@@ -29,6 +29,22 @@ export enum ClaudeAPIModel {
   'claude-instant-1' = 'claude-instant-v1',
 }
 
+export enum PoeGPTModel {
+  'GPT-3.5' = 'chinchilla',
+  'GPT-4' = 'beaver',
+}
+
+export enum PoeClaudeModel {
+  'claude-instant' = 'a2',
+  'claude-instant-100k' = 'a2_100k',
+  'claude-2-100k' = 'a2_2',
+}
+
+export enum OpenRouterClaudeModel {
+  'claude-2' = 'claude-2',
+  'claude-instant-v1' = 'claude-instant-v1',
+}
+
 export enum PerplexityMode {
   Webapp = 'webapp',
   API = 'api',

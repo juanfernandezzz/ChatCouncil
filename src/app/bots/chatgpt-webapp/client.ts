@@ -1,27 +1,10 @@
 import { ofetch } from 'ofetch'
-import { RequestInitSubset } from '~types/messaging'
 import { ChatError, ErrorCode } from '~utils/errors'
-import { Requester, globalFetchRequester, proxyFetchRequester } from './requesters'
+import { globalFetchRequester } from './requesters'
 
 class ChatGPTClient {
-  requester: Requester
-
-  constructor() {
-    this.requester = globalFetchRequester
-    proxyFetchRequester.findExistingProxyTab().then((tab) => {
-      if (tab) {
-        this.switchRequester(proxyFetchRequester)
-      }
-    })
-  }
-
-  switchRequester(newRequester: Requester) {
-    console.debug('client switchRequester', newRequester)
-    this.requester = newRequester
-  }
-
-  async fetch(url: string, options?: RequestInitSubset): Promise<Response> {
-    return this.requester.fetch(url, options)
+  async fetch(url: string, options?: RequestInit): Promise<Response> {
+    return globalFetchRequester.fetch(url, options)
   }
 
   async getAccessToken(): Promise<string> {
@@ -91,16 +74,6 @@ class ChatGPTClient {
     })
     await this.completeFileUpload(token, fileId)
     return fileId
-  }
-
-  // Switch to proxy mode, or refresh the proxy tab
-  async fixAuthState() {
-    if (this.requester === proxyFetchRequester) {
-      await proxyFetchRequester.refreshProxyTab()
-    } else {
-      await proxyFetchRequester.getProxyTab()
-      this.switchRequester(proxyFetchRequester)
-    }
   }
 }
 

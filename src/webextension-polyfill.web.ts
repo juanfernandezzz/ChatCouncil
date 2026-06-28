@@ -12,11 +12,13 @@ class WebStorage {
       }
       return all
     }
-    const arr = Array.isArray(keys) ? keys : (keys && typeof keys === 'object' ? Object.keys(keys) : [keys])
+    const arr = Array.isArray(keys) ? keys : (typeof keys === 'object' && keys !== null ? Object.keys(keys) : [keys])
     const result: Record<string, any> = {}
     for (const k of arr) {
-      const raw = localStorage.getItem(this.prefix + k)
-      result[k] = raw ? JSON.parse(raw) : undefined
+      if (typeof k === 'string') {
+        const raw = localStorage.getItem(this.prefix + k)
+        result[k] = raw ? JSON.parse(raw) : undefined
+      }
     }
     return result
   }
@@ -39,7 +41,46 @@ class WebStorage {
   }
 }
 
-const webBrowser = {
+type BrowserType = {
+  storage: {
+    sync: WebStorage
+    local: WebStorage
+    session: WebStorage
+  }
+  runtime: {
+    getURL: (path: string) => string
+    getManifest: () => { version: string; name?: string }
+    onConnect: { addListener: (fn: Function) => void }
+    onMessage: { addListener: (fn: Function) => void }
+    sendMessage: (message: any) => Promise<any>
+  }
+  tabs: {
+    create: (opts: any) => Promise<any>
+    query: (opts: any) => Promise<any[]>
+    update: (id: number, opts: any) => Promise<void>
+    remove: (id: number) => Promise<void>
+    reload: (id: number) => Promise<void>
+    connect: (id: number, opts?: any) => any
+    sendMessage: (tabId: number, message: any) => Promise<any>
+    getZoom: () => Promise<number>
+    setZoom: (zoom: number) => Promise<void>
+  }
+  permissions: {
+    contains: (perms: any) => Promise<boolean>
+    request: (perms: any) => Promise<boolean>
+  }
+  commands: {
+    getAll: () => Promise<any[]>
+  }
+  scripting: {
+    executeScript: (opts: any) => Promise<any[]>
+  }
+  action: {
+    onClicked: { addListener: (fn: Function) => void }
+  }
+}
+
+const browser: BrowserType = {
   storage: {
     sync: new WebStorage('sync:'),
     local: new WebStorage('local:'),
@@ -58,7 +99,7 @@ const webBrowser = {
     update: async () => {},
     remove: async () => {},
     reload: async () => {},
-    connect: () => ({ onMessage: { addListener: () => {} }, postMessage: () => {} }),
+    connect: () => ({ onMessage: { addListener: () => {}, removeListener: () => {} }, postMessage: () => {}, disconnect: () => {} }),
     sendMessage: async () => undefined,
     getZoom: async () => 1,
     setZoom: async () => {},
@@ -78,5 +119,5 @@ const webBrowser = {
   },
 }
 
-export default webBrowser
-export { webBrowser as Browser }
+export default browser
+export { browser as Browser }

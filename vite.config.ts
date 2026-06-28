@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       rollupOptions: {
-        input: ['app.html'],
+        input: ['index.html'],
       },
     },
     esbuild: {

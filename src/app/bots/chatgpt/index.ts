@@ -1,4 +1,12 @@
-import { ChatGPTMode, getUserConfig } from '~/services/user-config'
+import { getUserConfig } from '~/services/user-config'
+
+export enum ChatGPTMode {
+  Webapp = 'webapp',
+  API = 'api',
+  Azure = 'azure',
+  Poe = 'poe',
+  OpenRouter = 'openrouter',
+}
 import * as agent from '~services/agent'
 import { ChatError, ErrorCode } from '~utils/errors'
 import { AsyncAbstractBot, MessageParams } from '../abstract-bot'

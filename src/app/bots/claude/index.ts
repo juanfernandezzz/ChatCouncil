@@ -1,4 +1,11 @@
-import { ClaudeMode, getUserConfig } from '~/services/user-config'
+import { getUserConfig } from '~/services/user-config'
+
+export enum ClaudeMode {
+  Webapp = 'webapp',
+  API = 'api',
+  Poe = 'poe',
+  OpenRouter = 'openrouter',
+}
 import * as agent from '~services/agent'
 import { AsyncAbstractBot, MessageParams } from '../abstract-bot'
 import { ClaudeApiBot } from '../claude-api'

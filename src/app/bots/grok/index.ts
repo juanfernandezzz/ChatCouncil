@@ -1,6 +1,4 @@
 import { FetchError, ofetch } from 'ofetch'
-import Browser from 'webextension-polyfill'
-import { requestHostPermission } from '~app/utils/permissions'
 import { ChatError, ErrorCode } from '~utils/errors'
 import { streamAsyncIterable } from '~utils/stream-async-iterable'
 import { AbstractBot, SendMessageParams } from '../abstract-bot'
@@ -129,17 +127,8 @@ export class GrokWebBot extends AbstractBot {
     }
   }
 
-  private async readCsrfToken({ refresh }: { refresh?: boolean } = {}): Promise<string> {
-    const token = await Browser.runtime.sendMessage({
-      type: 'read-twitter-csrf-token',
-      data: { refresh },
-      target: 'background',
-    })
-    console.debug('twitter csrf token', token)
-    if (!token) {
-      throw new ChatError('There is no logged-in Twitter account in this browser.', ErrorCode.TWITTER_UNAUTHORIZED)
-    }
-    return token
+  private async readCsrfToken({ refresh: _refresh }: { refresh?: boolean } = {}): Promise<string> {
+    throw new ChatError('Grok requires a logged-in X/Twitter session. Please log in at x.com and try again.', ErrorCode.TWITTER_UNAUTHORIZED)
   }
 
   resetConversation() {

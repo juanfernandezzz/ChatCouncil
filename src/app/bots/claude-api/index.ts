@@ -1,5 +1,10 @@
 import { requestHostPermission } from '~app/utils/permissions'
-import { ClaudeAPIModel, UserConfig } from '~services/user-config'
+import { UserConfig } from '~services/user-config'
+
+export enum ClaudeAPIModel {
+  'claude-2' = 'claude-2',
+  'claude-instant-1' = 'claude-instant-v1',
+}
 import { ChatError, ErrorCode } from '~utils/errors'
 import { parseSSEResponse } from '~utils/sse'
 import { AbstractBot, SendMessageParams } from '../abstract-bot'

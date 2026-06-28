@@ -1,215 +1,96 @@
-import { motion } from 'framer-motion'
-import { FC, PropsWithChildren, useCallback, useEffect, useState } from 'react'
-import toast, { Toaster } from 'react-hot-toast'
+import { FC, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import Browser from 'webextension-polyfill'
-import Button from '~app/components/Button'
-import { Input } from '~app/components/Input'
-import RadioGroup from '~app/components/RadioGroup'
-import Select from '~app/components/Select'
-import Blockquote from '~app/components/Settings/Blockquote'
-import ChatGPTAPISettings from '~app/components/Settings/ChatGPTAPISettings'
-import ChatGPTAzureSettings from '~app/components/Settings/ChatGPTAzureSettings'
-import ChatGPTOpenRouterSettings from '~app/components/Settings/ChatGPTOpenRouterSettings'
-import ChatGPTPoeSettings from '~app/components/Settings/ChatGPTPoeSettings'
-import ChatGPWebSettings from '~app/components/Settings/ChatGPTWebSettings'
-import ClaudeAPISettings from '~app/components/Settings/ClaudeAPISettings'
-import ClaudeOpenRouterSettings from '~app/components/Settings/ClaudeOpenRouterSettings'
-import ClaudePoeSettings from '~app/components/Settings/ClaudePoeSettings'
-import ClaudeWebappSettings from '~app/components/Settings/ClaudeWebappSettings'
-import EnabledBotsSettings from '~app/components/Settings/EnabledBotsSettings'
-import ExportDataPanel from '~app/components/Settings/ExportDataPanel'
-import PerplexityAPISettings from '~app/components/Settings/PerplexityAPISettings'
-import ShortcutPanel from '~app/components/Settings/ShortcutPanel'
-import { ALL_IN_ONE_PAGE_ID, CHATBOTS } from '~app/consts'
-import {
-  BingConversationStyle,
-  ChatGPTMode,
-  ClaudeMode,
-  PerplexityMode,
-  UserConfig,
-  getUserConfig,
-  updateUserConfig,
-} from '~services/user-config'
+import toast, { Toaster } from 'react-hot-toast'
+import { CHATBOTS } from '~app/consts'
+import { UserConfig, getUserConfig, updateUserConfig } from '~services/user-config'
 import { getVersion } from '~utils'
-import PagePanel from '../components/Page'
+import { cx } from '~/utils'
 
-const BING_STYLE_OPTIONS = [
-  { name: 'Precise', value: BingConversationStyle.Precise },
-  { name: 'Balanced', value: BingConversationStyle.Balanced },
-  { name: 'Creative', value: BingConversationStyle.Creative },
+const PROVIDER_CONFIGS: { id: keyof UserConfig; label: string; botKey: string; placeholder: string }[] = [
+  { id: 'openaiApiKey', label: 'OpenAI', botKey: 'chatgpt', placeholder: 'sk-...' },
+  { id: 'anthropicApiKey', label: 'Anthropic', botKey: 'claude', placeholder: 'sk-ant-...' },
+  { id: 'geminiApiKey', label: 'Google Gemini', botKey: 'gemini', placeholder: 'AIza...' },
+  { id: 'deepseekApiKey', label: 'DeepSeek', botKey: 'deepseek', placeholder: 'sk-...' },
+  { id: 'grokApiKey', label: 'xAI Grok', botKey: 'grok', placeholder: 'xai-...' },
+  { id: 'perplexityApiKey', label: 'Perplexity', botKey: 'perplexity', placeholder: 'pplx-...' },
+  { id: 'moonshotApiKey', label: 'Moonshot (Kimi)', botKey: 'kimi', placeholder: 'sk-...' },
+  { id: 'minimaxApiKey', label: 'MiniMax', botKey: 'minimax', placeholder: 'sk-...' },
+  { id: 'glmApiKey', label: 'Zhipu AI (GLM)', botKey: 'chatglm', placeholder: 'glm-...' },
+  { id: 'qwenApiKey', label: 'Alibaba (Qwen)', botKey: 'qianwen', placeholder: 'sk-...' },
 ]
 
-const ChatBotSettingPanel: FC<PropsWithChildren<{ title: string }>> = (props) => {
-  return (
-    <div className="flex flex-col gap-1 border border-primary-border px-5 py-4 rounded-lg shadow-sm">
-      <p className="font-bold text-md">{props.title}</p>
-      {props.children}
-    </div>
-  )
-}
-
-function SettingPage() {
+const SettingPage: FC = () => {
   const { t } = useTranslation()
-  const [userConfig, setUserConfig] = useState<UserConfig | undefined>(undefined)
+  const [config, setConfig] = useState<UserConfig | null>(null)
   const [dirty, setDirty] = useState(false)
 
   useEffect(() => {
-    getUserConfig().then((config) => setUserConfig(config))
+    getUserConfig().then(setConfig)
   }, [])
 
-  const updateConfigValue = useCallback(
-    (update: Partial<UserConfig>) => {
-      setUserConfig({ ...userConfig!, ...update })
-      setDirty(true)
-    },
-    [userConfig],
-  )
+  const update = useCallback((key: keyof UserConfig, value: string) => {
+    setConfig((prev) => (prev ? { ...prev, [key]: value } : prev))
+    setDirty(true)
+  }, [])
 
   const save = useCallback(async () => {
-    let apiHost = userConfig?.openaiApiHost
-    if (apiHost) {
-      apiHost = apiHost.replace(/\/$/, '')
-      if (!apiHost.startsWith('http')) {
-        apiHost = 'https://' + apiHost
-      }
-      // request host permission to prevent CORS issues
-      try {
-        await Browser.permissions.request({ origins: [apiHost + '/'] })
-      } catch (e) {
-        console.error(e)
-      }
-    } else {
-      apiHost = undefined
-    }
-    await updateUserConfig({ ...userConfig!, openaiApiHost: apiHost })
+    if (!config) return
+    await updateUserConfig(config)
     setDirty(false)
-    toast.success('Saved')
-    setTimeout(() => location.reload(), 500)
-  }, [userConfig])
+    toast.success(t('Saved'))
+  }, [config, t])
 
-  if (!userConfig) {
-    return null
-  }
+  if (!config) return null
 
   return (
-    <PagePanel title={`${t('Settings')} (v${getVersion()})`}>
-      <div className="flex flex-col gap-5 mt-3 mb-10 px-10">
-        <div>
-          <p className="font-bold mb-2 text-lg">{t('Startup page')}</p>
-          <div className="w-[200px]">
-            <Select
-              options={[
-                { name: 'All-In-One', value: ALL_IN_ONE_PAGE_ID },
-                ...Object.entries(CHATBOTS).map(([botId, bot]) => ({ name: bot.name, value: botId })),
-              ]}
-              value={userConfig.startupPage}
-              onChange={(v) => updateConfigValue({ startupPage: v })}
-            />
-          </div>
+    <div className="overflow-y-auto h-full">
+      <div className="max-w-2xl mx-auto px-6 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-xl font-semibold text-primary-text">
+            {t('Settings')} <span className="text-sm font-normal text-secondary-text">v{getVersion()}</span>
+          </h1>
         </div>
-        <div className="flex flex-col gap-2 max-w-[700px]">
-          <p className="font-bold text-lg">{t('Chatbots')}</p>
-          <EnabledBotsSettings userConfig={userConfig} updateConfigValue={updateConfigValue} />
-        </div>
-        <div className="flex flex-col gap-5 w-fit max-w-[700px]">
-          <ChatBotSettingPanel title="ChatGPT">
-            <RadioGroup
-              options={Object.entries(ChatGPTMode).map(([k, v]) => ({ label: `${k} ${t('Mode')}`, value: v }))}
-              value={userConfig.chatgptMode}
-              onChange={(v) => updateConfigValue({ chatgptMode: v as ChatGPTMode })}
-            />
-            {userConfig.chatgptMode === ChatGPTMode.API ? (
-              <ChatGPTAPISettings userConfig={userConfig} updateConfigValue={updateConfigValue} />
-            ) : userConfig.chatgptMode === ChatGPTMode.Azure ? (
-              <ChatGPTAzureSettings userConfig={userConfig} updateConfigValue={updateConfigValue} />
-            ) : userConfig.chatgptMode === ChatGPTMode.Poe ? (
-              <ChatGPTPoeSettings userConfig={userConfig} updateConfigValue={updateConfigValue} />
-            ) : userConfig.chatgptMode === ChatGPTMode.OpenRouter ? (
-              <ChatGPTOpenRouterSettings userConfig={userConfig} updateConfigValue={updateConfigValue} />
-            ) : (
-              <ChatGPWebSettings userConfig={userConfig} updateConfigValue={updateConfigValue} />
-            )}
-          </ChatBotSettingPanel>
-          <ChatBotSettingPanel title="Claude">
-            <RadioGroup
-              options={Object.entries(ClaudeMode).map(([k, v]) => ({ label: `${k} ${t('Mode')}`, value: v }))}
-              value={userConfig.claudeMode}
-              onChange={(v) => updateConfigValue({ claudeMode: v as ClaudeMode })}
-            />
-            {userConfig.claudeMode === ClaudeMode.API ? (
-              <ClaudeAPISettings userConfig={userConfig} updateConfigValue={updateConfigValue} />
-            ) : userConfig.claudeMode === ClaudeMode.Webapp ? (
-              <ClaudeWebappSettings userConfig={userConfig} updateConfigValue={updateConfigValue} />
-            ) : userConfig.claudeMode === ClaudeMode.OpenRouter ? (
-              <ClaudeOpenRouterSettings userConfig={userConfig} updateConfigValue={updateConfigValue} />
-            ) : (
-              <ClaudePoeSettings userConfig={userConfig} updateConfigValue={updateConfigValue} />
-            )}
-          </ChatBotSettingPanel>
-          <ChatBotSettingPanel title="Gemini Pro">
-            <div className="flex flex-col gap-1">
-              <p className="font-medium text-sm">
-                API Key (
-                <a
-                  href="https://makersuite.google.com/app/apikey"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline"
-                >
-                  how to create key
-                </a>
-                )
-              </p>
-              <Input
-                className="w-[400px]"
-                placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                value={userConfig.geminiApiKey}
-                onChange={(e) => updateConfigValue({ geminiApiKey: e.currentTarget.value })}
-                type="password"
-              />
-              <Blockquote className="mt-1">{t('Your keys are stored locally')}</Blockquote>
-            </div>
-          </ChatBotSettingPanel>
-          <ChatBotSettingPanel title="Bing">
-            <div className="flex flex-row gap-5 items-center">
-              <p className="font-medium">{t('Chat style')}</p>
-              <div className="w-[150px]">
-                <Select
-                  options={BING_STYLE_OPTIONS}
-                  value={userConfig.bingConversationStyle}
-                  onChange={(v) => updateConfigValue({ bingConversationStyle: v })}
-                  position="top"
+        <div className="flex flex-col gap-4">
+          {PROVIDER_CONFIGS.map((provider) => {
+            const bot = CHATBOTS[provider.botKey as keyof typeof CHATBOTS]
+            return (
+              <div key={provider.id} className="flex flex-col gap-1.5 border border-primary-border rounded-xl px-4 py-3">
+                <div className="flex items-center gap-2">
+                  {bot && <img src={bot.avatar} className="w-5 h-5 rounded object-contain" />}
+                  <span className="font-medium text-sm text-primary-text">{provider.label}</span>
+                </div>
+                <input
+                  type="password"
+                  className="w-full bg-secondary border border-primary-border rounded-lg px-3 py-2 text-sm text-primary-text placeholder:text-light-text focus:outline-none focus:ring-1 focus:ring-primary-blue"
+                  placeholder={provider.placeholder}
+                  value={(config[provider.id] as string) || ''}
+                  onChange={(e) => update(provider.id, e.currentTarget.value)}
                 />
+                {bot && (
+                  <span className="text-xs text-light-text">
+                    Modelos: {bot.name}
+                  </span>
+                )}
               </div>
-            </div>
-          </ChatBotSettingPanel>
-          <ChatBotSettingPanel title="Perplexity">
-            <RadioGroup
-              options={Object.entries(PerplexityMode).map(([k, v]) => ({ label: `${k} ${t('Mode')}`, value: v }))}
-              value={userConfig.perplexityMode}
-              onChange={(v) => updateConfigValue({ perplexityMode: v as PerplexityMode })}
-            />
-            {userConfig.perplexityMode === PerplexityMode.API && (
-              <PerplexityAPISettings userConfig={userConfig} updateConfigValue={updateConfigValue} />
-            )}
-          </ChatBotSettingPanel>
+            )
+          })}
         </div>
-        <ShortcutPanel />
-        <ExportDataPanel />
+        <p className="text-xs text-light-text mt-4 px-1">
+          {t('Your keys are stored locally and never sent to any server')}
+        </p>
+        {dirty && (
+          <div className="sticky bottom-0 mt-6 pt-4 border-t border-primary-border">
+            <button
+              onClick={save}
+              className="w-full bg-primary-blue text-white rounded-xl py-2.5 text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              {t('Save changes')}
+            </button>
+          </div>
+        )}
       </div>
-      {dirty && (
-        <motion.div
-          className="sticky bottom-0 w-full bg-primary-background border-t-2 border-primary-border px-5 py-4 drop-shadow flex flex-row items-center justify-center"
-          initial={{ y: 100 }}
-          animate={{ y: 0 }}
-          transition={{ type: 'tween', ease: 'easeInOut' }}
-        >
-          <Button color="primary" size="small" text={t('Save changes')} onClick={save} className="py-2" />
-        </motion.div>
-      )}
       <Toaster position="bottom-center" />
-    </PagePanel>
+    </div>
   )
 }
 

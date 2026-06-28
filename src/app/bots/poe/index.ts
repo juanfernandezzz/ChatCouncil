@@ -1,7 +1,16 @@
 import { t } from 'i18next'
 import WebSocketAsPromised from 'websocket-as-promised'
 import { requestHostPermission } from '~app/utils/permissions'
-import { PoeClaudeModel, PoeGPTModel } from '~services/user-config'
+export enum PoeGPTModel {
+  'GPT-3.5' = 'chinchilla',
+  'GPT-4' = 'beaver',
+}
+
+export enum PoeClaudeModel {
+  'claude-instant' = 'a2',
+  'claude-instant-100k' = 'a2_100k',
+  'claude-2-100k' = 'a2_2',
+}
 import { ChatError, ErrorCode } from '~utils/errors'
 import { AbstractBot, SendMessageParams } from '../abstract-bot'
 import { GRAPHQL_QUERIES, PoeSettings, getChatId, getPoeSettings, gqlRequest } from './api'

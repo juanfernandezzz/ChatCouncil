@@ -1,4 +1,9 @@
-import { PerplexityMode, getUserConfig } from '~/services/user-config'
+import { getUserConfig } from '~/services/user-config'
+
+export enum PerplexityMode {
+  Webapp = 'webapp',
+  API = 'api',
+}
 import { AsyncAbstractBot } from '../abstract-bot'
 import { PerplexityApiBot } from '../perplexity-api'
 import { PerplexityLabsBot } from '../perplexity-web'

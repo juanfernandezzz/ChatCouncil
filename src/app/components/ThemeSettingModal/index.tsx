@@ -1,9 +1,8 @@
-import { cx } from '~/utils'
 import { useAtom } from 'jotai'
 import { ComponentPropsWithoutRef, FC, useCallback, useEffect, useMemo, useState } from 'react'
 import { ColorResult, TwitterPicker } from 'react-color'
 import { useTranslation } from 'react-i18next'
-import Browser from 'webextension-polyfill'
+import { cx } from '~/utils'
 import { followArcThemeAtom, themeColorAtom } from '~app/state'
 import { applyThemeMode } from '~app/utils/color-scheme'
 import { isArcBrowser } from '~app/utils/env'
@@ -50,7 +49,6 @@ const ThemeSettingModal: FC<Props> = (props) => {
   const [themeColor, setThemeColor] = useAtom(themeColorAtom)
   const [themeMode, setThemeMode] = useState(getUserThemeMode())
   const [followArcTheme, setFollowArcTheme] = useAtom(followArcThemeAtom)
-  const [zoomLevel, setZoomLevel] = useState<number | null>(null)
   const [lang, setLang] = useState(() => getLanguage() || 'auto')
 
   const languageOptions = useMemo(() => {
@@ -67,25 +65,6 @@ const ThemeSettingModal: FC<Props> = (props) => {
       return { name, value: code }
     })
   }, [])
-
-  useEffect(() => {
-    Browser.tabs.getZoom().then((zoom) => setZoomLevel(zoom))
-  }, [])
-
-  const updateZoomLevel = useCallback(
-    (op: '+' | '-') => {
-      if (!zoomLevel) {
-        return
-      }
-      const newZoom = op === '+' ? zoomLevel + 0.1 : zoomLevel - 0.1
-      if (newZoom < 0.7 || newZoom > 1.2) {
-        return
-      }
-      Browser.tabs.setZoom(newZoom)
-      setZoomLevel(newZoom)
-    },
-    [zoomLevel],
-  )
 
   const onThemeModeChange = useCallback((mode: ThemeMode) => {
     setUserThemeMode(mode)
@@ -153,18 +132,6 @@ const ThemeSettingModal: FC<Props> = (props) => {
               />
             )}
           </div>
-        </div>
-        <div>
-          <p className="font-bold text-lg mb-3">{t('Display size')}</p>
-          <span className="isolate inline-flex rounded-md shadow-sm">
-            <Button className="rounded-l-md" onClick={() => updateZoomLevel('-')}>
-              -
-            </Button>
-            <Button className="-ml-px cursor-default">{zoomLevel === null ? '-' : Math.floor(zoomLevel * 100)}%</Button>
-            <Button className="-ml-px rounded-r-md" onClick={() => updateZoomLevel('+')}>
-              +
-            </Button>
-          </span>
         </div>
         <div className="w-[300px]">
           <p className="font-bold text-lg mb-3">{t('Language')}</p>

@@ -1,7 +1,10 @@
 import { get as getPath } from 'lodash-es'
 import { v4 as uuidv4 } from 'uuid'
 import { getImageSize } from '~app/utils/image-size'
-import { ChatGPTWebModel } from '~services/user-config'
+export enum ChatGPTWebModel {
+  'GPT-3.5' = 'gpt-3.5',
+  'GPT-4' = 'gpt-4',
+}
 import { ChatError, ErrorCode } from '~utils/errors'
 import { parseSSEResponse } from '~utils/sse'
 import { AbstractBot, SendMessageParams } from '../abstract-bot'

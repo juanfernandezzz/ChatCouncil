@@ -1,6 +1,5 @@
 import i18next from 'i18next'
 import { ofetch } from 'ofetch'
-import Browser from 'webextension-polyfill'
 
 export interface Prompt {
   id: string
@@ -8,13 +7,24 @@ export interface Prompt {
   prompt: string
 }
 
+function getLocalPrompts(): Prompt[] {
+  try {
+    return JSON.parse(localStorage.getItem('prompts') || '[]')
+  } catch {
+    return []
+  }
+}
+
+function setLocalPrompts(prompts: Prompt[]) {
+  localStorage.setItem('prompts', JSON.stringify(prompts))
+}
+
 export async function loadLocalPrompts() {
-  const { prompts: value } = await Browser.storage.local.get('prompts')
-  return (value || []) as Prompt[]
+  return getLocalPrompts()
 }
 
 export async function saveLocalPrompt(prompt: Prompt) {
-  const prompts = await loadLocalPrompts()
+  const prompts = getLocalPrompts()
   let existed = false
   for (const p of prompts) {
     if (p.id === prompt.id) {
@@ -27,13 +37,13 @@ export async function saveLocalPrompt(prompt: Prompt) {
   if (!existed) {
     prompts.unshift(prompt)
   }
-  await Browser.storage.local.set({ prompts })
+  setLocalPrompts(prompts)
   return existed
 }
 
 export async function removeLocalPrompt(id: string) {
-  const prompts = await loadLocalPrompts()
-  await Browser.storage.local.set({ prompts: prompts.filter((p) => p.id !== id) })
+  const prompts = getLocalPrompts()
+  setLocalPrompts(prompts.filter((p) => p.id !== id))
 }
 
 export async function loadRemotePrompts() {

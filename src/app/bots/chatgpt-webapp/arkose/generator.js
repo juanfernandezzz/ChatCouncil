@@ -1,5 +1,3 @@
-import Browser from 'webextension-polyfill'
-
 class ArkoseTokenGenerator {
   constructor() {
     this.enforcement = undefined
@@ -37,12 +35,6 @@ class ArkoseTokenGenerator {
   }
 
   injectScript() {
-    const script = document.createElement('script')
-    script.src = Browser.runtime.getURL('/js/v2/35536E1E-65B4-4D96-9D97-6ADB7EFF8147/api.js')
-    script.async = true
-    script.defer = true
-    script.setAttribute('data-callback', 'useArkoseSetupEnforcement')
-    document.body.appendChild(script)
   }
 
   async generate() {

@@ -21,7 +21,6 @@ export default defineConfig(({ mode }) => {
     ],
     resolve: {
       alias: {
-        'webextension-polyfill': path.resolve(__dirname, 'src/webextension-polyfill.web.ts'),
       },
     },
     optimizeDeps: {

@@ -1,15 +1,18 @@
-import Browser from 'webextension-polyfill'
+const KEY = 'tokenUsage'
 
 export async function getTokenUsage() {
-  const { tokenUsage } = await Browser.storage.sync.get('tokenUsage')
-  return tokenUsage || 0
+  try {
+    return Number(localStorage.getItem(KEY)) || 0
+  } catch {
+    return 0
+  }
 }
 
 export async function incrTokenUsage(v = 1) {
   const tokenUsage = await getTokenUsage()
-  await Browser.storage.sync.set({ tokenUsage: tokenUsage + v })
+  localStorage.setItem(KEY, String(tokenUsage + v))
 }
 
 export async function resetTokenUsage() {
-  await Browser.storage.sync.remove('tokenUsage')
+  localStorage.removeItem(KEY)
 }

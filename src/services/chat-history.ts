@@ -1,12 +1,6 @@
 import { zip } from 'lodash-es'
-import Browser from 'webextension-polyfill'
 import { BotId } from '~app/bots'
 import { ChatMessageModel } from '~types'
-
-/**
- * conversations:$botId => Conversation[]
- * conversation:$botId:$cid:messages => ChatMessageModel[]
- */
 
 interface Conversation {
   id: string
@@ -15,32 +9,46 @@ interface Conversation {
 
 type ConversationWithMessages = Conversation & { messages: ChatMessageModel[] }
 
+function storageKey(botId: BotId, cid?: string): string {
+  return cid ? `conversation:${botId}:${cid}:messages` : `conversations:${botId}`
+}
+
+function getItem<T>(key: string, fallback: T): T {
+  try {
+    return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback
+  } catch {
+    return fallback
+  }
+}
+
+function setItem(key: string, value: unknown) {
+  localStorage.setItem(key, JSON.stringify(value))
+}
+
+function removeItem(key: string) {
+  localStorage.removeItem(key)
+}
+
 async function loadHistoryConversations(botId: BotId): Promise<Conversation[]> {
-  const key = `conversations:${botId}`
-  const { [key]: value } = await Browser.storage.local.get(key)
-  return value || []
+  return getItem<Conversation[]>(storageKey(botId), [])
 }
 
 async function deleteHistoryConversation(botId: BotId, cid: string) {
   const conversations = await loadHistoryConversations(botId)
-  const newConversations = conversations.filter((c) => c.id !== cid)
-  await Browser.storage.local.set({ [`conversations:${botId}`]: newConversations })
+  setItem(storageKey(botId), conversations.filter((c) => c.id !== cid))
 }
 
 async function loadConversationMessages(botId: BotId, cid: string): Promise<ChatMessageModel[]> {
-  const key = `conversation:${botId}:${cid}:messages`
-  const { [key]: value } = await Browser.storage.local.get(key)
-  return value || []
+  return getItem<ChatMessageModel[]>(storageKey(botId, cid), [])
 }
 
 export async function setConversationMessages(botId: BotId, cid: string, messages: ChatMessageModel[]) {
   const conversations = await loadHistoryConversations(botId)
   if (!conversations.some((c) => c.id === cid)) {
     conversations.unshift({ id: cid, createdAt: Date.now() })
-    await Browser.storage.local.set({ [`conversations:${botId}`]: conversations })
+    setItem(storageKey(botId), conversations)
   }
-  const key = `conversation:${botId}:${cid}:messages`
-  await Browser.storage.local.set({ [key]: messages })
+  setItem(storageKey(botId, cid), messages)
 }
 
 export async function loadHistoryMessages(botId: BotId): Promise<ConversationWithMessages[]> {
@@ -64,10 +72,6 @@ export async function deleteHistoryMessage(botId: BotId, conversationId: string,
 
 export async function clearHistoryMessages(botId: BotId) {
   const conversations = await loadHistoryConversations(botId)
-  await Promise.all(
-    conversations.map((c) => {
-      return Browser.storage.local.remove(`conversation:${botId}:${c.id}:messages`)
-    }),
-  )
-  await Browser.storage.local.remove(`conversations:${botId}`)
+  conversations.forEach((c) => removeItem(storageKey(botId, c.id)))
+  removeItem(storageKey(botId))
 }

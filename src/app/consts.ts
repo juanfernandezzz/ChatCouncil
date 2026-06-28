@@ -1,100 +1,67 @@
 import claudeLogo from '~/assets/logos/anthropic.png'
-import baichuanLogo from '~/assets/logos/baichuan.png'
-import bardLogo from '~/assets/logos/bard.svg'
-import bingLogo from '~/assets/logos/bing.svg'
-import chatglmLogo from '~/assets/logos/chatglm.svg'
-import chatgptLogo from '~/assets/logos/chatgpt.svg'
-import falconLogo from '~/assets/logos/falcon.jpeg'
+import chatgptLogo from '~/assets/logos/chatgpt.png'
 import geminiLogo from '~/assets/logos/gemini.png'
 import grokLogo from '~/assets/logos/grok.png'
-import llamaLogo from '~/assets/logos/llama.png'
-import mistralLogo from '~/assets/logos/mistral.png'
-import piLogo from '~/assets/logos/pi.png'
-import pplxLogo from '~/assets/logos/pplx.jpg'
+import deepseekLogo from '~/assets/logos/deepseek.png'
+import pplxLogo from '~/assets/logos/pplx.png'
+import zaiLogo from '~/assets/logos/zai.png'
+import moonshotLogo from '~/assets/logos/moonshot.png'
+import minimaxLogo from '~/assets/logos/minimax.png'
 import qianwenLogo from '~/assets/logos/qianwen.png'
-import vicunaLogo from '~/assets/logos/vicuna.jpg'
-import wizardlmLogo from '~/assets/logos/wizardlm.png'
-import xunfeiLogo from '~/assets/logos/xunfei.png'
-import yiLogo from '~/assets/logos/yi.svg'
-import deepseekLogo from '~/assets/logos/deepseek.svg'
 import { BotId } from './bots'
 
 export const CHATBOTS: Record<BotId, { name: string; avatar: string }> = {
   chatgpt: {
-    name: 'ChatGPT',
+    name: 'GPT-5.5',
+    avatar: chatgptLogo,
+  },
+  'chatgpt-thinking': {
+    name: 'GPT-5.5 Thinking',
     avatar: chatgptLogo,
   },
   claude: {
-    name: 'Claude',
+    name: 'Claude Sonnet 4.6',
     avatar: claudeLogo,
   },
-  bard: {
-    name: 'Bard',
-    avatar: bardLogo,
-  },
-  bing: {
-    name: 'Bing',
-    avatar: bingLogo,
-  },
-  perplexity: {
-    name: 'Perplexity',
-    avatar: pplxLogo,
-  },
-  llama: {
-    name: 'Llama 2',
-    avatar: llamaLogo,
-  },
-  gemini: {
-    name: 'Gemini Pro',
+  'gemini-flash-35': {
+    name: 'Gemini 3.5 Flash',
     avatar: geminiLogo,
   },
-  mistral: {
-    name: 'Mixtral',
-    avatar: mistralLogo,
+  gemini: {
+    name: 'Gemini 3.1 Pro',
+    avatar: geminiLogo,
   },
-  vicuna: {
-    name: 'Vicuna',
-    avatar: vicunaLogo,
-  },
-  falcon: {
-    name: 'Falcon',
-    avatar: falconLogo,
+  'gemini-flash-3': {
+    name: 'Gemini 3 Flash',
+    avatar: geminiLogo,
   },
   grok: {
-    name: 'Grok',
+    name: 'Grok 4.3',
     avatar: grokLogo,
   },
-  pi: {
-    name: 'Pi',
-    avatar: piLogo,
+  deepseek: {
+    name: 'DeepSeek-V4 Pro',
+    avatar: deepseekLogo,
   },
-  wizardlm: {
-    name: 'WizardLM',
-    avatar: wizardlmLogo,
+  kimi: {
+    name: 'Kimi K2.7 Code',
+    avatar: moonshotLogo,
+  },
+  minimax: {
+    name: 'MiniMax M3',
+    avatar: minimaxLogo,
   },
   chatglm: {
-    name: 'GLM',
-    avatar: chatglmLogo,
-  },
-  xunfei: {
-    name: 'iFlytek Spark',
-    avatar: xunfeiLogo,
+    name: 'GLM-5.2',
+    avatar: zaiLogo,
   },
   qianwen: {
-    name: 'Qianwen',
+    name: 'Qwen3.7 Plus',
     avatar: qianwenLogo,
   },
-  baichuan: {
-    name: 'Baichuan',
-    avatar: baichuanLogo,
-  },
-  yi: {
-    name: 'Yi-Chat',
-    avatar: yiLogo,
-  },
-  deepseek: {
-    name: 'DeepSeek',
-    avatar: deepseekLogo,
+  perplexity: {
+    name: 'Perplexity Sonar',
+    avatar: pplxLogo,
   },
 }
 

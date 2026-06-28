@@ -1,112 +1,93 @@
-import { Link } from '@tanstack/react-router'
-import { motion } from 'framer-motion'
-import { useAtom, useSetAtom } from 'jotai'
-import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Link, useLocation } from '@tanstack/react-router'
+import logoIcon from '~/assets/logo-chatcouncil.svg'
 import allInOneIcon from '~/assets/all-in-one.svg'
-import collapseIcon from '~/assets/icons/collapse.svg'
-import feedbackIcon from '~/assets/icons/feedback.svg'
-import githubIcon from '~/assets/icons/github.svg'
-import settingIcon from '~/assets/icons/setting.svg'
-import themeIcon from '~/assets/icons/theme.svg'
-import minimalLogo from '~/assets/minimal-logo.svg'
-import logo from '~/assets/santa-logo.png'
+import translateIcon from '~/assets/icons/translate.svg'
 import { cx } from '~/utils'
-import { useEnabledBots } from '~app/hooks/use-enabled-bots'
-import { releaseNotesAtom, sidebarCollapsedAtom } from '~app/state'
-import { checkReleaseNotes } from '~services/release-notes'
-import GuideModal from '../GuideModal'
-import ThemeSettingModal from '../ThemeSettingModal'
-import Tooltip from '../Tooltip'
-import NavLink from './NavLink'
+import { CHATBOTS } from '~app/consts'
+import { BotId } from '~app/bots'
 
-function IconButton(props: { icon: string; onClick?: () => void }) {
+const TOOLS = [
+  { id: 'image', label: 'Generador de Imágenes', icon: '' },
+  { id: 'translate', label: 'AI Traductor', icon: translateIcon },
+  { id: 'summary', label: 'Resumen Web', icon: '' },
+]
+
+const MODEL_IDS: BotId[] = [
+  'chatgpt', 'chatgpt-thinking', 'claude', 'gemini-flash-35', 'gemini',
+  'gemini-flash-3', 'grok', 'deepseek', 'kimi', 'minimax',
+  'chatglm', 'qianwen', 'perplexity',
+]
+
+function Sidebar() {
+  const location = useLocation()
+
   return (
-    <div
-      className="p-[6px] rounded-[10px] w-fit cursor-pointer hover:opacity-80 bg-secondary bg-opacity-20"
-      onClick={props.onClick}
-    >
-      <img src={props.icon} className="w-6 h-6" />
-    </div>
+    <aside className="flex flex-col bg-white w-[280px] h-full border-r border-gray-200 overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-4 border-b border-gray-100">
+        <img src={logoIcon} className="w-8 h-8" />
+        <span className="text-lg font-semibold text-gray-800">ChatCouncil</span>
+      </div>
+      <div className="flex flex-col overflow-y-auto flex-1 px-3 py-3 gap-1">
+        <NavItem to="/" icon={allInOneIcon} label="All-In-One" active={location.pathname === '/'} />
+        <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-4 mb-1 px-2">Herramientas</div>
+        {TOOLS.map((tool) => (
+          <div
+            key={tool.id}
+            className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-600 cursor-not-allowed opacity-50"
+          >
+            {tool.icon ? (
+              <img src={tool.icon} className="w-5 h-5" />
+            ) : (
+              <div className="w-5 h-5 rounded bg-gray-200" />
+            )}
+            {tool.label}
+          </div>
+        ))}
+        <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-4 mb-1 px-2">Modelos</div>
+        {MODEL_IDS.map((botId) => {
+          const bot = CHATBOTS[botId]
+          if (!bot) return null
+          const chatPath = `/chat/${botId}`
+          return (
+            <Link
+              key={botId}
+              to="/chat/$botId"
+              params={{ botId }}
+              className={cx(
+                'flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-700 hover:bg-gray-100 transition-colors',
+                location.pathname === chatPath && 'bg-gray-100 font-medium',
+              )}
+            >
+              <img src={bot.avatar} className="w-5 h-5 rounded object-contain" />
+              <span>{bot.name}</span>
+            </Link>
+          )
+        })}
+      </div>
+      <div className="border-t border-gray-100 px-4 py-3 flex flex-col gap-2">
+        <button className="w-full py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
+          Registrarse
+        </button>
+        <button className="w-full py-1.5 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors">
+          Iniciar sesión
+        </button>
+      </div>
+    </aside>
   )
 }
 
-function Sidebar() {
-  const { t } = useTranslation()
-  const [collapsed, setCollapsed] = useAtom(sidebarCollapsedAtom)
-  const [themeSettingModalOpen, setThemeSettingModalOpen] = useState(false)
-  const enabledBots = useEnabledBots()
-  const setReleaseNotes = useSetAtom(releaseNotesAtom)
-
-  useEffect(() => {
-    checkReleaseNotes().then((releaseNotes) => {
-      setReleaseNotes(releaseNotes)
-    })
-  }, [])
-
+function NavItem({ to, icon, label, active }: { to: string; icon: string; label: string; active: boolean }) {
   return (
-    <motion.aside
+    <Link
+      to={to}
       className={cx(
-        'flex flex-col bg-primary-background bg-opacity-40 overflow-hidden',
-        collapsed ? 'items-center px-[15px]' : 'w-[230px] px-4',
+        'flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors',
+        active ? 'bg-gray-100 font-medium text-gray-800' : 'text-gray-600 hover:bg-gray-50',
       )}
     >
-      <div className={cx('flex mt-8 gap-3 items-center', collapsed ? 'flex-col-reverse' : 'flex-row justify-between')}>
-        {collapsed ? <img src={minimalLogo} className="w-[30px]" /> : <img src={logo} className="w-[100px] ml-2" />}
-        <motion.img
-          src={collapseIcon}
-          className={cx('w-6 h-6 cursor-pointer')}
-          animate={{ rotate: collapsed ? 180 : 0 }}
-          onClick={() => setCollapsed((c) => !c)}
-        />
-      </div>
-      <div className="flex flex-col gap-[13px] mt-10 overflow-y-auto scrollbar-none">
-        <NavLink to="/" text={'All-In-One'} icon={allInOneIcon} iconOnly={collapsed} />
-        {enabledBots.map(({ botId, bot }) => (
-          <NavLink
-            key={botId}
-            to="/chat/$botId"
-            params={{ botId }}
-            text={bot.name}
-            icon={bot.avatar}
-            iconOnly={collapsed}
-          />
-        ))}
-      </div>
-      <div className="mt-auto pt-2">
-        {!collapsed && <hr className="border-[#ffffff4d]" />}
-        <div className={cx('flex mt-5 gap-[10px] mb-4', collapsed ? 'flex-col' : 'flex-row ')}>
-          {!collapsed && (
-            <Tooltip content={t('GitHub')}>
-              <a href="https://github.com/anomalyco/opencode" target="_blank" rel="noreferrer">
-                <IconButton icon={githubIcon} />
-              </a>
-            </Tooltip>
-          )}
-          {!collapsed && (
-            <Tooltip content={t('Feedback')}>
-              <a href="https://github.com/anomalyco/opencode/issues" target="_blank" rel="noreferrer">
-                <IconButton icon={feedbackIcon} />
-              </a>
-            </Tooltip>
-          )}
-          {!collapsed && (
-            <Tooltip content={t('Display')}>
-              <a onClick={() => setThemeSettingModalOpen(true)}>
-                <IconButton icon={themeIcon} />
-              </a>
-            </Tooltip>
-          )}
-          <Tooltip content={t('Settings')}>
-            <Link to="/setting">
-              <IconButton icon={settingIcon} />
-            </Link>
-          </Tooltip>
-        </div>
-      </div>
-      <GuideModal />
-      <ThemeSettingModal open={themeSettingModalOpen} onClose={() => setThemeSettingModalOpen(false)} />
-    </motion.aside>
+      <img src={icon} className="w-5 h-5" />
+      {label}
+    </Link>
   )
 }
 

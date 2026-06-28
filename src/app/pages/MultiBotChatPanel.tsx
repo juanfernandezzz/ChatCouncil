@@ -74,10 +74,10 @@ const MultiBotChatPanelPage: FC = () => {
             />
           ))}
         </div>
-        <div className="flex flex-row gap-3">
+        <div className="flex flex-row gap-3 px-4 pb-4">
           <ChatMessageInput
             mode="full"
-            className="rounded-2xl bg-white px-4 py-2 grow shadow-sm"
+            className="rounded-2xl bg-secondary px-4 py-2 grow shadow-sm"
             disabled={generating}
             onSubmit={sendAllMessage}
             actionButton={!generating && <Button text={t('Send')} color="primary" type="submit" />}

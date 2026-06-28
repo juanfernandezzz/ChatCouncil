@@ -4,7 +4,7 @@ import { UserConfig } from '~services/user-config'
 import { ChatError, ErrorCode } from '~utils/errors'
 import { parseSSEResponse } from '~utils/sse'
 import { AbstractBot, SendMessageParams } from '../abstract-bot'
-import { file2base64 } from '../bing/utils'
+import { file2base64 } from '../utils'
 import { ChatMessage } from './types'
 
 interface ConversationContext {

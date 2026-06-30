@@ -13,7 +13,7 @@ import {
 } from '@floating-ui/react'
 import { fileOpen } from 'browser-fs-access'
 import { cx } from '~/utils'
-import { ClipboardEventHandler, FC, ReactNode, memo, useCallback, useMemo, useRef, useState } from 'react'
+import { ClipboardEventHandler, DragEventHandler, FC, ReactNode, memo, useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { GoBook, GoImage } from 'react-icons/go'
 import { RiDeleteBackLine } from 'react-icons/ri'
@@ -158,8 +158,20 @@ const ChatMessageInput: FC<Props> = (props) => {
     }
   }, [])
 
+  const onDragOver: DragEventHandler = useCallback((e) => {
+    e.preventDefault()
+  }, [])
+
+  const onDrop: DragEventHandler = useCallback((e) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files?.[0]
+    if (file && file.type.startsWith('image/') && props.supportImageInput) {
+      setImage(file)
+    }
+  }, [props.supportImageInput])
+
   return (
-    <form className={cx('flex flex-row items-center gap-3', props.className)} onSubmit={onFormSubmit} ref={formRef}>
+    <form className={cx('flex flex-row items-center gap-3', props.className)} onSubmit={onFormSubmit} ref={formRef} onDragOver={onDragOver} onDrop={onDrop}>
       {props.mode === 'full' && (
         <>
           <GoBook

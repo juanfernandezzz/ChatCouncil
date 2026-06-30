@@ -27,16 +27,16 @@ const Button: FC<ComponentPropsWithoutRef<'button'>> = (props) => {
 }
 
 const THEME_COLORS = [
-  '#7EB8D6',
-  '#FF6900',
-  '#7BDCB5',
-  '#00D084',
-  '#8ED1FC',
-  '#0693E3',
-  '#ABB8C3',
-  '#EB144C',
-  '#F78DA7',
-  '#555555',
+  '#6B5CE7',
+  '#3B82F6',
+  '#10B981',
+  '#F59E0B',
+  '#EF4444',
+  '#8B5CF6',
+  '#06B6D4',
+  '#EC4899',
+  '#78716C',
+  '#1A1A1A',
 ]
 
 interface Props {

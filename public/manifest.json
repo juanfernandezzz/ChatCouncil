@@ -1,0 +1,17 @@
+{
+  "name": "ChatCouncil",
+  "short_name": "ChatCouncil",
+  "description": "Multi-model AI Chat Interface. Compare responses from all major AI models side by side.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0D0D0D",
+  "theme_color": "#0D0D0D",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

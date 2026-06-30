@@ -88,8 +88,8 @@ export class OpenRouterBot extends AbstractBot {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${this.config.apiKey}`,
-        'HTTP-Referer': 'https://chathub.gg',
-        'X-Title': 'ChatHub',
+        'HTTP-Referer': 'https://chatcouncil.app',
+        'X-Title': 'ChatCouncil',
       },
       body: JSON.stringify({
         model: this.config.model,

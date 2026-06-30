@@ -3,7 +3,7 @@ import Sidebar from './Sidebar'
 
 function Layout() {
   return (
-    <div className="flex h-screen flex-col overflow-hidden sm:bg-[#7EB8D6]">
+    <div className="flex h-screen flex-col overflow-hidden sm:bg-surface-bg">
       <main className="grid flex-1 grid-cols-1 overflow-hidden sm:grid-cols-[auto_1fr]">
         <Sidebar />
         <div className="overflow-hidden sm:px-[15px] sm:py-3">

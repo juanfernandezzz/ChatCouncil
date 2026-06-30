@@ -2,11 +2,11 @@
     <img src="./src/assets/icon.png" width="150">
 </p>
 
-<h1 align="center">ChatHub</h1>
+<h1 align="center">ChatCouncil</h1>
 
 <div align="center">
 
-### ChatHub はオールインワンのチャットボットクライアントです
+### ChatCouncil はオールインワンのチャットボットクライアントです
 
 [![author][author-image]][author-url]
 [![license][license-image]][license-url]
@@ -19,8 +19,8 @@
     
 ### インストール
     
-<a href="https://chrome.google.com/webstore/detail/chathub-all-in-one-chatbo/iaakpnchhognanibcahlpcplchdfmgma?utm_source=github"><img src="https://user-images.githubusercontent.com/64502893/231991498-8df6dd63-727c-41d0-916f-c90c15127de3.png" width="200" alt="Chromium 用の ChatHub を入手してください"></a>
-<a href="https://microsoftedge.microsoft.com/addons/detail/chathub-allinone-chat/kdlmggoacmfoombiokflpeompajfljga?utm_source=github"><img src="https://user-images.githubusercontent.com/64502893/231991158-1b54f831-2fdc-43b6-bf9a-f894000e5aa8.png" width="160" alt="Microsoft Edge 用の ChatHub を入手してください"></a>
+<a href="https://chrome.google.com/webstore/detail/ChatCouncil-all-in-one-chatbo/iaakpnchhognanibcahlpcplchdfmgma?utm_source=github"><img src="https://user-images.githubusercontent.com/64502893/231991498-8df6dd63-727c-41d0-916f-c90c15127de3.png" width="200" alt="Chromium 用の ChatCouncil を入手してください"></a>
+<a href="https://microsoftedge.microsoft.com/addons/detail/ChatCouncil-allinone-chat/kdlmggoacmfoombiokflpeompajfljga?utm_source=github"><img src="https://user-images.githubusercontent.com/64502893/231991158-1b54f831-2fdc-43b6-bf9a-f894000e5aa8.png" width="160" alt="Microsoft Edge 用の ChatCouncil を入手してください"></a>
     
 ##
 
@@ -28,12 +28,12 @@
 
 [author-image]: https://img.shields.io/badge/author-wong2-blue.svg
 [author-url]: https://github.com/wong2    
-[license-image]: https://img.shields.io/github/license/chathub-dev/chathub?color=blue
-[license-url]: https://github.com/chathub-dev/chathub/blob/main/LICENSE
-[release-image]: https://img.shields.io/github/v/release/chathub-dev/chathub?color=blue
-[release-url]: https://github.com/chathub-dev/chathub/releases/latest   
-[last-commit-image]: https://img.shields.io/github/last-commit/chathub-dev/chathub?label=last%20commit
-[last-commit-url]: https://github.com/chathub-dev/chathub/commits
+[license-image]: https://img.shields.io/github/license/ChatCouncil-dev/ChatCouncil?color=blue
+[license-url]: https://github.com/ChatCouncil-dev/ChatCouncil/blob/main/LICENSE
+[release-image]: https://img.shields.io/github/v/release/ChatCouncil-dev/ChatCouncil?color=blue
+[release-url]: https://github.com/ChatCouncil-dev/ChatCouncil/releases/latest   
+[last-commit-image]: https://img.shields.io/github/last-commit/ChatCouncil-dev/ChatCouncil?label=last%20commit
+[last-commit-url]: https://github.com/ChatCouncil-dev/ChatCouncil/commits
 
 </div>
 
@@ -79,7 +79,7 @@
 
 ## 🔧 手動インストール
 
-- [リリース](https://github.com/chathub-dev/chathub/releases)から chathub.zip をダウンロード
+- [リリース](https://github.com/ChatCouncil-dev/ChatCouncil/releases)から ChatCouncil.zip をダウンロード
 - ファイルを解凍
 - Chrome/Edge で拡張機能ページに移動します (chrome://extensions または edge://extensions)
 - 開発者モードを有効にする

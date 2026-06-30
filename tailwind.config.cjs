@@ -12,6 +12,11 @@ module.exports = {
         'secondary-text': 'rgb(var(--secondary-text) / <alpha-value>)',
         'light-text': 'rgb(var(--light-text) / <alpha-value>)',
         'primary-border': 'rgb(var(--primary-border) / <alpha-value>)',
+        'surface-bg': 'rgb(var(--surface-bg) / <alpha-value>)',
+        'hover-bg': 'rgb(var(--hover-bg) / <alpha-value>)',
+        'accent-purple': 'rgb(var(--accent-purple) / <alpha-value>)',
+        'accent-blue': 'rgb(var(--accent-blue) / <alpha-value>)',
+        'accent-green': 'rgb(var(--accent-green) / <alpha-value>)',
       },
       keyframes: {
         slideDownAndFade: {

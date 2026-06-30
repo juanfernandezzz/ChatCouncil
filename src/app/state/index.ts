@@ -23,7 +23,7 @@ export const chatFamily = atomFamily(
 )
 
 export const sidebarCollapsedAtom = atomWithStorage('sidebarCollapsed', false, undefined, { getOnInit: true })
-export const themeColorAtom = atomWithStorage('themeColor', getDefaultThemeColor())
+export const themeColorAtom = atomWithStorage('themeColor', '#6B5CE7')
 export const followArcThemeAtom = atomWithStorage('followArcTheme', false)
 export const sidePanelBotAtom = atomWithStorage<BotId>('sidePanelBot', 'chatgpt')
 export const releaseNotesAtom = atom<string[]>([])

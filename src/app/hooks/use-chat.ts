@@ -4,7 +4,6 @@ import { trackEvent } from '~app/plausible'
 import { chatFamily } from '~app/state'
 import { compressImageFile } from '~app/utils/image-compression'
 import { setConversationMessages } from '~services/chat-history'
-import { incrementQuota } from '~services/quota'
 import { ChatMessageModel } from '~types'
 import { uuid } from '~utils'
 import { ChatError } from '~utils/errors'
@@ -28,7 +27,6 @@ export function useChat(botId: BotId) {
 
   const sendMessage = useCallback(
     async (input: string, image?: File) => {
-      incrementQuota(botId)
       trackEvent('send_message', { botId, withImage: !!image, name: chatState.bot.name })
 
       const botMessageId = uuid()

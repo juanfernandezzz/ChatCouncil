@@ -5,7 +5,6 @@ import { FC, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { cx } from '~/utils'
-import { isQuotaExhausted } from '~services/quota'
 import Button from '~app/components/Button'
 import ChatMessageInput from '~app/components/Chat/ChatMessageInput'
 import { useChat } from '~app/hooks/use-chat'
@@ -58,25 +57,17 @@ const MultiBotChatPanelPage: FC = () => {
 
   const sendSingleMessage = useCallback(
     (input: string, botId: BotId) => {
-      if (isQuotaExhausted()) {
-        navigate({ to: '/setting' })
-        return
-      }
       const chat = chats.find((c) => c.botId === botId)
       chat?.sendMessage(input)
     },
-    [chats, navigate],
+    [chats],
   )
 
   const sendAllMessage = useCallback(
     (input: string, image?: File) => {
-      if (isQuotaExhausted()) {
-        navigate({ to: '/setting' })
-        return
-      }
       uniqBy(chats, (c) => c.botId).forEach((c) => c.sendMessage(input, image))
     },
-    [chats, navigate],
+    [chats],
   )
 
   const onSwitchBot = useCallback(

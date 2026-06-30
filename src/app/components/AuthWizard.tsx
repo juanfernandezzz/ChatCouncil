@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
 import logoIcon from '~/assets/logo-chatcouncil.svg'
 import { cx } from '~/utils'
-import { getQuotaInfo, QuotaInfo } from '~services/quota'
 
 interface AuthState {
   isLoggedIn: boolean
@@ -26,10 +25,6 @@ function saveAuth(state: AuthState) {
   localStorage.setItem(AUTH_KEY, JSON.stringify(state))
 }
 
-function clearAuth() {
-  localStorage.removeItem(AUTH_KEY)
-}
-
 interface Props {
   open: boolean
   onClose: () => void
@@ -42,7 +37,6 @@ const AuthWizard: FC<Props> = ({ open, onClose }) => {
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [step, setStep] = useState<'form' | 'success'>('form')
-  const [quota] = useState<QuotaInfo>(getQuotaInfo)
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -50,8 +44,8 @@ const AuthWizard: FC<Props> = ({ open, onClose }) => {
       if (!email || !password) return
       if (mode === 'register' && !name) return
 
-      const existing = loadAuth()
       if (mode === 'login') {
+        const existing = loadAuth()
         if (existing.email === email && existing.isLoggedIn) {
           toast.success(t('Welcome back!'))
           setStep('success')
@@ -162,21 +156,6 @@ const AuthWizard: FC<Props> = ({ open, onClose }) => {
                       {t('Continue as guest')}
                     </button>
                   </div>
-                  <div className="mt-6 pt-4 border-t border-primary-border">
-                    <div className="flex justify-between text-xs text-light-text mb-2">
-                      <span>{t('Daily free usage')}</span>
-                      <span>{quota.used}/{quota.limit}</span>
-                    </div>
-                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: `${Math.min(100, quota.percentage)}%`,
-                          background: quota.percentage > 80 ? '#EF4444' : '#6B5CE7',
-                        }}
-                      />
-                    </div>
-                  </div>
                 </div>
               ) : (
                 <div className="p-8 text-center">
@@ -185,23 +164,7 @@ const AuthWizard: FC<Props> = ({ open, onClose }) => {
                       <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </div>
-                  <h2 className="text-lg font-semibold text-primary-text mb-2">{t('Welcome to ChatCouncil!')}</h2>
-                  <p className="text-sm text-secondary-text mb-6">{t('You have 50 free messages per day')}</p>
-                  <div className="mb-6">
-                    <div className="flex justify-between text-xs text-light-text mb-2">
-                      <span>{t('Daily usage')}</span>
-                      <span>{quota.used}/{quota.limit}</span>
-                    </div>
-                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{
-                          width: `${Math.min(100, quota.percentage)}%`,
-                          background: quota.percentage > 80 ? '#EF4444' : '#6B5CE7',
-                        }}
-                      />
-                    </div>
-                  </div>
+                  <h2 className="text-lg font-semibold text-primary-text mb-4">{t('Welcome to ChatCouncil!')}</h2>
                   <button
                     onClick={onClose}
                     className="w-full bg-primary-blue text-white rounded-xl py-3 text-sm font-medium hover:opacity-90 transition-opacity"

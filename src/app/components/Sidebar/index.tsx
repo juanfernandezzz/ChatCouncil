@@ -1,14 +1,13 @@
 import { Link, useLocation } from '@tanstack/react-router'
 import { useAtom } from 'jotai'
 import { atomWithStorage } from 'jotai/utils'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import logoIcon from '~/assets/logo-chatcouncil.svg'
 import { cx } from '~/utils'
 import { BotId } from '~app/bots'
 import { CHATBOTS } from '~app/consts'
 import { loadHistoryMessages } from '~services/chat-history'
-import { getQuotaInfo } from '~services/quota'
 
 const TOOLS = [
   { id: 'image', label: 'Generador de Imágenes', icon: 'image' },
@@ -107,33 +106,6 @@ function HistorySection() {
   )
 }
 
-function QuotaBadge() {
-  const quota = useMemo(() => getQuotaInfo(), [])
-  const pct = Math.min(100, quota.percentage)
-  return (
-    <Link
-      to="/setting"
-      className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-secondary-text hover:bg-secondary hover:text-primary-text transition-colors"
-    >
-      <div className="flex-1">
-        <div className="flex justify-between mb-0.5">
-          <span>Free</span>
-          <span>{quota.remaining}/{quota.limit}</span>
-        </div>
-        <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all"
-            style={{
-              width: `${pct}%`,
-              background: pct > 80 ? '#EF4444' : '#6B5CE7',
-            }}
-          />
-        </div>
-      </div>
-    </Link>
-  )
-}
-
 function Sidebar() {
   const location = useLocation()
 
@@ -142,7 +114,6 @@ function Sidebar() {
       <div className="flex items-center justify-between pt-4 pb-2">
         <img src={logoIcon} className="ml-2 w-[90px]" alt="ChatCouncil" />
       </div>
-      <QuotaBadge />
       <div className="scrollbar-none mt-3 flex flex-col gap-0.5 overflow-y-auto flex-1">
         <Link
           to="/"

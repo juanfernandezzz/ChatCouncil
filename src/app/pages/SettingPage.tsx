@@ -2,6 +2,7 @@ import { FC, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import toast, { Toaster } from 'react-hot-toast'
 import { CHATBOTS } from '~app/consts'
+import { getQuotaInfo, QuotaInfo } from '~services/quota'
 import { UserConfig, getUserConfig, updateUserConfig } from '~services/user-config'
 import { getVersion } from '~utils'
 import { cx } from '~/utils'
@@ -19,10 +20,28 @@ const PROVIDER_CONFIGS: { id: keyof UserConfig; label: string; botKey: string; p
   { id: 'qwenApiKey', label: 'Alibaba (Qwen)', botKey: 'qianwen', placeholder: 'sk-...' },
 ]
 
+interface AuthState {
+  isLoggedIn: boolean
+  email: string
+  name: string
+}
+
+function loadAuth(): AuthState {
+  try {
+    const stored = localStorage.getItem('cc_auth')
+    if (stored) return JSON.parse(stored)
+  } catch { /* ignore */ }
+  return { isLoggedIn: false, email: '', name: '' }
+}
+
+const MODEL_QUOTA_KEYS = ['chatgpt', 'claude', 'gemini', 'deepseek', 'grok', 'perplexity', 'kimi', 'minimax', 'chatglm', 'qianwen']
+
 const SettingPage: FC = () => {
   const { t } = useTranslation()
   const [config, setConfig] = useState<UserConfig | null>(null)
   const [dirty, setDirty] = useState(false)
+  const [quota, setQuota] = useState<QuotaInfo>(getQuotaInfo)
+  const [auth, setAuth] = useState<AuthState>(loadAuth)
 
   useEffect(() => {
     getUserConfig().then(setConfig)
@@ -40,6 +59,19 @@ const SettingPage: FC = () => {
     toast.success(t('Saved'))
   }, [config, t])
 
+  const updateProfile = useCallback((field: 'name' | 'email', value: string) => {
+    const updated = { ...auth, [field]: value }
+    localStorage.setItem('cc_auth', JSON.stringify(updated))
+    setAuth(updated)
+    setDirty(true)
+  }, [auth])
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('cc_auth')
+    setAuth({ isLoggedIn: false, email: '', name: '' })
+    toast.success(t('Logged out'))
+  }, [t])
+
   if (!config) return null
 
   return (
@@ -50,31 +82,100 @@ const SettingPage: FC = () => {
             {t('Settings')} <span className="text-sm font-normal text-secondary-text">v{getVersion()}</span>
           </h1>
         </div>
-        <div className="flex flex-col gap-4">
-          {PROVIDER_CONFIGS.map((provider) => {
-            const bot = CHATBOTS[provider.botKey as keyof typeof CHATBOTS]
-            return (
-              <div key={provider.id} className="flex flex-col gap-1.5 border border-primary-border rounded-xl px-4 py-3">
-                <div className="flex items-center gap-2">
-                  {bot && <img src={bot.avatar} className="w-5 h-5 rounded object-contain" />}
-                  <span className="font-medium text-sm text-primary-text">{provider.label}</span>
-                </div>
-                <input
-                  type="password"
-                  className="w-full bg-secondary border border-primary-border rounded-lg px-3 py-2 text-sm text-primary-text placeholder:text-light-text focus:outline-none focus:ring-1 focus:ring-primary-blue"
-                  placeholder={provider.placeholder}
-                  value={(config[provider.id] as string) || ''}
-                  onChange={(e) => update(provider.id, e.currentTarget.value)}
-                />
-                {bot && (
-                  <span className="text-xs text-light-text">
-                    Modelos: {bot.name}
-                  </span>
-                )}
+
+        <div className="flex flex-col gap-6">
+          <section className="border border-primary-border rounded-xl p-4">
+            <h2 className="text-base font-semibold text-primary-text mb-4">{t('Profile')}</h2>
+            <div className="flex flex-col gap-3">
+              <input
+                type="text"
+                className="w-full bg-secondary border border-primary-border rounded-xl px-4 py-2.5 text-sm text-primary-text placeholder:text-light-text focus:outline-none focus:ring-1 focus:ring-primary-blue"
+                placeholder={t('Name')}
+                value={auth.name}
+                onChange={(e) => updateProfile('name', e.target.value)}
+              />
+              <input
+                type="email"
+                className="w-full bg-secondary border border-primary-border rounded-xl px-4 py-2.5 text-sm text-primary-text placeholder:text-light-text focus:outline-none focus:ring-1 focus:ring-primary-blue"
+                placeholder={t('Email')}
+                value={auth.email}
+                onChange={(e) => updateProfile('email', e.target.value)}
+              />
+              {auth.isLoggedIn && (
+                <button
+                  onClick={logout}
+                  className="self-start text-sm text-red-400 hover:text-red-300 transition-colors"
+                >
+                  {t('Sign out')}
+                </button>
+              )}
+            </div>
+          </section>
+
+          <section className="border border-primary-border rounded-xl p-4">
+            <h2 className="text-base font-semibold text-primary-text mb-4">{t('Usage Quotas')}</h2>
+            <div className="flex flex-col gap-2 mb-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-primary-text">{t('Daily free messages')}</span>
+                <span className="text-secondary-text">{quota.used}/{quota.limit}</span>
               </div>
-            )
-          })}
+              <div className="h-3 bg-secondary rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${Math.min(100, quota.percentage)}%`,
+                    background: quota.percentage > 80 ? '#EF4444' : '#6B5CE7',
+                  }}
+                />
+              </div>
+              <span className="text-xs text-light-text">{quota.remaining} {t('remaining today')}</span>
+            </div>
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-light-text uppercase tracking-wide">{t('Per model')}</span>
+              {MODEL_QUOTA_KEYS.map((key) => {
+                const count = quota.models[key] || 0
+                const bot = CHATBOTS[key as keyof typeof CHATBOTS]
+                if (!bot) return null
+                const pct = Math.min(100, (count / quota.limit) * 100)
+                return (
+                  <div key={key} className="flex items-center gap-2">
+                    <img src={bot.avatar} className="w-4 h-4 rounded object-contain" />
+                    <span className="text-xs text-secondary-text flex-1">{bot.name}</span>
+                    <span className="text-xs text-light-text">{count}</span>
+                    <div className="w-20 h-1.5 bg-secondary rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-primary-blue" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+
+          <section className="border border-primary-border rounded-xl p-4">
+            <h2 className="text-base font-semibold text-primary-text mb-4">{t('API Keys')}</h2>
+            <div className="flex flex-col gap-3">
+              {PROVIDER_CONFIGS.map((provider) => {
+                const bot = CHATBOTS[provider.botKey as keyof typeof CHATBOTS]
+                return (
+                  <div key={provider.id} className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      {bot && <img src={bot.avatar} className="w-4 h-4 rounded object-contain" />}
+                      <span className="font-medium text-xs text-primary-text">{provider.label}</span>
+                    </div>
+                    <input
+                      type="password"
+                      className="w-full bg-secondary border border-primary-border rounded-lg px-3 py-2 text-xs text-primary-text placeholder:text-light-text focus:outline-none focus:ring-1 focus:ring-primary-blue"
+                      placeholder={provider.placeholder}
+                      value={(config[provider.id] as string) || ''}
+                      onChange={(e) => update(provider.id, e.currentTarget.value)}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          </section>
         </div>
+
         <p className="text-xs text-light-text mt-4 px-1">
           {t('Your keys are stored locally and never sent to any server')}
         </p>

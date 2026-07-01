@@ -1,7 +1,7 @@
 import { Link, useLocation } from '@tanstack/react-router'
 import { useAtom } from 'jotai'
 import { atomWithStorage } from 'jotai/utils'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import logoIcon from '~/assets/logo-chatcouncil.svg'
 import { cx } from '~/utils'

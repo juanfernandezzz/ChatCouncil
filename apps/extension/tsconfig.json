@@ -1,0 +1,4 @@
+{
+  "//": "WXT genera este .wxt/tsconfig.json via `wxt prepare` (postinstall). No extiende ../../tsconfig.base.json a proposito: WXT necesita controlar sus propios globals auto-importados (defineBackground, browser, etc.) y ya aplica strict:true por defecto.",
+  "extends": "./.wxt/tsconfig.json"
+}

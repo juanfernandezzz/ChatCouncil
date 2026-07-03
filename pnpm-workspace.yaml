@@ -1,0 +1,21 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm 11 consolido los settings de build-scripts (onlyBuiltDependencies,
+# ignoredBuiltDependencies, etc.) en un unico mapa `allowBuilds` aca en
+# pnpm-workspace.yaml — ya NO se leen desde package.json#pnpm (ese campo
+# quedo deprecado y pnpm lo ignora con un warning silencioso si lo
+# encuentra). Verificado empiricamente: la primera instalacion en el
+# sandbox de verificacion (docs/BLUEPRINT.md, ledger) disparo el warning
+# real de pnpm senalando el campo movido, y `pnpm install` sin esto
+# entero deja los scripts "ignorados", lo que hace fallar el chequeo de
+# deps-status de comandos recursivos (`pnpm -r run ...`) de forma
+# intermitente y dificil de diagnosticar.
+#
+# esbuild: lo necesitan vite y wxt para bundlear (via @esbuild/<platform>).
+# spawn-sync: transitivo de wxt -> web-ext-run -> fx-runner, usado solo
+# para autolanzar Firefox en `wxt dev`; no interviene en build/zip.
+allowBuilds:
+  esbuild: true
+  spawn-sync: true

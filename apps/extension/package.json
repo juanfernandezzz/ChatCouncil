@@ -1,0 +1,24 @@
+{
+  "name": "@chatcouncil/extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Puente BYOA/BYOK de ChatCouncil: runner agnostico dirigido por adapters.json.",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "postinstall": "wxt prepare",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"(extension) no lint configured yet\"",
+    "test": "echo \"(extension) no tests yet\""
+  },
+  "dependencies": {
+    "@chatcouncil/adapters": "workspace:*",
+    "@chatcouncil/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "wxt": "^0.20.27"
+  }
+}

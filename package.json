@@ -1,0 +1,26 @@
+{
+  "name": "chatcouncil",
+  "private": true,
+  "version": "0.1.0",
+  "description": "ChatCouncil - herramienta de investigacion para analizar, comparar y auditar respuestas de multiples LLMs en paralelo (BYOA/BYOK).",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @chatcouncil/web dev",
+    "dev:ext": "pnpm --filter @chatcouncil/extension dev",
+    "build": "pnpm --filter @chatcouncil/web build && pnpm --filter @chatcouncil/extension build",
+    "build:web": "pnpm --filter @chatcouncil/web build",
+    "build:ext": "pnpm --filter @chatcouncil/extension build",
+    "zip:ext": "pnpm --filter @chatcouncil/extension zip",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "clean": "pnpm -r exec rm -rf dist .wxt node_modules/.cache"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

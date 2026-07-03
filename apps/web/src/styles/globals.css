@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+/*
+ * FUENTE DE VERDAD de los design tokens (Q26). Si cambias un valor
+ * aca, actualiza tambien packages/ui/src/tokens.ts en el mismo commit
+ * (ver el comentario en ese archivo).
+ *
+ * Nota de diseno (frontend-design skill): un fondo casi-negro con un
+ * unico acento vivo es un patron comun en UI generada por IA. Aqui es
+ * una decision explicita del brief (Q26), no un default por omision,
+ * asi que se respeta tal cual. Donde SI hay libertad de diseno -mono
+ * para metadatos tecnicos, densidad, radios, el anillo de streaming-
+ * se trata con intencion en los componentes en vez de piloto
+ * automatico de Tailwind.
+ */
+@theme {
+  --color-bg-base: #0a0a0a;
+  --color-surface-elevated: #141414;
+  --color-border: #262626;
+  --color-accent-primary: #00e5ff;
+  --color-accent-secondary: #10b981;
+  --color-text-primary: #ededed;
+  --color-text-secondary: #8a8a8a;
+
+  --font-ui: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-bg-base);
+    color: var(--color-text-primary);
+    font-family: var(--font-ui);
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-accent-primary) 30%, transparent);
+  }
+
+  /* Foco de teclado visible siempre — accesibilidad no negociable
+     incluso en un tema oscuro de alto contraste. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent-primary);
+    outline-offset: 2px;
+  }
+}
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}

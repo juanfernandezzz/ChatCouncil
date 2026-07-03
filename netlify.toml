@@ -1,0 +1,18 @@
+# Configuracion de build para el monorepo pnpm.
+# Deliberadamente SIN [build.base]: Netlify recomienda dejar la base en
+# la raiz del repo para que la deteccion de pnpm-lock.yaml funcione
+# (si se fija apps/web como base, Netlify no encuentra el lockfile,
+# cae a npm, y el protocolo "workspace:*" rompe la instalacion).
+[build]
+  command = "pnpm install --frozen-lockfile && pnpm --filter @chatcouncil/web build"
+  publish = "apps/web/dist"
+
+[build.environment]
+  NODE_VERSION = "20.19.0"
+
+# SPA fallback: todas las rutas sirven index.html (React Router, si se
+# agrega mas adelante, lo necesitara igual).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

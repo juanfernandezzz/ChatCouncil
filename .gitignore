@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+.wxt/
+.output/
+*.zip
+
+# env
+.env
+.env.local
+.env.*.local
+
+# editor / os
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+*.log
+
+# testing
+coverage/

@@ -35,11 +35,14 @@ frágiles (comportamiento no documentado, cambia sin aviso).
 | Google Drive API v3 (`files.list/create/get`) soporta CORS con Bearer token; sub-recursos puntuales (ej. `thumbnailLink`) NO | **Moderada** | Evita el patron mas fragil (uploads resumibles) para v1: multipart simple alcanza para JSON de texto+metadata (Q18). |
 | Netlify soporta pnpm nativo via Corepack; con monorepo, dejar `base` sin fijar (o el lockfile en la raiz no se detecta y cae a npm, rompiendo `workspace:*`) | **Alta** | `netlify.toml` ya escrito siguiendo esta regla exacta. |
 | pnpm 11 eliminó `onlyBuiltDependencies`/`ignoredBuiltDependencies` de `package.json#pnpm` — el reemplazo es un único mapa `allowBuilds` en `pnpm-workspace.yaml` | **Alta** | Descubierto por el propio pnpm instalado (warning real: *"The pnpm field in package.json is no longer read"*), no desde memoria — es un cambio posterior a cualquier tutorial preexistente. Sin esto, `pnpm install` deja `esbuild`/`spawn-sync` en estado "build ignorado" y `pnpm -r run <script>` puede fallar de forma intermitente en su chequeo interno de deps-status. Ya corregido en `pnpm-workspace.yaml`. |
+| pnpm 11 requiere **Node ≥ 22** (soporte para Node 18/19/20/21 eliminado; pnpm 11 es ESM puro) | **Alta** | Descubierto por fallo real del primer deploy en Netlify: corepack ejecutando pnpm 11.9.0 bajo Node 20.19.0 (pineado por `.nvmrc`/`netlify.toml`) crashea con `ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING` antes de instalar nada. El sandbox de verificación corría Node **v22.22.2** — por eso la incompatibilidad no apareció localmente: los pins del repo divergían del entorno realmente verificado. Corregido alineando `.nvmrc`, `netlify.toml`, CI y `engines` a `22.22.2` / `>=22.12.0` (el piso 22.12 lo fija Vite 7, que exige 20.19+ ó 22.12+; con pnpm 11 exigiendo ≥22, el piso combinado real es 22.12). Lección operativa: el ledger debe registrar también la versión de Node del entorno de verificación, no solo los resultados. |
 
 ### 0.1 Verificación ejecutada de punta a punta
 
 No es teoría: el scaffold de Fase 0 se instaló y compiló de verdad en
-un sandbox antes de entregarlo.
+un sandbox antes de entregarlo. Entorno del sandbox: **Node v22.22.2 +
+pnpm 11.9.0** — dato que resultó ser la variable oculta del primer
+deploy en Netlify (ver fila "pnpm 11 requiere Node ≥ 22" del ledger).
 
 ```
 pnpm install                               → 512 paquetes resueltos, 0 errores

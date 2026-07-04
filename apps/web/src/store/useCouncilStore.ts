@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ExtensionStatus } from "@/lib/extension-detect";
+import type { ExtensionStatus } from "@/lib/bridge-client";
 
 export const PANEL_COUNT_OPTIONS = [1, 2, 3, 4, 6, 8, 10] as const;
 export type PanelCount = (typeof PANEL_COUNT_OPTIONS)[number];

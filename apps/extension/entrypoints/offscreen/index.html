@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ChatCouncil offscreen</title>
+    <!--
+      Documento offscreen (Fase 1). No tiene UI: es un contexto de página
+      persistente cuya lifetime es INDEPENDIENTE del service worker
+      (verificado contra la doc de Chrome). Sostiene streams largos y su
+      buffer de reanudación mientras el SW se suspende. Se crea desde el
+      background con `browser.offscreen.createDocument`, nunca se navega
+      a él directamente.
+    -->
+  </head>
+  <body>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

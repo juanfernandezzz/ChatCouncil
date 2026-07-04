@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChatCouncil Bridge</title>
+    <!-- Registra este HTML como action.default_popup en el manifest. -->
+    <meta name="manifest.type" content="browser_action" />
+    <style>
+      :root {
+        --bg: #0a0a0a;
+        --surface: #141414;
+        --border: #262626;
+        --text: #ededed;
+        --text-dim: #8a8a8a;
+        --cyan: #00e5ff;
+        --emerald: #10b981;
+        --amber: #f59e0b;
+        --red: #ef4444;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Inter, system-ui, sans-serif;
+      }
+      body {
+        width: 300px;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0 0 2px;
+        letter-spacing: -0.01em;
+      }
+      .sub {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 10px;
+        color: var(--text-dim);
+        margin-bottom: 10px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 0;
+        border-top: 1px solid var(--border);
+        font-size: 12px;
+      }
+      .row .k {
+        color: var(--text-dim);
+      }
+      .row .v {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 11px;
+        text-align: right;
+      }
+      .dot {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        margin-right: 6px;
+        vertical-align: middle;
+      }
+      .ok {
+        color: var(--emerald);
+      }
+      .warn {
+        color: var(--amber);
+      }
+      .bad {
+        color: var(--red);
+      }
+      .note {
+        margin-top: 10px;
+        font-size: 10px;
+        line-height: 1.4;
+        color: var(--text-dim);
+      }
+      button {
+        margin-top: 10px;
+        width: 100%;
+        background: transparent;
+        color: var(--text-dim);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 6px;
+        font-size: 11px;
+        cursor: pointer;
+      }
+      button:hover {
+        color: var(--text);
+        border-color: var(--text-dim);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>ChatCouncil Bridge</h1>
+    <div class="sub" id="version">cargando…</div>
+    <div id="rows"></div>
+    <div class="note" id="note"></div>
+    <button id="refresh" type="button">Refrescar</button>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

@@ -10,6 +10,18 @@
 [build.environment]
   NODE_VERSION = "22.22.2"
 
+# Manifiesto remoto de adaptadores (Q9), leído por la extensión desde
+# chrome-extension:// (otro origen). Decisión "cartel": se publica con
+# CORS abierto para que la extensión lo fetchee por CORS normal, SIN
+# host_permissions (menos superficie de permisos, sin warning al
+# instalar). Es un archivo público por diseño. GET simple → alcanza con
+# Access-Control-Allow-Origin. Cache corto acorde al TTL de 10min del SW.
+[[headers]]
+  for = "/adapters.json"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Cache-Control = "public, max-age=600, must-revalidate"
+
 # SPA fallback: todas las rutas sirven index.html (React Router, si se
 # agrega mas adelante, lo necesitara igual).
 [[redirects]]

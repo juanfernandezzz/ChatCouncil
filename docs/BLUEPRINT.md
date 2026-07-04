@@ -6,9 +6,9 @@
 > releer todo el hilo de la entrevista. Cross-referencias `Qn` apuntan a
 > las respuestas de la entrevista de requerimientos original.
 
-**Estado global:** Fase 0 completa y verificada. Fases 1–9 pendientes,
-en orden de dependencia estricta (Q34: no saltar de UI a lógica de
-transporte sin cerrar la anterior).
+**Estado global:** Fases 0 y 1 completas y verificadas. Fases 2–9
+pendientes, en orden de dependencia estricta (Q34: no saltar de UI a
+lógica de transporte sin cerrar la anterior).
 
 **Leyenda:** ✅ hecho y verificado · 🔜 siguiente · ⏳ bloqueado por lo anterior
 
@@ -62,6 +62,61 @@ fuente. Efecto práctico: cargar la extensión sin empaquetar y correr
 Antes de cualquier distribución real, regenerar la clave (instrucciones
 en `docs/DEPLOY.md`).
 
+### 0.2 Ledger de verificación — Fase 1 (2026-07-04)
+
+Igual que Fase 0: código escrito contra el repo clonado y verificado en
+sandbox (**Node v22.22.2 + pnpm 11.9.0**) antes de entregar. Hallazgos y
+decisiones nuevos:
+
+| Hallazgo / decisión | Confianza | Implicación |
+|---|---|---|
+| La lifetime de un `offscreen document` es **independiente** del service worker; ilimitada para todo `reason` salvo `AUDIO_PLAYBACK` (cierra a 30s sin audio) | **Alta** | Base de la decisión B: el offscreen sobrevive a la muerte del SW y sostiene el buffer de reanudación en memoria. Verificado contra doc de Chrome + reportes de campo. El test manual de Juan (matar el SW) es la prueba final de que terminar el SW no tira también el offscreen. |
+| Un offscreen document sólo puede usar `chrome.runtime` (no `storage`/`tabs`) | **Alta** | Por eso el buffer vive en memoria en el offscreen y el cache del manifiesto lo maneja el SW en `storage.local`. Se sortea la incertidumbre de campo sobre `storage` en offscreen no dependiendo de él. |
+| Desde Chrome 114 abrir un Port ya **no** resetea el timer de suspensión del SW; sólo enviar mensajes lo hace. Chrome 116: sólo WebSocket extiende lifetime, no `fetch`/SSE | **Alta** | El offscreen no es opcional: un stream de varios minutos no puede vivir en el SW. Confirma la arquitectura SW-router-liviano + offscreen-dueño-del-stream. |
+| `browser.offscreen` (incl. `Reason`, `createDocument`) y `browser.runtime.getContexts` están **tipados en WXT** (`@wxt-dev/browser`) | **Alta** | No hace falta `@types/chrome`. Se usa `browser.*` en toda la extensión. |
+| WXT genera el tipo `PublicPath` de `getURL` desde los entrypoints; un entrypoint nuevo exige `wxt prepare` para que `getURL("/offscreen.html")` tipe | **Alta** | Descubierto por error de typecheck real (`TS2769`), no desde memoria. `wxt prepare` corre en `postinstall`, así que un `pnpm install` limpio lo regenera. |
+
+**Decisión de alcance (Juan): opción B — preservación de contenido**, no
+sólo "error recuperable" (A). Matar el SW a mitad de stream debe reanudar
+y no perder contenido. Implementado como **B con piso A**: reanudación
+best-effort desde el buffer del offscreen; si es imposible (offscreen
+caído / buffer desalojado / reintentos agotados) termina en
+`stream:aborted` → nunca hay cuelgue silencioso.
+
+**Bump de protocolo del puente a v2.** `BRIDGE_PROTOCOL_VERSION` sube de
+1 → 2 para soportar reanudación: `stream:chunk` lleva `seq`, `stream:done`
+lleva `lastSeq`, y se agrega `byoa:resume {requestId, fromSeq}`. **OJO con
+la ambigüedad de nombres:** esto es distinto del campo `protocolVersion`
+de `adapters.json`, que sigue en **1** — ese campo versiona el *formato
+del manifiesto remoto*, no el contrato SPA↔extensión. Son dos ejes de
+versión ortogonales a propósito.
+
+**Decisión "cartel" (Q9 transport):** Netlify sirve `/adapters.json` con
+`Access-Control-Allow-Origin: *` (header en `netlify.toml`); la extensión
+lo fetchea por CORS normal, **sin `host_permissions`** — menos superficie
+de permisos, sin warning al instalar. Si el header faltara, degrada al
+cache local (ya previsto).
+
+**Self-test (Q7 end-to-end):** providerId reservado `"__selftest__"`
+dispara un stream sintético (~40 chunks × 1s ≈ 40s, supera la ventana de
+30s) que nace en la SPA y recorre el camino real SPA→SW→offscreen→SW→SPA.
+Botón sólo-Fase-1 en la SPA (marcado como scaffolding temporal) con vista
+en vivo del transcript para *ver* la reanudación al matar el SW.
+
+```
+pnpm -r run typecheck                      → 5/5 packages, 0 errores de tipos
+pnpm --filter @chatcouncil/extension build → wxt 0.20.27; manifest con permiso "offscreen",
+                                             action.default_popup, entrypoints offscreen.html
+                                             + popup.html generados; sin host_permissions
+pnpm --filter @chatcouncil/web build       → vite 7.3.6, build limpio (209 KB JS)
+```
+
+Nota de honestidad: la correctitud *sin pérdida* de B depende de que el
+offscreen sobreviva a la terminación manual del SW (doc lo respalda,
+confianza alta). No es verificable en el sandbox (no hay Chrome real) —
+el test de aceptación manual de Juan es la prueba. Por eso se construyó
+con piso A: aun en el peor caso, no hay cuelgue silencioso.
+
 ---
 
 ## 1. Topología y grafo de dependencias
@@ -103,42 +158,61 @@ pnpm build:web && pnpm build:ext` sin errores. *(Cumplido, §0.1.)*
 
 ---
 
-## Fase 1 — Puente robusto + ciclo de vida de la extensión 🔜
+## Fase 1 — Puente robusto + ciclo de vida de la extensión ✅
 
 **Objetivo:** que el Port de Q7 sobreviva a la suspensión del service
 worker de MV3, y que el handshake de Q9 sea confiable bajo reconexión.
+Alcance elevado por decisión de Juan a **preservación de contenido**
+(opción B), no sólo error recuperable. Ver §0.2 del ledger.
 
-- **Documentos offscreen para streams largos.** El service worker MV3
-  se suspende tras ~30s de inactividad de eventos; un stream SSE/WS de
-  varios minutos necesita mantenerse vivo en un `offscreen document`
-  (API `chrome.offscreen`), con el service worker como router liviano
-  y el offscreen document sosteniendo la conexión real.
-- **Reconexión del Port.** `chrome.runtime.connect` no reintenta solo.
-  `bridge-client.ts` necesita un wrapper con backoff que reabra el
-  Port si `onDisconnect` dispara a mitad de un `requestId` activo, y
-  reportar ese `requestId` como `stream:aborted` en vez de dejarlo
-  colgado en la UI indefinidamente.
-- **Fetch + cache del manifiesto remoto (Q9).** La extensión debe
-  cachear `adapters.json` en `chrome.storage.local` con un TTL corto
-  (ej. 10 min) y degradar al último cache válido si Netlify no
-  responde — el manifiesto remoto no puede ser un punto único de
-  fallo que tumbe toda la extensión si Netlify tiene un hiccup.
-- **Popup mínimo de la extensión** mostrando estado de conexión y
-  versión — ayuda de diagnóstico para cuando el handshake falla y el
-  usuario no tiene forma de saber por qué desde la SPA sola.
+- **Offscreen document como dueño del stream y del buffer.** El SW es un
+  router liviano; el offscreen (lifetime independiente, ilimitada con
+  `reason: WORKERS`) sostiene el stream y un buffer en memoria por
+  `requestId`. Sobrevive a la muerte del SW → habilita reanudación.
+- **Reconexión + reanudación (opción B) con piso A.** `bridge-client.ts`
+  mantiene el Port persistente, reconecta con backoff
+  `[250,500,1000,2000,4000]ms` y, al reconectar, por cada stream en
+  vuelo pide `byoa:resume {fromSeq}`. El offscreen reproduce su buffer
+  desde ahí; los chunks se entregan **en orden** vía un buffer `pending`
+  (tolera reproducción + chunks en vivo intercalados/duplicados). Si la
+  reanudación es imposible → `stream:aborted` (piso) → nunca cuelgue
+  silencioso.
+- **Protocolo del puente v2.** `stream:chunk`+`seq`, `stream:done`+
+  `lastSeq`, nuevo `byoa:resume`. Distinto de `adapters.json.protocolVersion`
+  (sigue en 1; versiona el manifiesto, no el puente).
+- **Fetch + cache del manifiesto remoto (Q9).** El SW cachea
+  `adapters.json` en `storage.local` (TTL 10 min), degrada al último
+  cache válido si Netlify falla, o a lista vacía si no hay cache — nunca
+  punto único de fallo. Alimenta los adaptadores del handshake.
+- **Transporte "cartel":** Netlify sirve `/adapters.json` con CORS
+  abierto; la extensión lo fetchea sin `host_permissions`.
+- **Popup de diagnóstico** (read-only) mostrando protocolo, Ports
+  conectados, offscreen vivo y frescura del manifiesto.
+- **Self-test end-to-end** (`__selftest__`) para ejercitar el camino real
+  y validar el criterio de aceptación; botón sólo-Fase-1 en la SPA con
+  vista en vivo del transcript.
 
-**Módulos:** `apps/extension/entrypoints/offscreen.ts`,
-`apps/web/src/lib/bridge-client.ts` (reemplaza el stub de detección),
-`apps/extension/entrypoints/popup/`.
+**Módulos entregados:** `packages/shared/src/bridge-protocol.ts` (→v2),
+`apps/extension/lib/offscreen-protocol.ts` (contrato interno SW↔offscreen,
+NO en shared), `apps/extension/entrypoints/offscreen/` (index.html +
+main.ts), `apps/extension/entrypoints/popup/` (index.html + main.ts),
+`apps/extension/entrypoints/background.ts` (router + lifecycle + manifiesto),
+`apps/extension/wxt.config.ts` (permiso `offscreen`),
+`apps/web/src/lib/bridge-client.ts` (cliente persistente; reemplaza el
+stub), `apps/web/src/lib/extension-detect.ts` (shim de compat),
+`apps/web/src/App.tsx` (wiring + panel self-test), `netlify.toml` (CORS
+`/adapters.json`).
 
 **Criterio de aceptación:** matar el service worker manualmente
 (`chrome://extensions` → "service worker" → inspeccionar → recargar) a
 mitad de un stream simulado no debe perder el mensaje final para el
 usuario — debe verse como error recuperable, no como cuelgue silencioso.
+*(Bajo B: además preserva contenido y reanuda. Verificación final = test
+manual de Juan; el sandbox no tiene Chrome real.)*
 
 ---
 
-## Fase 2 — Adaptadores BYOK 🔜 (⏳ tras Fase 1)
+## Fase 2 — Adaptadores BYOK 🔜 (siguiente)
 
 Orden por prioridad de Q12, pero **reordenado por confianza CORS** para
 validar lo mobile-compatible primero: Anthropic → Google → OpenAI →

@@ -18,11 +18,18 @@ export default defineConfig({
     // y recalcular el ID resultante (formula y script en docs/DEPLOY.md).
     key: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAiRxXsR/h/Hoq4TADYzaYLDg3XNw2RroVpN89+FKA6evsLHaTAyiQfZvnEJS7yDqCTCcHVUz+csoCFq5SOLqytF8qeEV7AMdCMX8px8CAQptCQbg+o9vo05SRF+47hY4l1mxaWbRYCLzuz2IBK6UvNPO0fAJRYY3XD7uFR6TEERjOeC5SSEuB2SgJTqeT1Gya6ozUaI8Qa1DdZ86iD4lQo8K7lOHXBhvWdqng4EHZTORKdtfCle7WJMoyBNjRdTG0CCeI8+gNGWyDFLDYBDt3xW7mwzsk/Mw5wz12UcDqQlM+9gNiJFVSrqlB2u9TpjQPsvVwRT4V/RwLOrj2vxPWvwIDAQAB",
     // Minimo necesario para Fase 0/1 (custodia de keys + grupo de pestañas
-    // gestionado, Q2/Q10). host_permissions por proveedor se agregan recien
-    // en Fase 2 (BYOK) y Fase 3 (BYOA), cuando se sepa que dominios tocar
-    // — pedir permisos de mas antes de necesitarlos solo asusta al usuario
-    // en el prompt de instalacion sin beneficio real.
-    permissions: ["storage", "tabs", "tabGroups"],
+    // gestionado, Q2/Q10 + documento offscreen para streams largos, Fase 1).
+    // host_permissions por proveedor se agregan recien en Fase 2 (BYOK) y
+    // Fase 3 (BYOA), cuando se sepa que dominios tocar — pedir permisos de
+    // mas antes de necesitarlos solo asusta al usuario en el prompt de
+    // instalacion sin beneficio real.
+    //
+    // "offscreen": requerido por chrome.offscreen.createDocument (Fase 1).
+    // NO se agrega host_permissions para el manifiesto remoto: Netlify lo
+    // sirve con CORS abierto (ver netlify.toml), asi la extension lo fetchea
+    // por CORS normal sin ampliar la superficie de permisos (decision
+    // "cartel"). Si el header CORS faltara, degrada al cache local.
+    permissions: ["storage", "tabs", "tabGroups", "offscreen"],
     // Q7/Q9: unico transporte SPA -> extension. Cada origen que deba poder
     // conectar tiene que estar listado explicitamente aca.
     externally_connectable: {

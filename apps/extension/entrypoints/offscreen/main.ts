@@ -30,7 +30,7 @@ import {
  * manteniendo exactamente esta forma de buffer + reanudación.
  */
 
-// defineUnlistedScript / browser son globals auto-importados por WXT.
+// `browser` es un global auto-importado por WXT (no requiere import).
 
 type StreamStatus = "streaming" | "done" | "error";
 
@@ -138,35 +138,45 @@ function abort(requestId: string): void {
   relay({ type: "stream:aborted", requestId });
 }
 
-export default defineUnlistedScript(() => {
-  browser.runtime.onMessage.addListener((message: unknown) => {
-    if (!isToOffscreen(message)) return; // no es para el offscreen
-    const msg = message as ToOffscreenMessage;
-    // INSTRUMENTACIÓN DE DIAGNÓSTICO (temporal, ver nota en relay()).
-    console.log("[offscreen] mensaje recibido:", msg.kind, "requestId" in msg ? msg.requestId : "-");
-    switch (msg.kind) {
-      case "selftest:start":
-        startSelfTest(msg.requestId, msg.chunks, msg.intervalMs);
-        break;
-      case "resume":
-        resume(msg.requestId, msg.fromSeq);
-        break;
-      case "abort":
-        abort(msg.requestId);
-        break;
-    }
-  });
+// ─── Ejecución de nivel superior ────────────────────────────────────────
+// DELIBERADAMENTE SIN `defineUnlistedScript`. Ese wrapper es para
+// entrypoints de script unlisted (`entrypoints/<name>.ts` suelto), donde
+// WXT genera un módulo virtual que importa la definición y llama a
+// `.main()`. En el script de una PÁGINA HTML nadie consume ese export:
+// Rollup lo trata como código muerto y tree-shakea el módulo COMPLETO.
+// Eso fue la causa raíz del bug de Fase 1 (verificado a nivel de
+// artefacto: el offscreen.html compilado cargaba sólo el chunk compartido
+// de runtime — polyfill + shim de `browser` — sin una sola línea de este
+// archivo; por eso "Receiving end does not exist" en Chrome Y Opera, y
+// cero logs `[offscreen]` jamás). El patrón correcto es el mismo que
+// popup/main.ts: efectos de nivel superior, que Rollup preserva.
+browser.runtime.onMessage.addListener((message: unknown) => {
+  if (!isToOffscreen(message)) return; // no es para el offscreen
+  const msg = message as ToOffscreenMessage;
+  // INSTRUMENTACIÓN DE DIAGNÓSTICO (temporal, ver nota en relay()).
+  console.log("[offscreen] mensaje recibido:", msg.kind, "requestId" in msg ? msg.requestId : "-");
+  switch (msg.kind) {
+    case "selftest:start":
+      startSelfTest(msg.requestId, msg.chunks, msg.intervalMs);
+      break;
+    case "resume":
+      resume(msg.requestId, msg.fromSeq);
+      break;
+    case "abort":
+      abort(msg.requestId);
+      break;
+  }
+});
 
-  // Handshake de disponibilidad (ver isOffscreenReady en offscreen-protocol.ts):
-  // recién ahora, con el listener YA registrado en la línea de arriba, es
-  // seguro avisarle al SW que puede empezar a mandar trabajo. Mandarlo
-  // ANTES de addListener sería la misma carrera al revés.
-  const ready: OffscreenReadyMessage = { target: "offscreen-ready" };
-  console.log("[offscreen] listener registrado, avisando ready al SW");
-  void browser.runtime.sendMessage(ready).catch((err) => {
-    // No debería fallar nunca (el SW ya está escuchando para cuando este
-    // documento pudo llegar a existir) — pero si pasa, logueamos en vez
-    // de tragarlo: dejaría al SW esperando el ready hasta su timeout.
-    console.log("[offscreen] aviso de ready FALLÓ (inesperado):", err);
-  });
+// Handshake de disponibilidad (ver isOffscreenReady en offscreen-protocol.ts):
+// recién ahora, con el listener YA registrado en la línea de arriba, es
+// seguro avisarle al SW que puede empezar a mandar trabajo. Mandarlo
+// ANTES de addListener sería la misma carrera al revés.
+const ready: OffscreenReadyMessage = { target: "offscreen-ready" };
+console.log("[offscreen] listener registrado, avisando ready al SW");
+void browser.runtime.sendMessage(ready).catch((err) => {
+  // No debería fallar nunca (el SW ya está escuchando para cuando este
+  // documento pudo llegar a existir) — pero si pasa, logueamos en vez
+  // de tragarlo: dejaría al SW esperando el ready hasta su timeout.
+  console.log("[offscreen] aviso de ready FALLÓ (inesperado):", err);
 });

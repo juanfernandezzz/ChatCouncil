@@ -30,6 +30,19 @@ const PHASE_COLOR: Record<SelfTestPhase, string> = {
   error: "#ef4444",
 };
 
+// ─── SÓLO Fase 1 (scaffolding, se retira al cerrar la fase) ──────────────
+// Parámetros del self-test por URL, para pruebas AUTOMATIZADAS sin acceso
+// a DevTools ni a chrome:// (límite verificado de la automatización de
+// navegador). Con ?stIntervalMs=35000 los huecos entre chunks superan la
+// ventana de suspensión de ~30s del SW de MV3, así que el SW muere por
+// idle A MITAD del stream por sí solo — el proxy autónomo de la Corrida B
+// (misma terminación del proceso del SW; distinto gatillo que el Stop
+// manual). Sin params: 40×1000ms, el default de la fase.
+//   Ejemplo Corrida B autónoma: /?stChunks=4&stIntervalMs=35000
+const stParams = new URLSearchParams(window.location.search);
+const SELFTEST_CHUNKS = Math.max(1, Number(stParams.get("stChunks")) || 40);
+const SELFTEST_INTERVAL_MS = Math.max(50, Number(stParams.get("stIntervalMs")) || 1000);
+
 export default function App() {
   const panelCount = useCouncilStore((s) => s.panelCount);
   const isLayoutLocked = useCouncilStore((s) => s.isLayoutLocked);
@@ -73,7 +86,7 @@ export default function App() {
         setSelfTest((s) => ({ ...s, phase: "reconnecting", note: "Port caído; reconectando…" })),
       onResumed: () => setSelfTest((s) => ({ ...s, note: "reanudación pedida; reproduciendo buffer…" })),
     };
-    bridgeClient.runSelfTest(handlers, { chunks: 40, intervalMs: 1000 });
+    bridgeClient.runSelfTest(handlers, { chunks: SELFTEST_CHUNKS, intervalMs: SELFTEST_INTERVAL_MS });
   };
 
   const connected = extensionStatus.state === "connected";
@@ -107,7 +120,7 @@ export default function App() {
             onClick={runSelfTest}
             className="rounded-md border border-accent-primary px-3 py-1 text-xs font-medium text-accent-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:border-border disabled:text-text-secondary disabled:opacity-50"
           >
-            {testRunning ? "corriendo…" : "Correr self-test (~40s)"}
+            {testRunning ? "corriendo…" : "Correr self-test"}
           </button>
           <span className="flex items-center gap-1.5 font-mono text-xs">
             <span
@@ -118,7 +131,8 @@ export default function App() {
             {selfTest.phase}
           </span>
           <span className="font-mono text-xs text-text-secondary">
-            recibidos {selfTest.chunks.length} · lastSeq {selfTest.lastSeq}
+            recibidos {selfTest.chunks.length} · lastSeq {selfTest.lastSeq} · cfg{" "}
+            {SELFTEST_CHUNKS}×{SELFTEST_INTERVAL_MS}ms
           </span>
           {selfTest.note && (
             <span className="font-mono text-xs text-text-secondary">— {selfTest.note}</span>

@@ -66,6 +66,37 @@ export function isOffscreenRelay(msg: unknown): msg is OffscreenRelayMessage {
   );
 }
 
+/**
+ * offscreen -> SW: "ya registré mi listener, podés mandarme trabajo".
+ * ------------------------------------------------------------------
+ * Existe para cerrar una carrera real de MV3 (encontrada en producción,
+ * Opera, no en el sandbox): `browser.offscreen.createDocument()` resuelve
+ * cuando el DOCUMENTO existe, NO cuando su script módulo terminó de
+ * ejecutar y registró `runtime.onMessage`. Si el SW manda el primer
+ * mensaje apenas `createDocument()` resuelve, puede llegar antes de que
+ * haya alguien escuchando → `sendMessage` rechaza con "Could not
+ * establish connection. Receiving end does not exist." — visto
+ * literalmente en consola en la corrida de verificación de Juan, en el
+ * PRIMER mensaje de toda la sesión (`selftest:start`), no sólo en un
+ * `resume` post-reconexión.
+ *
+ * Es seguro que el offscreen mande esto sin ninguna espera de su lado:
+ * el listener del SW (`browser.runtime.onMessage`) se registra de forma
+ * síncrona al arrancar la extensión, mucho antes de que exista ninguna
+ * vía para que se cree un offscreen document — no hay carrera simétrica.
+ */
+export interface OffscreenReadyMessage {
+  target: "offscreen-ready";
+}
+
+export function isOffscreenReady(msg: unknown): msg is OffscreenReadyMessage {
+  return (
+    typeof msg === "object" &&
+    msg !== null &&
+    (msg as { target?: unknown }).target === "offscreen-ready"
+  );
+}
+
 // ---------------------------------------------------------------------------
 // SW <-> popup (diagnóstico)
 // ---------------------------------------------------------------------------

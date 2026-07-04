@@ -10,6 +10,7 @@ import {
 } from "@chatcouncil/shared";
 import {
   isDiagRequest,
+  isOffscreenReady,
   isOffscreenRelay,
   type DiagSnapshot,
   type ToOffscreenMessage,
@@ -70,7 +71,21 @@ export default defineBackground(() => {
 
   // Bus interno: sw-relay (chunks del offscreen -> broadcast) y diag (popup).
   browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
+    if (isOffscreenReady(message)) {
+      console.log("[SW] offscreen confirmó ready");
+      offscreenReadyResolve?.();
+      return; // sin respuesta
+    }
     if (isOffscreenRelay(message)) {
+      // INSTRUMENTACIÓN DE DIAGNÓSTICO (temporal, ver nota en offscreen/main.ts relay()).
+      console.log(
+        "[SW] relay recibido de offscreen:",
+        message.payload.type,
+        "requestId" in message.payload ? message.payload.requestId : "-",
+        "-> broadcasting a",
+        externalPorts.size,
+        "port(s)",
+      );
       broadcast(message.payload);
       return; // sin respuesta
     }
@@ -164,19 +179,46 @@ async function handleExternal(port: ExternalPort, message: BridgeRequest): Promi
 // Offscreen lifecycle
 // --------------------------------------------------------------------------
 
+// Handshake de disponibilidad (ver OffscreenReadyMessage). Un único
+// resolver pendiente a la vez alcanza: sólo hay un offscreen document
+// posible en toda la extensión. Se resuelve desde el listener interno
+// de mensajes cuando llega isOffscreenReady(...).
+let offscreenReadyResolve: (() => void) | null = null;
+const OFFSCREEN_READY_TIMEOUT_MS = 3000;
+
 async function ensureOffscreen(): Promise<void> {
   const offscreenUrl = browser.runtime.getURL(OFFSCREEN_PATH);
   const existing = await browser.runtime.getContexts({
     contextTypes: ["OFFSCREEN_DOCUMENT"],
     documentUrls: [offscreenUrl],
   });
-  if (existing.length > 0) return;
+  if (existing.length > 0) {
+    // Ya existía ANTES de esta llamada (p. ej. sobrevivió a la muerte de
+    // una instancia previa del SW, que es justamente el caso que Fase 1
+    // necesita). Lleva rato corriendo → su listener se registró hace
+    // tiempo → no hay carrera que esperar acá. Esperar igual sería
+    // lentitud sin beneficio, no corrección real.
+    return;
+  }
 
   // Guarda de concurrencia: createDocument tira error si ya existe uno.
   if (creatingOffscreen) {
     await creatingOffscreen;
     return;
   }
+
+  // A partir de acá SÍ hay una carrera real: createDocument() resuelve
+  // cuando el documento EXISTE, no cuando su script módulo terminó de
+  // ejecutar y registró `runtime.onMessage`. Mandar el primer mensaje
+  // apenas resuelve createDocument puede llegar antes de que haya alguien
+  // escuchando ("Receiving end does not exist" — visto literalmente en
+  // consola en la corrida de verificación, en el PRIMER mensaje de la
+  // sesión). Cerramos la carrera esperando el ping `offscreen-ready` que
+  // el propio documento manda apenas registra su listener.
+  const readyPromise = new Promise<void>((resolve) => {
+    offscreenReadyResolve = resolve;
+  });
+
   creatingOffscreen = browser.offscreen
     .createDocument({
       url: offscreenUrl,
@@ -192,13 +234,37 @@ async function ensureOffscreen(): Promise<void> {
       creatingOffscreen = null;
     });
   await creatingOffscreen;
+
+  const timedOut = await Promise.race([
+    readyPromise.then(() => false),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(true), OFFSCREEN_READY_TIMEOUT_MS)),
+  ]);
+  offscreenReadyResolve = null;
+  if (timedOut) {
+    // No convertimos esto en un cuelgue nuevo: seguimos igual (degrada al
+    // comportamiento previo, que ya falla de forma diagnosticable vía
+    // sendToOffscreen), pero dejamos rastro explícito de que el handshake
+    // no llegó a tiempo — sería la señal de que el problema es más
+    // profundo que timing (el documento no cargó en absoluto).
+    console.log(
+      `[SW] offscreen no confirmó "ready" dentro de ${OFFSCREEN_READY_TIMEOUT_MS}ms; ` +
+        "siguiendo de todas formas (puede volver a fallar con 'Receiving end does not exist').",
+    );
+  }
 }
 
 async function sendToOffscreen(msg: ToOffscreenMessage): Promise<void> {
   await ensureOffscreen();
-  await browser.runtime.sendMessage(msg).catch(() => {
-    /* offscreen arrancando; el reintento natural viene del próximo mensaje */
-  });
+  // INSTRUMENTACIÓN DE DIAGNÓSTICO (temporal, ver nota en offscreen/main.ts
+  // relay()). Antes esto tragaba el error de entrega SIN loguear nada.
+  console.log("[SW] enviando a offscreen:", msg.kind, "requestId" in msg ? msg.requestId : "-");
+  await browser.runtime.sendMessage(msg)
+    .then(() => {
+      console.log("[SW] mensaje a offscreen ENTREGADO:", msg.kind);
+    })
+    .catch((err) => {
+      console.log("[SW] mensaje a offscreen FALLÓ:", msg.kind, err);
+    });
 }
 
 // --------------------------------------------------------------------------

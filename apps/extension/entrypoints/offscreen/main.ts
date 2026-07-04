@@ -1,6 +1,7 @@
 import type { BridgeResponse } from "@chatcouncil/shared";
 import {
   isToOffscreen,
+  type OffscreenReadyMessage,
   type OffscreenRelayMessage,
   type ToOffscreenMessage,
 } from "@/lib/offscreen-protocol";
@@ -52,9 +53,19 @@ function relay(payload: BridgeResponse): void {
   // El SW puede estar dormido: un `sendMessage` entrante lo revive. Si no
   // hay ningún receptor (SW arrancando), la promesa rechaza; lo tragamos
   // porque el buffer ya guardó el chunk y se reproducirá en la reanudación.
-  void browser.runtime.sendMessage(msg).catch(() => {
-    /* SW despertando o sin listener aún; el buffer cubre la pérdida. */
-  });
+  //
+  // INSTRUMENTACIÓN DE DIAGNÓSTICO (temporal — remover cuando se cierre el
+  // hallazgo del resume-colgado). Antes esto tragaba el error SIN loguear
+  // nada, haciendo imposible distinguir "se entregó" de "se perdió" desde
+  // la consola. Ver docs/BLUEPRINT.md §0.2.
+  console.log("[offscreen] relay intentando enviar:", payload.type, "requestId" in payload ? payload.requestId : "-");
+  void browser.runtime.sendMessage(msg)
+    .then(() => {
+      console.log("[offscreen] relay ENTREGADO:", payload.type);
+    })
+    .catch((err) => {
+      console.log("[offscreen] relay FALLÓ (SW despertando o sin listener):", payload.type, err);
+    });
 }
 
 function startSelfTest(requestId: string, chunks: number, intervalMs: number): void {
@@ -84,6 +95,18 @@ function startSelfTest(requestId: string, chunks: number, intervalMs: number): v
 
 function resume(requestId: string, fromSeq: number): void {
   const state = streams.get(requestId);
+  // INSTRUMENTACIÓN DE DIAGNÓSTICO (temporal, ver nota en relay()). Esta
+  // es LA línea que distingue las dos hipótesis: si esto loguea "NO
+  // encontrado", el offscreen perdió el stream (contradice la premisa de
+  // B). Si loguea "encontrado", el resume llegó bien y el problema está
+  // en la entrega de vuelta (relay/broadcast), no acá.
+  console.log(
+    "[offscreen] resume pedido:",
+    requestId,
+    "fromSeq:",
+    fromSeq,
+    state ? `encontrado, ${state.chunks.length} chunks en buffer, status=${state.status}` : "NO encontrado",
+  );
   if (!state) {
     // Piso (A-floor): no tenemos ese stream (offscreen reiniciado, o
     // requestId desconocido). Nunca dejamos colgada a la SPA.
@@ -119,6 +142,8 @@ export default defineUnlistedScript(() => {
   browser.runtime.onMessage.addListener((message: unknown) => {
     if (!isToOffscreen(message)) return; // no es para el offscreen
     const msg = message as ToOffscreenMessage;
+    // INSTRUMENTACIÓN DE DIAGNÓSTICO (temporal, ver nota en relay()).
+    console.log("[offscreen] mensaje recibido:", msg.kind, "requestId" in msg ? msg.requestId : "-");
     switch (msg.kind) {
       case "selftest:start":
         startSelfTest(msg.requestId, msg.chunks, msg.intervalMs);
@@ -130,5 +155,18 @@ export default defineUnlistedScript(() => {
         abort(msg.requestId);
         break;
     }
+  });
+
+  // Handshake de disponibilidad (ver isOffscreenReady en offscreen-protocol.ts):
+  // recién ahora, con el listener YA registrado en la línea de arriba, es
+  // seguro avisarle al SW que puede empezar a mandar trabajo. Mandarlo
+  // ANTES de addListener sería la misma carrera al revés.
+  const ready: OffscreenReadyMessage = { target: "offscreen-ready" };
+  console.log("[offscreen] listener registrado, avisando ready al SW");
+  void browser.runtime.sendMessage(ready).catch((err) => {
+    // No debería fallar nunca (el SW ya está escuchando para cuando este
+    // documento pudo llegar a existir) — pero si pasa, logueamos en vez
+    // de tragarlo: dejaría al SW esperando el ready hasta su timeout.
+    console.log("[offscreen] aviso de ready FALLÓ (inesperado):", err);
   });
 });

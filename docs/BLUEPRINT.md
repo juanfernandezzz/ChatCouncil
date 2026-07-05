@@ -120,6 +120,51 @@ confianza alta). No es verificable en el sandbox (no hay Chrome real) —
 el test de aceptación manual de Juan es la prueba. Por eso se construyó
 con piso A: aun en el peor caso, no hay cuelgue silencioso.
 
+**Verificación funcional (Chrome 149, 2026-07-04, corrida autónoma de
+Code, post-fix del tree-shake — supersede parcialmente la nota
+anterior):** tres tests sobre el build corregido, oráculo = transcript
+de la SPA. (1) *Creación del offscreen* (40×1000ms): 40/40 chunks
+contiguos, cadencia exacta de 1s, cierre en `done`. El primer chunk
+llegó ≈1.1s después del click → el handshake `offscreen-ready` resolvió
+en <~150ms (si hubiera corrido el camino de timeout de 3s, el primer
+chunk habría llegado a ≥4s) — el hardening funciona y es rápido.
+(2) *SW frío + offscreen preexistente*: 40/40, `done`, sin espera de
+ready (camino `existing.length > 0`, por diseño). (3) *Muerte del SW a
+mitad de stream* (proxy por idle: cfg 4×35000ms, huecos > ventana de
+suspensión): 4/4 chunks preservados con separación exacta de 35s,
+cierre en `done`, **≥4 ciclos de muerte/reanudación** — fingerprint de
+la máquina de estados del cliente: la fase `resumed` sólo es alcanzable
+desde `reconnecting`, y se observó tras CADA chunk, incluida la
+reanudación con `fromSeq=-1` antes del primero. Decisión B verificada
+de punta a punta en Chrome. Pendiente opcional: Stop manual (el gatillo
+literal del criterio; mismo evento terminal, timing adversarial) y
+re-verificación en Opera (entorno del repro original; la causa raíz era
+independiente del navegador → confianza alta sin verificar).
+Observación de segundo orden para Fase 2+: con la SPA abierta e
+inactiva, el diseño de Port persistente produce un ciclo suspensión del
+SW ↔ reconexión del cliente cada ~30s (cada reconexión despierta al
+SW) — costo inherente al patrón, no un bug; considerar si Fase 2 quiere
+un backoff de reposo cuando no hay streams en vuelo.
+
+**Cierre de Fase 1 (2026-07-04).** Decisión de Juan: los dos checks
+opcionales (Stop manual del SW — el gatillo literal del criterio — y
+re-verificación en Opera) se **declinan conscientemente**; la
+verificación funcional en Chrome vía proxy por idle se considera
+suficiente. Queda registrado que el criterio literal no se ejecutó tal
+cual está redactado. Scaffolding retirado: el panel de self-test sale de
+`App.tsx` y se **conserva desmontado** en `apps/web/src/dev/SelfTestPanel.tsx`
+(typechequea con el workspace, no entra al bundle, un import lo
+re-monta; incluye los params de URL `?stChunks/?stIntervalMs`). La
+instrumentación de diagnóstico se reduce a **warns de camino de fallo**
+(entrega SW↔offscreen fallida, timeout de ready, resume sin stream =
+piso A) — la lección de la fase fue que los `.catch(() => {})` mudos
+hicieron el sistema indiagnosticable; eso no vuelve. Markers vigentes
+para el gate de artefactos del entrypoint offscreen tras la limpieza:
+`"offscreen-ready"` y `"sw-relay"` (los strings de logs verbosos, como
+`"listener registrado"`, ya no existen y no deben usarse como marker).
+Cambio de alcance registrado al cierre: Fase 8 (móvil) reescrita — ver
+esa sección.
+
 ---
 
 ## 1. Topología y grafo de dependencias
@@ -388,23 +433,52 @@ conversaciones sincronizadas (sin adjuntos, por diseño de Q18).
 
 ---
 
-## Fase 8 — Móvil (BYOK-only) 🔜
+## Fase 8 — Móvil ⏸ (alcance cambiado al cierre de Fase 1, 2026-07-04)
 
-- Carrusel horizontal con peek + dots de streaming (Q22), usando
-  `overflow-x: scroll` + `scroll-snap` nativo en vez de una librería de
-  swipe completa — menos peso, mejor rendimiento en gama baja.
-- Lista de proveedores móvil-compatibles derivada en runtime de
-  `mobileCompatibleProviders()` (ya existe en `capability-matrix.ts`),
-  nunca hardcodeada en el componente — así un cambio de política CORS
-  de un proveedor solo requiere actualizar el manifiesto remoto o
-  correr `probeCors()`, no shippear una nueva versión de la SPA.
-- Warning de seguridad visible para `localStorage` como custodia de
-  llaves (Q10), no solo un tooltip perdible.
+**Decisión de Juan (supersede el alcance anterior "BYOK-only"):** la v1
+móvil de la SPA **sólo informa** que ChatCouncil corre en Chrome de
+escritorio, porque el producto depende de una extensión que los
+navegadores móviles no pueden alojar. El plan anterior de esta fase
+(carrusel Q22 + subconjunto BYOK vía CORS con `mobileCompatibleProviders()`)
+queda **retirado del roadmap v1**: mantener una experiencia móvil
+parcial (algunos proveedores sí, otros no, sin BYOA) duplicaba UI para
+un producto degradado.
 
-**Criterio de aceptación:** en un navegador móvil real (no devtools
-responsive), Anthropic y Google funcionan sin extensión; DeepSeek y
-Perplexity muestran el estado "no disponible en móvil" con explicación,
-no un error genérico de red.
+**Ya implementado (al cierre de Fase 1, no requiere fase propia):** gate
+informativo en `App.tsx` — detección móvil por UA (+`userAgentData.mobile`
+donde existe) → pantalla de aviso con la explicación y la dirección
+futura. Caso borde conocido y aceptado: iPadOS se presenta como Mac →
+cae al flujo desktop y termina en el badge "Extensión no instalada"
+(degradación coherente, no un error). En móvil no se intenta conectar el
+puente (no hay extensión posible).
+
+**Vía en evaluación para habilitar móvil de verdad: extensión para
+Firefox en Android.** Firefox para Android soporta WebExtensions (el
+catálogo completo de AMO está abierto desde fines de 2023). La base de
+código actual está bien posicionada para un port (WXT compila
+multi-target y todo el código usa el namespace estándar `browser.*`),
+pero el port NO es gratis — dos fricciones estructurales, ambas en el
+corazón del puente de Fase 1:
+1. **Firefox no soporta `externally_connectable`** — el transporte
+   entero de Q7 (la SPA abre un Port con `runtime.connect(extensionId)`)
+   no existe ahí. El patrón estándar de reemplazo es un content script
+   inyectado en el origen de la SPA que puentea `window.postMessage` ↔
+   mensajería interna. Es una capa de adaptación del transporte, no un
+   cambio del protocolo v2 (los mensajes viajan igual).
+2. **Firefox no tiene `chrome.offscreen`** — pero tampoco lo necesita:
+   su MV3 usa **event pages**, no service workers, con semántica de
+   vida distinta; el sostén del stream + buffer de reanudación viviría
+   en el background directamente. La arquitectura "router liviano +
+   dueño-del-stream separado" de Fase 1 se conserva conceptualmente;
+   cambia dónde vive el dueño.
+Pendiente de verificar si se retoma: paridad de `tabGroups` en Firefox
+(hoy en `permissions`; probablemente ignorado/ausente) y el criterio de
+aceptación móvil real. Esta vía queda **post-v1, sin fase asignada** —
+se evalúa después de Fase 9 si el uso lo justifica.
+
+**Criterio de aceptación (del alcance vigente):** en un navegador móvil
+real, la SPA muestra el aviso informativo (no la UI de paneles, no un
+error de red, no el badge de extensión); en desktop nada cambia.
 
 ---
 

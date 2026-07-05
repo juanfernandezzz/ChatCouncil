@@ -72,20 +72,10 @@ export default defineBackground(() => {
   // Bus interno: sw-relay (chunks del offscreen -> broadcast) y diag (popup).
   browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
     if (isOffscreenReady(message)) {
-      console.log("[SW] offscreen confirmó ready");
       offscreenReadyResolve?.();
       return; // sin respuesta
     }
     if (isOffscreenRelay(message)) {
-      // INSTRUMENTACIÓN DE DIAGNÓSTICO (temporal, ver nota en offscreen/main.ts relay()).
-      console.log(
-        "[SW] relay recibido de offscreen:",
-        message.payload.type,
-        "requestId" in message.payload ? message.payload.requestId : "-",
-        "-> broadcasting a",
-        externalPorts.size,
-        "port(s)",
-      );
       broadcast(message.payload);
       return; // sin respuesta
     }
@@ -246,7 +236,7 @@ async function ensureOffscreen(): Promise<void> {
     // sendToOffscreen), pero dejamos rastro explícito de que el handshake
     // no llegó a tiempo — sería la señal de que el problema es más
     // profundo que timing (el documento no cargó en absoluto).
-    console.log(
+    console.warn(
       `[SW] offscreen no confirmó "ready" dentro de ${OFFSCREEN_READY_TIMEOUT_MS}ms; ` +
         "siguiendo de todas formas (puede volver a fallar con 'Receiving end does not exist').",
     );
@@ -255,16 +245,11 @@ async function ensureOffscreen(): Promise<void> {
 
 async function sendToOffscreen(msg: ToOffscreenMessage): Promise<void> {
   await ensureOffscreen();
-  // INSTRUMENTACIÓN DE DIAGNÓSTICO (temporal, ver nota en offscreen/main.ts
-  // relay()). Antes esto tragaba el error de entrega SIN loguear nada.
-  console.log("[SW] enviando a offscreen:", msg.kind, "requestId" in msg ? msg.requestId : "-");
-  await browser.runtime.sendMessage(msg)
-    .then(() => {
-      console.log("[SW] mensaje a offscreen ENTREGADO:", msg.kind);
-    })
-    .catch((err) => {
-      console.log("[SW] mensaje a offscreen FALLÓ:", msg.kind, err);
-    });
+  // Nunca tragamos el error de entrega en silencio (lección de Fase 1,
+  // ver BLUEPRINT §0.2): un warn barato mantiene esto diagnosticable.
+  await browser.runtime.sendMessage(msg).catch((err) => {
+    console.warn("[SW] envío a offscreen falló:", msg.kind, err);
+  });
 }
 
 // --------------------------------------------------------------------------

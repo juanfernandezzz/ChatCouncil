@@ -3,6 +3,7 @@ import { PANEL_COUNT_OPTIONS, useCouncilStore, type PanelCount } from "@/store/u
 import { bridgeClient } from "@/lib/bridge-client";
 import { GridPanel } from "@/components/layout/GridPanel";
 import { ExtensionBadge } from "@/components/shell/ExtensionBadge";
+import { ByokTestPanel } from "@/dev/ByokTestPanel";
 
 // ─── Soporte de plataformas (decisión de cierre de Fase 1, ver BLUEPRINT
 // "Fase 8 — Móvil") ─────────────────────────────────────────────────────
@@ -58,7 +59,7 @@ export default function App() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-baseline gap-2">
           <h1 className="text-lg font-semibold tracking-tight text-text-primary">ChatCouncil</h1>
-          <span className="font-mono text-xs text-text-secondary">scaffold · fase 1</span>
+          <span className="font-mono text-xs text-text-secondary">fase 2 · byok</span>
         </div>
         <ExtensionBadge />
       </header>
@@ -66,6 +67,11 @@ export default function App() {
       {/* El panel de self-test de Fase 1 fue retirado al cerrar la fase.
           Se conserva desmontado en src/dev/SelfTestPanel.tsx — un import
           lo re-monta si hace falta diagnóstico del puente. */}
+
+      {/* Harness de aceptación de Fase 2 (E8): montado DURANTE la fase
+          para el test con llaves reales; al cierre se retira este import
+          y queda en src/dev/, igual que el panel de Fase 1. */}
+      <ByokTestPanel />
 
       <div className="flex items-center gap-2">
         <span className="text-xs text-text-secondary">Paneles:</span>

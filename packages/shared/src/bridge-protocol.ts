@@ -33,6 +33,18 @@
  *     reanudación con contenido sea imposible.
  * Un SPA v2 hablando con una extensión v1 (o viceversa) es rechazado
  * por el handshake (`version-mismatch`) — comportamiento correcto.
+ *
+ * ── Cambio DENTRO de v2 (Fase 2, E4) ──────────────────────────────
+ * `byoa:resume` se RENOMBRA a `stream:resume`: la maquinaria de buffer +
+ * reanudación del offscreen siempre fue genérica por requestId (su canal
+ * interno usa `kind: "resume"` sin prefijo); el nombre byoa-específico
+ * era sólo de esta capa. Fase 2 la reutiliza para BYOK (caso real que
+ * muerde: modelos con thinking largo pueden callar >30s antes del primer
+ * token → el SW muere en el silencio → sin resume, el stream se pierde
+ * aunque el fetch del offscreen siga vivo). Se renombra SIN bump de
+ * versión ni alias: v2 tiene cero consumidores externos (distribución =
+ * zips de GitHub, un solo usuario) — un v3 acá sería teatro de
+ * compatibilidad. Registrado en BLUEPRINT §0.3.
  */
 
 export const BRIDGE_PROTOCOL_VERSION = 2;
@@ -75,18 +87,36 @@ export type BridgeRequest =
     }
   | {
       /**
-       * Reanudación (Fase 1, opción B). Tras una reconexión del Port, el
-       * cliente pide continuar un stream en vuelo desde después de
-       * `fromSeq` (el último seq entregado contiguamente). El offscreen
-       * reproduce su buffer y sigue. Si el offscreen ya no tiene ese
-       * stream, responde `stream:aborted` (piso).
+       * Reanudación (Fase 1, opción B; GENÉRICA desde Fase 2). Tras una
+       * reconexión del Port, el cliente pide continuar un stream en vuelo
+       * — byoa, byok o self-test, es indistinto: el buffer del offscreen
+       * se indexa por requestId — desde después de `fromSeq` (el último
+       * seq entregado contiguamente). El offscreen reproduce su buffer y
+       * sigue. Si ya no tiene ese stream, responde `stream:aborted`
+       * (piso). Hasta Fase 2 se llamaba `byoa:resume`.
        */
-      type: "byoa:resume";
+      type: "stream:resume";
       requestId: string;
       fromSeq: number;
     }
   | { type: "byoa:abort"; requestId: string }
   | {
+      /**
+       * Proxy BYOK (Fase 2, Q11). La SPA arma la request HTTP CRUDA —
+       * incluidos los headers de auth, porque la custodia de llaves vive
+       * en la SPA (E2a: key-vault aislado; ver BLUEPRINT Fase 2) — y la
+       * extensión es un caño tonto con allowlist: `background.ts` valida
+       * sender.origin + que el origin de `url` esté en la lista blanca
+       * EN CÓDIGO (`packages/adapters`, jamás del manifiesto remoto) y
+       * recién entonces la reenvía al offscreen, que ejecuta el fetch
+       * (ley de Fase 1: ningún fetch de proveedor vive en el SW — una
+       * respuesta >30s lo mata, streaming o no). Con `stream: true` el
+       * offscreen relaya el cuerpo como texto decodificado en
+       * `stream:chunk` con `seq`, por la MISMA maquinaria de buffer +
+       * reanudación que byoa/self-test; con `stream: false`, un único
+       * chunk y `stream:done`. Los headers NUNCA se loggean (llevan la
+       * API key).
+       */
       type: "byok:proxy";
       requestId: string;
       url: string;

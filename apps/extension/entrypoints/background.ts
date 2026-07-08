@@ -8,6 +8,7 @@ import {
   BRIDGE_PROTOCOL_VERSION,
   SELFTEST_PROVIDER_ID,
 } from "@chatcouncil/shared";
+import { BYOK_PROXY_ALLOWED_ORIGINS } from "@chatcouncil/adapters";
 import {
   isDiagRequest,
   isOffscreenReady,
@@ -18,13 +19,15 @@ import {
 
 // `defineBackground` y `browser` son globals auto-importados por WXT.
 //
-// Rol del service worker en Fase 1: ROUTER LIVIANO. No sostiene streams
-// (el offscreen lo hace, porque el SW muere a los ~30s y un fetch cuya
-// respuesta tarda >30s también lo mata — verificado en la doc de Chrome).
-// El SW: (1) resuelve el handshake alimentando la lista de adaptadores
-// desde el manifiesto cacheado; (2) enruta dispatch/resume/abort al
-// offscreen; (3) hace broadcast de los chunks del offscreen a los Ports
-// externos conectados; (4) responde el snapshot de diagnóstico al popup.
+// Rol del service worker en Fase 1/2: ROUTER LIVIANO. No sostiene streams
+// NI ejecuta fetch de proveedores (el offscreen lo hace, porque el SW
+// muere a los ~30s y un fetch cuya respuesta tarda >30s también lo mata —
+// verificado en la doc de Chrome; aplica a byok streaming o no). El SW:
+// (1) resuelve el handshake alimentando la lista de adaptadores desde el
+// manifiesto cacheado; (2) enruta dispatch/resume/abort y el proxy BYOK
+// (previa allowlist + sender.origin, Q11) al offscreen; (3) hace
+// broadcast de los chunks del offscreen a los Ports externos conectados;
+// (4) responde el snapshot de diagnóstico al popup.
 //
 // Todo el estado de abajo es de MEMORIA y se pierde si el SW se suspende.
 // Es a propósito: se reconstruye solo (los Ports se re-registran al
@@ -137,7 +140,9 @@ async function handleExternal(port: ExternalPort, message: BridgeRequest): Promi
       return;
     }
 
-    case "byoa:resume": {
+    case "stream:resume": {
+      // Genérico desde Fase 2 (E4): el buffer del offscreen se indexa por
+      // requestId — reanuda byoa, byok o self-test indistintamente.
       await sendToOffscreen({
         target: "offscreen",
         kind: "resume",
@@ -152,9 +157,42 @@ async function handleExternal(port: ExternalPort, message: BridgeRequest): Promi
       return;
     }
 
-    case "byok:proxy":
+    case "byok:proxy": {
+      const denial = validateByokProxy(port, message);
+      if (denial) {
+        // Diagnóstico sin secretos: requestId + razón (origins), JAMÁS
+        // los headers del mensaje (llevan la API key del usuario).
+        console.warn(
+          `[chatcouncil-bridge] byok:proxy rechazado (${denial}) requestId=${message.requestId}`,
+        );
+        const err: BridgeResponse = {
+          type: "stream:error",
+          requestId: message.requestId,
+          message: `byok:proxy rechazado: ${denial}`,
+        };
+        try {
+          port.postMessage(err);
+        } catch {
+          externalPorts.delete(port); // Port muerto
+        }
+        return;
+      }
+      await sendToOffscreen({
+        target: "offscreen",
+        kind: "byok:start",
+        requestId: message.requestId,
+        url: message.url,
+        method: message.method,
+        headers: message.headers,
+        body: message.body,
+        stream: message.stream,
+      });
+      return;
+    }
+
     case "byok:proxy-abort": {
-      console.warn(`[chatcouncil-bridge] mensaje "${message.type}" aún no implementado (Fase 2)`);
+      // Mismo abort genérico del offscreen: el registro es por requestId.
+      await sendToOffscreen({ target: "offscreen", kind: "abort", requestId: message.requestId });
       return;
     }
 
@@ -163,6 +201,51 @@ async function handleExternal(port: ExternalPort, message: BridgeRequest): Promi
       console.warn("[chatcouncil-bridge] mensaje desconocido", exhaustiveCheck);
     }
   }
+}
+
+// --------------------------------------------------------------------------
+// Proxy BYOK (Fase 2, Q11): allowlist estricta + verificación de origen
+// --------------------------------------------------------------------------
+
+// Defensa en profundidad: `externally_connectable` YA limita a nivel de
+// manifest quién puede abrir el Port (ver wxt.config.ts, espejar ambos),
+// pero byok:proxy mueve credenciales del usuario hacia dominios externos
+// y no debe depender de una sola capa — se re-verifica POR MENSAJE.
+const ALLOWED_SPA_ORIGINS = new Set(["https://chatcouncil.netlify.app", "http://localhost:5173"]);
+
+// Fuente de verdad EN CÓDIGO (packages/adapters, decisión E5 + Apéndice):
+// el manifiesto remoto sólo puede apagar proveedores, jamás agregar
+// dominios al proxy. host_permissions (wxt.config.ts) espeja esta lista.
+const BYOK_ORIGIN_SET = new Set<string>(BYOK_PROXY_ALLOWED_ORIGINS);
+
+function portOrigin(port: ExternalPort): string | undefined {
+  // Acceso estructural: el shape de Port.sender varía entre typings de
+  // browser; el dato en runtime existe para Ports de onConnectExternal.
+  return (port as { sender?: { origin?: string } }).sender?.origin;
+}
+
+/** null = permitido; string = razón del rechazo (sin secretos, nunca headers). */
+function validateByokProxy(
+  port: ExternalPort,
+  message: Extract<BridgeRequest, { type: "byok:proxy" }>,
+): string | null {
+  const origin = portOrigin(port);
+  if (!origin || !ALLOWED_SPA_ORIGINS.has(origin)) {
+    return `sender.origin no permitido (${origin ?? "desconocido"})`;
+  }
+  let target: URL;
+  try {
+    target = new URL(message.url);
+  } catch {
+    return "url inválida";
+  }
+  if (target.protocol !== "https:") {
+    return `protocolo no permitido (${target.protocol})`;
+  }
+  if (!BYOK_ORIGIN_SET.has(target.origin)) {
+    return `dominio fuera del allowlist BYOK (${target.origin})`;
+  }
+  return null;
 }
 
 // --------------------------------------------------------------------------

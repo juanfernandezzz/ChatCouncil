@@ -15,7 +15,9 @@ import {
  *     MV3 se suspende — verificado: un Port abierto ya NO mantiene vivo
  *     al SW desde Chrome 114, sólo lo hace enviar mensajes).
  *   · Reanudación con PRESERVACIÓN DE CONTENIDO (decisión B): tras
- *     reconectar, por cada stream en vuelo pide `byoa:resume {fromSeq}`.
+ *     reconectar, por cada stream en vuelo pide `stream:resume {fromSeq}`
+ *     (hasta Fase 2 se llamaba `byoa:resume`; hoy es genérico — byoa,
+ *     byok o self-test, el buffer del offscreen se indexa por requestId).
  *     El offscreen (que sobrevive a la muerte del SW) reproduce su buffer
  *     desde ahí. Los chunks se entregan EN ORDEN vía un buffer `pending`,
  *     tolerando que la reproducción y los chunks en vivo lleguen
@@ -43,6 +45,9 @@ const RECONNECT_BACKOFF_MS = [250, 500, 1000, 2000, 4000] as const;
 /** El payload de un byoa:dispatch, derivado del contrato compartido. */
 type DispatchPayload = Extract<BridgeRequest, { type: "byoa:dispatch" }>["payload"];
 
+/** Request cruda de byok:proxy (Fase 2), derivada del contrato compartido. */
+type ByokProxyPayload = Omit<Extract<BridgeRequest, { type: "byok:proxy" }>, "type" | "requestId">;
+
 export type ExtensionStatus =
   | { state: "checking" }
   | { state: "not-installed"; downloadUrl: string }
@@ -62,6 +67,9 @@ export interface StreamHandlers {
 }
 
 interface StreamRecord {
+  /** Familia del stream: decide qué mensaje de abort corresponde. La
+   * reanudación es genérica (`stream:resume`) para ambas. */
+  kind: "byoa" | "byok";
   handlers: StreamHandlers;
   /** Último seq entregado contiguamente (empieza en -1). */
   lastSeq: number;
@@ -123,6 +131,7 @@ class BridgeClient {
   dispatch(providerId: string, payload: DispatchPayload, handlers: StreamHandlers): string {
     const requestId = crypto.randomUUID();
     this.streams.set(requestId, {
+      kind: "byoa",
       handlers,
       lastSeq: -1,
       pending: new Map(),
@@ -144,11 +153,42 @@ class BridgeClient {
     return this.dispatch(SELFTEST_PROVIDER_ID, { prompt: "", selfTest: opts }, handlers);
   }
 
+  /**
+   * Fase 2 (BYOK, camino proxy): manda una request HTTP cruda para que
+   * el offscreen la ejecute (E3: ningún fetch de proveedor vive en el
+   * SW) y engancha el stream resultante a la MISMA maquinaria de
+   * orden/reanudación que byoa/self-test (E4). `request.headers` lleva
+   * la API key: este cliente no lo loggea jamás.
+   */
+  byokProxy(request: ByokProxyPayload, handlers: StreamHandlers): string {
+    const requestId = crypto.randomUUID();
+    this.streams.set(requestId, {
+      kind: "byok",
+      handlers,
+      lastSeq: -1,
+      pending: new Map(),
+      terminal: false,
+      doneLastSeq: null,
+    });
+    this.ensurePort();
+    if (!this.port) {
+      // Sin extensión no hay proxy posible: piso inmediato, nunca cuelgue.
+      this.finalizeAborted(requestId);
+      return requestId;
+    }
+    this.port.postMessage({ type: "byok:proxy", requestId, ...request });
+    return requestId;
+  }
+
   abort(requestId: string): void {
     const rec = this.streams.get(requestId);
     if (!rec || rec.terminal) return;
     if (this.port) {
-      this.port.postMessage({ type: "byoa:abort", requestId });
+      this.port.postMessage(
+        rec.kind === "byok"
+          ? { type: "byok:proxy-abort", requestId }
+          : { type: "byoa:abort", requestId },
+      );
       // El offscreen contestará stream:aborted, que finaliza el registro.
     } else {
       this.finalizeAborted(requestId);
@@ -334,7 +374,8 @@ class BridgeClient {
     for (const [requestId, rec] of this.streams) {
       if (rec.terminal) continue;
       rec.handlers.onResumed?.();
-      this.port.postMessage({ type: "byoa:resume", requestId, fromSeq: rec.lastSeq });
+      // Genérico desde Fase 2 (E4): cubre byoa, byok y self-test por igual.
+      this.port.postMessage({ type: "stream:resume", requestId, fromSeq: rec.lastSeq });
     }
   }
 }

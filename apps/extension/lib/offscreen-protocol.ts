@@ -36,7 +36,25 @@ export type ToOffscreenMessage =
       intervalMs: number;
     }
   | { target: "offscreen"; kind: "resume"; requestId: string; fromSeq: number }
-  | { target: "offscreen"; kind: "abort"; requestId: string };
+  | { target: "offscreen"; kind: "abort"; requestId: string }
+  | {
+      /**
+       * Fase 2 (BYOK): el SW YA validó sender.origin + allowlist de
+       * dominios (Q11) antes de reenviar esto — el offscreen ejecuta el
+       * fetch sin re-decidir política. `headers` incluye la API key del
+       * usuario: NUNCA loggear este mensaje ni sus headers. El stream
+       * resultante entra a la MISMA maquinaria de buffer + reanudación
+       * que el resto (`resume`/`abort` genéricos ya lo cubren).
+       */
+      target: "offscreen";
+      kind: "byok:start";
+      requestId: string;
+      url: string;
+      method: "GET" | "POST";
+      headers: Record<string, string>;
+      body?: string;
+      stream: boolean;
+    };
 
 /**
  * offscreen -> SW: un evento de stream ya con forma de `BridgeResponse`

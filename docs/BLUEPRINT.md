@@ -6,9 +6,11 @@
 > releer todo el hilo de la entrevista. Cross-referencias `Qn` apuntan a
 > las respuestas de la entrevista de requerimientos original.
 
-**Estado global:** Fases 0 y 1 completas y verificadas. Fases 2–9
-pendientes, en orden de dependencia estricta (Q34: no saltar de UI a
-lógica de transporte sin cerrar la anterior).
+**Estado global:** Fases 0 y 1 completas y verificadas. Fase 2
+entregada (2026-07-08; cierre pendiente del test de aceptación con
+llaves reales — ver §0.3). Fases 3–9 pendientes, en orden de dependencia
+estricta (Q34: no saltar de UI a lógica de transporte sin cerrar la
+anterior).
 
 **Leyenda:** ✅ hecho y verificado · 🔜 siguiente · ⏳ bloqueado por lo anterior
 
@@ -165,6 +167,115 @@ para el gate de artefactos del entrypoint offscreen tras la limpieza:
 Cambio de alcance registrado al cierre: Fase 8 (móvil) reescrita — ver
 esa sección.
 
+### 0.3 Ledger de verificación — Fase 2 (2026-07-08)
+
+**Decisiones de la entrevista (E1–E9; Juan aprobó todas, con E6
+ampliado por él):**
+
+- **E1 — Enmienda:** esta sección de Fase 2 SUPERSEDE su texto original
+  (escrito antes del commit 0443384). Retirada la custodia móvil de Q10
+  (el gate de App.tsx hace que la SPA nunca opere en móvil); criterio de
+  aceptación desktop-only; el reorden por confianza CORS se conserva con
+  justificación nueva (los directos son el transporte más simple para
+  validar el contrato — nada de móvil). `mobileCompatibleProviders()` →
+  `corsDirectProviders()` (mismo predicado, semántica vigente; sin
+  consumidores previos, verificado por grep). Las filas históricas de §0
+  que mencionan móvil NO se tocan: son registro fechado, no estado.
+- **E2a — Custodia en la SPA:** `apps/web/src/lib/key-vault.ts`
+  (localStorage default, opt-out por proveedor a sessionStorage). El Q10
+  original (chrome.storage desktop / localStorage móvil) chocaba además
+  consigo mismo: llaves sólo en chrome.storage ⇒ la SPA no puede armar el
+  header de una llamada directa "sin extensión". Regla dura cumplible por
+  estructura: gate mecánico `scripts/guard-key-vault.mjs` (paso propio en
+  CI) — sólo `byok-client.ts` y el panel pueden importar el vault; ningún
+  path /drive|sync/i puede hacerlo NI entrar al allowlist. Trade-off
+  asumido: XSS clásico de todo BYOK-SPA; mitigación operativa = llaves
+  revocables.
+- **E3 — Ley de fetch:** TODO `byok:proxy` ejecuta en el offscreen,
+  streaming o no (una respuesta no-streaming también puede superar los
+  ~30s del SW). Los directos fetchean en la SPA sin puente.
+- **E4 — Resume reutilizado:** `byoa:resume` → `stream:resume`, SIN bump
+  de versión ni alias (v2 sin consumidores externos; distribución = zips
+  de GitHub, un usuario). El canal interno SW↔offscreen ya era genérico
+  (`kind: "resume"`). Caso real que lo exige: modelos con thinking largo
+  callan >30s antes del primer token → el SW muere en el silencio → sin
+  resume el stream se pierde con el fetch del offscreen vivo. Mitigación
+  por tocar zona verificada: re-correr el escenario 3 del self-test
+  (muerte por idle) en Chrome real al cierre.
+- **E5 — Allowlist en código:** `BYOK_PROXY_ALLOWED_ORIGINS`
+  (packages/adapters, derivado del registro — no duplicado) es la fuente
+  de verdad que `background.ts` aplica por mensaje, con verificación de
+  `sender.origin` (defensa en profundidad sobre `externally_connectable`)
+  y https-only. `host_permissions` la espeja 1:1 (openai/deepseek/
+  perplexity). Los directos NO tienen fallback por proxy a propósito
+  (sus dominios fuera de host_permissions: no ampliar permisos por un
+  hipotético). Kill-switch remoto para BYOK: DIFERIDO — el manifiesto
+  hoy no participa del routing BYOK; se cablea cuando la UI consuma
+  `healthy` (Fase 4).
+- **E6 (ampliado por Juan) — CINCO proveedores de punta a punta:**
+  anthropic y google directos; openai, deepseek y perplexity vía proxy.
+  Un solo dialecto openai-compat parametrizado cubre a los tres proxied;
+  Groq/xAI/OpenRouter/Mistral llegarán como config + probe + test manual
+  (no código nuevo). GLM fuera: ni su baseUrl público está confirmado.
+- **E7 — probeCors real:** request mínimo NO autenticado; respuesta
+  LEGIBLE (401/403/405 incluidos) = CORS pasa → la corrección del probe
+  NO depende de que el path sea exacto, sólo del origin y su política.
+  Fetch rechazado se desambigua con centinela `mode:"no-cors"`: red viva
+  → "blocked" (cacheado en sessionStorage); red caída → "unverified" (NO
+  se cachea — sería congelar un falso negativo). `effectiveCorsStatus()`
+  = medido pisa declarado; el routing lo consume por request.
+- **E8 — Harness:** `ByokTestPanel` montado en App.tsx DURANTE la fase
+  (mismo ciclo de vida que el panel de Fase 1; al cierre se retira el
+  import y queda en `src/dev/`). La llave se tipea en el navegador de
+  Juan, se guarda sólo vía vault, y el panel jamás la imprime (maskKey).
+- **E9 — Backoff de reposo: DIFERIDO explícito.** El Port persistente
+  despierta al SW cada ~30s con la SPA inactiva — costo conocido del
+  patrón. Exige un estado nuevo del cliente ("conectable pero dormido")
+  que colisiona con la semántica del badge; revisitar post-Fase 4.
+  Condición mínima si se adelanta: dormir sólo con streams.size === 0,
+  despertar ante dispatch, re-verificar escenario 3 completo.
+
+**Verificación ejecutada (sandbox, Node 22.22.2 / pnpm 11.9.0):**
+
+- `pnpm install --frozen-lockfile` limpio (postinstall `wxt prepare` OK).
+- `pnpm -r run typecheck` → 5/5 `tsc --noEmit`, 0 errores (el 6.º
+  proyecto del scope es el raíz privado sin script; esperado).
+- `pnpm guard:keys` → OK (allowlist: byok-client.ts + ByokTestPanel.tsx).
+- `pnpm build:ext` → chrome-mv3 OK; manifest compilado con
+  `host_permissions` = openai/deepseek/perplexity (verificado en el
+  JSON compilado, no el fuente). `pnpm build:web` → OK (226 kB JS).
+- **Gates de artefacto (todos verificados sobre `.output`/`dist`):**
+  extensión — `"offscreen-ready"`, `"sw-relay"` y `"byok:start"` en
+  `background.js` Y en el chunk del offscreen; `"stream:resume"` en
+  `background.js` (el offscreen usa el `kind:"resume"` interno: NO debe
+  aparecer ahí); `offscreen.html` referencia exactamente el chunk que
+  contiene los markers. Web — `"stream:resume"`, `"byok:proxy"`,
+  `"chatcouncil:byok:key"`, `"chatcouncil:probeCors"`, `"api.deepseek.com"`
+  y el título del panel presentes en `dist/assets`.
+- **Verificación empírica parcial desde el sandbox** (red del sandbox
+  sólo permite api.anthropic.com de los cinco): preflight OPTIONS real a
+  `/v1/messages` con `Origin: https://chatcouncil.netlify.app` y los
+  tres headers del probe → **HTTP 200**, `access-control-allow-origin: *`,
+  `access-control-allow-headers` ecoando los tres textualmente,
+  `allow-methods` incluye POST. El diseño del probe queda validado a
+  nivel preflight para anthropic; el resto se mide con el botón "Probe
+  CORS" del panel en el navegador real.
+
+**Datos frágiles (modelos por defecto — override disponible en el
+panel; corregir en `providers.ts`/`anthropic.ts`/`google.ts` si un
+proveedor los retira):** `claude-sonnet-4-5` (confianza moderada-alta) ·
+`gemini-2.5-flash` (moderada) · `gpt-4o-mini` (alta) · `deepseek-chat`
+(alta) · `sonar` (moderada-alta). Los paths de probe de
+mistral/groq/xai/openrouter son best-effort: un path errado NO invalida
+el probe (ver E7).
+
+**Fuera del alcance de esta fase (explícito):** adjuntos y toggles BYOK
+(adjuntos presentes → error explícito del adapter; `thinking_delta` /
+`reasoning_content` ignorados — el contrato v1 sólo modela texto de
+respuesta); selector de modelo en UI real (Fase 4); adaptadores
+Mistral/Groq/xAI/OpenRouter/GLM; kill-switch remoto BYOK (ver E5);
+backoff de reposo (E9).
+
 ---
 
 ## 1. Topología y grafo de dependencias
@@ -260,37 +371,66 @@ manual de Juan; el sandbox no tiene Chrome real.)*
 
 ---
 
-## Fase 2 — Adaptadores BYOK 🔜 (siguiente)
+## Fase 2 — Adaptadores BYOK 🔄 (entregada 2026-07-08 · cierre pendiente de aceptación con llaves reales)
 
-Orden por prioridad de Q12, pero **reordenado por confianza CORS** para
-validar lo mobile-compatible primero: Anthropic → Google → OpenAI →
-Mistral/Groq/xAI/OpenRouter (con `probeCors()` real antes de confiar en
-la matriz) → DeepSeek/Perplexity (proxy obligatorio desde el día uno).
+> **Enmienda (E1, aprobada en la entrevista de fase):** esta sección fue
+> escrita ANTES del cambio de alcance móvil (commit 0443384) y quedó
+> superseded en dos puntos: (a) la custodia móvil de Q10 ("localStorage
+> + warning para móvil") se RETIRA — con el gate móvil de App.tsx la SPA
+> ni siquiera conecta el puente en móvil; (b) el criterio de aceptación
+> es desktop-only. El reorden por confianza CORS se CONSERVA con su
+> justificación vigente: los proveedores CORS-directos son el transporte
+> más simple (fetch+SSE sin puente) — validan el contrato `Adapter` y la
+> capa de parseo antes de sumar las variables del proxy. La motivación
+> móvil original ya no existe. Decisiones completas y verificación: §0.3.
 
-- Implementar `probeCors(providerId)` de verdad (hoy es una firma
-  declarada en `capability-matrix.ts`): un fetch mínimo real contra
-  cada API, cacheado en `sessionStorage`, que sobreescribe la
-  confianza declarada con un hecho medido en el navegador del usuario.
-- Adaptador BYOK genérico en `packages/adapters` implementando el
-  contrato `Adapter` de `shared`, parametrizado por proveedor (headers,
-  formato de streaming SSE/NDJSON, parseo de la respuesta a
-  `AdapterChunk`).
-- Proxy de la extensión (Q11): `byok:proxy` en `background.ts`, con
-  **allowlist estricta de dominios** (lista blanca explícita de
-  `baseUrl` por proveedor, nunca un proxy abierto) y verificación de
-  `sender.origin` contra el dominio de la SPA antes de reenviar nada.
-- Custodia de llaves (Q10): módulo de `chrome.storage` en la extensión
-  para escritorio; módulo de `localStorage` + warning visible en
-  componente para móvil. Ninguno de los dos debe ser importado desde
-  el módulo de sync de Drive — es la regla dura que hace cumplible
-  "las llaves jamás se sincronizan a Drive".
+Alcance implementado (5 proveedores de punta a punta — E6 ampliado):
+Anthropic y Google **directos** desde la SPA; OpenAI, DeepSeek y
+Perplexity **vía proxy** de la extensión (dialecto openai-compat único
+parametrizado). Groq/xAI/OpenRouter/Mistral: config + probe + test
+cuando se habiliten; GLM fuera hasta confirmar su API pública.
 
-**Criterio de aceptación:** enviar un prompt real a Anthropic y a
-Google directo desde el navegador (sin extensión) funciona en Chrome y
-en un navegador móvil; DeepSeek/Perplexity funcionan solo con la
-extensión activa como proxy.
+- `probeCors(providerId)` REAL en `capability-matrix.ts` (E7): fetch
+  mínimo no autenticado, centinela no-cors para distinguir CORS-bloqueado
+  de red caída, cache en `sessionStorage`, `effectiveCorsStatus()` (lo
+  medido pisa lo declarado) consumido por el routing en cada request.
+- Subsistema BYOK en `packages/adapters` (`src/byok/`): decoder SSE
+  incremental tolerante a cortes arbitrarios; builders + parsers por
+  dialecto (anthropic, gemini, openai-compat); registro
+  `BYOK_PROVIDERS`; factory `createByokAdapter` que implementa el
+  contrato `Adapter` con deps inyectadas (llave y transporte);
+  `directFetchTransport`. La request cruda (url/headers/body) la arma la
+  SPA; la extensión NO conoce dialectos (Q1 intacta).
+- Proxy Q11: `byok:proxy`/`byok:proxy-abort` implementados en
+  `background.ts` con **allowlist EN CÓDIGO** (`BYOK_PROXY_ALLOWED_ORIGINS`,
+  derivada del registro), https-only y verificación de `sender.origin`;
+  el fetch corre en el **offscreen** (ley de Fase 1) y alimenta el MISMO
+  buffer + reanudación, ahora genérico: `byoa:resume` → `stream:resume`
+  (E4, sin bump — v2 sin consumidores externos). `host_permissions`
+  espeja el allowlist 1:1 (openai/deepseek/perplexity).
+- Custodia Q10 (E2a): `key-vault.ts` en la SPA — localStorage default,
+  opt-out por proveedor a sessionStorage. Regla dura cumplible por
+  estructura: `scripts/guard-key-vault.mjs` en CI rompe el build si un
+  módulo fuera del allowlist (o cualquier path /drive|sync/i) importa el
+  vault. Las llaves jamás viajan en zips/prompts/commits/logs.
+- Harness E8: `ByokTestPanel` (src/dev/, montado en App.tsx durante la
+  fase) — custodia, probe, ruta directo/proxy visible, stream en vivo
+  con fases reconnecting/resumed, tokens in/out.
 
----
+**Criterio de aceptación (desktop-only, se prueba con las llaves de
+Juan en su Chrome — el sandbox no las tiene):**
+
+1. Anthropic y Google streamean un prompt real de punta a punta por la
+   vía DIRECTA (ruta "direct" visible en el panel; sin tráfico por el
+   puente).
+2. OpenAI, DeepSeek y Perplexity streamean vía la extensión (ruta
+   "proxy").
+3. Con la extensión deshabilitada, esos tres fallan con error claro e
+   INMEDIATO (nunca cuelgue) mientras Anthropic/Google siguen andando.
+4. Matar el SW (o dejarlo morir por idle) a mitad de un stream proxied
+   preserva el contenido y termina en `done` — la reanudación de Fase 1,
+   ahora genérica, ejercitada sobre byok. Regresión obligatoria: el
+   escenario 3 del self-test de Fase 1 sigue pasando.
 
 ## Fase 3 — Adaptadores BYOA 🔜 (⏳ tras Fase 2)
 
@@ -513,3 +653,6 @@ Registradas para que ninguna sesión futura las relitigue por accidente
 - El layout de una conversación se congela en el primer mensaje.
 - Comparar y Resumir anonimiza por defecto (Q30) — es una herramienta
   de auditoría de sesgos, no un chat comparativo casual.
+- El allowlist del proxy BYOK vive EN CÓDIGO (`packages/adapters`,
+  espejado 1:1 en `host_permissions`); el manifiesto remoto sólo puede
+  APAGAR proveedores, jamás agregar dominios al proxy (Fase 2, E5).

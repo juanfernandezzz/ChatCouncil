@@ -30,6 +30,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Guard key-vault isolation (Q10)
+        run: pnpm guard:keys
+
       - name: Lint
         run: pnpm lint
 

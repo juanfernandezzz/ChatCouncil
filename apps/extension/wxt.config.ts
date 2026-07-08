@@ -30,6 +30,23 @@ export default defineConfig({
     // por CORS normal sin ampliar la superficie de permisos (decision
     // "cartel"). Si el header CORS faltara, degrada al cache local.
     permissions: ["storage", "tabs", "tabGroups", "offscreen"],
+    // Q11 (Fase 2): dominios de los proveedores BYOK que REQUIEREN el
+    // proxy del offscreen (CORS bloqueado desde la SPA). host_permissions
+    // exime del CORS a los fetch hechos desde contextos de la extensión
+    // para EXACTAMENTE estos orígenes. La fuente de verdad del allowlist
+    // vive en código (packages/adapters, BYOK_PROXY_ALLOWED_ORIGINS) y
+    // background.ts la aplica por mensaje; esta lista debe espejarla 1:1.
+    // Los proveedores CORS-directos (anthropic/google) NO van acá: la SPA
+    // les habla sin puente, y no tienen fallback por proxy a propósito
+    // (agregar sus dominios "por si acaso" ampliaría permisos para un
+    // hipotético — contra la filosofía de Fase 0). Apéndice del
+    // BLUEPRINT: el manifiesto remoto sólo puede apagar proveedores,
+    // jamás agregar dominios al proxy.
+    host_permissions: [
+      "https://api.openai.com/*",
+      "https://api.deepseek.com/*",
+      "https://api.perplexity.ai/*",
+    ],
     // Q7/Q9: unico transporte SPA -> extension. Cada origen que deba poder
     // conectar tiene que estar listado explicitamente aca.
     externally_connectable: {

@@ -26,8 +26,14 @@ import {
  * otra razón (recarga de la extensión, etc.), el buffer se pierde y la
  * reanudación responde `stream:aborted` (piso) — sin cuelgue silencioso.
  *
- * Fase 3 reemplazará el generador sintético por un `fetch`/SSE real
- * manteniendo exactamente esta forma de buffer + reanudación.
+ * Fase 2 (BYOK) materializó esa promesa para el camino proxy: el
+ * handler `byok:start` ejecuta ACÁ el fetch real contra el proveedor
+ * (el SW ya validó allowlist + sender.origin — ley de Fase 1: ningún
+ * fetch de proveedor vive en el SW, una respuesta >30s lo mata,
+ * streaming o no) y alimenta EXACTAMENTE la misma forma de buffer +
+ * reanudación. Los `headers` de byok llevan la API key del usuario:
+ * NUNCA se loggean (ni en warns de fallo). Fase 3 hará lo propio con
+ * los streams BYOA.
  */
 
 // `browser` es un global auto-importado por WXT (no requiere import).
@@ -41,6 +47,8 @@ interface StreamState {
   errorMessage?: string;
   /** id del setInterval del generador sintético (Fase 1). */
   timer?: ReturnType<typeof setInterval>;
+  /** abort del fetch byok en vuelo (Fase 2). */
+  controller?: AbortController;
   /** meta del terminal `stream:done`, para reenviar en una reanudación. */
   doneMeta?: Record<string, unknown>;
 }
@@ -117,8 +125,101 @@ function resume(requestId: string, fromSeq: number): void {
 function abort(requestId: string): void {
   const state = streams.get(requestId);
   if (state?.timer) clearInterval(state.timer);
+  // Cortar el fetch byok en vuelo ANTES de borrar el registro: el catch
+  // del runner distingue "abort pedido" por signal.aborted / registro
+  // ausente y no pisa este `stream:aborted` con un error espurio.
+  state?.controller?.abort();
   streams.delete(requestId);
   relay({ type: "stream:aborted", requestId });
+}
+
+// ─── BYOK (Fase 2): fetch real por proxy ───────────────────────────────
+
+const BYOK_ERROR_SNIPPET_MAX = 400;
+
+type ByokStartMessage = Extract<ToOffscreenMessage, { kind: "byok:start" }>;
+
+function startByok(msg: ByokStartMessage): void {
+  // Idempotente, igual que el self-test: un reenvío duplicado no debe
+  // duplicar el fetch ni pisar el buffer.
+  if (streams.has(msg.requestId)) return;
+  const state: StreamState = { chunks: [], status: "streaming" };
+  const controller = new AbortController();
+  state.controller = controller;
+  streams.set(msg.requestId, state);
+  void runByokFetch(msg, state, controller);
+}
+
+async function runByokFetch(
+  msg: ByokStartMessage,
+  state: StreamState,
+  controller: AbortController,
+): Promise<void> {
+  const { requestId } = msg;
+
+  const pushChunk = (text: string): void => {
+    if (!text) return;
+    const seq = state.chunks.length;
+    state.chunks.push(text);
+    relay({ type: "stream:chunk", requestId, seq, chunk: text });
+  };
+  const finishDone = (): void => {
+    state.status = "done";
+    state.controller = undefined;
+    state.doneMeta = { byok: true };
+    relay({ type: "stream:done", requestId, lastSeq: state.chunks.length - 1, meta: state.doneMeta });
+  };
+  const finishError = (message: string): void => {
+    state.status = "error";
+    state.controller = undefined;
+    state.errorMessage = message;
+    // Diagnóstico sin secretos: jamás los headers de la request (llevan
+    // la API key). El mensaje viene de status/cuerpo de error/red.
+    console.warn(`[offscreen] byok ${requestId} falló:`, message);
+    relay({ type: "stream:error", requestId, message });
+  };
+
+  try {
+    const res = await fetch(msg.url, {
+      method: msg.method,
+      headers: msg.headers,
+      body: msg.body,
+      signal: controller.signal,
+      credentials: "omit",
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      let snippet = "";
+      try {
+        snippet = (await res.text()).slice(0, BYOK_ERROR_SNIPPET_MAX);
+      } catch {
+        // cuerpo ilegible: el status solo ya diagnostica
+      }
+      finishError(`HTTP ${res.status}${snippet ? ` — ${snippet}` : ""}`);
+      return;
+    }
+    if (msg.stream && res.body) {
+      const reader = res.body.getReader();
+      // TextDecoder en modo streaming: un code point UTF-8 partido entre
+      // dos reads no se corrompe; decode() final drena la cola.
+      const decoder = new TextDecoder();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) pushChunk(decoder.decode(value, { stream: true }));
+      }
+      const tail = decoder.decode();
+      if (tail) pushChunk(tail);
+    } else {
+      pushChunk(await res.text());
+    }
+    finishDone();
+  } catch (err) {
+    // Abort pedido por la SPA: `abort()` ya relayó stream:aborted y borró
+    // el registro — no lo pisamos con un error espurio.
+    if (controller.signal.aborted || !streams.has(requestId)) return;
+    finishError(err instanceof Error ? err.message : String(err));
+  }
 }
 
 // ─── Ejecución de nivel superior ────────────────────────────────────────
@@ -139,6 +240,9 @@ browser.runtime.onMessage.addListener((message: unknown) => {
   switch (msg.kind) {
     case "selftest:start":
       startSelfTest(msg.requestId, msg.chunks, msg.intervalMs);
+      break;
+    case "byok:start":
+      startByok(msg);
       break;
     case "resume":
       resume(msg.requestId, msg.fromSeq);

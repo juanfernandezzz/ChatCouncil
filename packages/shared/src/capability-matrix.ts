@@ -5,8 +5,14 @@
  *  - Qué toggles del input soporta cada proveedor de forma nativa (Q31),
  *    usada para pintar en gris el botón correspondiente y explicar
  *    "qué modelos inhabilitan esta función" al hacer click.
- *  - Qué proveedores son viables en BYOK móvil sin backend propio (Q21),
- *    porque su API permite fetch directo desde el navegador.
+ *  - Qué proveedores BYOK pueden hablarse DIRECTO desde la SPA (fetch
+ *    con CORS) y cuáles requieren el proxy de la extensión (Q11/Q12).
+ *    Nota de la enmienda de Fase 2: la motivación original de esta
+ *    clasificación era "viabilidad en móvil" (Q21); con el alcance móvil
+ *    retirado (Fase 8 reescrita al cierre de Fase 1), su valor vigente
+ *    es otro — los CORS-directos son el transporte más simple (fetch+SSE
+ *    sin puente), ideales para validar el contrato Adapter primero, y
+ *    no cargan host_permissions.
  *
  * ¡IMPORTANTE SOBRE CORS! Verificado por investigación activa el
  * 2026-07-02, no por memoria — el comportamiento CORS de APIs de
@@ -15,11 +21,14 @@
  * header de Anthropic). Por eso:
  *   1) Cada entrada trae `confidence` explícito.
  *   2) Este archivo es un DEFAULT, no la verdad final: en runtime,
- *      `probeCors()` (Fase 2) debe hacer una llamada de prueba real y
- *      cachear el resultado, porque un proveedor puede cambiar su
+ *      `probeCors()` (implementada en Fase 2) hace una llamada de prueba
+ *      real y cachea el resultado, porque un proveedor puede cambiar su
  *      política sin que nosotros lo sepamos.
  *   3) `apps/web/public/adapters.json` puede sobrescribir estos valores
- *      sin necesidad de un nuevo release (ver Q9, manifiesto remoto).
+ *      sin necesidad de un nuevo release (ver Q9, manifiesto remoto) —
+ *      con UNA excepción de seguridad: el allowlist del proxy BYOK vive
+ *      en código (`packages/adapters`); el manifiesto sólo puede apagar
+ *      proveedores, nunca agregar dominios al proxy (Apéndice).
  */
 
 export type SupportLevel = "native" | "unsupported" | "unknown";
@@ -35,6 +44,23 @@ export interface BrowserCorsInfo {
   verifiedAt: string; // fecha ISO de la última verificación manual
 }
 
+/**
+ * Cómo sondear empíricamente el CORS de un proveedor desde el navegador
+ * del usuario (Fase 2, E7). Diseño: request mínimo NO autenticado — la
+ * ausencia/invalidez de credenciales produce un 4xx LEGIBLE si CORS
+ * pasa, y `fetch` rechaza con TypeError si CORS bloquea. Nunca se
+ * fabrica una llave con forma real para el probe.
+ */
+export interface CorsProbeSpec {
+  url: string;
+  method: "GET" | "POST";
+  headers?: Record<string, string>;
+  body?: string;
+  /** Qué estado prueba una respuesta legible (p. ej. anthropic prueba
+   * `supported-with-header` porque el probe INCLUYE su header de opt-in). */
+  successStatus: Extract<CorsStatus, "supported" | "supported-with-header">;
+}
+
 export interface ProviderCapability {
   id: string;
   label: string;
@@ -42,6 +68,8 @@ export interface ProviderCapability {
   imageGeneration: SupportLevel; // diferido a v1.5 (Q31), igual se modela
   fileUpload: SupportLevel;
   browserCors: BrowserCorsInfo;
+  /** Ausente = todavía no diseñamos un probe para este proveedor. */
+  corsProbe?: CorsProbeSpec;
 }
 
 /**
@@ -66,6 +94,19 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
       confidence: "high",
       verifiedAt: "2026-07-02",
     },
+    corsProbe: {
+      // POST sin x-api-key: si el preflight (headers custom) pasa, la API
+      // contesta 401 legible → CORS ok con el header de opt-in incluido.
+      url: "https://api.anthropic.com/v1/messages",
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: "{}",
+      successStatus: "supported-with-header",
+    },
   },
   openai: {
     id: "openai",
@@ -76,9 +117,16 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
     browserCors: {
       status: "blocked",
       detail:
-        "Multiples reportes (2023-2026) de fetch directo bloqueado por falta de Access-Control-Allow-Origin. Sin header de opt-in oficial conocido. Requiere el proxy de la extension incluso para llamadas API (BYOK), y bloquea BYOK en movil.",
+        "Multiples reportes (2023-2026) de fetch directo bloqueado por falta de Access-Control-Allow-Origin. Sin header de opt-in oficial conocido. Requiere el proxy de la extension para BYOK.",
       confidence: "moderate",
       verifiedAt: "2026-07-02",
+    },
+    corsProbe: {
+      // GET simple (sin headers custom → sin preflight): si algún día
+      // sirven ACAO, la respuesta 401 se vuelve legible y esto lo detecta.
+      url: "https://api.openai.com/v1/models",
+      method: "GET",
+      successStatus: "supported",
     },
   },
   google: {
@@ -94,6 +142,12 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
       confidence: "moderate",
       verifiedAt: "2026-07-02",
     },
+    corsProbe: {
+      // GET simple sin key → 403 legible si CORS pasa.
+      url: "https://generativelanguage.googleapis.com/v1beta/models",
+      method: "GET",
+      successStatus: "supported",
+    },
   },
   deepseek: {
     id: "deepseek",
@@ -107,6 +161,11 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
         "Sin documentacion oficial de soporte CORS. Consistente con la experiencia reportada por el usuario. Tratar como bloqueado hasta probar lo contrario.",
       confidence: "moderate",
       verifiedAt: "2026-07-02",
+    },
+    corsProbe: {
+      url: "https://api.deepseek.com/models",
+      method: "GET",
+      successStatus: "supported",
     },
   },
   perplexity: {
@@ -122,6 +181,13 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
       confidence: "moderate",
       verifiedAt: "2026-07-02",
     },
+    corsProbe: {
+      // Perplexity no documenta un endpoint GET barato; un GET al chat
+      // endpoint devuelve 4xx/405 — LEGIBLE alcanza para probar CORS.
+      url: "https://api.perplexity.ai/chat/completions",
+      method: "GET",
+      successStatus: "supported",
+    },
   },
   mistral: {
     id: "mistral",
@@ -131,9 +197,15 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
     fileUpload: "unknown",
     browserCors: {
       status: "unverified",
-      detail: "No investigado aun. No asumir soporte; probar con probeCors() antes de habilitar en movil.",
+      detail:
+        "No investigado aun. No asumir soporte; probar con probeCors() antes de habilitarlo como directo.",
       confidence: "unknown",
       verifiedAt: "2026-07-02",
+    },
+    corsProbe: {
+      url: "https://api.mistral.ai/v1/models",
+      method: "GET",
+      successStatus: "supported",
     },
   },
   groq: {
@@ -149,6 +221,11 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
       confidence: "low",
       verifiedAt: "2026-07-02",
     },
+    corsProbe: {
+      url: "https://api.groq.com/openai/v1/models",
+      method: "GET",
+      successStatus: "supported",
+    },
   },
   xai: {
     id: "xai",
@@ -158,9 +235,15 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
     fileUpload: "unknown",
     browserCors: {
       status: "unverified",
-      detail: "Una unica fuente de terceros lo reporta como CORS-friendly; no confirmado de forma independiente.",
+      detail:
+        "Una unica fuente de terceros lo reporta como CORS-friendly; no confirmado de forma independiente.",
       confidence: "low",
       verifiedAt: "2026-07-02",
+    },
+    corsProbe: {
+      url: "https://api.x.ai/v1/models",
+      method: "GET",
+      successStatus: "supported",
     },
   },
   openrouter: {
@@ -176,6 +259,11 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
       confidence: "low",
       verifiedAt: "2026-07-02",
     },
+    corsProbe: {
+      url: "https://openrouter.ai/api/v1/models",
+      method: "GET",
+      successStatus: "supported",
+    },
   },
   glm: {
     id: "glm",
@@ -189,20 +277,144 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
       confidence: "unknown",
       verifiedAt: "2026-07-02",
     },
+    // Sin corsProbe: ni siquiera el baseUrl público está confirmado con
+    // confianza suficiente para diseñar un probe honesto (ver ledger).
   },
 };
 
-/**
- * Fase 2 (BYOK): implementar esta funcion para reemplazar la
- * confianza declarada por una verificacion empirica real, cacheada
- * por sesion de navegador. Firma dejada aqui para que el contrato sea
- * visible desde ahora.
- */
-export declare function probeCors(providerId: string): Promise<CorsStatus>;
+// ---------------------------------------------------------------------------
+// probeCors — verificación empírica en runtime (Fase 2, E7)
+// ---------------------------------------------------------------------------
 
-/** Proveedores viables para BYOK en movil segun el estado actual de la matriz. */
-export function mobileCompatibleProviders(): ProviderCapability[] {
-  return Object.values(PROVIDER_CAPABILITIES).filter(
-    (p) => p.browserCors.status === "supported" || p.browserCors.status === "supported-with-header",
+/** Prefijo del cache por sesión. Exportado para el harness y los gates. */
+export const CORS_PROBE_CACHE_PREFIX = "chatcouncil:probeCors:";
+
+export interface CorsProbeResult {
+  status: CorsStatus;
+  verifiedAt: string; // ISO
+  detail: string;
+}
+
+function probeCacheKey(providerId: string): string {
+  return `${CORS_PROBE_CACHE_PREFIX}${providerId}`;
+}
+
+function sessionStore(): Storage | null {
+  // shared también se importa desde el service worker de la extensión,
+  // donde no existe sessionStorage — guard estructural, no supuesto.
+  try {
+    return typeof sessionStorage !== "undefined" ? sessionStorage : null;
+  } catch {
+    return null; // acceso puede tirar en contextos con storage deshabilitado
+  }
+}
+
+/** Lector sincrónico del resultado sondeado (o null si no se sondeó). */
+export function readCorsProbe(providerId: string): CorsProbeResult | null {
+  const store = sessionStore();
+  if (!store) return null;
+  try {
+    const raw = store.getItem(probeCacheKey(providerId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CorsProbeResult>;
+    if (typeof parsed.status !== "string") return null;
+    return parsed as CorsProbeResult;
+  } catch {
+    return null;
+  }
+}
+
+/** Borra el resultado cacheado (botón "re-probar" del harness). */
+export function clearCorsProbe(providerId: string): void {
+  sessionStore()?.removeItem(probeCacheKey(providerId));
+}
+
+function writeCorsProbe(providerId: string, result: CorsProbeResult): void {
+  try {
+    sessionStore()?.setItem(probeCacheKey(providerId), JSON.stringify(result));
+  } catch {
+    // sesión sin storage: el probe sigue siendo útil como valor de retorno
+  }
+}
+
+/**
+ * Sondea empíricamente el CORS de un proveedor DESDE EL ORIGEN DONDE
+ * CORRE (en la práctica: la SPA — E2a puso la custodia y las llamadas
+ * directas ahí, así que ese es el origen que importa medir).
+ *
+ * Clasificación:
+ *   · respuesta LEGIBLE (cualquier status, 401/403/405 incluidos) →
+ *     CORS pasa → `spec.successStatus` (cacheado por sesión).
+ *   · `fetch` rechaza → puede ser CORS bloqueado O red caída. Se
+ *     desambigua con un fetch centinela `mode: "no-cors"` al mismo URL:
+ *     si el centinela resuelve (respuesta opaca), la red está viva →
+ *     "blocked" (cacheado); si también falla → "unverified" (problema de
+ *     red, NO se cachea — sería congelar un falso negativo).
+ *
+ * El resultado medido SOBREESCRIBE la confianza declarada de la matriz:
+ * consumir siempre vía `effectiveCorsStatus()`.
+ */
+export async function probeCors(providerId: string): Promise<CorsStatus> {
+  const cap = PROVIDER_CAPABILITIES[providerId];
+  if (!cap) return "unverified";
+  const cached = readCorsProbe(providerId);
+  if (cached) return cached.status;
+  const spec = cap.corsProbe;
+  if (!spec) return cap.browserCors.status;
+
+  try {
+    const res = await fetch(spec.url, {
+      method: spec.method,
+      headers: spec.headers,
+      body: spec.body,
+      mode: "cors",
+      credentials: "omit",
+      cache: "no-store",
+    });
+    const result: CorsProbeResult = {
+      status: spec.successStatus,
+      verifiedAt: new Date().toISOString(),
+      detail: `probe ${spec.method} ${spec.url} → HTTP ${res.status} legible (CORS pasa)`,
+    };
+    writeCorsProbe(providerId, result);
+    return result.status;
+  } catch {
+    try {
+      await fetch(spec.url, { method: "GET", mode: "no-cors", cache: "no-store" });
+      const result: CorsProbeResult = {
+        status: "blocked",
+        verifiedAt: new Date().toISOString(),
+        detail: `probe ${spec.method} ${spec.url} → fetch rechazado con red viva (centinela no-cors OK) = CORS bloqueado`,
+      };
+      writeCorsProbe(providerId, result);
+      return result.status;
+    } catch {
+      // Red caída / DNS / offline: no se cachea.
+      return "unverified";
+    }
+  }
+}
+
+/** Estado CORS efectivo: el hecho medido (probe) pisa lo declarado. */
+export function effectiveCorsStatus(providerId: string): CorsStatus {
+  const probed = readCorsProbe(providerId);
+  if (probed) return probed.status;
+  return PROVIDER_CAPABILITIES[providerId]?.browserCors.status ?? "unverified";
+}
+
+export function isCorsDirectStatus(status: CorsStatus): boolean {
+  return status === "supported" || status === "supported-with-header";
+}
+
+/**
+ * Proveedores que pueden hablarse DIRECTO desde la SPA (sin el proxy de
+ * la extensión) según el estado efectivo (probe > declarado). Hasta la
+ * enmienda de Fase 2 se llamaba `mobileCompatibleProviders()` — mismo
+ * predicado, semántica renombrada a la vigente (el alcance móvil se
+ * retiró al cierre de Fase 1; ver BLUEPRINT Fase 8).
+ */
+export function corsDirectProviders(): ProviderCapability[] {
+  return Object.values(PROVIDER_CAPABILITIES).filter((p) =>
+    isCorsDirectStatus(effectiveCorsStatus(p.id)),
   );
 }

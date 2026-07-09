@@ -3,7 +3,6 @@ import { PANEL_COUNT_OPTIONS, useCouncilStore, type PanelCount } from "@/store/u
 import { bridgeClient } from "@/lib/bridge-client";
 import { GridPanel } from "@/components/layout/GridPanel";
 import { ExtensionBadge } from "@/components/shell/ExtensionBadge";
-import { ByokTestPanel } from "@/dev/ByokTestPanel";
 
 // ─── Soporte de plataformas (decisión de cierre de Fase 1, ver BLUEPRINT
 // "Fase 8 — Móvil") ─────────────────────────────────────────────────────
@@ -68,10 +67,14 @@ export default function App() {
           Se conserva desmontado en src/dev/SelfTestPanel.tsx — un import
           lo re-monta si hace falta diagnóstico del puente. */}
 
-      {/* Harness de aceptación de Fase 2 (E8): montado DURANTE la fase
-          para el test con llaves reales; al cierre se retira este import
-          y queda en src/dev/, igual que el panel de Fase 1. */}
-      <ByokTestPanel />
+      {/* El panel BYOK de Fase 2 fue retirado al cerrar la fase. Se
+          conserva desmontado en src/dev/ByokTestPanel.tsx — un import lo
+          re-monta para diagnóstico BYOK o para cerrar los diferidos-por-
+          llave (ledger §0.3). Nota: sin este consumidor, el subsistema
+          BYOK web (byok-client / key-vault / adapters byok) queda FUERA
+          del bundle por tree-shaking hasta que la UI de Fase 4 lo
+          consuma — decisión registrada en §0.3; los gates web pasan a
+          verificar AUSENCIA del título del panel. */}
 
       <div className="flex items-center gap-2">
         <span className="text-xs text-text-secondary">Paneles:</span>

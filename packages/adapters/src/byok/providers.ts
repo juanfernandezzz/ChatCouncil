@@ -18,6 +18,14 @@
  * jamás agregar dominios — un Netlify comprometido no debe poder abrir
  * el proxy. `host_permissions` en wxt.config.ts DEBE espejar esta lista
  * 1:1 (agregar un proxied exige release de extensión de todos modos).
+ *
+ * NOTA POST-ACEPTACIÓN (2026-07-09): los tres "proxy" midieron CORS
+ * abierto con el probe FIEL (ver capability-matrix) — el routing real
+ * (`effectiveCorsStatus`) los lleva DIRECTO. `route: "proxy"` acá NO
+ * fuerza transporte: significa membresía del allowlist +
+ * host_permissions (derecho a usar el proxy como red de seguridad si
+ * la política CORS del proveedor revierte). No cambiar a "direct":
+ * vaciaría el allowlist y los host_permissions.
  */
 
 import { anthropicProvider } from "./anthropic";

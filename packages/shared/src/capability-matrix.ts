@@ -130,11 +130,11 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
     imageGeneration: "unsupported",
     fileUpload: "native",
     browserCors: {
-      status: "blocked",
+      status: "supported",
       detail:
-        "Multiples reportes (2023-2026) de fetch directo bloqueado por falta de Access-Control-Allow-Origin. Sin header de opt-in oficial conocido. Requiere el proxy de la extension para BYOK.",
+        "MEDIDO 2026-07-09 (aceptacion Fase 2, probe FIEL: POST /v1/chat/completions con authorization+content-type → preflight y 401 legibles desde origen web; coherencia con la request real: ruta direct, 401 en 538ms). Supersede los reportes 2023-2026 de bloqueo. Caveats: una sola medicion desde una red; el 200 de streaming con key valida quedo sin medir (sin llave paga). El proxy de la extension queda como red de seguridad si la politica revierte.",
       confidence: "moderate",
-      verifiedAt: "2026-07-02",
+      verifiedAt: "2026-07-09",
     },
     corsProbe: {
       // Fiel a la forma real: POST al chat endpoint con authorization +
@@ -186,11 +186,11 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
     imageGeneration: "unsupported",
     fileUpload: "unsupported",
     browserCors: {
-      status: "blocked",
+      status: "supported",
       detail:
-        "Sin documentacion oficial de soporte CORS. Consistente con la experiencia reportada por el usuario. Tratar como bloqueado hasta probar lo contrario.",
+        "MEDIDO 2026-07-09 (probe FIEL: POST /chat/completions con authorization+content-type → legible). Supersede el default bloqueado. Mismos caveats que openai (una medicion, una red; 200 de streaming sin medir); proxy como red de seguridad.",
       confidence: "moderate",
-      verifiedAt: "2026-07-02",
+      verifiedAt: "2026-07-09",
     },
     corsProbe: {
       // Fiel a la forma real (ver openai).
@@ -211,11 +211,11 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
     imageGeneration: "unsupported",
     fileUpload: "unsupported",
     browserCors: {
-      status: "blocked",
+      status: "supported",
       detail:
-        "Todas las guias oficiales y de terceros (2025-2026) enrutan a traves de un backend/proxy explicitamente para proteger la key. Sin via directa documentada.",
+        "MEDIDO 2026-07-09 (probe FIEL: POST /chat/completions con authorization+content-type → legible), pese a que todas las guias 2025-2026 enrutaban por backend. Mismos caveats que openai; proxy como red de seguridad.",
       confidence: "moderate",
-      verifiedAt: "2026-07-02",
+      verifiedAt: "2026-07-09",
     },
     corsProbe: {
       // Fiel a la forma real (ver openai): POST al chat endpoint.

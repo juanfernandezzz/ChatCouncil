@@ -6,11 +6,10 @@
 > releer todo el hilo de la entrevista. Cross-referencias `Qn` apuntan a
 > las respuestas de la entrevista de requerimientos original.
 
-**Estado global:** Fases 0 y 1 completas y verificadas. Fase 2
-entregada (2026-07-08; cierre pendiente del test de aceptación con
-llaves reales — ver §0.3). Fases 3–9 pendientes, en orden de dependencia
-estricta (Q34: no saltar de UI a lógica de transporte sin cerrar la
-anterior).
+**Estado global:** Fases 0–2 completas y verificadas (Fase 2 cerrada
+2026-07-09; diferidos-por-llave nominados en §0.3). Fases 3–9
+pendientes, en orden de dependencia estricta (Q34: no saltar de UI a
+lógica de transporte sin cerrar la anterior).
 
 **Leyenda:** ✅ hecho y verificado · 🔜 siguiente · ⏳ bloqueado por lo anterior
 
@@ -276,6 +275,67 @@ respuesta); selector de modelo en UI real (Fase 4); adaptadores
 Mistral/Groq/xAI/OpenRouter/GLM; kill-switch remoto BYOK (ver E5);
 backoff de reposo (E9).
 
+**Aceptación y cierre (2026-07-08/09)** — dos rondas automatizadas
+(Playwright sobre Chromium en la máquina del usuario, Windows) + una
+corrección (commit 2b82bea):
+
+- **Verificado.** Criterio 1: google stream directo de punta a punta
+  (done 4269ms, tokens 20/32, probe medido `supported`); anthropic probe
+  `supported-with-header` + camino de error directo (401 legible, 532ms).
+  Criterio 3 completo: los 3 proxied sin extensión → Enviar bloqueado
+  con razón visible en <25ms, sin cuelgue; google directo con extensión
+  presente sin tocar el puente. Transporte del proxy ×3 con llave
+  inválida: ruta `proxy` + 401 REAL del proveedor, jamás "byok:proxy
+  rechazado" — el allowlist discrimina capas. **Resume end-to-end del
+  `stream:resume` renombrado**: kill forzado del SW por CDP
+  (`Target.closeTarget`) tras el chunk 2 de un selftest 6×8s →
+  `reconnecting` (t=16.7s), `resumed` (t=24.1s), 6/6 chunks contiguos,
+  `done · lastSeq 5` — cierra el desvío de la 1.ª ronda, donde la sesión
+  CDP impedía la muerte por idle y reconnecting/resumed no aparecían.
+- **Hallazgo mayor + corrección (2b82bea).** El probe GET pelado era
+  "simple request" (sin preflight): midió `supported` en
+  openai/deepseek/perplexity sin probar el POST autenticado — riesgo de
+  routing hacia un fetch que muere en preflight. Fix: probes FIELES a la
+  forma real (mismo método + headers custom, centinela `probe-invalid`).
+  Con el probe fiel los tres SIGUIERON midiendo `supported`, y la
+  coherencia con la request real lo confirmó (openai: ruta direct, 401
+  en 538ms) → **la realidad CORS cambió respecto de los reportes
+  2023-2026**: matriz declarada actualizada (supported, confianza
+  moderate, verifiedAt 2026-07-09; una sola medición desde una red).
+  Consecuencia: el routing lleva a los CINCO directo; el proxy
+  (verificado a nivel transporte) queda como red de seguridad —
+  `route:"proxy"` en el registro = membresía de allowlist +
+  host_permissions, no transporte forzado.
+- **Diferido-por-llave (nominado; costo de cierre reducido).**
+  (1) Parser openai-compat contra SSE real — cierra con CUALQUIER llave
+  barata streameando DIRECTO (p. ej. deepseek ~USD 2). (2) Loop de relay
+  del fetch byok en el offscreen con cuerpo real (~15 líneas espejo del
+  transporte directo verificado; sólo relevante si algún proveedor
+  vuelve a rutear proxy). (3) El 200 de streaming con ACAO en los tres
+  ex-bloqueados (implícito en (1)).
+- **Brecha de robustez conocida.** El routing decide upfront sin
+  fallback-on-failure: si un proveedor revierte su CORS, el fetch
+  directo muere en TypeError sin caer solo al proxy. Remedio actual:
+  botón Probe (re-mide y cachea `blocked` → proxy). Candidato: auto-probe
+  ante TypeError (Fase 4).
+- **Tree-shaking al cierre.** Retirado el panel, el subsistema BYOK web
+  (byok-client / key-vault / adapters byok) sale del bundle de la SPA
+  hasta que la UI de Fase 4 lo consuma — queda en repo, typechecked, con
+  harness re-montable con un import. Gates web: AUSENCIA del título del
+  panel + presencia de `stream:resume`; gates de extensión sin cambios
+  (`byok:start`, `stream:resume`, allowlist, host_permissions).
+- **Incidentes registrados.** (1) La llave de Google quedó pegada en el
+  historial del chat de Code pese al canal de archivo — rotación en AI
+  Studio instruida, pendiente de confirmación del usuario. (2) Un
+  `Stop-Process` por nombre genérico mató el Chrome personal del
+  usuario — desde entonces todo kill va por PID exacto verificado
+  (regla estándar de los prompts).
+- **CI.** Actions habilitado por el usuario durante el cierre; primer
+  run de la historia del repo disparado por 2b82bea (`queued` al momento
+  del reporte). La conclusión de ese run es PRECONDICIÓN del push de
+  cierre; `zip:ext` (único paso jamás ejercitado localmente) fue
+  pre-volado en sandbox: OK (9.88 kB).
+
 ---
 
 ## 1. Topología y grafo de dependencias
@@ -371,7 +431,7 @@ manual de Juan; el sandbox no tiene Chrome real.)*
 
 ---
 
-## Fase 2 — Adaptadores BYOK 🔄 (entregada 2026-07-08 · cierre pendiente de aceptación con llaves reales)
+## Fase 2 — Adaptadores BYOK ✅ (cerrada 2026-07-09 — resultado de aceptación: §0.3)
 
 > **Enmienda (E1, aprobada en la entrevista de fase):** esta sección fue
 > escrita ANTES del cambio de alcance móvil (commit 0443384) y quedó

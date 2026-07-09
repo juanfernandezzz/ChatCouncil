@@ -49,7 +49,19 @@ export interface BrowserCorsInfo {
  * del usuario (Fase 2, E7). Diseño: request mínimo NO autenticado — la
  * ausencia/invalidez de credenciales produce un 4xx LEGIBLE si CORS
  * pasa, y `fetch` rechaza con TypeError si CORS bloquea. Nunca se
- * fabrica una llave con forma real para el probe.
+ * fabrica una llave con forma real: el valor centinela es "probe-invalid".
+ *
+ * LECCIÓN DE LA ACEPTACIÓN (2026-07-08) — el probe debe ser FIEL A LA
+ * FORMA de la request real: mismo método y mismos headers custom (con
+ * credencial inválida). Un GET pelado sin headers custom es una "simple
+ * request" que NO dispara preflight, y por lo tanto no mide lo que el
+ * routing necesita saber: si el preflight del POST autenticado
+ * (authorization/x-api-key + content-type) pasa. En la aceptación,
+ * openai/deepseek/perplexity midieron "supported" con el GET pelado
+ * mientras su realidad de POST autenticado quedaba sin medir — con el
+ * riesgo de que `effectiveCorsStatus` ruteara "direct" hacia un fetch
+ * que muere en preflight. Con probes fieles, una respuesta legible SÍ
+ * prueba que la request real pasa CORS.
  */
 export interface CorsProbeSpec {
   url: string;
@@ -95,11 +107,14 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
       verifiedAt: "2026-07-02",
     },
     corsProbe: {
-      // POST sin x-api-key: si el preflight (headers custom) pasa, la API
-      // contesta 401 legible → CORS ok con el header de opt-in incluido.
+      // Fiel a la forma real: POST con TODOS los headers custom de la
+      // request de streaming (x-api-key inválida incluida) — el preflight
+      // probado es exactamente el que enfrentará buildRequest. 401
+      // legible → CORS ok con el header de opt-in incluido.
       url: "https://api.anthropic.com/v1/messages",
       method: "POST",
       headers: {
+        "x-api-key": "probe-invalid",
         "content-type": "application/json",
         "anthropic-version": "2023-06-01",
         "anthropic-dangerous-direct-browser-access": "true",
@@ -122,10 +137,18 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
       verifiedAt: "2026-07-02",
     },
     corsProbe: {
-      // GET simple (sin headers custom → sin preflight): si algún día
-      // sirven ACAO, la respuesta 401 se vuelve legible y esto lo detecta.
-      url: "https://api.openai.com/v1/models",
-      method: "GET",
+      // Fiel a la forma real: POST al chat endpoint con authorization +
+      // content-type (credencial inválida). Legible (401) sólo si el
+      // preflight del POST autenticado pasa — que es lo que el routing
+      // necesita. (El GET pelado anterior medía "supported" sin probar
+      // el preflight: hallazgo de la aceptación.)
+      url: "https://api.openai.com/v1/chat/completions",
+      method: "POST",
+      headers: {
+        authorization: "Bearer probe-invalid",
+        "content-type": "application/json",
+      },
+      body: "{}",
       successStatus: "supported",
     },
   },
@@ -143,9 +166,16 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
       verifiedAt: "2026-07-02",
     },
     corsProbe: {
-      // GET simple sin key → 403 legible si CORS pasa.
+      // GET al endpoint real CON x-goog-api-key inválida: el header
+      // custom dispara preflight, así que se prueba la dimensión de auth
+      // de la request real. Trade-off documentado: content-type (del POST
+      // de streaming) no se prueba acá — POSTear a una URL cuyo OPTIONS
+      // no conocemos arriesga un falso negativo cacheado que rompería el
+      // routing de google; y el POST real completo quedó verificado de
+      // punta a punta en la aceptación (stream directo con key válida).
       url: "https://generativelanguage.googleapis.com/v1beta/models",
       method: "GET",
+      headers: { "x-goog-api-key": "probe-invalid" },
       successStatus: "supported",
     },
   },
@@ -163,8 +193,14 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
       verifiedAt: "2026-07-02",
     },
     corsProbe: {
-      url: "https://api.deepseek.com/models",
-      method: "GET",
+      // Fiel a la forma real (ver openai).
+      url: "https://api.deepseek.com/chat/completions",
+      method: "POST",
+      headers: {
+        authorization: "Bearer probe-invalid",
+        "content-type": "application/json",
+      },
+      body: "{}",
       successStatus: "supported",
     },
   },
@@ -182,10 +218,14 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
       verifiedAt: "2026-07-02",
     },
     corsProbe: {
-      // Perplexity no documenta un endpoint GET barato; un GET al chat
-      // endpoint devuelve 4xx/405 — LEGIBLE alcanza para probar CORS.
+      // Fiel a la forma real (ver openai): POST al chat endpoint.
       url: "https://api.perplexity.ai/chat/completions",
-      method: "GET",
+      method: "POST",
+      headers: {
+        authorization: "Bearer probe-invalid",
+        "content-type": "application/json",
+      },
+      body: "{}",
       successStatus: "supported",
     },
   },
@@ -203,8 +243,14 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
       verifiedAt: "2026-07-02",
     },
     corsProbe: {
-      url: "https://api.mistral.ai/v1/models",
-      method: "GET",
+      // Fiel a la forma real (ver openai).
+      url: "https://api.mistral.ai/v1/chat/completions",
+      method: "POST",
+      headers: {
+        authorization: "Bearer probe-invalid",
+        "content-type": "application/json",
+      },
+      body: "{}",
       successStatus: "supported",
     },
   },
@@ -222,8 +268,14 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
       verifiedAt: "2026-07-02",
     },
     corsProbe: {
-      url: "https://api.groq.com/openai/v1/models",
-      method: "GET",
+      // Fiel a la forma real (ver openai).
+      url: "https://api.groq.com/openai/v1/chat/completions",
+      method: "POST",
+      headers: {
+        authorization: "Bearer probe-invalid",
+        "content-type": "application/json",
+      },
+      body: "{}",
       successStatus: "supported",
     },
   },
@@ -241,8 +293,14 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
       verifiedAt: "2026-07-02",
     },
     corsProbe: {
-      url: "https://api.x.ai/v1/models",
-      method: "GET",
+      // Fiel a la forma real (ver openai).
+      url: "https://api.x.ai/v1/chat/completions",
+      method: "POST",
+      headers: {
+        authorization: "Bearer probe-invalid",
+        "content-type": "application/json",
+      },
+      body: "{}",
       successStatus: "supported",
     },
   },
@@ -260,8 +318,14 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapability> = {
       verifiedAt: "2026-07-02",
     },
     corsProbe: {
-      url: "https://openrouter.ai/api/v1/models",
-      method: "GET",
+      // Fiel a la forma real (ver openai).
+      url: "https://openrouter.ai/api/v1/chat/completions",
+      method: "POST",
+      headers: {
+        authorization: "Bearer probe-invalid",
+        "content-type": "application/json",
+      },
+      body: "{}",
       successStatus: "supported",
     },
   },

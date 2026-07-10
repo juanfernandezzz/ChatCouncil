@@ -8,7 +8,7 @@ import {
   BRIDGE_PROTOCOL_VERSION,
   SELFTEST_PROVIDER_ID,
 } from "@chatcouncil/shared";
-import { BYOK_PROXY_ALLOWED_ORIGINS } from "@chatcouncil/adapters";
+import { BYOA_SESSION_ALLOWED_ORIGINS, BYOK_PROXY_ALLOWED_ORIGINS } from "@chatcouncil/adapters";
 import {
   isDiagRequest,
   isOffscreenReady,
@@ -196,6 +196,43 @@ async function handleExternal(port: ExternalPort, message: BridgeRequest): Promi
       return;
     }
 
+    case "byoa:proxy": {
+      // Fase 3 (B+): gemelo de byok:proxy con semántica de sesión. Mismo
+      // patrón de validación, pero contra el allowlist de orígenes de
+      // SESIÓN (host_permissions lo espeja 1:1). El offscreen ejecutará el
+      // fetch con credentials:"include" (delta del kind byoa:start).
+      const denial = validateByoaProxy(port, message);
+      if (denial) {
+        // Diagnóstico sin secretos: requestId + razón (origins), jamás los
+        // headers del mensaje.
+        console.warn(
+          `[chatcouncil-bridge] byoa:proxy rechazado (${denial}) requestId=${message.requestId}`,
+        );
+        const err: BridgeResponse = {
+          type: "stream:error",
+          requestId: message.requestId,
+          message: `byoa:proxy rechazado: ${denial}`,
+        };
+        try {
+          port.postMessage(err);
+        } catch {
+          externalPorts.delete(port); // Port muerto
+        }
+        return;
+      }
+      await sendToOffscreen({
+        target: "offscreen",
+        kind: "byoa:start",
+        requestId: message.requestId,
+        url: message.url,
+        method: message.method,
+        headers: message.headers,
+        body: message.body,
+        stream: message.stream,
+      });
+      return;
+    }
+
     default: {
       const exhaustiveCheck: never = message;
       console.warn("[chatcouncil-bridge] mensaje desconocido", exhaustiveCheck);
@@ -244,6 +281,35 @@ function validateByokProxy(
   }
   if (!BYOK_ORIGIN_SET.has(target.origin)) {
     return `dominio fuera del allowlist BYOK (${target.origin})`;
+  }
+  return null;
+}
+
+// Fase 3 (BYOA): orígenes de SESIÓN admitidos por el proxy. Fuente de
+// verdad EN CÓDIGO (packages/adapters), espejada 1:1 por host_permissions.
+// El manifiesto remoto jamás puede agregar un host de sesión.
+const BYOA_ORIGIN_SET = new Set<string>(BYOA_SESSION_ALLOWED_ORIGINS);
+
+/** null = permitido; string = razón del rechazo (sin secretos, nunca headers). */
+function validateByoaProxy(
+  port: ExternalPort,
+  message: Extract<BridgeRequest, { type: "byoa:proxy" }>,
+): string | null {
+  const origin = portOrigin(port);
+  if (!origin || !ALLOWED_SPA_ORIGINS.has(origin)) {
+    return `sender.origin no permitido (${origin ?? "desconocido"})`;
+  }
+  let target: URL;
+  try {
+    target = new URL(message.url);
+  } catch {
+    return "url inválida";
+  }
+  if (target.protocol !== "https:") {
+    return `protocolo no permitido (${target.protocol})`;
+  }
+  if (!BYOA_ORIGIN_SET.has(target.origin)) {
+    return `host de sesión fuera del allowlist BYOA (${target.origin})`;
   }
   return null;
 }

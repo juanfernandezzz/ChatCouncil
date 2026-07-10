@@ -32,8 +32,12 @@ import {
  * fetch de proveedor vive en el SW, una respuesta >30s lo mata,
  * streaming o no) y alimenta EXACTAMENTE la misma forma de buffer +
  * reanudación. Los `headers` de byok llevan la API key del usuario:
- * NUNCA se loggean (ni en warns de fallo). Fase 3 hará lo propio con
- * los streams BYOA.
+ * NUNCA se loggean (ni en warns de fallo).
+ *
+ * Fase 3 (BYOA) reusa EXACTAMENTE esa maquinaria: el handler `byoa:start`
+ * corre el mismo fetch con un único delta — `credentials: "include"`, para
+ * que la cookie de sesión httpOnly del usuario autentique la request (el
+ * navegador la adjunta; el código nunca la ve). Ver `startProxy`.
  */
 
 // `browser` es un global auto-importado por WXT (no requiere import).
@@ -133,13 +137,26 @@ function abort(requestId: string): void {
   relay({ type: "stream:aborted", requestId });
 }
 
-// ─── BYOK (Fase 2): fetch real por proxy ───────────────────────────────
+// ─── Proxy real por fetch: BYOK (Fase 2) + BYOA (Fase 3) ────────────────
+// Una sola maquinaria de fetch para ambos caminos; el ÚNICO delta es el
+// modo de credenciales, que decide el `kind` del mensaje:
+//   · byok:start → credentials:"omit"    (auth por header/llave armada en
+//     la SPA; el dominio es un endpoint de API, no una sesión).
+//   · byoa:start → credentials:"include" (auth por la cookie de sesión
+//     httpOnly del usuario, que el navegador adjunta en runtime — el
+//     código NUNCA la lee ni la loggea; es la misma cookie que usa cuando
+//     abre claude.ai directamente en el navegador).
+// El SW ya validó allowlist + sender.origin antes de reenviar (ley de
+// Fase 1: ningún fetch de proveedor vive en el SW, una respuesta >30s lo
+// mata). Los `headers` NUNCA se loggean en ningún caso (byok lleva la API
+// key; byoa no lleva secretos porque la auth va por cookie, pero se trata
+// igual por uniformidad).
 
-const BYOK_ERROR_SNIPPET_MAX = 400;
+const PROXY_ERROR_SNIPPET_MAX = 400;
 
-type ByokStartMessage = Extract<ToOffscreenMessage, { kind: "byok:start" }>;
+type ProxyStartMessage = Extract<ToOffscreenMessage, { kind: "byok:start" | "byoa:start" }>;
 
-function startByok(msg: ByokStartMessage): void {
+function startProxy(msg: ProxyStartMessage, credentials: RequestCredentials): void {
   // Idempotente, igual que el self-test: un reenvío duplicado no debe
   // duplicar el fetch ni pisar el buffer.
   if (streams.has(msg.requestId)) return;
@@ -147,15 +164,17 @@ function startByok(msg: ByokStartMessage): void {
   const controller = new AbortController();
   state.controller = controller;
   streams.set(msg.requestId, state);
-  void runByokFetch(msg, state, controller);
+  void runProxyFetch(msg, state, controller, credentials);
 }
 
-async function runByokFetch(
-  msg: ByokStartMessage,
+async function runProxyFetch(
+  msg: ProxyStartMessage,
   state: StreamState,
   controller: AbortController,
+  credentials: RequestCredentials,
 ): Promise<void> {
   const { requestId } = msg;
+  const label = msg.kind === "byoa:start" ? "byoa" : "byok";
 
   const pushChunk = (text: string): void => {
     if (!text) return;
@@ -166,16 +185,17 @@ async function runByokFetch(
   const finishDone = (): void => {
     state.status = "done";
     state.controller = undefined;
-    state.doneMeta = { byok: true };
+    state.doneMeta = { [label]: true };
     relay({ type: "stream:done", requestId, lastSeq: state.chunks.length - 1, meta: state.doneMeta });
   };
   const finishError = (message: string): void => {
     state.status = "error";
     state.controller = undefined;
     state.errorMessage = message;
-    // Diagnóstico sin secretos: jamás los headers de la request (llevan
-    // la API key). El mensaje viene de status/cuerpo de error/red.
-    console.warn(`[offscreen] byok ${requestId} falló:`, message);
+    // Diagnóstico sin secretos: jamás los headers de la request (byok
+    // lleva la API key; byoa la cookie ya viaja aparte). El mensaje viene
+    // de status/cuerpo de error/red.
+    console.warn(`[offscreen] ${label} ${requestId} falló:`, message);
     relay({ type: "stream:error", requestId, message });
   };
 
@@ -185,13 +205,13 @@ async function runByokFetch(
       headers: msg.headers,
       body: msg.body,
       signal: controller.signal,
-      credentials: "omit",
+      credentials,
       cache: "no-store",
     });
     if (!res.ok) {
       let snippet = "";
       try {
-        snippet = (await res.text()).slice(0, BYOK_ERROR_SNIPPET_MAX);
+        snippet = (await res.text()).slice(0, PROXY_ERROR_SNIPPET_MAX);
       } catch {
         // cuerpo ilegible: el status solo ya diagnostica
       }
@@ -242,7 +262,10 @@ browser.runtime.onMessage.addListener((message: unknown) => {
       startSelfTest(msg.requestId, msg.chunks, msg.intervalMs);
       break;
     case "byok:start":
-      startByok(msg);
+      startProxy(msg, "omit");
+      break;
+    case "byoa:start":
+      startProxy(msg, "include");
       break;
     case "resume":
       resume(msg.requestId, msg.fromSeq);

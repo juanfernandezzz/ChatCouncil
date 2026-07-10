@@ -54,6 +54,26 @@ export type ToOffscreenMessage =
       headers: Record<string, string>;
       body?: string;
       stream: boolean;
+    }
+  | {
+      /**
+       * Fase 3 (BYOA, camino B+): gemelo de `byok:start` con semántica de
+       * SESIÓN. El SW ya validó sender.origin + BYOA_SESSION_ALLOWED_ORIGINS
+       * antes de reenviar. El offscreen ejecuta el fetch con
+       * `credentials: "include"`: la cookie de sesión httpOnly del usuario
+       * autentica la request (el navegador la adjunta; el código nunca la
+       * ve ni la loggea). `headers` no lleva secretos (auth por cookie),
+       * pero NO se loggea igual. Mismo buffer + reanudación genéricos que
+       * el resto (`resume`/`abort` por requestId ya lo cubren).
+       */
+      target: "offscreen";
+      kind: "byoa:start";
+      requestId: string;
+      url: string;
+      method: "GET" | "POST";
+      headers: Record<string, string>;
+      body?: string;
+      stream: boolean;
     };
 
 /**

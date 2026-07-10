@@ -42,10 +42,17 @@ export default defineConfig({
     // hipotético — contra la filosofía de Fase 0). Apéndice del
     // BLUEPRINT: el manifiesto remoto sólo puede apagar proveedores,
     // jamás agregar dominios al proxy.
+    // Fase 3 (BYOA): "https://claude.ai/*" es un dominio de SESION que el
+    // proxy BYOA toca con credentials:"include". host_permissions habilita
+    // el fetch cross-origin desde el offscreen y — junto con
+    // credentials:"include" — que el navegador adjunte la cookie de sesion
+    // del dominio. Fuente de verdad: BYOA_SESSION_ALLOWED_ORIGINS en
+    // packages/adapters; esta lista la espeja 1:1.
     host_permissions: [
       "https://api.openai.com/*",
       "https://api.deepseek.com/*",
       "https://api.perplexity.ai/*",
+      "https://claude.ai/*",
     ],
     // Q7/Q9: unico transporte SPA -> extension. Cada origen que deba poder
     // conectar tiene que estar listado explicitamente aca.

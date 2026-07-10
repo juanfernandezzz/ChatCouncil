@@ -1,10 +1,12 @@
 {
   "manifestVersion": 1,
   "protocolVersion": 1,
-  "updatedAt": "2026-07-02T00:00:00Z",
+  "updatedAt": "2026-07-10T00:00:00Z",
   "notes": "Manifiesto remoto (Q9). La extension y la SPA lo consultan en runtime para saber que adaptadores existen, con que estrategia (dom/endpoint) y si estan sanos. Editar y desplegar este archivo estatico en Netlify permite apagar o parchear un adaptador roto sin esperar un release de la extension.",
-  "byoaPriority": ["openai", "anthropic", "google", "deepseek", "perplexity", "glm"],
+  "byoaPriorityNote": "Testabilidad primero (Fase 3): 'claude' (claude.ai) es el primer adaptador BYOA de punta a punta — endpoint interno CON ESTADO (crear conversacion + completion SSE Messages), auth por cookie de sesion. Es el mas testeable; el resto sigue pending-reverse-engineering.",
+  "byoaPriority": ["claude", "openai", "anthropic", "google", "deepseek", "perplexity", "glm"],
   "providers": [
+    { "id": "claude", "byoaStrategy": "endpoint", "healthy": true },
     { "id": "openai", "byoaStrategy": "pending-reverse-engineering", "healthy": null },
     { "id": "anthropic", "byoaStrategy": "pending-reverse-engineering", "healthy": null },
     { "id": "google", "byoaStrategy": "pending-reverse-engineering", "healthy": null },

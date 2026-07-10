@@ -3,6 +3,7 @@ import { PANEL_COUNT_OPTIONS, useCouncilStore, type PanelCount } from "@/store/u
 import { bridgeClient } from "@/lib/bridge-client";
 import { GridPanel } from "@/components/layout/GridPanel";
 import { ExtensionBadge } from "@/components/shell/ExtensionBadge";
+import { ByoaTestPanel } from "@/dev/ByoaTestPanel";
 
 // ─── Soporte de plataformas (decisión de cierre de Fase 1, ver BLUEPRINT
 // "Fase 8 — Móvil") ─────────────────────────────────────────────────────
@@ -58,10 +59,15 @@ export default function App() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-baseline gap-2">
           <h1 className="text-lg font-semibold tracking-tight text-text-primary">ChatCouncil</h1>
-          <span className="font-mono text-xs text-text-secondary">fase 2 · byok</span>
+          <span className="font-mono text-xs text-text-secondary">fase 3 · byoa</span>
         </div>
         <ExtensionBadge />
       </header>
+
+      {/* Panel BYOA de Fase 3 (gate make-or-break) — MONTADO durante la
+          fase, como los paneles de Fase 1/2. Al cerrar la fase se retira
+          este import y el panel queda desmontado en src/dev/. */}
+      <ByoaTestPanel />
 
       {/* El panel de self-test de Fase 1 fue retirado al cerrar la fase.
           Se conserva desmontado en src/dev/SelfTestPanel.tsx — un import

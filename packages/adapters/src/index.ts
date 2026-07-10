@@ -12,8 +12,12 @@
  *   `createByokAdapter` que implementa el contrato con deps inyectadas,
  *   y el ALLOWLIST del proxy (fuente de verdad de Q11 — ver
  *   providers.ts y el Apéndice del BLUEPRINT).
- * · BYOA (Fase 3): pendiente de ingeniería inversa activa; nada acá se
- *   inventa por adelantado.
+ * · BYOA (Fase 3, camino B+): `./byoa/*` — dialecto claude.ai (endpoint
+ *   interno CON ESTADO: crear-conversación + completion SSE Messages),
+ *   registro + allowlist de orígenes de SESIÓN, y `createByoaAdapter`
+ *   (máquina de dos pasos que implementa el contrato Adapter). La sesión
+ *   del usuario autentica por cookie httpOnly (sin llave); la extensión es
+ *   un caño credencial genérico (byoa:proxy). byoa NO importa key-vault.
  *
  * (El export histórico `registeredAdapters` del scaffold se retiró en
  * Fase 2: era un placeholder vacío sin consumidores, reemplazado por el
@@ -28,3 +32,7 @@ export * from "./byok/google";
 export * from "./byok/providers";
 export * from "./byok/adapter";
 export * from "./byok/transports";
+export * from "./byoa/types";
+export * from "./byoa/claude";
+export * from "./byoa/providers";
+export * from "./byoa/adapter";

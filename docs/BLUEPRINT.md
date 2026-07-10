@@ -7,7 +7,9 @@
 > las respuestas de la entrevista de requerimientos original.
 
 **Estado global:** Fases 0–2 completas y verificadas (Fase 2 cerrada
-2026-07-09; diferidos-por-llave nominados en §0.3). Fases 3–9
+2026-07-09; diferidos-por-llave nominados en §0.3). **Fase 3 (BYOA) EN
+CURSO:** primer adaptador — claude.ai vía sesión propia — implementado y
+verificado de punta a punta 2026-07-10 (camino B+; ledger §0.4). Fases 4–9
 pendientes, en orden de dependencia estricta (Q34: no saltar de UI a
 lógica de transporte sin cerrar la anterior).
 
@@ -336,6 +338,74 @@ corrección (commit 2b82bea):
   cierre; `zip:ext` (único paso jamás ejercitado localmente) fue
   pre-volado en sandbox: OK (9.88 kB).
 
+### 0.4 Ledger de verificación — Fase 3, primer adaptador BYOA (2026-07-10)
+
+**Camino B+ (decidido tras una 1.ª inspección que descartó el clon
+single-request de BYOK):** la SPA corre la MÁQUINA DE ESTADOS; la extensión
+es un caño credencial genérico (`byoa:proxy`, gemelo de `byok:proxy` pero el
+offscreen fetchea con `credentials:"include"`). El detalle multi-paso del
+proveedor vive en `packages/adapters/src/byoa/`, no en apps/web: la
+topología Q1 (runner agnóstico) se mantiene.
+
+**Ingeniería inversa de claude.ai (sesión propia de Juan, logueado):**
+- **Auth = SÓLO cookie de sesión httpOnly** (sin Authorization, sin
+  anti-CSRF, sin token en la página). Probado: el completion da 200 SSE
+  mandando sólo `Content-Type` + `accept` + la cookie — los headers
+  `anthropic-client-platform`/`anthropic-device-id` que manda la webapp NO
+  gatean (el 2.º es a su vez una cookie). El código nunca ve la cookie: la
+  adjunta el navegador (`credentials:"include"` en el offscreen).
+- **Endpoint CON ESTADO** (por eso no es un clon de la request única de
+  BYOK): `POST /api/organizations/{orgId}/chat_conversations/{convId}/completion`.
+  `orgId` no es accesible desde la SPA (vive en cookies/bootstrap de
+  claude.ai); `GET /api/organizations` (cookie-auth) devuelve 2 orgs
+  (selección en el panel). Postear a una conversación inexistente → 404
+  `chat_conversation_not_found`: hay que crearla antes
+  (`POST .../chat_conversations`, body mínimo `{uuid, name:""}` → 201, uuid
+  generado por el cliente). `parent_message_uuid` del 1.er turno = raíz
+  all-zeros `00000000-0000-4000-8000-000000000000` (verificado: da 200).
+- **Cuerpo mínimo de completion** para el dialecto reusable:
+  `{prompt, parent_message_uuid, rendering_mode:"messages"}`. `model` es
+  OPCIONAL (omitir → default de la cuenta; da 200) — se omite para no
+  hardcodear un id de modelo frágil; el override llega en Fase 4.
+- **Dialecto del stream = Anthropic Messages** (`message_start` /
+  `content_block_delta`[`text_delta`] / `message_delta` / `message_stop`),
+  gatillado por `rendering_mode:"messages"` (sin él, el server responde el
+  formato legacy `event: completion`, no reusable). El parser es EXACTAMENTE
+  `createAnthropicParser` de BYOK; el evento extra `message_limit` (propio de
+  claude.ai) cae en el `default` ignorado. Reuso, no duplico.
+
+**Gate make-or-break (verificado en el Chrome real de Juan, no de memoria):**
+un `fetch` desde el offscreen de la extensión (host_permissions
+`https://claude.ai/*` + `credentials:"include"`) SÍ adjunta la cookie de
+sesión httpOnly y autentica cross-origin — la duda central de la fase, no
+deducible por memoria (comportamiento SameSite/Origin que cambia sin aviso).
+`GET /api/organizations` → 200 + 2 orgs. Y — clave — los **POST cross-origin
+(crear conversación + completion streaming) también se aceptan**: claude.ai
+NO valida el Origin para rechazar a la extensión → no hace falta content
+script, la estrategia `endpoint` es viable.
+
+**Verificación ejecutada (sandbox + Chrome real):** typecheck 5/5;
+`guard:keys` OK (byoa NO importa key-vault); build:ext + build:web limpios;
+gates de artefacto — `background.js` con `byoa:start`/`byoa:proxy` (+ los de
+Fase 1/2), chunk del offscreen con `byoa:start` y SIN `stream:resume`,
+manifest con `https://claude.ai/*`, `dist/assets` con `byoa:proxy` +
+`chat_conversations` + `rendering_mode` + título del panel. **Aceptación
+funcional (2026-07-10):** Detectar sesión → 200 + 2 orgs; Enviar → máquina de
+dos pasos (crear conversación + completion) → texto reconocible de Claude
+streameado → `done`; Abortar a mitad de un stream largo → corta (texto
+congelado, fase `aborted`). Criterio de aceptación de Fase 3 CUMPLIDO.
+
+**Notas / deuda registrada:**
+- La reanudación tras muerte del SW (Fase 1, genérica por requestId) aplica
+  al stream de completion; el paso 1 (crear conversación) es corto y
+  no-stream. No se ejercitó la muerte del SW en esta aceptación (el criterio
+  de Fase 3 no lo pide); la maquinaria es la misma verificada en Fase 1/2.
+- Quedaron conversaciones de prueba en la cuenta de Juan (prompts "responde
+  solo: …", "consejo de modelos", el listado 1–80 abortado). NO se borran
+  desde el agente (borrado permanente = decisión humana); Juan las elimina.
+- Selección de org: hoy la elige el panel; el default matchea la cookie
+  `lastActiveOrg` (la personal). Formalizar la UX de selección en Fase 4.
+
 ---
 
 ## 1. Topología y grafo de dependencias
@@ -492,39 +562,56 @@ Juan en su Chrome — el sandbox no las tiene):**
    ahora genérica, ejercitada sobre byok. Regresión obligatoria: el
    escenario 3 del self-test de Fase 1 sigue pasando.
 
-## Fase 3 — Adaptadores BYOA 🔜 (⏳ tras Fase 2)
+## Fase 3 — Adaptadores BYOA 🟡 (primer adaptador hecho y verificado 2026-07-10; ver §0.4)
 
-La fase de mayor incertidumbre real del proyecto — ingeniería inversa
-activa, no lectura de documentación. Empezar por el proveedor de la
-lista de Q6 que tenga el endpoint interno más estable observado
-(típicamente más fácil que DOM automation) y usar ese primer adaptador
-para terminar de validar el contrato `AdapterDescriptor` antes de
-replicar a los demás.
+> **Enmienda (testabilidad primero):** el primer adaptador BYOA es
+> **claude.ai** (no ChatGPT), por ser el endpoint interno más testeable
+> observado — auth sólo-cookie y dialecto de stream ya conocido (Anthropic
+> Messages, reusa el parser de BYOK). Se usó para validar el contrato
+> `Adapter` contra un endpoint CON ESTADO real antes de replicar a los
+> demás. Arquitectura **B+**: la SPA corre la máquina de estados, la
+> extensión es un caño credencial genérico (`byoa:proxy`). Decisiones,
+> ingeniería inversa y verificación completas: §0.4.
 
-- Por cada proveedor: investigar en `chrome://net-export` o DevTools
-  con la sesión abierta si existe un endpoint interno reutilizable
-  (estrategia `endpoint`) antes de resignarse a `dom`. `dom` implica
-  mantenimiento continuo — cualquier rediseño de la UI del proveedor
-  rompe el selector sin aviso.
-- `AdapterDescriptor.notes` de cada proveedor debe documentar la fecha
-  de la última verificación manual — esto envejece rápido y silencioso.
-- Gestión de pestañas (Q2): grupo dedicado vía `chrome.tabGroups`,
-  minimizado; abort limpio con `chrome.tabs.remove` o simplemente
-  detener la observación si se decide mantener la pestaña viva entre
-  turnos (más barato que reabrir por cada Round).
-- Selector de modelo intra-proveedor con discovery (Q4): para
-  `endpoint`, casi siempre hay una llamada de "listar modelos
-  disponibles en esta sesión" que se puede reutilizar; para `dom`,
-  leer el selector nativo del proveedor.
+Sigue siendo la fase de mayor incertidumbre real — ingeniería inversa
+activa con la sesión abierta, no lectura de documentación. Regla vigente:
+por cada proveedor, buscar el endpoint interno reutilizable (estrategia
+`endpoint`) antes de resignarse a `dom` (que implica mantenimiento continuo
+— cualquier rediseño de la UI rompe el selector sin aviso). El
+`AdapterDescriptor.notes` documenta la fecha de la última verificación
+manual (envejece rápido y silencioso).
 
-**Riesgo abierto, sin resolver:** ningún adaptador BYOA está diseñado
-todavía a nivel de selector/endpoint concreto porque eso requeriría
-inventar valores no verificados. Este es trabajo real de la siguiente
-sesión, con la sesión del proveedor abierta.
+**Hecho (claude.ai):** dialecto con estado en `packages/adapters/src/byoa/`
+(crear conversación + completion SSE Messages), `createByoaAdapter` (máquina
+de dos pasos que implementa el contrato `Adapter`), allowlist de orígenes de
+sesión `BYOA_SESSION_ALLOWED_ORIGINS` (espejo 1:1 de `host_permissions`),
+`byoa:proxy`/`byoa:start` (gemelos de byok con `credentials:"include"`),
+`byoa-client.ts` + `ByoaTestPanel` (gate + envío). Verificado de punta a
+punta en Chrome real (§0.4).
 
-**Criterio de aceptación:** un adaptador BYOA completo (mínimo:
-ChatGPT o Claude) entrega un stream de texto reconocible en un panel
-de la grilla, con abort funcional.
+**Roadmap de continuación (inventario en 3 clases, sin implementar aún):**
+1. **Chat mainstream** (ChatGPT, Gemini, DeepSeek, Perplexity, Grok…):
+   mismo patrón que claude.ai — buscar el endpoint interno de completion
+   con la sesión abierta; probable estado análogo (crear conversación +
+   turnos). Cada uno es ingeniería inversa propia; `dom` sólo si no hay
+   endpoint reutilizable.
+2. **Research-agent / con fit-de-contrato pendiente**: superficies cuyo
+   "turno" no mapea limpio a un stream de texto único (agentes con pasos,
+   herramientas, artefactos). Requieren decidir cómo se proyecta su salida
+   al contrato `AdapterChunk` v1 (sólo texto) antes de adaptarlas.
+3. **BYOK-native redundantes**: proveedores que ya cubre BYOK con llave
+   (anthropic/google/openai/deepseek/perplexity por API). BYOA para ellos
+   es redundante salvo que el usuario prefiera no gastar llave — baja
+   prioridad. `chatglm.cn` inaccesible desde acá; GLM se alcanzaría vía
+   `z.ai`.
+
+- Gestión de pestañas (Q2): pendiente — hoy el adaptador claude no abre
+  pestaña (fetch directo al endpoint desde el offscreen). Si algún
+  proveedor exige DOM, ahí entra el grupo dedicado vía `chrome.tabGroups`.
+
+**Criterio de aceptación:** *(CUMPLIDO para claude.ai, §0.4)* un adaptador
+BYOA completo entrega un stream de texto reconocible en un panel, con abort
+funcional.
 
 ---
 
@@ -543,6 +630,13 @@ de la grilla, con abort funcional.
   worker para mantenerse fluido.
 - Metadatos por panel (Q24): latencia, tokens, costo estimado
   (BYOK), acciones copiar/reintentar/exportar-solo-este.
+- **Selector de modelo intra-proveedor con discovery (Q4) — REQUERIMIENTO
+  heredado de Fase 3:** falta el mockup + la UI. Para BYOA-claude, `model`
+  hoy se OMITE (usa el default de la cuenta); el override por request ya
+  está cableado en el builder/adapter (`buildCompletion({..., model})`),
+  falta la UI de discovery (listar modelos de la sesión) + selección. Para
+  BYOK ya existe el override en el harness; unificar ambos en un selector
+  por panel.
 - Excepciones al input global (Q13): "reintentar" agrega un `Attempt`
   (ya modelado en `db.ts`); "continuar solo aquí" crea un `Reply` con
   `scope: "panel-continued"` (también ya modelado) fuera del flujo de

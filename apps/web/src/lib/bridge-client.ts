@@ -48,6 +48,9 @@ type DispatchPayload = Extract<BridgeRequest, { type: "byoa:dispatch" }>["payloa
 /** Request cruda de byok:proxy (Fase 2), derivada del contrato compartido. */
 type ByokProxyPayload = Omit<Extract<BridgeRequest, { type: "byok:proxy" }>, "type" | "requestId">;
 
+/** Request cruda de byoa:proxy (Fase 3), derivada del contrato compartido. */
+type ByoaProxyPayload = Omit<Extract<BridgeRequest, { type: "byoa:proxy" }>, "type" | "requestId">;
+
 export type ExtensionStatus =
   | { state: "checking" }
   | { state: "not-installed"; downloadUrl: string }
@@ -177,6 +180,35 @@ class BridgeClient {
       return requestId;
     }
     this.port.postMessage({ type: "byok:proxy", requestId, ...request });
+    return requestId;
+  }
+
+  /**
+   * Fase 3 (BYOA, camino B+): gemelo de `byokProxy` con semántica de
+   * sesión. La request cruda viaja por `byoa:proxy`; el offscreen la
+   * ejecuta con `credentials:"include"` (la cookie de sesión httpOnly del
+   * usuario, que el navegador adjunta — este cliente nunca la ve). Mismo
+   * stream + reanudación que byok/byoa/self-test. El abort de un stream
+   * `kind:"byoa"` reusa `byoa:abort` (ver abort()). `request.headers` no
+   * lleva secretos (auth por cookie), pero tampoco se loggea.
+   */
+  byoaProxy(request: ByoaProxyPayload, handlers: StreamHandlers): string {
+    const requestId = crypto.randomUUID();
+    this.streams.set(requestId, {
+      kind: "byoa",
+      handlers,
+      lastSeq: -1,
+      pending: new Map(),
+      terminal: false,
+      doneLastSeq: null,
+    });
+    this.ensurePort();
+    if (!this.port) {
+      // Sin extensión no hay sesión que proxyar: piso inmediato, nunca cuelgue.
+      this.finalizeAborted(requestId);
+      return requestId;
+    }
+    this.port.postMessage({ type: "byoa:proxy", requestId, ...request });
     return requestId;
   }
 

@@ -125,7 +125,38 @@ export type BridgeRequest =
       body?: string;
       stream: boolean;
     }
-  | { type: "byok:proxy-abort"; requestId: string };
+  | { type: "byok:proxy-abort"; requestId: string }
+  | {
+      /**
+       * Proxy BYOA (Fase 3, camino B+). Gemelo de `byok:proxy` con
+       * semántica de SESIÓN en vez de llave: la SPA arma la request HTTP
+       * cruda contra el endpoint interno del proveedor (p. ej. claude.ai) y
+       * la extensión la ejecuta en el offscreen. Mismo camino de validación
+       * que byok (sender.origin + allowlist EN CÓDIGO + https-only), pero
+       * contra `BYOA_SESSION_ALLOWED_ORIGINS` (host de sesión) en lugar del
+       * allowlist BYOK.
+       *
+       * DELTA CLAVE vs byok:proxy — modo de credenciales del fetch:
+       *   · byok:proxy → el offscreen usa `credentials: "omit"` (la auth
+       *     va en un header/llave que arma la SPA).
+       *   · byoa:proxy → el offscreen usa `credentials: "include"`: la
+       *     cookie de sesión httpOnly del usuario — la MISMA que usa cuando
+       *     abre claude.ai en el navegador — la adjunta el navegador en
+       *     runtime; el código NUNCA la lee ni la loggea. `headers` acá NO
+       *     lleva secretos (la auth es la cookie), pero se trata igual: no
+       *     se loggea.
+       *
+       * El abort reusa el `byoa:abort` existente (registro por requestId).
+       * Sin bump de versión: v2 sin consumidores externos (ver E4/§0.3).
+       */
+      type: "byoa:proxy";
+      requestId: string;
+      url: string;
+      method: "GET" | "POST";
+      headers: Record<string, string>;
+      body?: string;
+      stream: boolean;
+    };
 
 // ---------------------------------------------------------------------------
 // Extensión -> SPA

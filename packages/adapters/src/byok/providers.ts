@@ -43,6 +43,19 @@ export const openaiProvider: ByokProviderConfig = openAiCompatProvider({
   route: "proxy",
   includeUsageOption: true,
   notes: "usage sólo llega en streaming si se pide stream_options.include_usage.",
+  // Registro curado (Fase 4, E4) — verificado por búsqueda web 2026-07-10,
+  // no por llamada real salvo el default. GPT-5.5/5.6 requieren plan de
+  // pago que Juan todavía no tiene: quedan marcados para cuando lo active.
+  models: [
+    { id: "gpt-4o-mini", label: "GPT-4o mini", verified: true, note: "default actual (Fase 2), confianza alta." },
+    {
+      id: "gpt-5.5",
+      label: "GPT-5.5",
+      verified: false,
+      note:
+        "flagship OpenAI segun busqueda 2026-07-10 (abr-2026). Necesita plan pago para probar — pendiente cuando Juan tenga acceso. Los modelos de razonamiento de OpenAI historicamente cambian la FORMA del pedido (otros nombres de parametro, sin temperature); no asumir que el shape actual de openai-compat alcanza sin probar.",
+    },
+  ],
 });
 
 export const deepseekProvider: ByokProviderConfig = openAiCompatProvider({
@@ -55,6 +68,16 @@ export const deepseekProvider: ByokProviderConfig = openAiCompatProvider({
   route: "proxy",
   includeUsageOption: false,
   notes: "usage llega solo en el chunk final; reasoning_content (reasoner) se ignora en v1.",
+  models: [
+    { id: "deepseek-chat", label: "DeepSeek Chat", verified: true, note: "default actual (Fase 2), confianza alta." },
+    {
+      id: "deepseek-v4",
+      label: "DeepSeek V4 (nombre de lanzamiento)",
+      verified: false,
+      note:
+        "generacion mas nueva segun busqueda 2026-07-10, pero ese es el nombre de MARKETING del lanzamiento, no confirme el id exacto que expone /chat/completions (suele diferir, ej. 'deepseek-chat' como alias movil). No usar sin confirmar contra la documentacion vigente de DeepSeek.",
+    },
+  ],
 });
 
 export const perplexityProvider: ByokProviderConfig = openAiCompatProvider({
@@ -67,6 +90,9 @@ export const perplexityProvider: ByokProviderConfig = openAiCompatProvider({
   route: "proxy",
   includeUsageOption: false,
   notes: "Dialecto openai-compat con búsqueda web inherente; usage en chunks finales.",
+  // Sin hallazgos nuevos verificables en la búsqueda de Fase 4 (E4): no
+  // agrego variantes que no pude confirmar. Ampliar cuando Juan las use.
+  models: [{ id: "sonar", label: "Sonar", verified: true, note: "default actual (Fase 2), confianza moderada-alta." }],
 });
 
 export const BYOK_PROVIDERS: Record<string, ByokProviderConfig> = {

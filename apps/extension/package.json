@@ -18,7 +18,7 @@
     "@chatcouncil/shared": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.7.3",
+    "typescript": "7.0.2",
     "wxt": "^0.20.27"
   }
 }

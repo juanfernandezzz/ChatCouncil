@@ -21,9 +21,21 @@
  * (`done`|`error`), salvo abort del consumidor → termina sin terminal (el
  * orquestador lo mapea a onAborted). `attachments`/`toggles`/`model`
  * diferidos como en BYOK (adjuntos presentes → `error` explícito).
+ *
+ * Threading multi-turno (Fase 4, E2): con `opts.priorThread` (hilo de un
+ * turno anterior de ESTE panel, ver `apps/web/src/lib/db.ts`
+ * `panelThreads`), el paso 1 se SALTEA — se reusa la conversación
+ * existente y el `parent_message_uuid` es su `lastMessageId` — en vez de
+ * crear una conversación nueva con parent raíz. Tras un paso 2 exitoso
+ * (sin abort, sin error), un paso 3 (`buildGetThread`, no-streaming) trae
+ * el uuid del mensaje del asistente recién creado y lo adjunta al chunk
+ * `done` como `providerThread`; quien consume (apps/web) lo persiste para
+ * el próximo turno. Si el paso 3 falla, el turno sigue `done` sin
+ * `providerThread` — degradación suave, nunca se pisa una respuesta ya
+ * entregada por un fallo de una request de "housekeeping".
  */
 
-import type { Adapter, AdapterChunk, SendOptions } from "@chatcouncil/shared";
+import type { Adapter, AdapterChunk, ProviderThreadState, SendOptions } from "@chatcouncil/shared";
 import type { ByoaCompletionParams, ByoaProviderConfig, ByoaTransport } from "./types";
 
 export interface ByoaAdapterDeps {
@@ -36,6 +48,24 @@ export interface ByoaAdapterDeps {
 
 function isAbortError(err: unknown): boolean {
   return err instanceof Error && err.name === "AbortError";
+}
+
+/** Paso 3: housekeeping post-turno. Nunca lanza — un fallo acá degrada a "sin providerThread", no a error del turno. */
+async function fetchThreadState(
+  cfg: ByoaProviderConfig,
+  transport: ByoaTransport,
+  orgId: string,
+  conversationUuid: string,
+  signal: AbortSignal,
+): Promise<ProviderThreadState | null> {
+  let body = "";
+  try {
+    await transport.run(cfg.buildGetThread({ orgId, conversationUuid }), (text) => (body += text), signal);
+  } catch {
+    return null;
+  }
+  const lastMessageId = cfg.parseLastAssistantMessageUuid(body);
+  return lastMessageId ? { conversationUuid, lastMessageId } : null;
 }
 
 export function createByoaAdapter(cfg: ByoaProviderConfig, deps: ByoaAdapterDeps): Adapter {
@@ -64,25 +94,28 @@ export function createByoaAdapter(cfg: ByoaProviderConfig, deps: ByoaAdapterDeps
     // 2 (error/abort al crear) como después.
     let finished = false;
     try {
-      // ── Paso 1: crear la conversación ─────────────────────────────────
-      // El uuid lo genera el cliente, así que ya lo conocemos; la respuesta
-      // sólo confirma. stream:false → el transporte entrega el cuerpo entero
-      // y resuelve; un HTTP !ok rechaza y cae al catch.
-      const conversationUuid = crypto.randomUUID();
-      try {
-        await transport.run(cfg.buildCreateConversation({ orgId, conversationUuid }), () => {}, controller.signal);
-      } catch (err) {
-        finished = true;
-        if (isAbortError(err) || controller.signal.aborted) return; // abort del consumidor
-        yield { kind: "error", message: `crear conversación: ${err instanceof Error ? err.message : String(err)}` };
-        return;
+      // ── Paso 1: crear la conversación (salteado si hay hilo previo) ───
+      // Con `priorThread` reusamos la conversación existente del panel en
+      // vez de generar una nueva; sin él, el uuid lo genera el cliente y la
+      // respuesta sólo confirma. stream:false → el transporte entrega el
+      // cuerpo entero y resuelve; un HTTP !ok rechaza y cae al catch.
+      const conversationUuid = opts.priorThread?.conversationUuid ?? crypto.randomUUID();
+      if (!opts.priorThread) {
+        try {
+          await transport.run(cfg.buildCreateConversation({ orgId, conversationUuid }), () => {}, controller.signal);
+        } catch (err) {
+          finished = true;
+          if (isAbortError(err) || controller.signal.aborted) return; // abort del consumidor
+          yield { kind: "error", message: `crear conversación: ${err instanceof Error ? err.message : String(err)}` };
+          return;
+        }
       }
 
       // ── Paso 2: completion (streaming) ────────────────────────────────
       const params: ByoaCompletionParams = {
         orgId,
         conversationUuid,
-        parentMessageUuid: cfg.rootParentMessageUuid,
+        parentMessageUuid: opts.priorThread?.lastMessageId ?? cfg.rootParentMessageUuid,
         prompt: opts.prompt,
       };
       if (deps.model !== undefined) params.model = deps.model;
@@ -123,8 +156,14 @@ export function createByoaAdapter(cfg: ByoaProviderConfig, deps: ByoaAdapterDeps
       for (;;) {
         while (queue.length > 0) {
           const chunk = queue.shift()!;
+          if (chunk.kind === "done") {
+            // ── Paso 3: housekeeping post-turno (nunca convierte el turno en error) ──
+            const providerThread = await fetchThreadState(cfg, transport, orgId, conversationUuid, controller.signal);
+            yield providerThread ? { ...chunk, providerThread } : chunk;
+            return;
+          }
           yield chunk;
-          if (chunk.kind !== "text-delta") return; // terminal entregado
+          if (chunk.kind !== "text-delta") return; // terminal entregado ("error")
         }
         if (finished) break;
         await new Promise<void>((resolve) => {

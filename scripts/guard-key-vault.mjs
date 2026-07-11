@@ -22,6 +22,10 @@ const VAULT_PATH = "apps/web/src/lib/key-vault.ts";
 const ALLOWED_IMPORTERS = new Set([
   "apps/web/src/lib/byok-client.ts",
   "apps/web/src/dev/ByokTestPanel.tsx",
+  // Fase 4, E4: sólo usa hasKey() (booleano de presencia) para filtrar
+  // el selector por disponibilidad real — nunca lee ni expone el valor
+  // de la llave. Ampliación explícita y documentada, no un bypass.
+  "apps/web/src/lib/model-registry.ts",
 ]);
 const SCAN_ROOTS = ["apps", "packages"];
 const SKIP_DIRS = new Set(["node_modules", "dist", ".output", ".wxt", ".git", ".turbo"]);

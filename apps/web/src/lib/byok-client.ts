@@ -97,6 +97,8 @@ export interface ByokPromptHandlers {
 export interface ByokPromptOptions {
   providerId: string;
   prompt: string;
+  /** Turnos previos de este panel, en orden (Fase 4, E2). Vacío/ausente en el primer turno. */
+  history?: import("@chatcouncil/shared").ConversationTurn[];
   model?: string;
   maxTokens?: number;
 }
@@ -148,6 +150,7 @@ export function sendByokPrompt(
       for await (const chunk of adapter.send({
         requestId,
         prompt: opts.prompt,
+        history: opts.history ?? [],
         signal: controller.signal,
       })) {
         if (chunk.kind === "text-delta") {

@@ -49,17 +49,45 @@ export interface AdapterDescriptor {
   notes?: string;
 }
 
+/** Un turno previo de la conversación de ESTE panel (Fase 4, E2). */
+export interface ConversationTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface SendOptions {
   requestId: string;
   prompt: string;
+  /**
+   * Turnos previos de este panel, en orden cronológico (vacío o ausente
+   * en el primer turno). Fase 4, E2: BYOK lo usa para reconstruir el
+   * array de mensajes que manda al proveedor (sin memoria propia del
+   * lado servidor). BYOA lo IGNORA — su continuidad vive del lado del
+   * proveedor (conversación con estado); ver packages/adapters/src/byoa.
+   */
+  history?: ConversationTurn[];
   attachments?: { name: string; mimeType: string; dataBase64: string }[];
   toggles?: { webSearch?: boolean; imageGeneration?: boolean };
   signal?: AbortSignal;
+  /**
+   * Hilo previo del proveedor para ESTE panel (Fase 4, E2 — recon de
+   * Round B confirmado 2026-07-11). Sólo BYOA lo usa: con esto reusa la
+   * conversación con estado del proveedor en vez de arrancar una nueva.
+   * BYOK lo ignora (su continuidad es `history`, sin estado del lado
+   * del proveedor).
+   */
+  priorThread?: ProviderThreadState;
+}
+
+/** Estado de hilo de un proveedor BYOA con conversación server-side. */
+export interface ProviderThreadState {
+  conversationUuid: string;
+  lastMessageId: string;
 }
 
 export type AdapterChunk =
   | { kind: "text-delta"; text: string }
-  | { kind: "done"; tokensIn?: number; tokensOut?: number }
+  | { kind: "done"; tokensIn?: number; tokensOut?: number; providerThread?: ProviderThreadState }
   | { kind: "error"; message: string };
 
 /**

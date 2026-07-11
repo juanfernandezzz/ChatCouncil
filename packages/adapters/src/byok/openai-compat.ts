@@ -19,7 +19,7 @@
  * el contrato AdapterChunk sólo modela texto de respuesta (ledger §0.3).
  */
 
-import type { AdapterChunk } from "@chatcouncil/shared";
+import type { AdapterChunk, CuratedModel } from "@chatcouncil/shared";
 import { createSseDecoder } from "./sse";
 import type { ByokProviderConfig, ByokRoute, ByokStreamParser } from "./types";
 
@@ -32,6 +32,8 @@ export interface OpenAiCompatOptions {
   defaultModel: string;
   route: ByokRoute;
   includeUsageOption?: boolean;
+  /** Registro curado para el selector (Fase 4, E4). */
+  models?: CuratedModel[];
   notes?: string;
 }
 
@@ -96,7 +98,7 @@ export function openAiCompatProvider(opts: OpenAiCompatOptions): ByokProviderCon
     baseUrl: opts.baseUrl,
     defaultModel: opts.defaultModel,
     route: opts.route,
-    buildRequest: ({ prompt, apiKey, model, maxTokens }) => ({
+    buildRequest: ({ prompt, history, apiKey, model, maxTokens }) => ({
       url: `${opts.baseUrl}${opts.chatPath}`,
       method: "POST",
       headers: {
@@ -105,7 +107,9 @@ export function openAiCompatProvider(opts: OpenAiCompatOptions): ByokProviderCon
       },
       body: JSON.stringify({
         model: model ?? opts.defaultModel,
-        messages: [{ role: "user", content: prompt }],
+        // E2=B: mismo shape {role,content} de siempre; el historial va
+        // primero, en orden, y el turno nuevo al final.
+        messages: [...(history ?? []), { role: "user", content: prompt }],
         stream: true,
         ...(opts.includeUsageOption ? { stream_options: { include_usage: true } } : {}),
         ...(maxTokens != null ? { max_tokens: maxTokens } : {}),
@@ -115,5 +119,6 @@ export function openAiCompatProvider(opts: OpenAiCompatOptions): ByokProviderCon
     createParser: createOpenAiCompatParser,
   };
   if (opts.notes !== undefined) config.notes = opts.notes;
+  if (opts.models !== undefined) config.models = opts.models;
   return config;
 }

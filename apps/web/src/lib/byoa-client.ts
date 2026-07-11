@@ -24,6 +24,7 @@ import {
   type ByoaHttpRequest,
   type ByoaTransport,
 } from "@chatcouncil/adapters";
+import type { ProviderThreadState } from "@chatcouncil/shared";
 import { bridgeClient, type StreamHandlers } from "./bridge-client";
 
 type ProxyLifecycle = Pick<StreamHandlers, "onReconnecting" | "onResumed">;
@@ -62,7 +63,7 @@ function makeByoaBridgeTransport(lifecycle: ProxyLifecycle): ByoaTransport {
 
 export interface ByoaPromptHandlers {
   onDelta: (text: string) => void;
-  onDone: (meta: { tokensIn?: number; tokensOut?: number }) => void;
+  onDone: (meta: { tokensIn?: number; tokensOut?: number; providerThread?: ProviderThreadState }) => void;
   onError: (message: string) => void;
   /** Terminal sin resultado: abort del usuario o piso A del puente. */
   onAborted: () => void;
@@ -76,6 +77,8 @@ export interface ByoaPromptOptions {
   orgId: string;
   prompt: string;
   model?: string;
+  /** Hilo previo de ESTE panel (Fase 4, E2) — ausente en el primer turno. */
+  priorThread?: ProviderThreadState;
 }
 
 export function sendByoaPrompt(
@@ -118,16 +121,23 @@ export function sendByoaPrompt(
   void (async () => {
     let sawTerminal = false;
     try {
-      for await (const chunk of adapter.send({
+      const sendOpts: Parameters<typeof adapter.send>[0] = {
         requestId,
         prompt: opts.prompt,
         signal: controller.signal,
-      })) {
+      };
+      if (opts.priorThread !== undefined) sendOpts.priorThread = opts.priorThread;
+      for await (const chunk of adapter.send(sendOpts)) {
         if (chunk.kind === "text-delta") {
           handlers.onDelta(chunk.text);
         } else if (chunk.kind === "done") {
           sawTerminal = true;
-          handlers.onDone({ tokensIn: chunk.tokensIn, tokensOut: chunk.tokensOut });
+          const meta: { tokensIn?: number; tokensOut?: number; providerThread?: ProviderThreadState } = {
+            tokensIn: chunk.tokensIn,
+            tokensOut: chunk.tokensOut,
+          };
+          if (chunk.providerThread !== undefined) meta.providerThread = chunk.providerThread;
+          handlers.onDone(meta);
           return;
         } else {
           sawTerminal = true;

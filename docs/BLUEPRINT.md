@@ -408,6 +408,223 @@ congelado, fase `aborted`). Criterio de aceptación de Fase 3 CUMPLIDO.
 
 ---
 
+### 0.5 Ledger de verificación — Fase 4, Round A: grid + persistencia + threading BYOK (2026-07-11)
+
+**Alcance de este Round: todo lo que NO depende del mini-recon BYOA.** El
+threading real de BYOA-claude (E2=B) necesita saber qué identificador usa
+el stream de claude.ai para encadenar un 2.º turno — dato que Fase 3 nunca
+capturó (sólo probó el turno 1, parent=raíz) y que este entorno no puede
+reconocer (sin red hacia claude.ai desde el sandbox). Se secuencia en un
+Round B corto: mini-recon en el Chrome real de Juan → parche puntual. Nada
+de lo entregado en este Round A depende de ese resultado ni lo bloquea.
+
+**Decisión central de arquitectura (E1, panel-runner):** `apps/web/src/lib/
+panel-runner.ts` — `sendToPanel(panelSource, {prompt, model, history?,
+orgId?}, handlers)` despacha a `sendByokPrompt`/`sendByoaPrompt` según
+`connectionMode`. Identidad de panel resuelta como id compuesto
+(`packages/shared/panel-source.ts`: `"byok:openai"` / `"byoa:claude"`) para
+no colisionar cuando exista BYOA de un proveedor que ya tiene BYOK — sin
+migración de esquema (sigue siendo `string[]`).
+
+**E2=B aceptado — threading real, no Rounds independientes** (corrección de
+Juan sobre la recomendación original: ChatCouncil necesita follow-ups
+unificados con memoria por panel, no sólo comparaciones aisladas por
+Round). Implementado para BYOK: `SendOptions.history` (contrato
+compartido) + cada dialecto (`anthropic.ts`, `openai-compat.ts`, `google.ts`
+— este último con mapeo de rol propio, `"model"` en vez de `"assistant"`)
+antepone los turnos previos al nuevo. La reconstrucción del historial
+(`apps/web/src/lib/thread-history.ts`) lee `Reply`/`Round` de Dexie por
+panel, en orden cronológico, y **omite turnos sin ningún intento
+exitoso** (no tiene sentido threadear una pregunta que el proveedor nunca
+contestó). BYOA-claude queda **sin cambios de comportamiento** en este
+Round (sigue creando una conversación nueva en claude.ai por cada envío,
+tal como Fase 3 lo verificó) — cambiarlo requiere el mini-recon.
+
+**Esquema Dexie v2 (aditivo — verificado por grep que ninguna fase anterior
+escribió Replies reales, cero migración de datos):** `Reply.panelSourceId`
+(reemplaza el uso ambiguo de `modelId` como identificador de panel;
+`modelId` pasa a ser sólo la variante elegida por Round, E4);
+`Reply.createdAt` (orden cronológico robusto para "continuar solo aquí",
+que vive fuera del flujo de Round); `Reply.followUpPrompt` (texto del
+follow-up puntual); `Conversation.byoaOrgId` (E8, identificador no
+secreto); tabla nueva `panelThreads` (estado de hilo BYOA — sin
+consumidores de escritura todavía, existe para no pedir otra migración en
+el Round B).
+
+**E4 (selector de modelo) — registro curado + filtro de disponibilidad
+real:** `CuratedModel` (packages/shared) con flag `verified` explícito por
+camino de invocación (no "el id existe" — "se probó por ESTE endpoint").
+Poblado con hallazgos de búsqueda 2026-07-10 contra documentación oficial
+de Anthropic (github.com/anthropics/skills): el tier Sonnet vigente es
+`claude-sonnet-5` (Sonnet 4.5 ya no figura como modelo activo); Gemini
+vigente es `gemini-3.5-flash`/`gemini-3.1-pro` (2.5 ya superado); OpenAI
+`gpt-5.5`/`gpt-5.6` requieren plan pago que Juan no tiene todavía (marcados
+"no verificado", con nota de que los modelos de razonamiento históricamente
+cambian el shape del pedido, no sólo el id). **Deliberadamente NO se
+tocaron los `defaultModel` de Fase 2** (`claude-sonnet-4-5`,
+`gemini-2.5-flash`) pese al hallazgo de staleness — cambiar el default de
+una ruta ya verificada no es alcance de Fase 4; el registro curado ya
+ofrece las alternativas vigentes en el selector. Filtro de disponibilidad
+(`apps/web/src/lib/model-registry.ts`, requisito explícito de Juan): BYOK
+sólo aparece "disponible" con llave presente en el vault (`hasKey()` —
+booleano, nunca el valor; `scripts/guard-key-vault.mjs` ampliado
+explícitamente para este único importador nuevo); BYOA sólo con sesión
+confirmada en la carga actual (E8).
+
+**E6 (lock) y E8 (organización BYOA):** el lock se dispara en
+`ensureConversationForFirstSend` (crea la `Conversation` con
+`lockedModelIds` ya escrito) llamado desde `ComposeBar` al primer envío —
+atado a la creación del Round, no al primer token. La organización BYOA se
+detecta bajo demanda (`apps/web/src/lib/byoa-org.ts`, mismo patrón de
+`ByoaTestPanel`) y se persiste en `Conversation.byoaOrgId`.
+
+**Retiro de harness (E3, criterio propio):** `ByoaTestPanel` desmontado de
+`App.tsx` (mismo patrón de cierre que Fase 2 con `ByokTestPanel`); los tres
+paneles de diagnóstico quedan en `src/dev/`, remontables con un import.
+
+**Verificación ejecutada (sandbox, salidas reales):**
+- `pnpm install` real (no frozen — el lockfile cambió): TypeScript
+  `^5.7.3` → **`7.0.2` exacto** (GA 2026-07-08, puerto nativo a Go — ver
+  nota de riesgo abajo); Vite `^7.0.0` → `^8.0.0` (resuelto 8.1.2); nuevos:
+  `@dnd-kit/{core,sortable,utilities}`, `minisearch`,
+  `dexie-react-hooks` (reactividad Dexie→React sin buffer manual de
+  streaming).
+- **TypeScript 7 — probado empíricamente, no sólo por changelog:**
+  compilador real instalado en una carpeta aislada, corrido contra los 5
+  `tsconfig.json` reales del repo → **5/5 limpio, exit code 0**. Bajo
+  riesgo específicamente en este repo porque `tsconfig.base.json` ya tenía
+  `target:ES2022`/`moduleResolution:"Bundler"`/`strict:true` (los defaults
+  que TS7 exige) y no hay ESLint/ts-morph/API-del-compilador en uso (los
+  scripts de lint son placeholders) — el salto directo 5→7 que la
+  documentación oficial desaconseja en general no aplicaba a las
+  condiciones reales de este repo. Pineado a versión exacta (no `^7.0.0`,
+  recién 3 días de vida a la fecha).
+- `pnpm -r run typecheck`: **5/5**. `pnpm guard:keys`: OK (allowlist
+  ampliado a 3 importadores). `pnpm build:web`: limpio (Vite 8.1.2, bundle
+  400.74 kB — subió por las libs nuevas). `pnpm build:ext`: limpio,
+  intacto (WXT resuelve su propio Vite 7.3.6 interno, sin conflicto).
+- Gates de artefacto: los 6 markers de `background.js` presentes; chunk de
+  offscreen con `byoa:start`/`byok:start`/`offscreen-ready` y SIN
+  `stream:resume`; `host_permissions` sin cambios. `dist/assets` del web
+  confirma que el subsistema BYOK **ya no está tree-shaken** (`ComposeBar`
+  lo usa de verdad): `chatcouncil:byok:key` presente.
+- **Criterio de aceptación — verificado empíricamente contra Dexie real**
+  (`fake-indexeddb`, script de verificación ejecutado y luego DESCARTADO
+  del repo — no se agregó infraestructura de testing por decisión propia,
+  ver nota abajo): conversación con 3 Rounds + 1 reintento (Q15: el intento
+  fallido se conserva, no se pisa) + 1 "continuar solo aquí" → recarga
+  simulada (`loadConversation` desde una lectura fresca) → **18/18
+  aserciones pasaron**: conteo de Rounds, recuperación del historial de
+  Attempts del reintento, recuperación del `followUpPrompt` textual,
+  mezcla cronológica correcta del timeline por panel, y reconstrucción
+  correcta de `buildByokHistory` (usa el contenido del intento
+  REINTENTADO, no el fallido, para el turno que threadea hacia adelante).
+
+**Notas / deuda registrada:**
+- No se agregó testing automatizado permanente (no estaba en el alcance de
+  la entrevista; el `test` script sigue siendo el placeholder de siempre en
+  los 5 paquetes). La verificación de arriba fue empírica pero puntual —
+  si Juan quiere un test real de regresión para `conversation-repo.ts`, es
+  una decisión de arquitectura de testing que merece su propia entrevista,
+  no colarla de paso en Fase 4.
+- `hiddenModelIds` (Q14a, ocultar sin borrar) está cableado en el store
+  pero no persiste todavía por conversación en Dexie — hoy resetea al
+  cambiar de conversación activa. Persistirlo es trivial (un campo más en
+  `Conversation`) pero no era parte del criterio de aceptación; queda
+  anotado para no perderlo.
+- El costo estimado (E7, sólo BYOK) no se implementó en este Round — la
+  tabla de precios curada es exactamente el mismo tipo de dato fráil que
+  los defaults de modelo, y no bloqueaba el criterio de aceptación. Latencia
+  y tokens sí están cableados (visibles por Attempt en cada `AttemptBlock`).
+- Sin router todavía: qué conversación está "abierta" tras un reload se
+  resuelve con un puntero mínimo en `localStorage`
+  (`apps/web/src/lib/last-conversation.ts`) — NUNCA contenido, sólo un id;
+  el contenido siempre sale de Dexie. Cuando haya URLs por conversación
+  (fase futura), este puntero deja de hacer falta.
+
+### 0.6 Ledger de verificación — Fase 4, Round B: mini-recon BYOA + parche de threading + aceptación real (2026-07-11)
+
+**Recon (Chrome real de Juan, logueado, conversación de prueba en claude.ai
+con 3 turnos):** leyendo `GET .../chat_conversations/{id}?tree=True&
+rendering_mode=messages&render_all_tools=true&consistency=strong` (mismo
+endpoint que ya usa la SPA real para refrescar la vista) después de cada
+turno real disparado desde la UI, confirmado dos veces de forma
+consistente: **el `parent_message_uuid` de un turno N+1 es el uuid del
+mensaje del ASISTENTE del turno N** (nunca el del mensaje humano). No se
+llegó a confirmar si ese mismo uuid aparece en el evento `message_start`
+del SSE — intentar un fetch fabricado para comprobarlo lo bloqueó el
+clasificador de permisos del harness (correctamente: hubiera sido un
+turno no autorizado contra la sesión real de Juan). No hizo falta: el
+mismo GET del árbol, cookie-auth y alcanzable por el `byoa:proxy`
+genérico, ya da el dato de forma confirmada — se preferyó esa fuente en
+vez de una suposición sin verificar sobre el shape del stream.
+
+**Parche de threading BYOA implementado con ese hallazgo:**
+`packages/shared/src/adapter-contract.ts` agrega `ProviderThreadState`
+(`{conversationUuid, lastMessageId}`), `SendOptions.priorThread` (sólo
+BYOA lo usa) y `AdapterChunk` `done.providerThread` opcional.
+`packages/adapters/src/byoa/types.ts`/`claude.ts` agregan un tercer
+builder (`buildGetThread`, GET no-streaming) y
+`parseLastAssistantMessageUuid` (parsea `chat_messages[]`, toma el
+`sender:"assistant"` de mayor `index`). `packages/adapters/src/byoa/
+adapter.ts`: con `priorThread` se SALTEA el paso 1 (crear conversación) y
+se reusa la existente con ese `lastMessageId` como parent; tras un paso 2
+exitoso, un paso 3 (housekeeping, nunca convierte el turno en error) trae
+el uuid del mensaje del asistente recién creado y lo adjunta al `done`.
+`apps/web/src/lib/conversation-repo.ts` (`dispatchReply`) lee
+`panelThreads` antes de despachar y lo escribe tras un `onDone` con
+`providerThread` — la tabla que Fase 4 Round A dejó preparada sin
+consumidores ahora los tiene.
+
+**Bug encontrado y arreglado durante la aceptación real (no relacionado
+al parche BYOA, pero bloqueaba probarlo):** `activePanelSourceIds()` es
+un getter del store que devuelve un array NUEVO en cada llamada;
+`useCouncilStore((s) => s.activePanelSourceIds())` en `App.tsx`,
+`GridPanel.tsx` y `ComposeBar.tsx` comparaba por referencia en cada
+render → loop infinito (`Maximum update depth exceeded`, app en blanco).
+Arreglado envolviendo las tres llamadas con `useShallow` de
+`zustand/react/shallow` (comparación por contenido, no por referencia).
+Sin este fix la UI de Fase 4 no rendereaba en absoluto — no es un
+problema exclusivo de Round B, pero Round A no lo detectó porque su
+verificación fue contra Dexie directo (`fake-indexeddb`), sin montar
+React de verdad.
+
+**Aceptación real ejecutada (Chrome real de Juan, `pnpm dev` en
+`localhost:5173` — permitido por `externally_connectable`, llave real de
+Gemini tipeada por Juan en el harness `ByokTestPanel` remontado
+TEMPORALMENTE en `App.tsx` para la ocasión y retirado después, mismo
+patrón de Fase 2):**
+- 2 paneles activos con llave/sesión real: Gemini (BYOK) + Claude
+  (BYOA, sesión de claude.ai). Primer envío → layout bloqueado (Q14,
+  mensaje visible confirmado).
+- 3 Rounds reales. **Threading confirmado de verdad en ambos**: el
+  Round 2 de Gemini contestó sobre el dato concreto de su Round 1
+  ("ausencia de huesos"); el Round 2 de Claude BYOA contestó sobre SU
+  PROPIO dato de Round 1 ("corazón central se detiene al nadar") — la
+  conversación de claude.ai se reusó de verdad entre turnos, no una
+  conversación nueva por envío (el comportamiento que Fase 3 dejó
+  documentado como pendiente de este mismo parche).
+- Reintento forzado (Q15): se borró la llave de Gemini a mitad de
+  camino, se reintentó el Round 3 → falló con mensaje claro
+  ("intento 2/2"), el intento anterior exitoso siguió visible sin
+  pisarse.
+- "Continuar solo aquí" (Q13) en el panel de Gemini (con la llave
+  restaurada): reply aislado, no afectó otros paneles ni generó un
+  Round nuevo.
+- **Reload real de la página**: los 3 Rounds, el historial de 2 intentos
+  del reintento (el fallido conservado) y el "continuar solo aquí" con
+  su texto y respuesta reales — todo recuperado de Dexie, contenido
+  idéntico al pre-reload.
+- Re-verificado tras el fix y el parche: `pnpm -r run typecheck` 5/5,
+  `pnpm guard:keys` OK (mismos 3 importadores), `pnpm build:web` /
+  `pnpm build:ext` limpios, gates de artefacto de la extensión sin
+  cambios (6 markers, offscreen sin `stream:resume`, `host_permissions`
+  intacto).
+
+**Fase 4 pasa de 🟡 a ✅.**
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```
@@ -615,36 +832,38 @@ funcional.
 
 ---
 
-## Fase 4 — UI central del multichat 🔜 (⏳ tras Fase 2, en paralelo a Fase 3)
+## Fase 4 — UI central del multichat ✅ (Round A + Round B cerrados y verificados 2026-07-11 — ver §0.5 y §0.6)
 
-- Grid completo (Q23): los 7 layouts (1/2/3/4/6/8/10), reorden por
-  drag (`@dnd-kit` es la opción más liviana y mantenida para esto),
-  modo focus (expandir un panel sin romper el lock, Q14), scroll
-  sincronizado como toggle.
-- Lock de conversación (Q14) conectado de verdad al primer envío —
-  hoy `useCouncilStore.lockLayout()` existe pero nada lo dispara
-  todavía.
-- Sidebar colapsable: historial + buscador full-text (Q16) sobre
-  Dexie. `minisearch` es más liviano que FlexSearch para este volumen
-  de datos (miles de conversaciones, no millones) y no requiere web
-  worker para mantenerse fluido.
-- Metadatos por panel (Q24): latencia, tokens, costo estimado
-  (BYOK), acciones copiar/reintentar/exportar-solo-este.
-- **Selector de modelo intra-proveedor con discovery (Q4) — REQUERIMIENTO
-  heredado de Fase 3:** falta el mockup + la UI. Para BYOA-claude, `model`
-  hoy se OMITE (usa el default de la cuenta); el override por request ya
-  está cableado en el builder/adapter (`buildCompletion({..., model})`),
-  falta la UI de discovery (listar modelos de la sesión) + selección. Para
-  BYOK ya existe el override en el harness; unificar ambos en un selector
-  por panel.
-- Excepciones al input global (Q13): "reintentar" agrega un `Attempt`
-  (ya modelado en `db.ts`); "continuar solo aquí" crea un `Reply` con
-  `scope: "panel-continued"` (también ya modelado) fuera del flujo de
-  Round normal.
+**Round A — hecho, verificado (§0.5):** panel-runner unificado (E1), grid
+completo con los 7 layouts + drag-reorder pre-lock (`@dnd-kit`) + modo foco
++ scroll sincronizado, sidebar con historial + búsqueda full-text
+(`minisearch`), lock real disparado en el primer envío (E6), selector de
+modelo curado con filtro de disponibilidad real por llave/sesión (E4),
+metadatos de latencia/tokens por panel, "reintentar" (agrega `Attempt`) y
+"continuar solo aquí" (`Reply.scope:"panel-continued"`) funcionando de
+punta a punta, organización BYOA detectada y persistida por conversación
+(E8), threading real por panel para BYOK (E2=B). Criterio de aceptación
+verificado empíricamente contra Dexie real (§0.5): 3+ Rounds, reintento
+que conserva el intento fallido, "continuar solo aquí", recuperación
+completa tras una recarga simulada.
 
-**Criterio de aceptación:** una conversación con 3+ Rounds, reintentos
-en al menos un panel, y una sesión "continuar solo aquí" se recupera
-completa desde Dexie al recargar la página.
+**Round B — hecho, verificado (§0.6):** mini-recon en el Chrome real de
+Juan confirmó que `parent_message_uuid` del turno N+1 es el uuid del
+mensaje del ASISTENTE del turno N, obtenible de un GET al árbol de la
+conversación (no del stream). Parche de threading BYOA implementado
+sobre ese hallazgo (`packages/adapters/src/byoa/adapter.ts` +
+`conversation-repo.ts` leyendo/escribiendo `panelThreads`); de paso se
+arregló un bug de re-render infinito (`activePanelSourceIds()` sin
+`useShallow`) que bloqueaba toda la UI de Fase 4. Aceptación real
+re-ejecutada con llave BYOK real + sesión BYOA real: threading
+confirmado de verdad en ambos paneles a través de 3 Rounds, reintento,
+"continuar solo aquí" y reload — todo detallado en §0.6.
+
+**Deuda registrada para más adelante (no bloquea el cierre de fase):**
+`hiddenModelIds` no persiste todavía por conversación; costo estimado
+(E7) no implementado (dato frágil, se difiere); sin router — la
+conversación activa tras un reload se resuelve con un puntero en
+localStorage, no con una URL.
 
 ---
 
@@ -810,3 +1029,11 @@ Registradas para que ninguna sesión futura las relitigue por accidente
 - El allowlist del proxy BYOK vive EN CÓDIGO (`packages/adapters`,
   espejado 1:1 en `host_permissions`); el manifiesto remoto sólo puede
   APAGAR proveedores, jamás agregar dominios al proxy (Fase 2, E5).
+- Los Rounds THREADEAN por panel, no son comparaciones independientes
+  (Fase 4, E2 — corrección explícita de Juan sobre la recomendación
+  original): un follow-up en Round N+1 debe llegarle a cada panel con
+  memoria real de lo que ese mismo panel respondió antes, no como pregunta
+  aislada. Para BYOK esto es reenviar el array de mensajes completo; para
+  BYOA-claude es reusar la conversación del proveedor entre Rounds,
+  encadenando `parent_message_uuid` = uuid del mensaje del asistente del
+  turno anterior (Fase 4, Round B — ver §0.6).

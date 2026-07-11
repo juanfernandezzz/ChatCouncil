@@ -14,7 +14,7 @@
  *     apps/web, porque depende de bridge-client).
  */
 
-import type { AdapterChunk } from "@chatcouncil/shared";
+import type { AdapterChunk, ConversationTurn, CuratedModel } from "@chatcouncil/shared";
 
 /** Request HTTP cruda, espejo del payload de `byok:proxy` del puente. */
 export interface ByokHttpRequest {
@@ -28,6 +28,14 @@ export interface ByokHttpRequest {
 
 export interface ByokBuildParams {
   prompt: string;
+  /**
+   * Turnos previos de ESTE panel, en orden (Fase 4, E2). Vacío o ausente
+   * en el primer turno de la conversación. Cada builder decide cómo
+   * mapearlo a la forma del dialecto (mensajes con role/content para
+   * Anthropic/openai-compat; `contents` con role "user"/"model" para
+   * Google — el mapeo vive en cada dialecto, no acá).
+   */
+  history?: ConversationTurn[];
   /** Sale del key-vault de la SPA justo antes de armar la request. */
   apiKey: string;
   /** Override del modelo; ausente → `defaultModel` del proveedor. */
@@ -63,6 +71,8 @@ export interface ByokProviderConfig {
   route: ByokRoute;
   buildRequest(params: ByokBuildParams): ByokHttpRequest;
   createParser(): ByokStreamParser;
+  /** Registro curado para el selector (Fase 4, E4). Ausente/vacío → sólo el defaultModel. */
+  models?: CuratedModel[];
   notes?: string;
 }
 

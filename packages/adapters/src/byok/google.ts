@@ -86,9 +86,14 @@ export function googleProvider(): ByokProviderConfig {
     id: "google",
     label: "Gemini (Google AI)",
     baseUrl: GOOGLE_BASE_URL,
+    // HALLAZGO (Fase 4, E4, búsqueda 2026-07-10): la generación 2.5 ya no
+    // aparece como vigente; el tier "Flash" actual es gemini-3.5-flash.
+    // No cambio el default acá por la misma razón que en anthropic.ts
+    // (no alterar una ruta ya verificada en Fase 2 desde Fase 4); el
+    // registro `models` de abajo ofrece la opción nueva en el selector.
     defaultModel: GOOGLE_DEFAULT_MODEL,
     route: "direct",
-    buildRequest: ({ prompt, apiKey, model, maxTokens }) => ({
+    buildRequest: ({ prompt, history, apiKey, model, maxTokens }) => ({
       url: `${GOOGLE_BASE_URL}/v1beta/models/${encodeURIComponent(model ?? GOOGLE_DEFAULT_MODEL)}:streamGenerateContent?alt=sse`,
       method: "POST",
       headers: {
@@ -96,12 +101,42 @@ export function googleProvider(): ByokProviderConfig {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        // E2=B: Gemini usa "contents"/"parts", no "messages"/"content", y
+        // llama al turno del asistente "model" (no "assistant") — mapeo
+        // puntual de este dialecto, no del contrato generico.
+        contents: [
+          ...(history ?? []).map((turn) => ({
+            role: turn.role === "assistant" ? "model" : "user",
+            parts: [{ text: turn.content }],
+          })),
+          { role: "user", parts: [{ text: prompt }] },
+        ],
         ...(maxTokens != null ? { generationConfig: { maxOutputTokens: maxTokens } } : {}),
       }),
       stream: true,
     }),
     createParser: createGoogleParser,
     notes: "Directo (confianza moderada — correr el probe). Stream EOF-terminado, sin [DONE].",
+    // Registro curado (Fase 4, E4). IDs segun busqueda 2026-07-10.
+    models: [
+      {
+        id: GOOGLE_DEFAULT_MODEL,
+        label: "Gemini 2.5 Flash",
+        verified: true,
+        note: "default probado en la aceptación de Fase 2 (criterio 1: stream directo end-to-end). Generación previa a la vigente.",
+      },
+      {
+        id: "gemini-3.5-flash",
+        label: "Gemini 3.5 Flash",
+        verified: false,
+        note: "tier Flash vigente segun busqueda 2026-07-10 (lanzado mayo 2026); probable reemplazo del default. No probado.",
+      },
+      {
+        id: "gemini-3.1-pro",
+        label: "Gemini 3.1 Pro",
+        verified: false,
+        note: "tier superior, mas caro. No probado.",
+      },
+    ],
   };
 }

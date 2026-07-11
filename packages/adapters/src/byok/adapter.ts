@@ -66,6 +66,7 @@ export function createByokAdapter(cfg: ByokProviderConfig, deps: ByokAdapterDeps
     };
 
     const params: Parameters<ByokProviderConfig["buildRequest"]>[0] = { prompt: opts.prompt, apiKey };
+    if (opts.history !== undefined) params.history = opts.history;
     if (deps.model !== undefined) params.model = deps.model;
     if (deps.maxTokens !== undefined) params.maxTokens = deps.maxTokens;
     const req = cfg.buildRequest(params);

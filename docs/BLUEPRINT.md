@@ -6,12 +6,14 @@
 > releer todo el hilo de la entrevista. Cross-referencias `Qn` apuntan a
 > las respuestas de la entrevista de requerimientos original.
 
-**Estado global:** Fases 0–2 completas y verificadas (Fase 2 cerrada
-2026-07-09; diferidos-por-llave nominados en §0.3). **Fase 3 (BYOA) EN
-CURSO:** primer adaptador — claude.ai vía sesión propia — implementado y
-verificado de punta a punta 2026-07-10 (camino B+; ledger §0.4). Fases 4–9
-pendientes, en orden de dependencia estricta (Q34: no saltar de UI a
-lógica de transporte sin cerrar la anterior).
+**Estado global:** Fases 0–5 completas y verificadas (Fase 5 cerrada
+2026-07-12 — herramientas del panel lateral: juez anonimizado, PDF,
+plantillas, toggles; aceptación real en Chrome §0.8). **Siguiente: Fase
+6 — autenticación y sync a Drive.**
+Fases 6–9 pendientes, en orden de dependencia estricta (Q34, redacción
+reconciliada con la rotación de 2026-07-11: no construir sobre cimientos
+abiertos — la funcionalidad se cierra primero y el diseño, que es
+superficie sobre sustancia ya cerrada, va al final; ver §0.7).
 
 **Leyenda:** ✅ hecho y verificado · 🔜 siguiente · ⏳ bloqueado por lo anterior
 
@@ -623,6 +625,208 @@ patrón de Fase 2):**
 
 **Fase 4 pasa de 🟡 a ✅.**
 
+### 0.7 Nota de plan — rotación de Fases 5/6/7 (2026-07-11)
+
+Decisión de Juan al abrir la fase siguiente: el pulido visual (el viejo
+"Design system + media pack") se ejecuta DESPUÉS de que toda la
+funcionalidad esté lista, no antes. Rotación aplicada — sólo se mueven
+fases NO empezadas; 0–4 (hechas), 8 y 9 no se tocan:
+
+- Herramientas del panel lateral: vieja Fase 6 → **Fase 5** (la siguiente).
+- Autenticación y sync a Drive: vieja Fase 7 → **Fase 6**.
+- Design system + media pack: vieja Fase 5 → **Fase 7** (última).
+
+Por qué: extraer primitivas y formalizar el design system ANTES de que
+existan las superficies de tools/auth obligaría a rehacer ese trabajo;
+las Fases 4/5/6 acumulan primitivas Tailwind inline a propósito y la
+fase de diseño las hereda y las extrae al final. El espíritu de Q34 (no
+construir sobre cimientos abiertos) se conserva: ninguna fase funcional
+depende del pulido. Los bloques de sección de este documento fueron
+reordenados para que leerlo de arriba a abajo siga siendo el orden de
+ejecución, y las referencias cruzadas se actualizaron ("branding de
+Fase 5" → "de Fase 7"). Si un hilo previo menciona la numeración vieja,
+ESTA numeración es la vigente.
+
+### 0.8 Fase 5 — herramientas del panel lateral (implementación 2026-07-11)
+
+**Decisiones de entrevista (E1–E7, aprobadas por Juan con adiciones):**
+
+- **E1 — Juez (Q30a):** selector propio filtrado a disponibilidad real
+  (reusa `listPanelOptions` de F4). La UI SUGIERE explícitamente un
+  proveedor FUERA del consejo (pedido de Juan: más neutral, menos
+  auto-referencia): optgroup "Fuera del consejo (recomendado)" primero
+  y default automático a un no-participante si existe. Juez
+  participante NO se bloquea (puede ser lo único disponible) pero se
+  marca en la UI y persiste `judgeWasParticipant` (match por
+  providerId, que también cubre byok:x vs byoa:x — misma familia,
+  mismo riesgo de auto-preferencia). Juez BYOA válido: reusa
+  `sendToPanel`, con nota visible de que cada análisis crea una
+  conversación en la cuenta del proveedor. La llamada del juez va SIN
+  `history` y SIN `priorThread` (turno aislado; no escribe
+  `panelThreads`).
+- **E2 — Anonimización estructural (Q30b), 3 capas:** (1)
+  `lib/judge/anonymize.ts` es el ÚNICO módulo que etiqueta; produce
+  `{label,text}[]` + sello aparte; `build-judge-prompt.ts` es un módulo
+  SELLADO con CERO imports — la identidad no tiene por dónde entrar.
+  (2) `guard:judge` (CI + local): el builder no puede ganar imports;
+  sólo run-analysis y el harness pueden importarlo; `provider-names`
+  sólo lo importan anonymize/run-analysis/harness. (3) Aserción
+  runtime post-scrub en run-analysis: un término identificatorio
+  sobreviviente = el prompt NO SE ENVÍA (error visible +
+  console.warn). **Sub-decisión E2-iii:** el contenido se
+  auto-identifica ("Soy Claude…"), así que la copia AL JUEZ se
+  scrubbea contra una lista curada (→ ▮▮▮) con log de redacciones
+  persistido; el original queda intacto en Dexie/UI/PDF. Trade-off
+  asumido: falsos positivos posibles ("Google" como buscador, "sonar"
+  como verbo) — auditables por el log. El prompt ORIGINAL del usuario
+  no se scrubbea (idéntico para todas las respuestas: no rompe la
+  ceguera). Toggle Q30: default ON, sólo DESACTIVA; `anonymized`
+  persiste.
+- **E3 — Persistencia (Q30c):** Dexie **v3 aditiva** (patrón v2):
+  tabla `roundAnalyses` con índices `roundId`, `conversationId`,
+  `[conversationId+roundId]`, `createdAt`. Rúbrica fija v1
+  estructurada (score 1–5 clampeado + nota por criterio),
+  `rawResponse` SIEMPRE, `status ok|parse_error|error` (parse fallido
+  conserva el raw legible; abort del usuario NO persiste), `labelMap`
+  (el sello), `redactions`, latencia/tokens del juez. Varios análisis
+  por Round permitidos.
+- **E4 — PDF (Q28):** `pdfmake` **0.3.11** (capturado del registry —
+  la línea 0.3 cambió shapes vs 0.2: vfs = mapa de .ttf directo +
+  `addVirtualFileSystem`; `getBuffer()` es Promise;
+  `pageBreakBefore(nodo, nodeQueries)` con
+  `getFollowingNodesOnPage()`). Import DINÁMICO: chunks propios
+  (pdfmake 973 kB + vfs 855 kB), gate = el index no contiene
+  "Roboto-Regular.ttf". Builder PURO (`build-doc-definition.ts`)
+  compartido browser/harness. Layout secuencial por Round: header →
+  prompt → tabla de metadatos (dontBreakRows) → respuestas apiladas →
+  follow-ups del Round → análisis des-sellados. Anti-huérfanos:
+  `orphanPageBreakBefore` exportada y asertada unitariamente contra el
+  shape 0.3 real (la versión 0.2-style era un no-op silencioso —
+  hallazgo del typecheck, no de la suerte). Code fences en caja gris
+  con espacios preservados (Roboto — mono real es pulido de F7);
+  glifos fuera del subset Roboto de pdfmake (⚠, →) reemplazados por
+  ASCII en el PDF (hallazgo del harness: ⚠ extraía \u0000). Wordmark
+  de texto "ChatCouncil" (placeholder hasta F7). Markdown v1 = plano +
+  fences.
+- **E5 — Plantillas (Q29):** panel derecho de herramientas
+  (colapsable; la sidebar izquierda no se toca), CRUD + búsqueda por
+  título/tag, interpolación `{{variable}}` (dedup en orden, vacías
+  permitidas con aviso), inserción al ComposeBar — cuyo texto pasó de
+  useState local al store (`composePrompt`) para poder inyectar. Si el
+  input tiene texto: confirmación inline, nunca pisar en silencio.
+- **E6 — Toggles (Q31), opción A:** chips en ComposeBar leyendo
+  `PROVIDER_CAPABILITIES` (webSearch activable; imageGeneration
+  deshabilitado "v1.5" como marca la propia matriz); tooltip generado
+  del dato real (✓ nativo / ? desconocido / ✗ no soporta, por panel
+  activo) que DECLARA que el chip es informativo+persistido: el
+  contrato Adapter v1 no transporta el toggle (exclusión de F2).
+  `createRound` ahora recibe los toggles reales (param opcional,
+  compat). Cablear al transporte = candidata a fase corta posterior.
+- **E7 — Aceptación en dos mitades:** offline en sandbox (harness) +
+  online en el Chrome real (Code). Regla de Juan: TODO uso de
+  Anthropic en pruebas va con **Haiku** (entrada curada
+  `claude-haiku-4-5` agregada al registro BYOA-claude, `verified:
+  false` con nota — el override interno sigue sin probar; la
+  aceptación lo confirma o captura el slug real de la webapp). Juan
+  disponible para pasos manuales (llaves, refrescos). Nota operativa
+  registrada: la URL interna de extensiones es `chrome://extensions`
+  (CON los dos puntos — en una fase previa se intentó sin ellos);
+  esta fase es SPA-only, no debería hacer falta tocar la extensión.
+
+**Verificación en sandbox (2026-07-11, salidas reales):** Node
+v22.22.2, pnpm 11.9.0. `install --frozen-lockfile` OK (lockfile
+actualizado con pdfmake + devDeps del harness: @types/pdfmake, unpdf,
+fake-indexeddb, vite-node). `typecheck` 5/5. `guard:keys` OK,
+`guard:judge` OK (paso nuevo en CI). `build:web` limpio: index 439.47
+kB SIN la fuente; pdfmake/vfs en chunks propios; markers nuevos
+presentes (roundAnalyses, "Fuera del consejo", Plantillas,
+chatcouncil:judge, "Exportar PDF"). `build:ext` limpio: gates F1–F3
+intactos (6/6 markers en background; offscreen sin stream:resume;
+host_permissions 3 BYOK + claude.ai); +0.4 kB por la entrada Haiku
+(el registro viaja en adapters — esperado). **Harness
+`src/dev/fase5-harness.ts`: 37/37** — siembra 6 paneles × 3 Rounds
+(con auto-identificación, code fence, reintento Q15 y follow-up),
+scrub ON = cero términos identificatorios + ≥3 redacciones en la
+respuesta auto-identificada, prompt del juez limpio, toggle OFF
+intacto, parser (limpio/fences/basura→parse_error, clamp 1–5),
+roundtrip completo de `roundAnalyses`, y PDF real de 10 páginas:
+Rounds en orden, 6 paneles presentes, fence "def fibonacci", "Soy
+Claude" INTACTO en el PDF (el scrub es sólo para el juez), análisis
+des-sellado, follow-up, toggle impreso, cero rótulos huérfanos +
+mecanismo anti-huérfanos asertado unitariamente. Dos bugs
+encontrados y corregidos POR el harness: `content` faltante en el
+docDefinition retornado, y los glifos fuera del subset.
+
+**ACEPTACIÓN REAL (completada por Code en el Chrome de Juan, 2026-07-12):**
+- [x] `git status` limpio post-descompresión: exactamente los 26 paths
+      del ledger (13 M + 13 nuevos), nada extra/faltante. `install
+      --frozen-lockfile` OK. `typecheck` 5/5. `guard:keys` OK,
+      `guard:judge` OK. `build:web`: chunks `pdfmake-*.js` +
+      `vfs_fonts-*.js` propios, `Roboto-Regular.ttf` count=0 en el
+      index, markers "roundAnalyses"/"Fuera del consejo"/"Exportar PDF"
+      presentes. `build:ext`: 6/6 markers en background.js, chunk
+      offscreen sin `stream:resume`, `host_permissions` = 3 BYOK +
+      `claude.ai`.
+- [x] Harness re-ejecutado en la máquina real: **37/37**.
+      `.harness-out/fase5-accept.pdf` (9 páginas, 3 Rounds × 6 paneles)
+      revisado — tablas, code fence, análisis des-sellado y follow-up
+      se renderizan correctamente. Nota de legibilidad: el PDF (tanto
+      éste como el de aceptación real más abajo) tiene un glitch de
+      extracción de texto en ligaduras "fi"/"fl" del subset Roboto de
+      pdfmake (p. ej. "confiar"→"confar", "flash"→"fash",
+      "definir"→"defnir"); ya estaba presente en el PDF de sandbox
+      pre-verificado, o sea no es una regresión introducida en esta
+      corrida — probablemente sólo afecta la extracción de texto/copia,
+      no el glifo visual. Queda anotado para una fase de pulido de
+      fuentes (F7); no bloqueó la aceptación.
+- [x] Flujo real (dev server, conversación nueva "Nueva conversación"):
+      2 paneles (Gemini BYOK, con llave ya cargada en el vault del
+      Chrome de Juan + Claude BYOA con sesión confirmada), 2 Rounds con
+      prompts cortos ("¿por qué el cielo es azul?" / "¿qué es la
+      recursión?"). **Hallazgo de arquitectura (no improvisado, sólo
+      reportado):** el envío de Round (ComposeBar → `createRound`) lee
+      `modelOverrideByPanel`, pero NINGÚN control de UI pre-lock llama a
+      `setModelOverride` — el selector de modelo por panel sólo existe
+      post-lock y sólo alimenta "continuar acá" (follow-up de un solo
+      panel), no un Round nuevo completo. Para cumplir la regla dura de
+      Haiku en AMBOS Rounds sin tocar código, se pobló
+      `modelOverrideByPanel['byoa:claude']='claude-haiku-4-5'` vía la
+      store ya cableada (mismo campo que lee ComposeBar) antes del
+      primer envío — no es una decisión de arquitectura nueva, es
+      invocar el wiring ya existente sin su widget. Falta un selector de
+      modelo pre-lock por panel; candidata a fase corta posterior.
+      Comparar sobre Round 2 con juez real: el selector mostró SÓLO
+      participantes (Gemini, Claude) — con 2 proveedores el juez
+      SIEMPRE participa, advertencia amarilla ejercitada como camino
+      esperado. Juez sugerido Gemini 2.5 Flash: análisis corrido,
+      rúbrica completa persistida (`kind:"compare"`,
+      `judgeWasParticipant:true`, `redactions:0` — nada que redactar en
+      estas respuestas). Reload de la página → análisis recuperado
+      desde Dexie (confirmado leyendo `db.roundAnalyses` directo, no
+      sólo la UI). Segundo análisis con juez `byoa:claude` (Haiku):
+      corrido con éxito, crea una conversación nueva y visible en la
+      cuenta de Juan en claude.ai (esperado, avisado por la propia UI:
+      "Juez por sesión (BYOA): cada análisis crea una conversación
+      nueva..."). Export PDF desde la UI (`chatcouncil-Nueva-
+      conversacion-2026-07-12.pdf`, Downloads) y abierto: 2 paneles, 2
+      Rounds, ambos análisis (Gemini y Claude/Haiku) con rúbrica
+      completa incluidos.
+- [x] Override Haiku confirmado con llamadas reales: completion (2/2
+      turnos, `status:"done"`, sin error) y juez-por-sesión (1/1,
+      `status:"done"`), ambos leídos directo de Dexie —
+      `modelId:"claude-haiku-4-5"` sin fallback al default de cuenta.
+      Entrada actualizada en `packages/adapters/src/byoa/claude.ts`:
+      `verified:true` + nota de captura con fecha 2026-07-12. No hizo
+      falta el camino de fallback (capturar slug real / caer a
+      default) — el override interno acepta `claude-haiku-4-5`
+      directamente.
+- [ ] Push a main con CI verde (dos commits: docs del reorden + fase) —
+      pendiente al momento de este commit; se reporta en el cierre de
+      la conversación, no en este documento.
+- [x] Heading de Fase 5 flippeado a ✅; esta checklist completada con lo
+      observado (salvo el ítem de push, que se confirma después de
+      commitear este mismo archivo).
+
 ---
 
 ## 1. Topología y grafo de dependencias
@@ -867,33 +1071,11 @@ localStorage, no con una URL.
 
 ---
 
-## Fase 5 — Design system + media pack 🔜
-
-- Formalizar el "elemento signature" de la identidad visual: el
-  anillo de estado por panel (`accent-secondary` en reposo,
-  `accent-primary` pulsando en streaming) es el candidato natural —
-  es el único lugar donde el acento vivo aparece con fuerza, en vez de
-  salpicado por toda la interfaz (principio de restraint del proceso
-  de diseño).
-- Iconografía: set consistente (Lucide) en vez de mezclar fuentes de
-  íconos.
-- Branding para el PDF exportado (Q28): logotipo simple monocromo que
-  funcione bien impreso en escala de grises — el tema es oscuro, el
-  PDF no lo será.
-- Documentar el sistema en `packages/ui` más allá de `tokens.ts`:
-  componentes primitivos (Button, Panel, Badge) que hoy están
-  duplicados inline en `apps/web`.
-
-**Criterio de aceptación:** ningún componente nuevo de `apps/web`
-define un color hex fuera de `packages/ui`/`globals.css`.
-
----
-
-## Fase 6 — Herramientas del panel lateral 🔜
+## Fase 5 — Herramientas del panel lateral ✅ (implementada y verificada en sandbox 2026-07-11; aceptación real en el Chrome de Juan 2026-07-12 — §0.8)
 
 - **PDF unificado (Q28):** `pdfmake` con layout secuencial
   (prompt global → respuestas apiladas), metadatos (modelo, vía,
-  fecha, latencia) y el branding de Fase 5.
+  fecha, latencia) y el branding de Fase 7 (wordmark de texto como placeholder hasta esa fase).
 - **Librería de prompts (Q29):** ya modelada en `db.ts`
   (`PromptTemplate`); falta la UI de gestión + interpolación de
   `{{variable}}` al insertar en el input global.
@@ -910,13 +1092,24 @@ define un color hex fuera de `packages/ui`/`globals.css`.
   dato, falta la UI que lo consulte en vez de hardcodear qué modelos
   soportan qué.
 
+**Hecho (2026-07-11, sandbox — detalle y decisiones E1–E7 en §0.8):**
+Dexie v3 aditiva con `roundAnalyses`; subsistema del juez en
+`apps/web/src/lib/judge/` (anonimización estructural en 3 capas +
+`guard:judge` en CI); PDF con `pdfmake` 0.3.11 code-split
+(`build-doc-definition` puro compartido con el harness); panel lateral
+de herramientas (Analyze + Export + Plantillas con `{{variable}}`);
+chips Q31 leyendo `PROVIDER_CAPABILITIES`; harness persistente en
+`src/dev/fase5-harness.ts` (37/37).
+
 **Criterio de aceptación:** el PDF exportado de una conversación real
 con 6 paneles es legible y no corta contenido a mitad de página de
-forma arbitraria.
+forma arbitraria. *(Mitad offline CUMPLIDA en sandbox con la
+conversación sembrada de 6 paneles — §0.8; mitad online — juez real +
+export desde la UI + reload — la corre Code en el Chrome real.)*
 
 ---
 
-## Fase 7 — Autenticación y sync a Drive 🔜
+## Fase 6 — Autenticación y sync a Drive 🔜
 
 - Supabase Google Auth: identidad pura, cero tablas (Q19) — solo
   gestiona el login, no guarda estado de la app.
@@ -943,6 +1136,30 @@ forma arbitraria.
 **Criterio de aceptación:** cerrar la pestaña, reabrir en otro
 navegador logueado con la misma cuenta de Google, y ver las
 conversaciones sincronizadas (sin adjuntos, por diseño de Q18).
+
+---
+
+## Fase 7 — Design system + media pack 🔜
+
+- Formalizar el "elemento signature" de la identidad visual: el
+  anillo de estado por panel (`accent-secondary` en reposo,
+  `accent-primary` pulsando en streaming) es el candidato natural —
+  es el único lugar donde el acento vivo aparece con fuerza, en vez de
+  salpicado por toda la interfaz (principio de restraint del proceso
+  de diseño).
+- Iconografía: set consistente (Lucide) en vez de mezclar fuentes de
+  íconos.
+- Branding para el PDF exportado (Q28): logotipo simple monocromo que
+  funcione bien impreso en escala de grises — el tema es oscuro, el
+  PDF no lo será.
+- Documentar el sistema en `packages/ui` más allá de `tokens.ts`:
+  componentes primitivos (Button, Panel, Badge) que hoy están
+  duplicados inline en `apps/web` — las Fases 4/5/6 acumulan
+  primitivas Tailwind inline A PROPÓSITO; esta fase las hereda y
+  las extrae (ver §0.7).
+
+**Criterio de aceptación:** ningún componente nuevo de `apps/web`
+define un color hex fuera de `packages/ui`/`globals.css`.
 
 ---
 

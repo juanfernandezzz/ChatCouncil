@@ -18,6 +18,7 @@
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
     "guard:keys": "node scripts/guard-key-vault.mjs",
+    "guard:judge": "node scripts/guard-judge-anonymity.mjs",
     "test": "pnpm -r run test",
     "clean": "pnpm -r exec rm -rf dist .wxt node_modules/.cache"
   },

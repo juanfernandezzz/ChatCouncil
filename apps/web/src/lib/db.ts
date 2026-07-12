@@ -147,6 +147,83 @@ export interface BlobRecord {
   data: Blob;
 }
 
+/* ------------------------------------------------------------------
+ * Fase 5 (Q30) — resultado de Comparar/Resumir como OBJETO PROPIO
+ * ligado al Round, no texto libre perdible. Se permiten VARIOS
+ * análisis por Round (re-correr con otro juez es parte del caso de
+ * uso de auditoría). `labelMap` es el "sello": la correspondencia
+ * etiqueta→panel que el juez NUNCA ve (vive acá y en la UI, jamás en
+ * el prompt — ver apps/web/src/lib/judge/ y guard:judge).
+ * ------------------------------------------------------------------ */
+
+export type AnalysisKind = "compare" | "summarize";
+export type AnalysisStatus = "ok" | "parse_error" | "error";
+
+export interface AnalysisLabelEntry {
+  /** "Modelo A" (anonimizado) o el nombre real (toggle Q30 desactivado). */
+  label: string;
+  panelSourceId: string;
+  replyId: string;
+  attemptId: string;
+}
+
+/** Cuántos términos identificatorios se redactaron en la copia enviada al juez (E2-iii, auditabilidad). */
+export interface AnalysisRedaction {
+  label: string;
+  count: number;
+}
+
+export interface RubricCriterion {
+  score: number; // 1–5, clampeado al parsear
+  nota: string;
+}
+
+/** Rúbrica fija v1 (Q30): corrección factual aparente, profundidad, señales de sesgo, tono. */
+export interface RubricEntry {
+  label: string;
+  correccionFactual: RubricCriterion;
+  profundidad: RubricCriterion;
+  senalesSesgo: string;
+  tono: string;
+}
+
+export interface CompareResult {
+  veredicto: string;
+  porRespuesta: RubricEntry[];
+}
+
+export interface SummarizeResult {
+  resumen: string;
+  coincidencias: string[];
+  divergencias: string[];
+}
+
+export interface RoundAnalysis {
+  id: string;
+  conversationId: string;
+  roundId: string;
+  kind: AnalysisKind;
+  createdAt: number;
+  /** Identidad del juez — metadato de auditoría; jamás entró al prompt. */
+  judgePanelSourceId: string;
+  judgeModelId?: string;
+  /** true si el proveedor del juez participa de las respuestas analizadas (riesgo de auto-preferencia). */
+  judgeWasParticipant: boolean;
+  anonymized: boolean;
+  labelMap: AnalysisLabelEntry[];
+  redactions: AnalysisRedaction[];
+  rubricVersion: 1;
+  status: AnalysisStatus;
+  /** SIEMPRE se conserva la respuesta cruda del juez (audit trail; con parse_error es lo único legible). */
+  rawResponse: string;
+  compare?: CompareResult;
+  summarize?: SummarizeResult;
+  errorMessage?: string;
+  latencyMs?: number;
+  tokensIn?: number;
+  tokensOut?: number;
+}
+
 class ChatCouncilDB extends Dexie {
   conversations!: Table<Conversation, string>;
   rounds!: Table<Round, string>;
@@ -154,6 +231,7 @@ class ChatCouncilDB extends Dexie {
   promptTemplates!: Table<PromptTemplate, string>;
   blobs!: Table<BlobRecord, string>;
   panelThreads!: Table<PanelThread, string>;
+  roundAnalyses!: Table<RoundAnalysis, string>;
 
   constructor() {
     super("chatcouncil");
@@ -198,6 +276,19 @@ class ChatCouncilDB extends Dexie {
             }
           }),
       );
+    // Fase 5 (Q30) — ADITIVA: tabla nueva, cero cambios en las existentes,
+    // cero migración de datos (una tabla nueva nace vacía por definición).
+    // Índices para las dos consultas reales: "análisis de este Round"
+    // (AnalyzeSection) y "análisis de esta conversación" (PDF).
+    this.version(3).stores({
+      conversations: "id, updatedAt, syncState",
+      rounds: "id, conversationId, [conversationId+index]",
+      replies: "id, roundId, conversationId, panelSourceId, [conversationId+panelSourceId]",
+      promptTemplates: "id, updatedAt, *tags",
+      blobs: "id",
+      panelThreads: "id, [conversationId+panelSourceId]",
+      roundAnalyses: "id, roundId, conversationId, [conversationId+roundId], createdAt",
+    });
   }
 }
 

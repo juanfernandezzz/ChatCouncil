@@ -132,5 +132,11 @@ export const claudeByoaProvider: ByoaProviderConfig = {
       verified: false,
       note: "id válido en la API pública (flagship vigente). Mismo caveat: override interno sin probar.",
     },
+    {
+      id: "claude-haiku-4-5",
+      label: "Claude Haiku 4.5",
+      verified: true,
+      note: "Modelo DESIGNADO PARA PRUEBAS (regla de Fase 5: todo uso de Anthropic en aceptación va con Haiku para gastar poca cuota). Override confirmado con llamadas reales en la aceptación de Fase 5 (2026-07-12, Chrome de Juan): completion (2 turnos) y juez-por-sesión, ambos 200/done sin fallback al default de la cuenta.",
+    },
   ],
 };

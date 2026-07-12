@@ -54,6 +54,15 @@ interface CouncilState {
   modelOverrideByPanel: Record<string, string>;
   setModelOverride: (panelSourceId: string, modelId: string) => void;
 
+  // --- Fase 5: input global compartido (Q29: la librería de plantillas inyecta acá) + toggles Q31 + panel de herramientas ---
+  composePrompt: string;
+  setComposePrompt: (value: string) => void;
+  /** Q31: se persiste en Round.toggles. imageGeneration queda fija en false (diferida a v1.5 en la propia matriz). */
+  composeWebSearch: boolean;
+  setComposeWebSearch: (value: boolean) => void;
+  toolsPanelOpen: boolean;
+  setToolsPanelOpen: (open: boolean) => void;
+
   /** Paneles activos AHORA: si hay conversación lockeada, sus lockedModelIds (menos hidden); si no, el top-N de prioridad. */
   activePanelSourceIds: () => string[];
 }
@@ -107,6 +116,13 @@ export const useCouncilStore = create<CouncilState>((set, get) => ({
   modelOverrideByPanel: {},
   setModelOverride: (panelSourceId, modelId) =>
     set((s) => ({ modelOverrideByPanel: { ...s.modelOverrideByPanel, [panelSourceId]: modelId } })),
+
+  composePrompt: "",
+  setComposePrompt: (value) => set({ composePrompt: value }),
+  composeWebSearch: false,
+  setComposeWebSearch: (value) => set({ composeWebSearch: value }),
+  toolsPanelOpen: true,
+  setToolsPanelOpen: (open) => set({ toolsPanelOpen: open }),
 
   activePanelSourceIds: () => {
     const s = get();

@@ -21,3 +21,4 @@ dist/
 
 # testing
 coverage/
+.harness-out/

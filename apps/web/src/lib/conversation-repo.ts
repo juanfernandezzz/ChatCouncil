@@ -1,5 +1,5 @@
 import { parsePanelSourceId } from "@chatcouncil/shared";
-import { db, createId, type Attempt, type Conversation, type PanelThread, type Reply, type Round } from "./db";
+import { db, createId, type Attempt, type Conversation, type PanelThread, type Reply, type Round, type RoundAnalysis } from "./db";
 import { sendToPanel, type PanelRunHandlers } from "./panel-runner";
 import { buildByokHistory } from "./thread-history";
 
@@ -35,7 +35,12 @@ export async function ensureConversationForFirstSend(
   return conv;
 }
 
-export async function createRound(conversationId: string, promptText: string): Promise<Round> {
+export async function createRound(
+  conversationId: string,
+  promptText: string,
+  /** Q31 (Fase 5): el estado real de los chips del ComposeBar. Default = ambos apagados (compat con llamadores previos). */
+  toggles: Round["toggles"] = { webSearch: false, imageGeneration: false },
+): Promise<Round> {
   const count = await db.rounds.where("conversationId").equals(conversationId).count();
   const round: Round = {
     id: createId("round"),
@@ -43,7 +48,7 @@ export async function createRound(conversationId: string, promptText: string): P
     index: count,
     promptText,
     attachments: [],
-    toggles: { webSearch: false, imageGeneration: false },
+    toggles,
     createdAt: Date.now(),
   };
   await db.rounds.add(round);
@@ -200,6 +205,34 @@ export async function dispatchReply(
   }
 
   return sendToPanel(runOpts, handlers);
+}
+
+/** Último intento con status "done" de una Reply — el "vigente" (Q15: el array crece, el último done manda). */
+export function latestDoneAttempt(reply: Reply): Attempt | null {
+  for (let i = reply.attempts.length - 1; i >= 0; i--) {
+    const a = reply.attempts[i];
+    if (a && a.status === "done") return a;
+  }
+  return null;
+}
+
+/* ------------------------------------------------------------------
+ * Fase 5 (Q30): persistencia del resultado de Comparar/Resumir como
+ * objeto propio ligado al Round. Varios análisis por Round permitidos
+ * (re-correr con otro juez es parte del caso de uso de auditoría).
+ * ------------------------------------------------------------------ */
+
+export async function saveRoundAnalysis(analysis: RoundAnalysis): Promise<void> {
+  await db.roundAnalyses.add(analysis);
+  await db.conversations.update(analysis.conversationId, { updatedAt: analysis.createdAt });
+}
+
+export async function listAnalysesForRound(roundId: string): Promise<RoundAnalysis[]> {
+  return db.roundAnalyses.where("roundId").equals(roundId).sortBy("createdAt");
+}
+
+export async function listAnalysesForConversation(conversationId: string): Promise<RoundAnalysis[]> {
+  return db.roundAnalyses.where("conversationId").equals(conversationId).sortBy("createdAt");
 }
 
 export interface LoadedConversation {

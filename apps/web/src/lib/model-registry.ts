@@ -66,3 +66,17 @@ export function listPanelOptions(ctx: AvailabilityContext): PanelOption[] {
 export function isAccountDefaultModel(modelId: string): boolean {
   return modelId === BYOA_ACCOUNT_DEFAULT_SENTINEL;
 }
+
+/**
+ * Nombre visible de un panel a partir de su id compuesto (Fase 5: lo
+ * consumen el PDF y el nombre de-anonimizado del juez). Cae al id crudo
+ * si el proveedor no está en los registros — mejor un id feo que un
+ * "(desconocido)" que esconde el dato.
+ */
+export function panelDisplayLabel(panelSourceId: string): string {
+  const [mode, providerId] = panelSourceId.split(":");
+  if (!providerId) return panelSourceId;
+  const cfg = mode === "byok" ? BYOK_PROVIDERS[providerId] : BYOA_PROVIDERS[providerId];
+  if (!cfg) return panelSourceId;
+  return mode === "byoa" ? `${cfg.label} (sesión)` : cfg.label;
+}

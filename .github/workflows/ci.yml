@@ -33,6 +33,9 @@ jobs:
       - name: Guard key-vault isolation (Q10)
         run: pnpm guard:keys
 
+      - name: Guard judge anonymity (Q30)
+        run: pnpm guard:judge
+
       - name: Lint
         run: pnpm lint
 

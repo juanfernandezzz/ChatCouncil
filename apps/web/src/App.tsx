@@ -5,6 +5,7 @@ import { ComposeBar } from "@/components/layout/ComposeBar";
 import { CouncilGrid } from "@/components/layout/GridPanel";
 import { ExtensionBadge } from "@/components/shell/ExtensionBadge";
 import { ConversationSidebar } from "@/components/sidebar/ConversationSidebar";
+import { ToolsPanel } from "@/components/tools/ToolsPanel";
 import { BYOA_PROVIDERS } from "@chatcouncil/adapters";
 import { bridgeClient } from "@/lib/bridge-client";
 import { detectByoaOrganizations } from "@/lib/byoa-org";
@@ -161,7 +162,7 @@ export default function App() {
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-baseline gap-2">
             <h1 className="text-lg font-semibold tracking-tight text-text-primary">ChatCouncil</h1>
-            <span className="font-mono text-xs text-text-secondary">fase 4 · grid</span>
+            <span className="font-mono text-xs text-text-secondary">fase 5 · herramientas</span>
           </div>
           <div className="flex items-center gap-2">
             <ByoaSessionBar />
@@ -207,6 +208,8 @@ export default function App() {
           />
         </footer>
       </div>
+
+      <ToolsPanel />
     </div>
   );
 }

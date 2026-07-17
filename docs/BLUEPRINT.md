@@ -6,13 +6,14 @@
 > releer todo el hilo de la entrevista. Cross-referencias `Qn` apuntan a
 > las respuestas de la entrevista de requerimientos original.
 
-**Estado global:** Fases 0–4 completas y verificadas (Fase 4 cerrada
-2026-07-11 — grid, persistencia, threading real BYOK+BYOA; ledgers
-§0.1–§0.6). **Siguiente: Fase 5 — herramientas del panel lateral.**
-Fases 5–9 pendientes, en orden de dependencia estricta (Q34, redacción
-reconciliada con la rotación de 2026-07-11: no construir sobre cimientos
-abiertos — la funcionalidad se cierra primero y el diseño, que es
-superficie sobre sustancia ya cerrada, va al final; ver §0.7).
+**Estado global:** Fases 0–5 completas y verificadas (Fase 5 cerrada
+2026-07-17 — herramientas del panel lateral: juez anonimizado, informe
+PDF/DOCX + visor, plantillas, toggles; ledgers §0.1–§0.8). **Siguiente:
+Fase 6 — autenticación y sync a Drive.** Fases 6–9 pendientes, en orden
+de dependencia estricta (Q34, redacción reconciliada con la rotación de
+2026-07-11: no construir sobre cimientos abiertos — la funcionalidad se
+cierra primero y el diseño, que es superficie sobre sustancia ya
+cerrada, va al final; ver §0.7).
 
 **Leyenda:** ✅ hecho y verificado · 🔜 siguiente · ⏳ bloqueado por lo anterior
 
@@ -787,8 +788,9 @@ docDefinition retornado, y los glifos fuera del subset.
       mini-check dedicado pendiente (ver adición abajo).
 - [x] Push + CI: Run #13 sobre 8184d62 = success (incluye el paso
       guard:judge del workflow).
-- [ ] Flip del heading a ✅ al cierre: tras el check online de la
-      adición visor/DOCX y el mini-check Haiku.
+- [x] Flip del heading a ✅ (2026-07-17): check online de la adición
+      cumplido, mini-check Haiku verificado, PDFs y DOCX juzgados por
+      Juan — detalle en el bloque de la adición, abajo.
 
 **Adición post-aceptación (2026-07-16, pedido de Juan): visor en
 modal + export DOCX.** Además de descargar, el informe se puede VER
@@ -830,13 +832,30 @@ copiables.
   informe (Ver/PDF/DOCX); no se renombra porque el zip de fases no
   expresa deletes — se renombra en Fase 7 con la extracción de
   primitivas.
-- **Check ONLINE de la adición (Code, pendiente):** [ ] el visor abre
-  el informe en el modal SIN descarga (mismo blob en memoria);
-  [ ] "Exportar DOCX" descarga y Juan lo abre en Word/LibreOffice y
-  COPIA una tabla (el criterio); [ ] mini-check Haiku: conversación
-  nueva de panel único Claude BYOA con claude-haiku-4-5 elegido ANTES
-  del primer send — resultado: funciona / slug corregido / default
-  reportado.
+- **Check ONLINE de la adición (Code — EJECUTADO 2026-07-17):**
+  [x] visor: modal con "…pdf · en memoria, sin descargar", cero
+  descargas disparadas, ESC cierra. [x] DOCX: descargado desde la UI
+  (13 kB); Juan lo abrió y COPIÓ la tabla de metadatos a una planilla
+  (el criterio). PDF del harness re-juzgado legible. [x] mini-check
+  Haiku: stream OK — modelId `claude-haiku-4-5` persistido, status
+  done, content "ok", 1718 ms. HALLAZGO en el camino: no hay UI para
+  elegir modelo ANTES del primer envío global (`setModelOverride`
+  existe en el store pero ningún componente lo llama; el select del
+  E4 en GridPanel sólo renderiza con locked===true) → el check se
+  ejercitó por el camino UI real disponible (follow-up "continuar
+  solo acá" con Haiku). El transporte del override (builders BYOA →
+  body del completion) es el mismo para cualquier scope → entrada
+  curada VERIFICADA (verified:true en este commit; Sonnet/Opus siguen
+  sin probar — el flag no se hereda).
+- **Brecha UI diferida (decisión de cierre 2026-07-17):** la
+  selección de modelo pre-primer-envío NO se parcha suelta — es la
+  extensión del selector E4 al estado pre-lock y se resuelve cuando
+  esa superficie se rediseñe (candidato natural: Fase 7; antes si
+  molesta operativamente). Cablear `setModelOverride` desde ahí.
+  Registrado para que ninguna sesión futura lo redescubra como bug.
+- **Cierre (2026-07-17):** push `a964bfa` a main; badge de CI de main
+  = passing tras el push (la confirmación commit-exacta del run la
+  hace el push de cierre como pre-gate). Fase 5 → ✅.
 
 ---
 
@@ -1082,7 +1101,7 @@ localStorage, no con una URL.
 
 ---
 
-## Fase 5 — Herramientas del panel lateral 🟡 (funcional ACEPTADA en Chrome real 2026-07-16 — §0.8; adición visor/DOCX verificada en sandbox 2026-07-17, cierre pendiente de su check online + mini-check Haiku)
+## Fase 5 — Herramientas del panel lateral ✅ (cerrada 2026-07-17 — aceptación real 2026-07-16 + adición visor/DOCX y mini-check Haiku 2026-07-17; ledger §0.8)
 
 - **PDF unificado (Q28):** `pdfmake` con layout secuencial
   (prompt global → respuestas apiladas), metadatos (modelo, vía,
@@ -1122,8 +1141,8 @@ con 6 paneles es legible y no corta contenido a mitad de página de
 forma arbitraria. *(Mitad offline CUMPLIDA en sandbox con la
 conversación sembrada de 6 paneles — §0.8. Mitad online CUMPLIDA
 2026-07-16: juez real + reload + export desde la UI, ambos PDFs
-juzgados LEGIBLES por Juan. Resta el check online de la adición
-visor/DOCX + el mini-check Haiku — §0.8.)*
+juzgados LEGIBLES por Juan. Check de la adición y mini-check
+Haiku CUMPLIDOS 2026-07-17 — fase cerrada, §0.8.)*
 
 ---
 

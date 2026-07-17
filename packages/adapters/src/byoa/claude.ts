@@ -108,11 +108,14 @@ export const claudeByoaProvider: ByoaProviderConfig = {
 
   // Registro curado (Fase 4, E4). OJO: acá "verified" es MÁS estricto que
   // en BYOK — estos ids son reales y oficiales en la API pública de
-  // Anthropic (confirmados por búsqueda 2026-07-10), pero el override
-  // `model` de ESTE endpoint interno nunca se probó con un valor real: la
-  // aceptación de Fase 3 siempre omitió `model` (default de la cuenta).
-  // Que un id sea válido en la API pública NO garantiza que el endpoint
-  // interno de claude.ai lo acepte igual.
+  // Anthropic (confirmados por búsqueda 2026-07-10). Que un id sea válido
+  // en la API pública NO garantiza que el endpoint interno de claude.ai
+  // acepte el override `model` igual: hasta el cierre de Fase 5 ese
+  // override nunca se había probado con un valor real (la aceptación de
+  // Fase 3 siempre omitió `model`). El 2026-07-17 el mini-check del
+  // cierre de Fase 5 verificó `claude-haiku-4-5` con una llamada real
+  // (ver esa entrada). "verified" NO se hereda entre ids: Sonnet/Opus
+  // siguen sin probar.
   models: [
     {
       id: "(default de la cuenta)",
@@ -136,7 +139,7 @@ export const claudeByoaProvider: ByoaProviderConfig = {
       id: "claude-haiku-4-5",
       label: "Claude Haiku 4.5",
       verified: true,
-      note: "Modelo DESIGNADO PARA PRUEBAS (regla de Fase 5: todo uso de Anthropic en aceptación va con Haiku para gastar poca cuota). Override confirmado con llamadas reales en la aceptación de Fase 5 (2026-07-12, Chrome de Juan): completion (2 turnos) y juez-por-sesión, ambos 200/done sin fallback al default de la cuenta.",
+      note: "Modelo DESIGNADO PARA PRUEBAS (regla de Fase 5: todo uso de Anthropic en aceptación va con Haiku para gastar poca cuota). Override VERIFICADO contra el endpoint interno el 2026-07-17 (mini-check del cierre de Fase 5, vía follow-up 'continuar solo acá': modelId persistido, stream done, content 'ok', 1718 ms). El transporte del override es el mismo para round global y follow-up, así que la verificación cubre ambos scopes.",
     },
   ],
 };

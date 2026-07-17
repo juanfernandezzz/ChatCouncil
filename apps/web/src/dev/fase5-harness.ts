@@ -35,6 +35,9 @@ import { extractTemplateVariables, interpolateTemplate } from "../lib/prompt-tem
  *    post-scrub, redacciones contadas, prompt del juez limpio.
  *  · parseJudgeResponse con fixtures (JSON limpio / con fences / basura).
  *  · RoundAnalysis: persistir → releer (roundtrip Dexie v3).
+ *  · DOCX (adición 2026-07-16): PK + word/document.xml desempaquetado
+ *    con fflate — rounds, paneles, fence en Consolas, tablas, análisis
+ *    des-sellado; escribe fase5-accept.docx para juicio humano.
  * La mitad ONLINE (juez real + export desde la UI) la corre Code en el
  * Chrome real — ver prompt de la fase.
  */
@@ -42,6 +45,7 @@ import { extractTemplateVariables, interpolateTemplate } from "../lib/prompt-tem
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = join(__dirname, "..", "..", ".harness-out");
 const OUT_PDF = join(OUT_DIR, "fase5-accept.pdf");
+const OUT_DOCX = join(OUT_DIR, "fase5-accept.docx");
 
 let pass = 0;
 let failCount = 0;
@@ -361,6 +365,42 @@ async function main() {
     }
   });
   check("ningún rótulo huérfano al pie de página", orphan === null, orphan ?? "");
+
+  /* ── DOCX (adición 2026-07-16): tablas copiables ──────────────── */
+  console.log("\n[fase5-harness] DOCX — mismo input que el PDF, tablas de Word");
+  const { buildDocxDocument } = await import("../lib/docx/build-docx");
+  const { Packer } = await import("docx");
+  const { strFromU8, unzipSync } = await import("fflate");
+
+  const docxDoc = buildDocxDocument({ loaded, analysesByRoundId, panelLabel, exportedAt: new Date() });
+  const docxBuf = Buffer.from(await Packer.toBuffer(docxDoc));
+  writeFileSync(OUT_DOCX, docxBuf);
+  console.log(`  · DOCX escrito: ${OUT_DOCX} (${(docxBuf.length / 1024).toFixed(0)} kB)`);
+
+  check(
+    "DOCX: firma zip PK + tamaño razonable",
+    docxBuf[0] === 0x50 && docxBuf[1] === 0x4b && docxBuf.length > 8_000,
+    `bytes=${docxBuf.length}`,
+  );
+  const unzipped = unzipSync(new Uint8Array(docxBuf));
+  const docXmlFile = unzipped["word/document.xml"];
+  check("DOCX: word/document.xml presente", docXmlFile !== undefined);
+  // norm() como en el PDF; los markers con ">" toleran el escape XML (&gt;)
+  const xml = norm(strFromU8(docXmlFile ?? new Uint8Array()));
+  for (const h of roundHeaders) check(`DOCX: round presente (${h.slice(0, 10)}…)`, xml.includes(norm(h)));
+  for (const p of PANELS) check(`DOCX: panel presente: ${p.label}`, xml.includes(norm(p.label)));
+  check(
+    "DOCX: code fence en mono real (def fibonacci + Consolas)",
+    xml.includes(norm("def fibonacci(n, memo=None):")) && xml.includes("Consolas"),
+  );
+  check("DOCX: 'Soy Claude' intacto (el scrub es sólo para el juez)", xml.includes(norm("Soy Claude")));
+  check("DOCX: tabla de metadatos como <w:tbl> (headers Latencia/Estado)", xml.includes("<w:tbl>") && xml.includes("Latencia") && xml.includes("Estado"));
+  check(
+    "DOCX: análisis des-sellado (Modelo A -> panel real)",
+    xml.includes(norm("Análisis · Comparar")) && (xml.includes(norm("Modelo A ->")) || xml.includes(norm("Modelo A -&gt;"))),
+  );
+  check("DOCX: follow-up presente", xml.includes(norm("Follow-up (solo Gemini (Google AI))")));
+  check("DOCX: veredicto de la rúbrica intacto", xml.includes(norm("B más profunda; A con un error factual.")));
 
   /* ── resumen ──────────────────────────────────────────────────── */
   console.log(`\n[fase5-harness] ${pass} OK · ${failCount} FALLOS`);

@@ -1,10 +1,14 @@
-import { listAnalysesForConversation, loadConversation } from "../conversation-repo";
-import type { RoundAnalysis } from "../db";
 import { panelDisplayLabel } from "../model-registry";
+import { downloadBlob, loadReportData, reportFilename } from "../report-data";
 import { buildDocDefinition, PDF_TABLE_LAYOUTS } from "./build-doc-definition";
 
 /**
- * Export a PDF desde el navegador — ChatCouncil Fase 5 (Q28)
+ * Export/visor de PDF desde el navegador — ChatCouncil Fase 5 (Q28)
+ * + adición 2026-07-16 (D1): "Ver informe" y "Exportar PDF" comparten
+ * generateConversationPdfBlob() — el visor muestra EL MISMO pdf en
+ * memoria que se descargaría, por construcción (un solo camino de
+ * generación; la descarga dejó de usar pdfmake.download() y pasa por
+ * el mismo blob + <a download>).
  * ------------------------------------------------------------------
  * pdfmake se carga con IMPORT DINÁMICO a propósito: la fuente Roboto
  * embebida (vfs) pesa ~0.9 MB y no puede vivir en el bundle principal.
@@ -18,28 +22,14 @@ import { buildDocDefinition, PDF_TABLE_LAYOUTS } from "./build-doc-definition";
  *  · getBuffer() devuelve Promise (ya no callback)
  */
 
-function sanitizeFilename(title: string): string {
-  const clean = title
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9-_ ]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .slice(0, 60);
-  return clean || "conversacion";
+export interface GeneratedPdf {
+  blob: Blob;
+  filename: string;
+  title: string;
 }
 
-export async function exportConversationPdf(conversationId: string): Promise<void> {
-  const loaded = await loadConversation(conversationId);
-  if (!loaded) throw new Error("la conversación no existe en Dexie — nada que exportar");
-
-  const analyses = await listAnalysesForConversation(conversationId);
-  const analysesByRoundId = new Map<string, RoundAnalysis[]>();
-  for (const a of analyses) {
-    const list = analysesByRoundId.get(a.roundId) ?? [];
-    list.push(a);
-    analysesByRoundId.set(a.roundId, list);
-  }
+export async function generateConversationPdfBlob(conversationId: string): Promise<GeneratedPdf> {
+  const { loaded, analysesByRoundId } = await loadReportData(conversationId);
 
   const docDefinition = buildDocDefinition({
     loaded,
@@ -57,15 +47,16 @@ export async function exportConversationPdf(conversationId: string): Promise<voi
 
   const maker = pdfMake as unknown as {
     addVirtualFileSystem: (v: Record<string, string>) => void;
-    createPdf: (
-      dd: unknown,
-      tableLayouts?: unknown,
-    ) => { download: (filename: string) => void };
+    createPdf: (dd: unknown, tableLayouts?: unknown) => { getBuffer: () => Promise<Uint8Array> };
   };
   maker.addVirtualFileSystem(vfs);
 
-  const date = new Date().toISOString().slice(0, 10);
-  maker
-    .createPdf(docDefinition, PDF_TABLE_LAYOUTS)
-    .download(`chatcouncil-${sanitizeFilename(loaded.conversation.title)}-${date}.pdf`);
+  const buffer = await maker.createPdf(docDefinition, PDF_TABLE_LAYOUTS).getBuffer();
+  const blob = new Blob([buffer as BlobPart], { type: "application/pdf" });
+  return { blob, filename: reportFilename(loaded.conversation.title, "pdf"), title: loaded.conversation.title };
+}
+
+export async function exportConversationPdf(conversationId: string): Promise<void> {
+  const { blob, filename } = await generateConversationPdfBlob(conversationId);
+  downloadBlob(blob, filename);
 }

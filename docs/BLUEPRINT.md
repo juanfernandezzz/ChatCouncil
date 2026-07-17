@@ -6,11 +6,10 @@
 > releer todo el hilo de la entrevista. Cross-referencias `Qn` apuntan a
 > las respuestas de la entrevista de requerimientos original.
 
-**Estado global:** Fases 0–5 completas y verificadas (Fase 5 cerrada
-2026-07-12 — herramientas del panel lateral: juez anonimizado, PDF,
-plantillas, toggles; aceptación real en Chrome §0.8). **Siguiente: Fase
-6 — autenticación y sync a Drive.**
-Fases 6–9 pendientes, en orden de dependencia estricta (Q34, redacción
+**Estado global:** Fases 0–4 completas y verificadas (Fase 4 cerrada
+2026-07-11 — grid, persistencia, threading real BYOK+BYOA; ledgers
+§0.1–§0.6). **Siguiente: Fase 5 — herramientas del panel lateral.**
+Fases 5–9 pendientes, en orden de dependencia estricta (Q34, redacción
 reconciliada con la rotación de 2026-07-11: no construir sobre cimientos
 abiertos — la funcionalidad se cierra primero y el diseño, que es
 superficie sobre sustancia ya cerrada, va al final; ver §0.7).
@@ -757,75 +756,87 @@ mecanismo anti-huérfanos asertado unitariamente. Dos bugs
 encontrados y corregidos POR el harness: `content` faltante en el
 docDefinition retornado, y los glifos fuera del subset.
 
-**ACEPTACIÓN REAL (completada por Code en el Chrome de Juan, 2026-07-12):**
-- [x] `git status` limpio post-descompresión: exactamente los 26 paths
-      del ledger (13 M + 13 nuevos), nada extra/faltante. `install
-      --frozen-lockfile` OK. `typecheck` 5/5. `guard:keys` OK,
-      `guard:judge` OK. `build:web`: chunks `pdfmake-*.js` +
-      `vfs_fonts-*.js` propios, `Roboto-Regular.ttf` count=0 en el
-      index, markers "roundAnalyses"/"Fuera del consejo"/"Exportar PDF"
-      presentes. `build:ext`: 6/6 markers en background.js, chunk
-      offscreen sin `stream:resume`, `host_permissions` = 3 BYOK +
-      `claude.ai`.
-- [x] Harness re-ejecutado en la máquina real: **37/37**.
-      `.harness-out/fase5-accept.pdf` (9 páginas, 3 Rounds × 6 paneles)
-      revisado — tablas, code fence, análisis des-sellado y follow-up
-      se renderizan correctamente. Nota de legibilidad: el PDF (tanto
-      éste como el de aceptación real más abajo) tiene un glitch de
-      extracción de texto en ligaduras "fi"/"fl" del subset Roboto de
-      pdfmake (p. ej. "confiar"→"confar", "flash"→"fash",
-      "definir"→"defnir"); ya estaba presente en el PDF de sandbox
-      pre-verificado, o sea no es una regresión introducida en esta
-      corrida — probablemente sólo afecta la extracción de texto/copia,
-      no el glifo visual. Queda anotado para una fase de pulido de
-      fuentes (F7); no bloqueó la aceptación.
-- [x] Flujo real (dev server, conversación nueva "Nueva conversación"):
-      2 paneles (Gemini BYOK, con llave ya cargada en el vault del
-      Chrome de Juan + Claude BYOA con sesión confirmada), 2 Rounds con
-      prompts cortos ("¿por qué el cielo es azul?" / "¿qué es la
-      recursión?"). **Hallazgo de arquitectura (no improvisado, sólo
-      reportado):** el envío de Round (ComposeBar → `createRound`) lee
-      `modelOverrideByPanel`, pero NINGÚN control de UI pre-lock llama a
-      `setModelOverride` — el selector de modelo por panel sólo existe
-      post-lock y sólo alimenta "continuar acá" (follow-up de un solo
-      panel), no un Round nuevo completo. Para cumplir la regla dura de
-      Haiku en AMBOS Rounds sin tocar código, se pobló
-      `modelOverrideByPanel['byoa:claude']='claude-haiku-4-5'` vía la
-      store ya cableada (mismo campo que lee ComposeBar) antes del
-      primer envío — no es una decisión de arquitectura nueva, es
-      invocar el wiring ya existente sin su widget. Falta un selector de
-      modelo pre-lock por panel; candidata a fase corta posterior.
-      Comparar sobre Round 2 con juez real: el selector mostró SÓLO
-      participantes (Gemini, Claude) — con 2 proveedores el juez
-      SIEMPRE participa, advertencia amarilla ejercitada como camino
-      esperado. Juez sugerido Gemini 2.5 Flash: análisis corrido,
-      rúbrica completa persistida (`kind:"compare"`,
-      `judgeWasParticipant:true`, `redactions:0` — nada que redactar en
-      estas respuestas). Reload de la página → análisis recuperado
-      desde Dexie (confirmado leyendo `db.roundAnalyses` directo, no
-      sólo la UI). Segundo análisis con juez `byoa:claude` (Haiku):
-      corrido con éxito, crea una conversación nueva y visible en la
-      cuenta de Juan en claude.ai (esperado, avisado por la propia UI:
-      "Juez por sesión (BYOA): cada análisis crea una conversación
-      nueva..."). Export PDF desde la UI (`chatcouncil-Nueva-
-      conversacion-2026-07-12.pdf`, Downloads) y abierto: 2 paneles, 2
-      Rounds, ambos análisis (Gemini y Claude/Haiku) con rúbrica
-      completa incluidos.
-- [x] Override Haiku confirmado con llamadas reales: completion (2/2
-      turnos, `status:"done"`, sin error) y juez-por-sesión (1/1,
-      `status:"done"`), ambos leídos directo de Dexie —
-      `modelId:"claude-haiku-4-5"` sin fallback al default de cuenta.
-      Entrada actualizada en `packages/adapters/src/byoa/claude.ts`:
-      `verified:true` + nota de captura con fecha 2026-07-12. No hizo
-      falta el camino de fallback (capturar slug real / caer a
-      default) — el override interno acepta `claude-haiku-4-5`
-      directamente.
-- [ ] Push a main con CI verde (dos commits: docs del reorden + fase) —
-      pendiente al momento de este commit; se reporta en el cierre de
-      la conversación, no en este documento.
-- [x] Heading de Fase 5 flippeado a ✅; esta checklist completada con lo
-      observado (salvo el ítem de push, que se confirma después de
-      commitear este mismo archivo).
+**ACEPTACIÓN REAL (Code en el Chrome de Juan — EJECUTADA 2026-07-16):**
+- [x] Pre-flight: Code encontró los dos commits YA aplicados y
+      pusheados por una sesión previa suya (main = origin/main =
+      8184d62; docs = 5046de3 — hashes propios de esa máquina,
+      contenido idéntico: `git diff 4d28066..HEAD --stat` = 26
+      archivos exacto). Desvío consciente del "PARÁ y reportá" del
+      prompt: verificó el diff exacto ANTES de continuar y NO
+      descomprimió nada. Precedente ACOTADO: el tripwire protege
+      contra pisar un árbol divergente, no contra reconocer trabajo
+      propio ya verificado.
+- [x] Verificación local: install frozen OK, typecheck 5/5,
+      guard:keys y guard:judge OK, ambos builds con todos los gates
+      de artefacto (web y ext).
+- [x] Harness en la máquina real: 37/37; PDF del harness juzgado
+      LEGIBLE por Juan.
+- [x] Flujo real: Gemini BYOK + Claude BYOA (sesión detectada, org
+      correcta), 2 Rounds con threading confirmado por contenido y
+      por tokens (Gemini in:13→54 al arrastrar historial). Juez real
+      gemini-2.5-flash, anonimizado (Q30), `judgeWasParticipant` ⚠
+      ejercitado (2 proveedores → el juez siempre participa;
+      advertencia visible y persistida: "anonimizado (Q30) · juez
+      participante ⚠ · gemini-2.5-flash · 6.1s"). labelMap sellado →
+      des-sellado post-reload (Modelo A = Gemini, B = Claude); 3
+      análisis históricos recuperados. PDF exportado desde la UI
+      (45 kB) y juzgado LEGIBLE por Juan.
+- [x] Contingencia Haiku: el override `claude-haiku-4-5` NO llegó a
+      intentarse — la conversación usó el default de la cuenta y así
+      se reportó. La entrada curada sigue `verified: false`;
+      mini-check dedicado pendiente (ver adición abajo).
+- [x] Push + CI: Run #13 sobre 8184d62 = success (incluye el paso
+      guard:judge del workflow).
+- [ ] Flip del heading a ✅ al cierre: tras el check online de la
+      adición visor/DOCX y el mini-check Haiku.
+
+**Adición post-aceptación (2026-07-16, pedido de Juan): visor en
+modal + export DOCX.** Además de descargar, el informe se puede VER
+sin descargar (mismo PDF en memoria) y bajar como DOCX con tablas
+copiables.
+- **D1 — visor = mismo blob, por construcción:**
+  `generateConversationPdfBlob()` (lib/pdf/export-conversation) es el
+  ÚNICO camino de generación; "Ver informe" (modal con iframe sobre
+  object URL; revoke al cerrar/desmontar; ESC cierra) y "Exportar
+  PDF" (mismo blob → <a download>; se retiró pdfmake.download()) lo
+  comparten. Se RECHAZÓ window.open: el hueco async click→blob rompe
+  el gesture context → popup blocker intermitente; el modal tiene un
+  solo camino de fallo y el producto es Chrome-desktop.
+- **D2 — DOCX:** `docx` 9.7.1 (dep) con import dinámico — frontera en
+  lib/docx/export-conversation-docx.ts, chunk propio (patrón
+  pdfmake); gate: el index NO contiene "wordprocessingml". Builder
+  PURO lib/docx/build-docx.ts que consume el MISMO input que el de
+  PDF (reusa tipo, rótulos y formateadores exportados de
+  build-doc-definition — un solo vocabulario entre formatos) vía el
+  cargador compartido nuevo lib/report-data.ts. Tablas de metadatos y
+  rúbrica como Table REALES de Word (el objetivo: copiables a
+  Excel/Sheets); code fences en Consolas (mono real — sin el límite
+  del vfs de pdfmake, que queda para el pulido de F7); header/footer
+  con wordmark y pág. X/Y espejando el PDF.
+- **D3 — harness 37→54:** el DOCX es un zip → fflate 0.8.3 (devDep)
+  desempaqueta word/document.xml y se asertan: PK+tamaño, 3 Rounds,
+  6 paneles, fence+Consolas, "Soy Claude" intacto, tabla de metadatos
+  como w:tbl, análisis des-sellado (marker tolerante al escape XML de
+  "->"), follow-up y veredicto. Escribe
+  .harness-out/fase5-accept.docx para juicio humano.
+- Verificación sandbox (2026-07-17, salidas reales): typecheck 5/5;
+  guard:keys y guard:judge OK; build:web con index 441.71 kB (sin
+  Roboto-Regular.ttf ni wordprocessingml), chunks pdfmake 972.88 kB /
+  vfs 854.71 kB intactos + export-conversation-docx-*.js 365.59 kB
+  nuevo; markers previos + "Ver informe"/"Exportar DOCX" presentes;
+  build:ext 27.04 kB y gates F1–F3 intactos (la adición es SPA-only);
+  harness **54/54**. Lockfile actualizado (docx, fflate).
+- Deuda de naming asumida: PdfSection.tsx ahora es la sección de
+  informe (Ver/PDF/DOCX); no se renombra porque el zip de fases no
+  expresa deletes — se renombra en Fase 7 con la extracción de
+  primitivas.
+- **Check ONLINE de la adición (Code, pendiente):** [ ] el visor abre
+  el informe en el modal SIN descarga (mismo blob en memoria);
+  [ ] "Exportar DOCX" descarga y Juan lo abre en Word/LibreOffice y
+  COPIA una tabla (el criterio); [ ] mini-check Haiku: conversación
+  nueva de panel único Claude BYOA con claude-haiku-4-5 elegido ANTES
+  del primer send — resultado: funciona / slug corregido / default
+  reportado.
 
 ---
 
@@ -1071,7 +1082,7 @@ localStorage, no con una URL.
 
 ---
 
-## Fase 5 — Herramientas del panel lateral ✅ (implementada y verificada en sandbox 2026-07-11; aceptación real en el Chrome de Juan 2026-07-12 — §0.8)
+## Fase 5 — Herramientas del panel lateral 🟡 (funcional ACEPTADA en Chrome real 2026-07-16 — §0.8; adición visor/DOCX verificada en sandbox 2026-07-17, cierre pendiente de su check online + mini-check Haiku)
 
 - **PDF unificado (Q28):** `pdfmake` con layout secuencial
   (prompt global → respuestas apiladas), metadatos (modelo, vía,
@@ -1099,13 +1110,20 @@ Dexie v3 aditiva con `roundAnalyses`; subsistema del juez en
 (`build-doc-definition` puro compartido con el harness); panel lateral
 de herramientas (Analyze + Export + Plantillas con `{{variable}}`);
 chips Q31 leyendo `PROVIDER_CAPABILITIES`; harness persistente en
-`src/dev/fase5-harness.ts` (37/37).
+`src/dev/fase5-harness.ts` (54/54 con la adición).
+**Adición 2026-07-16 (pedido de Juan; detalle y decisiones D1–D3 en
+§0.8):** visor del informe en modal — mismo PDF en memoria, sin
+descarga — y export DOCX con tablas copiables (`docx` 9.7.1
+code-split, builder puro compartido con el harness, cargador común
+`report-data.ts`).
 
 **Criterio de aceptación:** el PDF exportado de una conversación real
 con 6 paneles es legible y no corta contenido a mitad de página de
 forma arbitraria. *(Mitad offline CUMPLIDA en sandbox con la
-conversación sembrada de 6 paneles — §0.8; mitad online — juez real +
-export desde la UI + reload — la corre Code en el Chrome real.)*
+conversación sembrada de 6 paneles — §0.8. Mitad online CUMPLIDA
+2026-07-16: juez real + reload + export desde la UI, ambos PDFs
+juzgados LEGIBLES por Juan. Resta el check online de la adición
+visor/DOCX + el mini-check Haiku — §0.8.)*
 
 ---
 

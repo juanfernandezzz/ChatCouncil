@@ -41,21 +41,21 @@ const ACCENT = "#0d7f8c"; // el cian del tema, oscurecido para papel
 
 const HEADLINE = { round: 1, reply: 2 } as const;
 
-function latestAttempt(reply: Reply): Attempt | null {
+export function latestAttempt(reply: Reply): Attempt | null {
   const done = [...reply.attempts].reverse().find((a) => a.status === "done");
   return done ?? reply.attempts[reply.attempts.length - 1] ?? null;
 }
 
-function fmtDate(ts: number | Date): string {
+export function fmtDate(ts: number | Date): string {
   const d = typeof ts === "number" ? new Date(ts) : ts;
   return d.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
 }
 
-function fmtLatency(a: Attempt | null): string {
+export function fmtLatency(a: Attempt | null): string {
   return a?.latencyMs !== undefined ? `${(a.latencyMs / 1000).toFixed(1)}s` : "—";
 }
 
-function fmtTokens(a: Attempt | null): string {
+export function fmtTokens(a: Attempt | null): string {
   if (!a) return "—";
   const tin = a.tokensIn !== undefined ? String(a.tokensIn) : "?";
   const tout = a.tokensOut !== undefined ? String(a.tokensOut) : "?";

@@ -1,43 +1,138 @@
-import { useState } from "react";
-import { exportConversationPdf } from "@/lib/pdf/export-conversation";
+import { useEffect, useRef, useState } from "react";
+import { exportConversationPdf, generateConversationPdfBlob } from "@/lib/pdf/export-conversation";
 
-/** Export PDF (Q28) — Fase 5. El trabajo pesado vive en lib/pdf; acá sólo estados de UI. */
+/**
+ * Sección de informe (Q28 + adición 2026-07-16) — Ver / PDF / DOCX.
+ * "Ver informe" abre un modal con <iframe> sobre el MISMO blob en
+ * memoria que descargaría "Exportar PDF" (D1: un solo camino de
+ * generación; nada toca el disco hasta que el usuario lo pida). El
+ * DOCX (tablas copiables) se importa dinámico — chunk propio.
+ * Deuda de naming asumida: el archivo se sigue llamando PdfSection
+ * aunque ya exporta dos formatos (el zip de fases no expresa
+ * renames; se renombra en Fase 7).
+ */
+
+type BusyKind = "view" | "pdf" | "docx";
+
+interface ViewerState {
+  url: string;
+  filename: string;
+}
+
 export function PdfSection({ conversationId }: { conversationId: string | null }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<BusyKind | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<ViewerState | null>(null);
+  const viewerUrlRef = useRef<string | null>(null);
 
-  const handleExport = async () => {
+  const closeViewer = () => {
+    if (viewerUrlRef.current) {
+      URL.revokeObjectURL(viewerUrlRef.current);
+      viewerUrlRef.current = null;
+    }
+    setViewer(null);
+  };
+
+  // revoke si el componente se desmonta con el visor abierto
+  useEffect(
+    () => () => {
+      if (viewerUrlRef.current) URL.revokeObjectURL(viewerUrlRef.current);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!viewer) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeViewer();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // closeViewer es estable en la práctica (sólo toca refs/estado); no lo listamos para no recrear el listener
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewer]);
+
+  const run = async (kind: BusyKind) => {
     if (!conversationId || busy) return;
-    setBusy(true);
+    setBusy(kind);
     setError(null);
     try {
-      await exportConversationPdf(conversationId);
+      if (kind === "view") {
+        const { blob, filename } = await generateConversationPdfBlob(conversationId);
+        const url = URL.createObjectURL(blob);
+        viewerUrlRef.current = url;
+        setViewer({ url, filename });
+      } else if (kind === "pdf") {
+        await exportConversationPdf(conversationId);
+      } else {
+        const mod = await import("@/lib/docx/export-conversation-docx");
+        await mod.exportConversationDocx(conversationId);
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      console.warn("[chatcouncil:pdf] export falló:", message);
+      console.warn(`[chatcouncil:${kind === "docx" ? "docx" : "pdf"}] export falló:`, message);
       setError(message);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
+  const btn = (kind: BusyKind, label: string, primary = false) => (
+    <button
+      type="button"
+      disabled={!conversationId || busy !== null}
+      onClick={() => void run(kind)}
+      className={
+        primary
+          ? "rounded-md border border-accent-primary px-3 py-1.5 text-sm text-accent-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          : "rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary transition-colors hover:border-text-secondary disabled:cursor-not-allowed disabled:opacity-40"
+      }
+    >
+      {busy === kind ? "Generando…" : label}
+    </button>
+  );
+
   return (
     <section className="flex flex-col gap-2 rounded-md border border-border p-3">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Exportar PDF</h3>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Informe</h3>
       <p className="text-[11px] leading-snug text-text-secondary">
         Conversación completa: prompts, respuestas por panel con metadatos (modelo, vía, latencia, tokens) y los
-        análisis persistidos de cada Round.
+        análisis persistidos de cada Round. Vela sin descargar, o bajala como PDF o como DOCX (tablas copiables).
       </p>
-      <button
-        type="button"
-        disabled={!conversationId || busy}
-        onClick={() => void handleExport()}
-        className="rounded-md border border-accent-primary px-3 py-1.5 text-sm text-accent-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {busy ? "Generando…" : "Exportar PDF"}
-      </button>
+      <div className="flex flex-wrap gap-2">
+        {btn("view", "Ver informe", true)}
+        {btn("pdf", "Exportar PDF")}
+        {btn("docx", "Exportar DOCX")}
+      </div>
       {!conversationId && <p className="text-[11px] text-text-secondary">Abrí o creá una conversación primero.</p>}
       {error && <p className="text-[11px] text-red-400">{error}</p>}
+
+      {viewer && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Vista previa del informe"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={closeViewer}
+        >
+          <div
+            className="flex h-[85vh] w-[min(92vw,900px)] flex-col overflow-hidden rounded-lg border border-border bg-surface-elevated"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+              <span className="truncate text-xs text-text-secondary">{viewer.filename} · en memoria, sin descargar</span>
+              <button
+                type="button"
+                onClick={closeViewer}
+                className="shrink-0 rounded border border-border px-2 py-0.5 text-xs text-text-secondary hover:border-text-secondary"
+              >
+                Cerrar ✕
+              </button>
+            </div>
+            <iframe title="Vista previa del informe (PDF en memoria)" src={viewer.url} className="h-full w-full flex-1 bg-white" />
+          </div>
+        </div>
+      )}
     </section>
   );
 }

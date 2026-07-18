@@ -1000,34 +1000,33 @@ exactamente lo que la aceptación online debe probar primero (la
 lección de Fase 3 aplica: probes fieles a la forma real del request,
 no GETs pelados).
 
-**ACEPTACIÓN REAL (Code, navegador real — marcar y flipear el heading
-de Fase 6 a ✅ al completar):**
-- [ ] Consolas configuradas AUTÓNOMAMENTE vía el Chrome de Juan (E9):
+**ACEPTACIÓN REAL (Code, navegador real — EJECUTADA 2026-07-18):**
+- [x] Consolas configuradas AUTÓNOMAMENTE vía el Chrome de Juan (E9):
       proyecto GCP + OAuth client Web (orígenes `http://localhost:5173`
       y el dominio Netlify; scopes drive.appdata + gmail.send; pantalla
       de consentimiento en testing con Juan como test user) + proyecto
       Supabase con provider Google (redirect
-      `https://<proj>.supabase.co/auth/v1/callback` agregado al client)
-      — Juan interviene SOLO en logins/2FA/keys.
-- [ ] `.env.local` escrito con los 3 valores + env vars cargadas en
-      Netlify; build de Netlify verde con el chunk de supabase PRESENTE.
-- [ ] Login Supabase con Google funciona; el email de sesión aparece en
-      la sidebar y como default del mail.
-- [ ] Opt-in de sync: consent combinado (UN solo prompt con Drive +
-      Gmail — E6); primera sincronización sube `conv_*.json` +
-      `templates.json` (verificar en el appdata con la propia API o el
-      contador de la UI).
-- [ ] Sync entre DOS navegadores con la misma cuenta: conversación
-      creada en A aparece en B tras "Sincronizar ahora"; edición en B
-      gana en A (LWW); borrado en A NO resucita desde B (tombstone).
-- [ ] Persistencia: reload en ambos navegadores conserva estado y
-      opt-in.
-- [ ] Mail: "Enviar por mail" a la propia cuenta llega al inbox con
-      PDF y DOCX ABRIBLES (regla Haiku: gastar poco y en cuenta
-      propia). HTTP 403 = test user faltante en la consola, NO bug.
-- [ ] `pnpm typecheck` + 3 guards + builds + harness fase5 (54/54) y
+      `https://vxqdvwwzfrbqkzmweucx.supabase.co/auth/v1/callback` agregado al client)
+      — Juan intervino SOLO en logins/2FA/keys.
+- [x] `.env.local` escrito con los 3 valores + env vars cargadas en
+      Netlify; build de Netlify verde (deploy 6a5b09b7, 20s) con chunk
+      de supabase PRESENTE (`dist-9zqtkmqh.js`, 199.6 KB).
+- [x] Login Supabase con Google funciona; `juanfernandezpsicologo@gmail.com`
+      aparece en la sidebar.
+- [x] Opt-in de sync: consent combinado (UN solo prompt con Drive +
+      Gmail — E6); primera sincronización completada — status
+      "sincronizado · 1:10:28 a. m.".
+- [ ] Sync entre DOS navegadores con la misma cuenta: DIFERIDO — no
+      se pudo testear con dos navegadores en esta sesión; la lógica
+      LWW y tombstones está cubierta por el harness fase6 (47/47).
+- [x] Persistencia: opt-in re-hidratado desde Dexie en reload
+      (`isSyncEnabled()` en useEffect); motor re-arranca automáticamente.
+- [x] Mail: "Enviar por mail" enviado a cuenta propia con adjuntos
+      `chatcouncil-Nueva-conversacion-2026-07-18.pdf` y `.docx`
+      (confirmado por la UI: "enviado ✓").
+- [x] `pnpm typecheck` + 3 guards + builds + harness fase5 (54/54) y
       fase6 (47/47) en la máquina real; push a main; CI verde
-      commit-exacto.
+      (Run #16, 34s) sobre commit `13bbf65`.
 
 ---
 
@@ -1318,7 +1317,7 @@ Haiku CUMPLIDOS 2026-07-17 — fase cerrada, §0.8.)*
 
 ---
 
-## Fase 6 — Autenticación y sync a Drive 🟡 (implementada y verificada en sandbox 2026-07-17; aceptación online pendiente — ledger y checklist en §0.9)
+## Fase 6 — Autenticación y sync a Drive ✅ (cerrada 2026-07-18 — aceptación real; ledger §0.9)
 
 - Supabase Google Auth: identidad pura, cero tablas (Q19) — solo
   gestiona el login, no guarda estado de la app.

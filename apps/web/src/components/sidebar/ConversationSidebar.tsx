@@ -2,9 +2,10 @@ import { useLiveQuery } from "dexie-react-hooks";
 import MiniSearch from "minisearch";
 import { useMemo, useState } from "react";
 import { db, type Conversation } from "@/lib/db";
-import { listConversationsForSidebar } from "@/lib/conversation-repo";
+import { deleteConversationLocal, listConversationsForSidebar } from "@/lib/conversation-repo";
 import { getLastConversationId, setLastConversationId } from "@/lib/last-conversation";
 import { useCouncilStore } from "@/store/useCouncilStore";
+import { AccountSyncSection } from "./AccountSyncSection";
 
 interface SearchDoc {
   id: string;
@@ -69,6 +70,18 @@ export function ConversationSidebar({
     onSelect(conversationId);
   };
 
+  /** Fase 6 (E3): borrado con tombstone — sin él, el sync resucitaría la conversación. */
+  const handleDelete = async (conv: Conversation) => {
+    if (!window.confirm(`¿Borrar la conversación "${conv.title}"? Se borra acá y, si el sync está activo, también en Drive.`)) return;
+    await deleteConversationLocal(conv.id);
+    if (conv.id === activeConversationId) {
+      setActiveConversation(null, []);
+      setLastConversationId(null);
+    } else if (getLastConversationId() === conv.id) {
+      setLastConversationId(null);
+    }
+  };
+
   return (
     <aside className="flex w-64 shrink-0 flex-col gap-2 border-r border-border p-3">
       <button
@@ -86,22 +99,33 @@ export function ConversationSidebar({
       />
       <div className="scrollbar-thin flex-1 space-y-1 overflow-y-auto">
         {visible.map((c: Conversation) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => void handleSelect(c.id)}
-            className={`block w-full truncate rounded px-2 py-1.5 text-left text-xs ${
-              c.id === activeConversationId
-                ? "bg-accent-primary/20 text-accent-primary"
-                : "text-text-secondary hover:bg-bg-base hover:text-text-primary"
-            }`}
-            title={c.title}
-          >
-            {c.title}
-          </button>
+          <div key={c.id} className="group relative">
+            <button
+              type="button"
+              onClick={() => void handleSelect(c.id)}
+              className={`block w-full truncate rounded px-2 py-1.5 pr-6 text-left text-xs ${
+                c.id === activeConversationId
+                  ? "bg-accent-primary/20 text-accent-primary"
+                  : "text-text-secondary hover:bg-bg-base hover:text-text-primary"
+              }`}
+              title={c.title}
+            >
+              {c.title}
+            </button>
+            <button
+              type="button"
+              aria-label={`Borrar "${c.title}"`}
+              title="Borrar conversación"
+              onClick={() => void handleDelete(c)}
+              className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded px-1 text-[11px] text-text-secondary hover:text-red-400 group-hover:block"
+            >
+              ✕
+            </button>
+          </div>
         ))}
         {visible.length === 0 && <p className="px-2 py-1.5 text-xs text-text-secondary">sin conversaciones todavía</p>}
       </div>
+      <AccountSyncSection />
     </aside>
   );
 }

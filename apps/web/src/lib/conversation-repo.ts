@@ -269,6 +269,41 @@ export async function listConversationsForSidebar(): Promise<Conversation[]> {
   return db.conversations.orderBy("updatedAt").reverse().toArray();
 }
 
+/**
+ * Borrado local de una conversación (Fase 6, E3): elimina el contenido
+ * de TODAS las tablas y deja el TOMBSTONE en syncMeta — sin él, un
+ * pull posterior la resucitaría (el otro navegador re-subiría lo que
+ * este borró). El motor de sync empuja el tombstone a Drive cuando
+ * corre; si el sync está apagado, el tombstone queda local y no
+ * molesta a nadie (Q20).
+ */
+export async function deleteConversationLocal(conversationId: string): Promise<void> {
+  const deletedAt = Date.now();
+  await db.transaction(
+    "rw",
+    [db.conversations, db.rounds, db.replies, db.roundAnalyses, db.panelThreads, db.blobs, db.syncMeta],
+    async () => {
+      const rounds = await db.rounds.where("conversationId").equals(conversationId).toArray();
+      const blobIds = rounds.flatMap((r) => r.attachments.map((a) => a.blobId));
+      await Promise.all([
+        db.conversations.delete(conversationId),
+        db.rounds.where("conversationId").equals(conversationId).delete(),
+        db.replies.where("conversationId").equals(conversationId).delete(),
+        db.roundAnalyses.where("conversationId").equals(conversationId).delete(),
+        db.panelThreads.where("[conversationId+panelSourceId]").between([conversationId, ""], [conversationId, "\uffff"]).delete(),
+        blobIds.length > 0 ? db.blobs.bulkDelete(blobIds) : Promise.resolve(),
+      ]);
+      await db.syncMeta.put({
+        id: conversationId,
+        kind: "conversation",
+        deleted: true,
+        deletedAt,
+        tombstonePushed: false,
+      });
+    },
+  );
+}
+
 export interface PanelTimelineEntry {
   reply: Reply;
   /** Texto de usuario resuelto: Round.promptText (scope "round") o Reply.followUpPrompt (scope "panel-continued"). */

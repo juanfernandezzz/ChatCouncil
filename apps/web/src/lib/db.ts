@@ -148,6 +148,40 @@ export interface BlobRecord {
 }
 
 /* ------------------------------------------------------------------
+ * Fase 6 — metadatos de sincronización a Drive (Q17/Q18/Q20).
+ * Tabla local-only: NUNCA se serializa a Drive (es contabilidad del
+ * sync, no contenido). Tres clases de registro, discriminadas por
+ * `kind`:
+ *  · "conversation": estado de sync por conversación. `deleted:true`
+ *    es el TOMBSTONE local (E3): al borrar una conversación se borra
+ *    su contenido de todas las tablas pero este registro queda para
+ *    (a) empujar el tombstone al archivo de Drive y (b) impedir que
+ *    un pull posterior la resucite.
+ *  · "template": tombstone de una plantilla borrada (id = `tpl:<id>`),
+ *    para la propagación de borrados del merge por-ítem de
+ *    templates.json.
+ *  · "settings": un único registro (id = "settings") con el opt-in de
+ *    sync (Q20: Drive es opt-in; el flag vive en Dexie — los módulos
+ *    de sync tienen PROHIBIDO tocar localStorage, ver guard:sync).
+ * ------------------------------------------------------------------ */
+export interface SyncMetaRecord {
+  /** conversationId | `tpl:${templateId}` | "settings" */
+  id: string;
+  kind: "conversation" | "template" | "settings";
+  /** "conversation": updatedAt local que quedó reflejado en Drive en el último push/pull. */
+  lastSyncedAt?: number;
+  /** Tombstone (conversation/template). */
+  deleted?: boolean;
+  deletedAt?: number;
+  /** true cuando el tombstone ya se escribió en Drive (hasta entonces, pendiente). */
+  tombstonePushed?: boolean;
+  /** "settings": opt-in de sync a Drive (Q20). */
+  syncEnabled?: boolean;
+  /** driveFileId de templates.json (las conversaciones llevan el suyo en Conversation.driveFileId). */
+  templatesDriveFileId?: string;
+}
+
+/* ------------------------------------------------------------------
  * Fase 5 (Q30) — resultado de Comparar/Resumir como OBJETO PROPIO
  * ligado al Round, no texto libre perdible. Se permiten VARIOS
  * análisis por Round (re-correr con otro juez es parte del caso de
@@ -232,6 +266,7 @@ class ChatCouncilDB extends Dexie {
   blobs!: Table<BlobRecord, string>;
   panelThreads!: Table<PanelThread, string>;
   roundAnalyses!: Table<RoundAnalysis, string>;
+  syncMeta!: Table<SyncMetaRecord, string>;
 
   constructor() {
     super("chatcouncil");
@@ -288,6 +323,19 @@ class ChatCouncilDB extends Dexie {
       blobs: "id",
       panelThreads: "id, [conversationId+panelSourceId]",
       roundAnalyses: "id, roundId, conversationId, [conversationId+roundId], createdAt",
+    });
+    // Fase 6 — ADITIVA (patrón v2/v3): tabla nueva de metadatos de sync,
+    // nace vacía, cero migración de datos. Índice `kind` para las dos
+    // consultas reales: "tombstones pendientes" y "settings".
+    this.version(4).stores({
+      conversations: "id, updatedAt, syncState",
+      rounds: "id, conversationId, [conversationId+index]",
+      replies: "id, roundId, conversationId, panelSourceId, [conversationId+panelSourceId]",
+      promptTemplates: "id, updatedAt, *tags",
+      blobs: "id",
+      panelThreads: "id, [conversationId+panelSourceId]",
+      roundAnalyses: "id, roundId, conversationId, [conversationId+roundId], createdAt",
+      syncMeta: "id, kind",
     });
   }
 }

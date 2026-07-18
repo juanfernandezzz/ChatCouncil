@@ -36,6 +36,9 @@ jobs:
       - name: Guard judge anonymity (Q30)
         run: pnpm guard:judge
 
+      - name: Guard sync storage purity (Fase 6, E7)
+        run: pnpm guard:sync
+
       - name: Lint
         run: pnpm lint
 

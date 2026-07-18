@@ -13,7 +13,18 @@ import { buildDocxDocument } from "./build-docx";
  */
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-export async function exportConversationDocx(conversationId: string): Promise<void> {
+export interface GeneratedDocx {
+  blob: Blob;
+  filename: string;
+  title: string;
+}
+
+/**
+ * Fase 6 (refactor mínimo, mismo patrón D1 del PDF): el blob se expone
+ * para que "Enviar por mail" adjunte EXACTAMENTE lo que "Exportar
+ * DOCX" descargaría — un solo camino de generación por formato.
+ */
+export async function generateConversationDocxBlob(conversationId: string): Promise<GeneratedDocx> {
   const { loaded, analysesByRoundId } = await loadReportData(conversationId);
   const doc = buildDocxDocument({
     loaded,
@@ -23,5 +34,10 @@ export async function exportConversationDocx(conversationId: string): Promise<vo
   });
   const raw = await Packer.toBlob(doc);
   const blob = raw.type === DOCX_MIME ? raw : new Blob([raw], { type: DOCX_MIME });
-  downloadBlob(blob, reportFilename(loaded.conversation.title, "docx"));
+  return { blob, filename: reportFilename(loaded.conversation.title, "docx"), title: loaded.conversation.title };
+}
+
+export async function exportConversationDocx(conversationId: string): Promise<void> {
+  const { blob, filename } = await generateConversationDocxBlob(conversationId);
+  downloadBlob(blob, filename);
 }

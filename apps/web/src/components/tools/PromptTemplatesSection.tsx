@@ -1,7 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo, useState } from "react";
 import { createId, db, type PromptTemplate } from "@/lib/db";
-import { extractTemplateVariables, interpolateTemplate } from "@/lib/prompt-templates";
+import { deleteTemplateWithTombstone, extractTemplateVariables, interpolateTemplate } from "@/lib/prompt-templates";
 import { useCouncilStore } from "@/store/useCouncilStore";
 
 /**
@@ -65,7 +65,8 @@ export function PromptTemplatesSection() {
   const removeTemplate = async (tpl: PromptTemplate) => {
     // destructivo y poco frecuente: confirm nativo alcanza en v1 (E5)
     if (window.confirm(`¿Borrar la plantilla "${tpl.title}"?`)) {
-      await db.promptTemplates.delete(tpl.id);
+      // Fase 6 (E2): tombstone incluido — sin él, el sync la resucitaría.
+      await deleteTemplateWithTombstone(tpl.id);
     }
   };
 

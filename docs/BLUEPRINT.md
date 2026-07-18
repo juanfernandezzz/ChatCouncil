@@ -859,6 +859,178 @@ copiables.
 
 ---
 
+### 0.9 Fase 6 — cuenta, sync a Drive y mail del informe (implementación 2026-07-17)
+
+**Entrevista E1–E9 (decisiones cerradas con Juan; E6/E9 con su
+modificación explícita — no se reabren):**
+
+- **E1 — contenido del JSON por conversación** (`conv_<id>.json`,
+  Q18: sin blobs): Conversation SIN `driveFileId` (metadata local del
+  sync — cada navegador la aprende de su propio `files.list`), Rounds
+  con attachments=SOLO metadata, Replies completas con TODOS los
+  Attempts (Q15), roundAnalyses completas INCLUIDO `labelMap` (sello
+  de auditoría — sin él el des-sellado se pierde al restaurar en otro
+  navegador), y panelThreads (identificadores no secretos, mismo
+  criterio que `byoaOrgId`; habilitan continuar el hilo BYOA en otro
+  navegador si ahí también hay sesión del proveedor).
+- **E2 — templates.json**: archivo appdata propio; merge POR-ÍTEM,
+  LWW por `updatedAt`, con tombstones por-ítem `{id, deletedAt}`
+  dentro del archivo. Regla del empate: `deletedAt >= updatedAt` gana
+  el borrado (borrar es acción explícita; recrear con id nuevo siempre
+  se puede). Edición POSTERIOR al borrado (`updatedAt > deletedAt`)
+  revive legítimamente. `syncState:"conflict"` queda sin escritor en
+  v1 (LWW no lo produce).
+- **E3 — tombstone IN-FILE**: borrar = escribir el MISMO archivo con
+  `{deleted:true, updatedAt:deletedAt}` — una escritura LWW más, un
+  solo mecanismo, converge. Borrar el archivo de Drive NO converge (el
+  otro navegador lo re-subiría) y queda prohibido. Local: el tombstone
+  vive en la tabla Dexie `syncMeta` (v4 aditiva) hasta empujarse
+  (`tombstonePushed`), y después impide resurrecciones en pulls.
+- **E4 — ciclo**: pull completo al habilitar/arrancar; watcher
+  `liveQuery` → push con debounce 2.5 s por conversación (comparando
+  `updatedAt` vs `lastSyncedAt` de syncMeta); botón "Sincronizar
+  ahora" = pull+push con gesto (habilita el prompt visible de GIS);
+  refresh de token = `requestAccessToken({prompt:''})` con margen de
+  5 min; fallo → modo local con badge (Q20, jamás bloqueante).
+- **E5 — mail**: camino A confirmado (Gmail API `users.messages.send`
+  COMO el usuario; MIME client-side).
+- **E6 (MODIFICADA por Juan)**: scopes COMBINADOS — un solo token
+  client con `drive.appdata` + `gmail.send`, un solo consent. NO
+  incremental.
+- **E7 — guard:sync** (`scripts/guard-sync-purity.mjs`, en CI tras
+  guard:judge): rompe el build si archivos en paths `/(drive|sync)/i`
+  de apps/+packages/ contienen `localStorage`, `sessionStorage` o el
+  prefijo de storage de llaves. Complemento del FORBIDDEN_PATH de
+  guard:keys: aquel prohíbe importar el vault; éste cierra el vector
+  de leer el web storage por fuera del vault. Efecto de diseño: los
+  módulos de sync no pueden persistir NADA en web storage — su estado
+  vive en Dexie (`syncMeta`) o en memoria. El guard se autovalidó en
+  sandbox: detectó sus propias menciones literales en comentarios de
+  los módulos custodiados (se reescribieron a "web storage") y
+  custodia 4 archivos (los 3 de `lib/sync/` + `AccountSyncSection.tsx`
+  por nombre).
+- **E8 — UI de mail**: botón "Enviar por mail" junto a Ver/PDF/DOCX;
+  destinatario libre con default = mail de la sesión Supabase;
+  checkboxes PDF/DOCX ambos ON; deshabilitado con tooltip si no hay
+  configuración. Los adjuntos REUSAN los generadores de F5 tal cual
+  (`generateConversationPdfBlob` + `generateConversationDocxBlob`,
+  refactor mínimo del wrapper DOCX para exponer el blob — el generador
+  no se tocó).
+- **E9 (MODIFICADA por Juan)**: la configuración de consolas (Google
+  Cloud + Supabase) NO es guía manual: Code la ejecuta AUTÓNOMAMENTE
+  vía el Chrome de Juan (GCC operativo; Supabase logueado; ningún
+  proyecto creado aún), pidiendo la intervención de Juan SOLO para
+  logins/2FA/keys con instrucciones explícitas de qué hacer.
+
+**Arquitectura implementada (2026-07-17, sandbox):**
+
+- Dexie **v4 ADITIVA**: tabla `syncMeta: "id, kind"` (kinds
+  `conversation` | `template` | `settings`; el opt-in de sync vive acá
+  porque los paths de sync no pueden tocar web storage — E7).
+- `lib/google-auth.ts`: GIS token client, scopes combinados (E6),
+  token SOLO en memoria, `getGoogleAccessToken({interactive})`,
+  suscripción `onGoogleTokenState`. Superficie 2 de consentimiento;
+  Supabase (`lib/supabase-client.ts`, import dinámico de
+  `@supabase/supabase-js`, Q19 identidad pura) es la superficie 1.
+- `lib/sync/serialize.ts` (PURO): `buildConversationFile` /
+  `buildTombstoneFile` / `parseConversationFile`, `decideLww`
+  (apply-remote | delete-local | push-local | push-tombstone | noop;
+  desempate: tombstone local gana con reloj igual), `mergeTemplates`
+  (E2 completo). `lib/sync/drive-client.ts`: REST v3 appDataFolder
+  (list paginado / `alt=media` / multipart SIMPLE create+PATCH).
+  `lib/sync/sync-engine.ts`: `fullSync` + watcher incremental +
+  `runGuarded` (serializa ciclos, `rerunRequested`) + estado
+  observable (off|idle|syncing|error) — `console.warn` en todos los
+  caminos de fallo, cero catches mudos.
+- `lib/mail/build-mime.ts` (PURO): base64 propio sobre `Uint8Array`
+  (sin btoa/Buffer — portable a vite-node), base64url sin padding,
+  chunking 76 de cuerpos, RFC 2047 para subject no-ASCII.
+  `lib/mail/send-report-mail.ts`: valida destinatario, arma MIME con
+  los blobs de F5, techo 8 MB, POST `users.messages.send`, mensaje
+  especial para HTTP 403 (trampa test-user documentada en Fase 6).
+- Borrados con tombstone: `deleteConversationLocal` (conversation-repo;
+  transacción sobre TODAS las tablas incl. blobs de attachments) y
+  `deleteTemplateWithTombstone` (prompt-templates; `tpl:<id>`). La UI
+  de plantillas dejó de llamar `db.promptTemplates.delete` directo.
+  Sidebar: botón ✕ por fila con confirm + limpieza del puntero
+  last-conversation.
+- UI nueva: `AccountSyncSection` al pie de la sidebar (login/logout
+  Supabase, opt-in "Sincronizar a Google Drive" con consent combinado
+  al habilitar, estado, "Sincronizar ahora", nota Q20 si no
+  configurado); formulario de mail colapsable en PdfSection (E8).
+  Header → "fase 6 · cuenta y sync".
+- Env nuevas (`.env.example`): `VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_ANON_KEY`, `VITE_GOOGLE_CLIENT_ID` (el client ID no
+  es secreto — viaja en el bundle por diseño de GIS).
+
+**Hallazgo de build (importante para gates futuros):** sin
+`VITE_SUPABASE_*` en el entorno de BUILD, Vite constante-folding +
+DCE eliminan el `import("@supabase/supabase-js")` completo (cero
+chunk) — correcto y deseable (Q20: no configurado = cero peso). CON
+env, el chunk emerge (`dist-*.js`, 204.41 kB, carga dinámica) con
+`createClient` adentro — verificado en sandbox con env dummy. Los
+gates de artefacto del chunk de supabase son por lo tanto
+ENV-DEPENDIENTES: en builds sin env se verifica su AUSENCIA; en
+Netlify (env configurada) su presencia.
+
+**Verificación sandbox (2026-07-17, Node 22.22.2 / pnpm 11.9.0):**
+typecheck 5/5 · guard:keys OK · guard:judge OK · guard:sync OK (4
+archivos) · build:web OK (index 463.07 kB con markers `appDataFolder`,
+"Enviar por mail", "Sincronizar ahora", "Iniciar sesión con Google",
+`syncMeta`; `gmail.googleapis.com` en el chunk dinámico
+send-report-mail 3.41 kB; gates negativos del index intactos:
+sin Roboto-Regular.ttf ni wordprocessingml; HTML referencia el chunk
+exacto) · build:ext intacta (0 archivos tocados — gates F1–F3 =
+baseline re-verificado hoy: 27.12 kB, 6/6 markers, offscreen sin
+stream:resume) · harness **fase5 54/54** (regresión) · harness
+**fase6 47/47** (`src/dev/fase6-harness.ts`: serialización E1
+roundtrip con driveFileId excluido y labelMap/attempts/panelThreads
+incluidos; decideLww 8 ramas incl. anti-resurrección;
+deleteConversationLocal con blobs; mergeTemplates 10 casos;
+deleteTemplateWithTombstone; MIME estructura + base64url puro +
+roundtrip byte a byte + RFC 2047 + límites de línea). Dependencia
+nueva: `@supabase/supabase-js` ^2.110.7 (lockfile actualizado; el
+warning de peers de @vitejs/plugin-react@4.7.0 con vite 8.1.2 es
+PREEXISTENTE, no de esta fase).
+
+**Hechos frágiles (no verificables desde el sandbox — allowlist de
+red):** el CORS real de `gmail.googleapis.com` y de
+`www.googleapis.com/upload` con `authorization` + `content-type` es
+exactamente lo que la aceptación online debe probar primero (la
+lección de Fase 3 aplica: probes fieles a la forma real del request,
+no GETs pelados).
+
+**ACEPTACIÓN REAL (Code, navegador real — marcar y flipear el heading
+de Fase 6 a ✅ al completar):**
+- [ ] Consolas configuradas AUTÓNOMAMENTE vía el Chrome de Juan (E9):
+      proyecto GCP + OAuth client Web (orígenes `http://localhost:5173`
+      y el dominio Netlify; scopes drive.appdata + gmail.send; pantalla
+      de consentimiento en testing con Juan como test user) + proyecto
+      Supabase con provider Google (redirect
+      `https://<proj>.supabase.co/auth/v1/callback` agregado al client)
+      — Juan interviene SOLO en logins/2FA/keys.
+- [ ] `.env.local` escrito con los 3 valores + env vars cargadas en
+      Netlify; build de Netlify verde con el chunk de supabase PRESENTE.
+- [ ] Login Supabase con Google funciona; el email de sesión aparece en
+      la sidebar y como default del mail.
+- [ ] Opt-in de sync: consent combinado (UN solo prompt con Drive +
+      Gmail — E6); primera sincronización sube `conv_*.json` +
+      `templates.json` (verificar en el appdata con la propia API o el
+      contador de la UI).
+- [ ] Sync entre DOS navegadores con la misma cuenta: conversación
+      creada en A aparece en B tras "Sincronizar ahora"; edición en B
+      gana en A (LWW); borrado en A NO resucita desde B (tombstone).
+- [ ] Persistencia: reload en ambos navegadores conserva estado y
+      opt-in.
+- [ ] Mail: "Enviar por mail" a la propia cuenta llega al inbox con
+      PDF y DOCX ABRIBLES (regla Haiku: gastar poco y en cuenta
+      propia). HTTP 403 = test user faltante en la consola, NO bug.
+- [ ] `pnpm typecheck` + 3 guards + builds + harness fase5 (54/54) y
+      fase6 (47/47) en la máquina real; push a main; CI verde
+      commit-exacto.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```
@@ -1146,7 +1318,7 @@ Haiku CUMPLIDOS 2026-07-17 — fase cerrada, §0.8.)*
 
 ---
 
-## Fase 6 — Autenticación y sync a Drive 🔜
+## Fase 6 — Autenticación y sync a Drive 🟡 (implementada y verificada en sandbox 2026-07-17; aceptación online pendiente — ledger y checklist en §0.9)
 
 - Supabase Google Auth: identidad pura, cero tablas (Q19) — solo
   gestiona el login, no guarda estado de la app.

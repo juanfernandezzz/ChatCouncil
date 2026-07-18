@@ -63,6 +63,18 @@ interface CouncilState {
   toolsPanelOpen: boolean;
   setToolsPanelOpen: (open: boolean) => void;
 
+  // --- Fase 6: identidad (Supabase, Q19) + token Google (GIS) + estado de sync (Q17/Q20) ---
+  /** Email de la sesión Supabase (identidad pura) — default del destinatario en "Enviar por mail". */
+  accountEmail: string | null;
+  setAccountEmail: (email: string | null) => void;
+  /** true si hay un access token GIS vigente en memoria (drive.appdata + gmail.send, E6). */
+  googleTokenReady: boolean;
+  setGoogleTokenReady: (ready: boolean) => void;
+  syncStatus: "off" | "idle" | "syncing" | "error";
+  syncLastAt: number | null;
+  syncMessage: string | null;
+  setSyncState: (status: "off" | "idle" | "syncing" | "error", lastAt: number | null, message: string | null) => void;
+
   /** Paneles activos AHORA: si hay conversación lockeada, sus lockedModelIds (menos hidden); si no, el top-N de prioridad. */
   activePanelSourceIds: () => string[];
 }
@@ -123,6 +135,15 @@ export const useCouncilStore = create<CouncilState>((set, get) => ({
   setComposeWebSearch: (value) => set({ composeWebSearch: value }),
   toolsPanelOpen: true,
   setToolsPanelOpen: (open) => set({ toolsPanelOpen: open }),
+
+  accountEmail: null,
+  setAccountEmail: (email) => set({ accountEmail: email }),
+  googleTokenReady: false,
+  setGoogleTokenReady: (ready) => set({ googleTokenReady: ready }),
+  syncStatus: "off",
+  syncLastAt: null,
+  syncMessage: null,
+  setSyncState: (status, lastAt, message) => set({ syncStatus: status, syncLastAt: lastAt, syncMessage: message }),
 
   activePanelSourceIds: () => {
     const s = get();

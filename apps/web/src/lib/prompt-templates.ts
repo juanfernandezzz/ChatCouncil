@@ -1,3 +1,5 @@
+import { db } from "./db";
+
 /**
  * Interpolación de plantillas — ChatCouncil Fase 5 (Q29)
  * ------------------------------------------------------------------
@@ -31,5 +33,19 @@ export function interpolateTemplate(body: string, values: Record<string, string>
     const name = rawName.trim();
     if (!name) return whole;
     return values[name] ?? "";
+  });
+}
+
+/**
+ * Borrado con tombstone (Fase 6, E2): sin el registro en syncMeta, el
+ * merge por-ítem de templates.json resucitaría la plantilla borrada
+ * en el próximo pull (el otro navegador la re-aportaría). La UI debe
+ * borrar por acá, nunca con db.promptTemplates.delete directo.
+ */
+export async function deleteTemplateWithTombstone(templateId: string): Promise<void> {
+  const deletedAt = Date.now();
+  await db.transaction("rw", [db.promptTemplates, db.syncMeta], async () => {
+    await db.promptTemplates.delete(templateId);
+    await db.syncMeta.put({ id: `tpl:${templateId}`, kind: "template", deleted: true, deletedAt });
   });
 }

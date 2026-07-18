@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { googleAuthConfigured } from "@/lib/google-auth";
 import { exportConversationPdf, generateConversationPdfBlob } from "@/lib/pdf/export-conversation";
+import { useCouncilStore } from "@/store/useCouncilStore";
 
 /**
  * Sección de informe (Q28 + adición 2026-07-16) — Ver / PDF / DOCX.
@@ -24,6 +26,41 @@ export function PdfSection({ conversationId }: { conversationId: string | null }
   const [error, setError] = useState<string | null>(null);
   const [viewer, setViewer] = useState<ViewerState | null>(null);
   const viewerUrlRef = useRef<string | null>(null);
+
+  // ── Fase 6 (Paso 0, E8): "Enviar por mail" ──────────────────────────
+  const accountEmail = useCouncilStore((s) => s.accountEmail);
+  const [mailOpen, setMailOpen] = useState(false);
+  const [mailTo, setMailTo] = useState("");
+  const [mailPdf, setMailPdf] = useState(true);
+  const [mailDocx, setMailDocx] = useState(true);
+  const [mailBusy, setMailBusy] = useState(false);
+  const [mailResult, setMailResult] = useState<string | null>(null);
+  const mailConfigured = googleAuthConfigured();
+
+  // Default del destinatario (E8): el mail de la sesión, editable.
+  useEffect(() => {
+    if (accountEmail && mailTo === "") setMailTo(accountEmail);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountEmail]);
+
+  const handleSendMail = async () => {
+    if (!conversationId || mailBusy) return;
+    setMailBusy(true);
+    setMailResult(null);
+    setError(null);
+    try {
+      const { sendReportByMail } = await import("@/lib/mail/send-report-mail");
+      const sent = await sendReportByMail({ conversationId, to: mailTo, includePdf: mailPdf, includeDocx: mailDocx });
+      setMailResult(`enviado ✓ (${sent.attachmentNames.join(", ")})`);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.warn("[chatcouncil:mail] envío falló:", message);
+      setMailResult(null);
+      setError(message);
+    } finally {
+      setMailBusy(false);
+    }
+  };
 
   const closeViewer = () => {
     if (viewerUrlRef.current) {
@@ -103,7 +140,56 @@ export function PdfSection({ conversationId }: { conversationId: string | null }
         {btn("view", "Ver informe", true)}
         {btn("pdf", "Exportar PDF")}
         {btn("docx", "Exportar DOCX")}
+        <button
+          type="button"
+          disabled={!conversationId || !mailConfigured}
+          title={
+            !mailConfigured
+              ? "Configurá las variables de entorno de Google para enviar por mail"
+              : "Enviar el informe por Gmail con los adjuntos elegidos"
+          }
+          onClick={() => setMailOpen((o) => !o)}
+          className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary transition-colors hover:border-text-secondary disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Enviar por mail
+        </button>
       </div>
+      {mailOpen && mailConfigured && (
+        <div className="flex flex-col gap-1.5 rounded border border-border p-2 text-[11px]">
+          <label className="flex items-center gap-1.5 text-text-secondary">
+            Para:
+            <input
+              value={mailTo}
+              onChange={(e) => setMailTo(e.target.value)}
+              placeholder={accountEmail ?? "destinatario@dominio.com"}
+              className="flex-1 rounded border border-border bg-bg-base px-2 py-1 text-[11px] text-text-primary placeholder:text-text-secondary"
+            />
+          </label>
+          <div className="flex items-center gap-3 text-text-secondary">
+            <label className="flex cursor-pointer items-center gap-1">
+              <input type="checkbox" checked={mailPdf} onChange={(e) => setMailPdf(e.target.checked)} className="accent-accent-primary" />
+              PDF
+            </label>
+            <label className="flex cursor-pointer items-center gap-1">
+              <input type="checkbox" checked={mailDocx} onChange={(e) => setMailDocx(e.target.checked)} className="accent-accent-primary" />
+              DOCX
+            </label>
+            <button
+              type="button"
+              disabled={mailBusy || !mailTo.trim() || (!mailPdf && !mailDocx)}
+              onClick={() => void handleSendMail()}
+              className="ml-auto rounded border border-accent-primary px-2 py-1 text-[11px] text-accent-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {mailBusy ? "Enviando…" : "Enviar"}
+            </button>
+          </div>
+          {mailResult && <p className="text-accent-secondary">{mailResult}</p>}
+          <p className="text-[10px] leading-snug text-text-secondary">
+            Se envía desde TU cuenta de Gmail (Gmail API, mismo permiso que el sync). El adjunto es exactamente el
+            mismo informe de Ver/PDF/DOCX.
+          </p>
+        </div>
+      )}
       {!conversationId && <p className="text-[11px] text-text-secondary">Abrí o creá una conversación primero.</p>}
       {error && <p className="text-[11px] text-red-400">{error}</p>}
 

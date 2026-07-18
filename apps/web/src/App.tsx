@@ -162,7 +162,7 @@ export default function App() {
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-baseline gap-2">
             <h1 className="text-lg font-semibold tracking-tight text-text-primary">ChatCouncil</h1>
-            <span className="font-mono text-xs text-text-secondary">fase 5 · herramientas</span>
+            <span className="font-mono text-xs text-text-secondary">fase 6 · cuenta y sync</span>
           </div>
           <div className="flex items-center gap-2">
             <ByoaSessionBar />

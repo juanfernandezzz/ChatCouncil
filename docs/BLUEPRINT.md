@@ -1016,9 +1016,13 @@ no GETs pelados).
 - [x] Opt-in de sync: consent combinado (UN solo prompt con Drive +
       Gmail — E6); primera sincronización completada — status
       "sincronizado · 1:10:28 a. m.".
-- [ ] Sync entre DOS navegadores con la misma cuenta: DIFERIDO — no
-      se pudo testear con dos navegadores en esta sesión; la lógica
-      LWW y tombstones está cubierta por el harness fase6 (47/47).
+- [x] Sync entre DOS navegadores con la misma cuenta: verificado
+      2026-07-18 con dos orígenes (localhost:5173 + chatcouncil.netlify.app)
+      = dos IndexedDB distintos contra el mismo Drive appdata. Pasos
+      ejecutados: (1) create→pull OK, (2) LWW edit (updatedAt mayor gana)
+      OK, (3) tombstone E3 anti-resurrección OK, (4) plantillas E2
+      tombstone+no-resurrección OK, (5) reload — sesión, sync opt-in y
+      datos persisten OK. Client secret rotado post-transcript (higiene).
 - [x] Persistencia: opt-in re-hidratado desde Dexie en reload
       (`isSyncEnabled()` en useEffect); motor re-arranca automáticamente.
 - [x] Mail: "Enviar por mail" enviado a cuenta propia con adjuntos

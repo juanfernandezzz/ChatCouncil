@@ -1169,10 +1169,37 @@ Haiku CUMPLIDOS 2026-07-17 — fase cerrada, §0.8.)*
 - Modo anónimo (Q20): Drive es siempre opt-in ofrecido, nunca
   bloqueante; todo el flujo de arriba debe poder no ejecutarse nunca
   sin que el resto de la app lo note.
+- **Envío del informe por mail (pedido de Juan, 2026-07-17, post-cierre
+  de Fase 5):** junto a Ver/PDF/DOCX, un botón "Enviar por mail" que
+  mande el informe con los adjuntos. Investigación verificada
+  2026-07-17 (no re-investigar salvo contradicción):
+  · EmailJS DESCARTADO para "gratis con adjuntos": el plan free
+    (200 mails/mes, 50 KB/request) NO incluye adjuntos; adjuntos sólo
+    en planes pagos.
+  · Camino recomendado (A): Gmail API `gmail.send` COMO el usuario —
+    el mismo GIS token client que esta fase ya construye para
+    `drive.appdata`, gratis, adjuntos hasta 25 MB, sin terceros ni
+    backend, coherente con la filosofía BYO del producto. Costo: scope
+    SENSIBLE (no restringido — sin security assessment); en modo
+    testing funciona sin verificación de Google con hasta 100 test
+    users agregados a mano en la consola (alcanza para el uso de Juan
+    hoy); distribución pública exigiría verificación de Google
+    (justificación + video demo).
+  · Alternativas: (D) Web Share API con files — share sheet del SO,
+    cero cuentas, complemento barato, pero soporte desktop desigual y
+    no "envía" directo; (C) Netlify Function como relay con llave en
+    env var — sería el PRIMER backend del proyecto, cuota compartida
+    entre todos los usuarios y superficie de spam: sólo si A muere en
+    la entrevista.
+  Si A: el MIME multipart del mensaje se arma client-side (base64url)
+  y va a `users.messages.send`.
 
 **Criterio de aceptación:** cerrar la pestaña, reabrir en otro
 navegador logueado con la misma cuenta de Google, y ver las
 conversaciones sincronizadas (sin adjuntos, por diseño de Q18).
+Para el mail: el informe LLEGA a un inbox real con los adjuntos
+abribles (enviárselo a sí mismo — análogo de la regla Haiku: gastar
+poco y en cuenta propia).
 
 ---
 

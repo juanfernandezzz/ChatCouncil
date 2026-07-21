@@ -1,4 +1,6 @@
+import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Button } from "@chatcouncil/ui";
 import { getGoogleAccessToken, googleAuthConfigured, onGoogleTokenState } from "@/lib/google-auth";
 import { onSessionEmail, signInWithGoogle, signOut, supabaseConfigured } from "@/lib/supabase-client";
 import { isSyncEnabled, onSyncState, setSyncEnabled, startSyncEngine, syncNow } from "@/lib/sync/sync-engine";
@@ -18,6 +20,7 @@ export function AccountSyncSection() {
   const accountEmail = useCouncilStore((s) => s.accountEmail);
   const setAccountEmail = useCouncilStore((s) => s.setAccountEmail);
   const setGoogleTokenReady = useCouncilStore((s) => s.setGoogleTokenReady);
+  const googleTokenReady = useCouncilStore((s) => s.googleTokenReady);
   const syncStatus = useCouncilStore((s) => s.syncStatus);
   const syncLastAt = useCouncilStore((s) => s.syncLastAt);
   const syncMessage = useCouncilStore((s) => s.syncMessage);
@@ -80,7 +83,15 @@ export function AccountSyncSection() {
     }
   };
 
+  // Fase 7 E6: tras un reload el token GIS vive sólo en memoria — con el
+  // sync habilitado y sin token, el estado real es "en pausa hasta un
+  // gesto", NO un error del motor. Warning, no danger; el botón
+  // "Reconectar sync" dispara syncNow() (gesto → prompt GIS, mecanismo
+  // E4 de F6 intacto — cero cambio de comportamiento del motor).
+  const syncPaused = enabled && !googleTokenReady;
+
   const statusLabel = (() => {
+    if (syncPaused) return "sync en pausa · reconectar";
     switch (syncStatus) {
       case "off":
         return "sólo local";
@@ -113,22 +124,14 @@ export function AccountSyncSection() {
           <span className="truncate text-text-primary" title={accountEmail}>
             {accountEmail}
           </span>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] text-text-secondary hover:border-text-secondary"
-          >
+          <Button size="xs" onClick={handleLogout} className="shrink-0">
             Salir
-          </button>
+          </Button>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={handleLogin}
-          className="rounded border border-accent-primary px-2 py-1 text-[11px] text-accent-primary hover:opacity-90"
-        >
+        <Button variant="accent" onClick={handleLogin}>
           Iniciar sesión con Google
-        </button>
+        </Button>
       )}
 
       <label className="flex cursor-pointer items-center gap-1.5 text-text-secondary">
@@ -137,20 +140,26 @@ export function AccountSyncSection() {
       </label>
 
       <div className="flex items-center justify-between gap-1">
-        <span className={syncStatus === "error" ? "text-red-400" : "text-text-secondary"}>{statusLabel}</span>
-        {enabled && (
-          <button
-            type="button"
-            onClick={() => syncNow()}
-            disabled={syncStatus === "syncing"}
-            className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] text-text-secondary hover:border-text-secondary disabled:opacity-40"
-          >
+        <span className={syncPaused ? "text-warning" : syncStatus === "error" ? "text-danger" : "text-text-secondary"}>{statusLabel}</span>
+        {enabled && !syncPaused && (
+          <Button size="xs" onClick={() => syncNow()} disabled={syncStatus === "syncing"} className="shrink-0">
             Sincronizar ahora
-          </button>
+          </Button>
+        )}
+        {syncPaused && (
+          <Button
+            size="xs"
+            onClick={() => syncNow()}
+            title="Reconectar el token de Google (puede abrir el prompt de consentimiento)"
+            className="flex shrink-0 items-center gap-1 border-warning text-warning"
+          >
+            <RefreshCw size={12} aria-hidden />
+            Reconectar sync
+          </Button>
         )}
       </div>
-      {syncStatus === "error" && syncMessage && <p className="text-red-400">{syncMessage}</p>}
-      {error && <p className="text-red-400">{error}</p>}
+      {syncStatus === "error" && syncMessage && <p className="text-danger">{syncMessage}</p>}
+      {error && <p className="text-danger">{error}</p>}
     </section>
   );
 }

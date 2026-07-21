@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Fase 7 (E1): las primitivas viven en packages/ui — Tailwind tiene que
+   escanear ese código para generar sus clases (fuera del root de la app,
+   no se detecta solo). Ruta relativa a ESTE archivo. */
+@source "../../../../packages/ui/src";
+
 /*
  * FUENTE DE VERDAD de los design tokens (Q26). Si cambias un valor
  * aca, actualiza tambien packages/ui/src/tokens.ts en el mismo commit
@@ -21,6 +26,9 @@
   --color-accent-secondary: #10b981;
   --color-text-primary: #ededed;
   --color-text-secondary: #8a8a8a;
+  /* Fase 7 E4 — semánticos de estado (espejados en packages/ui/src/tokens.ts) */
+  --color-danger: #f87171;
+  --color-warning: #fbbf24;
 
   --font-ui: "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
@@ -54,4 +62,38 @@
 @utility scrollbar-thin {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border) transparent;
+}
+
+/*
+ * Anillo de estado por panel — el elemento SIGNATURE de la identidad
+ * (Fase 7 E2). Keyframes PROPIOS que animan SOLO borde y box-shadow:
+ * animate-pulse de Tailwind pulsa la opacidad de la tarjeta ENTERA
+ * (contenido incluido) — exactamente lo que no queremos.
+ * Semántica: streaming = accent-primary pulsando · último intento
+ * exitoso = accent-secondary tenue · último intento fallido = danger
+ * tenue · panel virgen = border-border (la clase base, sin utilidad).
+ */
+@keyframes cc-ring-pulse {
+  0%,
+  100% {
+    border-color: var(--color-accent-primary);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent-primary) 40%, transparent);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--color-accent-primary) 55%, var(--color-border));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-primary) 12%, transparent);
+  }
+}
+
+@utility panel-ring-streaming {
+  border-color: var(--color-accent-primary);
+  animation: cc-ring-pulse 1.6s ease-in-out infinite;
+}
+
+@utility panel-ring-done {
+  border-color: color-mix(in srgb, var(--color-accent-secondary) 45%, var(--color-border));
+}
+
+@utility panel-ring-error {
+  border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border));
 }

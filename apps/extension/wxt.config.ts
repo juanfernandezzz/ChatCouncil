@@ -30,6 +30,16 @@ export default defineConfig({
     // por CORS normal sin ampliar la superficie de permisos (decision
     // "cartel"). Si el header CORS faltara, degrada al cache local.
     permissions: ["storage", "tabs", "tabGroups", "offscreen"],
+    // Fase 7 E5: íconos de la marca (hub-and-spoke) rasterizados desde
+    // la geometría única de packages/ui/src/brand.ts. Los PNG se generan
+    // con sharp instalado FUERA del repo (no entra al lockfile);
+    // procedimiento en BLUEPRINT §0.10. Explícito (no auto-discovery de
+    // WXT) para que el manifest compilado sea verificable por gate.
+    icons: {
+      16: "/icon/16.png",
+      48: "/icon/48.png",
+      128: "/icon/128.png",
+    },
     // Q11 (Fase 2): dominios de los proveedores BYOK que REQUIEREN el
     // proxy del offscreen (CORS bloqueado desde la SPA). host_permissions
     // exime del CORS a los fetch hechos desde contextos de la extensión

@@ -1103,6 +1103,121 @@ viejo va explícito en el prompt de Code — el zip no expresa deletes);
 el ⚠ del optgroup queda (string); el mailResult "enviado ✓" se
 renderiza con ícono Check + texto plano.
 
+**Implementación aplicada (2026-07-21, sandbox):**
+
+- `packages/ui`: tokens.ts suma `danger`/`warning` + `printColors`
+  (paleta de impresión, única fuente para los builders de informe);
+  `brand.ts` (geometría paramétrica + `brandMarkSvg()`);
+  `components.tsx` (cx, Button, Badge, Section, TextInput, TextArea,
+  Select, BrandMark — cero hex en el archivo); react peer ^19.
+- globals.css: `@source` hacia ui, tokens E4, keyframes
+  `cc-ring-pulse` + utilidades `panel-ring-{streaming,done,error}`.
+- Migrados los 9 + App.tsx. El anillo E2 vive en `panelRingClass()`
+  de GridPanel (mira el último intento del reply más reciente;
+  `aborted` cae a borde neutro — ni éxito ni fallo). El input
+  transparente del ComposeBar NO se forzó a TextInput (es
+  deliberadamente sin borde); los botones de panel-count de App
+  quedan custom (estado activo/inactivo propio, ya con tokens).
+  Normalización asumida: botones que usaban text-[11px] pasan a
+  sm (12px) — consolidar tamaños es el punto de la fase.
+- `build-docx.ts` también migró sus hexes a `printColors` (fuera del
+  texto literal de E5 pero exigido por el grep-gate endurecido de
+  E4); HEADER_BG se unificó con codeBg (EFEFEF→F2F2F2,
+  imperceptible, una fuente menos).
+- `brandMarkCanvas(size, color)` exportada de build-doc-definition:
+  la geometría escalada a vectores `line`/`ellipse` de pdfmake
+  (r1=r2 = círculo; lineCap round tipado en @types/pdfmake 0.3.3).
+  Header del PDF = marca 12pt en printColors.accent + wordmark.
+- Media pack: favicon.svg servido desde apps/web/public + link en
+  index.html; PNGs 16/48/128 en apps/extension/public/icon +
+  `manifest.icons` explícito; `src/dev/generate-brand-assets.ts`
+  emite favicon/icon-tile/mark/mark-mono a .brand-out/ (vite-node).
+- Colores stock `black`/`white` PERMITIDOS por decisión puntual: el
+  scrim del modal (bg-black/70) y el fondo del iframe del PDF
+  (bg-white) no tienen token equivalente y son semánticamente
+  correctos (el PDF ES blanco). El grep-gate cubre la familia con
+  escala numérica (red-400 etc.).
+
+**Procedimiento de rasterización (E5b — reproducible):** los PNG NO
+se regeneran en CI (assets committeados). Para regenerarlos:
+`npm i sharp` en un directorio FUERA del repo; correr el generador
+(`pnpm --filter @chatcouncil/web exec vite-node
+src/dev/generate-brand-assets.ts`); desde ese directorio externo,
+`sharp(icon-tile.svg, {density:300}).resize(N,N).png()` para
+N∈{16,48,128} hacia apps/extension/public/icon/. sharp jamás entra
+al lockfile.
+
+**Verificación en sandbox (2026-07-21, Node v22.22.2 / pnpm 11.9.0,
+salidas reales):**
+
+- `pnpm install` real (NO frozen — lockfile cambió por
+  `lucide-react` ^1.25.0 en apps/web y react/@types/react como
+  devDeps de ui). El warning de peers (@vitejs/plugin-react@4.7.0
+  con vite 8.1.2) es el PREEXISTENTE de §0.9, no de esta fase.
+- `pnpm -r run typecheck` → **5/5**, 0 errores.
+- `guard:keys` OK (3 importadores, sin cambios) · `guard:judge` OK ·
+  `guard:sync` OK (4 archivos).
+- `pnpm build:web` limpio: index 466.22 kB (463.07 + lucide usados +
+  primitivas), CSS 18.45 kB. Gates previos TODOS verdes (markers
+  F5/F6, sin Roboto-Regular.ttf ni wordprocessingml en el index,
+  gmail en el chunk de mail, HTML→chunk exacto, supabase ausente sin
+  env). Gates NUEVOS F7: `cc-brand-mark` (BrandMark en el header),
+  `"ellipse"` (canvas del PDF — conteo 0 en el index de baseline,
+  presente ahora), "fase 7 · design system", "sync en pausa",
+  "Reconectar sync" en el index; `panel-ring-*` + `cc-ring-pulse` +
+  variables danger/warning en el CSS compilado; favicon.svg en dist
+  y referenciado por el HTML compilado.
+- **Grep-gate del criterio de aceptación: VERDE** — cero
+  `#hex` y cero colores stock con escala numérica en apps/web/src
+  fuera de `src/dev/` y `styles/globals.css`; packages/ui sin hexes
+  fuera de tokens.ts.
+- `pnpm build:ext`: **32.03 kB** (antes 27.12 — los 3 PNG suman
+  4.9 kB, esperado y registrado). 6/6 markers F1–F3 en background.js;
+  offscreen sin `stream:resume`; host_permissions intactos;
+  `manifest.icons` = {16,48,128 → /icon/N.png} verificado en el JSON
+  COMPILADO; PNGs presentes en `.output`.
+- Harness **fase5 54/54** — el PDF renderiza con el header nuevo (la
+  marca canvas no rompió ninguna aserción; verificación visual
+  adicional: página 1 rasterizada, hub-and-spoke correcto junto al
+  wordmark en el teal de impresión). Harness **fase6 47/47**.
+
+**Hechos frágiles / notas para quien siga:**
+- `lucide-react` resolvió a la serie 1.x (^1.25.0) — los nombres de
+  íconos usados (X, TriangleAlert, Check, Search, Image, Wrench,
+  ChevronsRight, Plus, RefreshCw) compilan contra esa versión; si un
+  update mayor renombra íconos, el typecheck lo detecta.
+- Los tipos canvas de pdfmake exigen literales (`as const` en
+  type/lineCap) — TS ensancha a string en objetos de un map.
+- El gate "ellipse en el index" asume que build-doc-definition
+  queda en el chunk index (hoy: import estático desde
+  ReportSection). Si un refactor lo mueve a un chunk propio, mover
+  el gate con él.
+
+**ACEPTACIÓN REAL (Code, navegador real — pendiente):**
+- [ ] `pnpm dev` + extensión recargada (`chrome://extensions` —
+      CON dos puntos): el ícono nuevo aparece en la barra y en la
+      página de extensiones (16/48/128).
+- [ ] Favicon visible en la pestaña de la SPA.
+- [ ] Header: BrandMark + "fase 7 · design system".
+- [ ] Anillo E2 en vivo con un envío real (Gemini BYOK o Claude BYOA
+      con Haiku — regla de Juan: todo Anthropic de prueba es
+      `claude-haiku-4-5`): pulso accent durante el stream → borde
+      verde tenue al terminar; forzar un error (llave inválida) →
+      borde danger tenue; el statusDot de error se ve danger (no
+      rojo stock).
+- [ ] Iconografía visible: Search/Image en chips, Wrench/ChevronsRight
+      en el panel de herramientas, X de borrar en la sidebar,
+      TriangleAlert en el aviso de juez participante, Plus en "nueva".
+- [ ] E6: con sync habilitado, recargar la página → estado "sync en
+      pausa · reconectar" en warning + botón "Reconectar sync" →
+      click → prompt/refresh GIS → vuelve a "sincronizado". Un fallo
+      real de sync sigue mostrándose en danger.
+- [ ] Exportar PDF desde la UI: header con la marca + wordmark,
+      juzgado legible por Juan. DOCX sigue abriendo bien.
+- [ ] typecheck + 3 guards + ambos builds + ambos harnesses en la
+      máquina real; push (dos commits, patrón Paso 0); CI verde
+      commit-exacto.
+
 ---
 
 ## 1. Topología y grafo de dependencias

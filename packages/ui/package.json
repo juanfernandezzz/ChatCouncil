@@ -10,7 +10,12 @@
     "lint": "echo \"(ui) no lint configured yet\"",
     "test": "echo \"(ui) no tests yet\""
   },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
   "devDependencies": {
+    "@types/react": "^19.0.2",
+    "react": "^19.0.0",
     "typescript": "7.0.2"
   }
 }

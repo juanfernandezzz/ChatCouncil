@@ -1,3 +1,4 @@
+import { printColors } from "@chatcouncil/ui";
 import {
   BorderStyle,
   Document,
@@ -41,17 +42,22 @@ import {
  * por Round y rúbrica del juez) son Table reales de Word → se copian
  * y pegan a Excel/Sheets/otro doc. Bonus sobre el PDF: acá los code
  * fences van en Consolas (mono real — sin el límite del vfs de
- * pdfmake; la mono del PDF queda para el pulido de Fase 7).
+ * pdfmake; embeber mono en el PDF quedó fuera del alcance final de F7).
  */
 
 export type ReportBuildInput = PdfBuildInput;
 
-const INK = "1A1A1A";
-const MUTED = "6B6B6B";
-const RULE = "D9D9D9";
-const CODE_BG = "F2F2F2";
-const HEADER_BG = "EFEFEF";
-const ACCENT = "0D7F8C";
+// Fase 7 E4/E5: cero hexes locales — paleta de impresión desde
+// @chatcouncil/ui. docx quiere hex SIN "#"; HEADER_BG se unifica con
+// codeBg (antes EFEFEF ≈ F2F2F2: diferencia imperceptible, una fuente
+// menos que mantener — registrado en el ledger §0.10).
+const strip = (hex: string): string => hex.slice(1).toUpperCase();
+const INK = strip(printColors.ink);
+const MUTED = strip(printColors.muted);
+const RULE = strip(printColors.rule);
+const CODE_BG = strip(printColors.codeBg);
+const HEADER_BG = strip(printColors.codeBg);
+const ACCENT = strip(printColors.accent);
 
 // tamaños en half-points (21 = 10.5pt)
 const SZ = { title: 34, round: 26, reply: 22, prompt: 21, body: 20, small: 17 } as const;

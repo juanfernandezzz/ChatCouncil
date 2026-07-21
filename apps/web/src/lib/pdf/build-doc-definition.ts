@@ -1,4 +1,5 @@
-import type { Content, ContentText, CustomTableLayout, Node, NodeQueries, TDocumentDefinitions } from "pdfmake/interfaces";
+import type { CanvasElement, Content, ContentText, CustomTableLayout, Node, NodeQueries, TDocumentDefinitions } from "pdfmake/interfaces";
+import { brandMarkGeometry, printColors } from "@chatcouncil/ui";
 import type { LoadedConversation } from "../conversation-repo";
 import type { Attempt, Reply, RoundAnalysis } from "../db";
 
@@ -21,9 +22,14 @@ import type { Attempt, Reply, RoundAnalysis } from "../db";
  *
  * Tipografía: pdfmake embebe SOLO Roboto (vfs de fábrica). Los code
  * fences se renderizan en caja gris con espacios preservados pero en
- * Roboto — embeber una mono real es peso+licencia y pertenece al
- * pulido de Fase 7. El PDF es CLARO a propósito (el tema oscuro no se
- * imprime — decisión heredada de la sección de diseño).
+ * Roboto — embeber una mono real es peso+licencia; quedó fuera del
+ * alcance final de Fase 7 (decisión E5: la fase entrega marca+paleta,
+ * no fuentes embebidas). El PDF es CLARO a propósito (el tema oscuro
+ * no se imprime — decisión heredada de la sección de diseño).
+ *
+ * Header con la MARCA real (Fase 7 E5): primitivas canvas de pdfmake
+ * (line/ellipse) mapeadas desde brandMarkGeometry() — decisión: sin
+ * parser SVG; una sola fuente de geometría, dos renderers.
  */
 
 export interface PdfBuildInput {
@@ -33,11 +39,13 @@ export interface PdfBuildInput {
   exportedAt: Date;
 }
 
-const INK = "#1a1a1a";
-const MUTED = "#6b6b6b";
-const RULE = "#d9d9d9";
-const CODE_BG = "#f2f2f2";
-const ACCENT = "#0d7f8c"; // el cian del tema, oscurecido para papel
+// Fase 7 E5: paleta de impresión centralizada en @chatcouncil/ui
+// (printColors) — los 5 hexes locales se eliminaron.
+const INK = printColors.ink;
+const MUTED = printColors.muted;
+const RULE = printColors.rule;
+const CODE_BG = printColors.codeBg;
+const ACCENT = printColors.accent;
 
 const HEADLINE = { round: 1, reply: 2 } as const;
 
@@ -88,6 +96,39 @@ function bodyContent(text: string): Content[] {
         }
       : { text: seg.value.trim(), style: "body" },
   );
+}
+
+/**
+ * La marca como vector de canvas de pdfmake (Fase 7 E5) — misma
+ * geometría paramétrica que BrandMark/favicon, escalada a `size` pt.
+ * type:"ellipse" con r1=r2 dibuja los círculos; las líneas llevan el
+ * lineCap redondo del SVG.
+ */
+export function brandMarkCanvas(size: number, color: string): CanvasElement[] {
+  const g = brandMarkGeometry();
+  const k = size / g.viewBox;
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return [
+    ...g.spokes.map((sp) => ({
+      type: "line" as const,
+      x1: r2(sp.x1 * k),
+      y1: r2(sp.y1 * k),
+      x2: r2(sp.x2 * k),
+      y2: r2(sp.y2 * k),
+      lineWidth: r2(g.strokeWidth * k),
+      lineColor: color,
+      lineCap: "round" as const,
+    })),
+    { type: "ellipse" as const, x: r2(g.hub.x * k), y: r2(g.hub.y * k), r1: r2(g.hub.r * k), r2: r2(g.hub.r * k), color },
+    ...g.nodes.map((n) => ({
+      type: "ellipse" as const,
+      x: r2(n.x * k),
+      y: r2(n.y * k),
+      r1: r2(n.r * k),
+      r2: r2(n.r * k),
+      color,
+    })),
+  ];
 }
 
 /** Rótulo de respuesta — string EXACTO también usado por la heurística anti-huérfanos del harness. */
@@ -263,7 +304,14 @@ export function buildDocDefinition(input: PdfBuildInput): TDocumentDefinitions {
     info: { title: `ChatCouncil — ${loaded.conversation.title}` },
     header: () => ({
       columns: [
-        { text: "ChatCouncil", style: "wordmark" }, // wordmark de texto — placeholder hasta el branding de Fase 7 (Q28)
+        {
+          width: 16,
+          // Fase 7 E5: la marca real via primitivas canvas (una sola
+          // fuente de geometría con BrandMark/favicon; sin parser SVG).
+          canvas: brandMarkCanvas(12, ACCENT),
+          margin: [0, 1, 0, 0] as [number, number, number, number],
+        },
+        { text: "ChatCouncil", style: "wordmark", margin: [4, 0, 0, 0] as [number, number, number, number] },
         { text: loaded.conversation.title, alignment: "right", style: "muted" },
       ],
       margin: [42, 20, 42, 0],

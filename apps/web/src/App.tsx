@@ -12,6 +12,7 @@ import { detectByoaOrganizations } from "@/lib/byoa-org";
 import { loadConversation } from "@/lib/conversation-repo";
 import { getLastConversationId, setLastConversationId } from "@/lib/last-conversation";
 import { PANEL_COUNT_OPTIONS, useCouncilStore, type PanelCount } from "@/store/useCouncilStore";
+import { BrandMark, Button, Select } from "@chatcouncil/ui";
 
 // ─── Soporte de plataformas (decisión de cierre de Fase 1, ver BLUEPRINT
 // "Fase 8 — Móvil") ─────────────────────────────────────────────────────
@@ -81,28 +82,22 @@ function ByoaSessionBar() {
     <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface-elevated px-3 py-1.5 text-xs">
       <span className="text-text-secondary">Sesión BYOA ({cfg.label}):</span>
       {!confirmed ? (
-        <button
-          type="button"
-          onClick={handleDetect}
-          disabled={detecting}
-          className="rounded border border-accent-primary px-2 py-1 text-xs text-accent-primary disabled:opacity-50"
-        >
+        <Button variant="accent" onClick={handleDetect} disabled={detecting}>
           {detecting ? "detectando…" : "detectar sesión"}
-        </button>
+        </Button>
       ) : (
-        <select
+        <Select
           value={selectedOrgId}
           onChange={(e) => setByoaSelectedOrg(providerId, e.target.value)}
-          className="rounded border border-border bg-bg-base px-2 py-1 text-xs text-text-primary"
         >
           {orgs.map((o) => (
             <option key={o.id} value={o.id}>
               {o.name}
             </option>
           ))}
-        </select>
+        </Select>
       )}
-      {error && <span className="text-red-400">{error}</span>}
+      {error && <span className="text-danger">{error}</span>}
     </div>
   );
 }
@@ -160,9 +155,12 @@ export default function App() {
 
       <div className="flex flex-1 flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-baseline gap-2">
-            <h1 className="text-lg font-semibold tracking-tight text-text-primary">ChatCouncil</h1>
-            <span className="font-mono text-xs text-text-secondary">fase 6 · cuenta y sync</span>
+          <div className="flex items-center gap-2">
+            <BrandMark size={22} className="text-accent-primary" />
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-lg font-semibold tracking-tight text-text-primary">ChatCouncil</h1>
+              <span className="font-mono text-xs text-text-secondary">fase 7 · design system</span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <ByoaSessionBar />

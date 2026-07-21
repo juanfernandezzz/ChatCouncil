@@ -1,4 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
+import { Check, TriangleAlert, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { parsePanelSourceId } from "@chatcouncil/shared";
 import { latestDoneAttempt } from "@/lib/conversation-repo";
@@ -6,6 +7,7 @@ import { db, type AnalysisKind, type Reply, type Round, type RoundAnalysis } fro
 import { runRoundAnalysis, type JudgeSelection } from "@/lib/judge/run-analysis";
 import { isAccountDefaultModel, listPanelOptions, panelDisplayLabel, type PanelOption } from "@/lib/model-registry";
 import { useCouncilStore } from "@/store/useCouncilStore";
+import { Button, Section, Select } from "@chatcouncil/ui";
 
 /**
  * Comparar/Resumir (Q30) — Fase 5. Herramienta de AUDITORÍA DE SESGOS,
@@ -23,10 +25,10 @@ import { useCouncilStore } from "@/store/useCouncilStore";
 
 const EMPTY_ANALYSES: RoundAnalysis[] = [];
 
-function statusBadge(a: RoundAnalysis): string {
-  if (a.status === "ok") return "✓";
-  if (a.status === "parse_error") return "raw";
-  return "✗";
+function StatusBadge({ a }: { a: RoundAnalysis }) {
+  if (a.status === "ok") return <Check size={12} className="inline shrink-0 text-accent-secondary" aria-label="ok" />;
+  if (a.status === "parse_error") return <span aria-label="parse_error">raw</span>;
+  return <X size={12} className="inline shrink-0 text-danger" aria-label="error" />;
 }
 
 export function AnalyzeSection({ conversationId }: { conversationId: string | null }) {
@@ -149,8 +151,7 @@ export function AnalyzeSection({ conversationId }: { conversationId: string | nu
   };
 
   return (
-    <section className="flex flex-col gap-2 rounded-md border border-border p-3">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Comparar / Resumir</h3>
+    <Section title="Comparar / Resumir">
 
       {!conversationId && <p className="text-[11px] text-text-secondary">Abrí o creá una conversación primero.</p>}
 
@@ -158,10 +159,9 @@ export function AnalyzeSection({ conversationId }: { conversationId: string | nu
         <>
           <label className="flex flex-col gap-1 text-[11px] text-text-secondary">
             Round a analizar
-            <select
+            <Select
               value={roundId ?? ""}
               onChange={(e) => setRoundId(e.target.value || null)}
-              className="rounded border border-border bg-bg-base px-2 py-1 text-xs text-text-primary focus:outline-none"
             >
               {rounds.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -169,7 +169,7 @@ export function AnalyzeSection({ conversationId }: { conversationId: string | nu
                   {r.promptText.length > 48 ? "…" : ""}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
 
           <div className="flex gap-3 text-[11px] text-text-secondary">
@@ -183,10 +183,9 @@ export function AnalyzeSection({ conversationId }: { conversationId: string | nu
 
           <label className="flex flex-col gap-1 text-[11px] text-text-secondary">
             Juez — sugerido: un proveedor FUERA de tu consejo (más neutral, evita auto-referencia)
-            <select
+            <Select
               value={judgeId ?? ""}
               onChange={(e) => setJudgeId(e.target.value || null)}
-              className="rounded border border-border bg-bg-base px-2 py-1 text-xs text-text-primary focus:outline-none"
             >
               {outsiders.length > 0 && (
                 <optgroup label="Fuera del consejo (recomendado)">
@@ -206,16 +205,15 @@ export function AnalyzeSection({ conversationId }: { conversationId: string | nu
                   ))}
                 </optgroup>
               )}
-            </select>
+            </Select>
           </label>
 
           {judge && judge.models.length > 0 && (
             <label className="flex flex-col gap-1 text-[11px] text-text-secondary">
               Modelo del juez
-              <select
+              <Select
                 value={judgeModelId ?? ""}
                 onChange={(e) => setJudgeModelId(e.target.value)}
-                className="rounded border border-border bg-bg-base px-2 py-1 text-xs text-text-primary focus:outline-none"
               >
                 {judge.models.map((m) => (
                   <option key={m.id} value={m.id} title={m.note ?? ""}>
@@ -223,14 +221,17 @@ export function AnalyzeSection({ conversationId }: { conversationId: string | nu
                     {m.verified ? "" : " (sin verificar)"}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           )}
 
           {judgeIsParticipant && (
-            <p className="text-[11px] text-yellow-500">
-              ⚠ Este juez participa del consejo de este Round: aun anonimizado hay riesgo documentado de
-              auto-preferencia. Queda registrado en el análisis.
+            <p className="flex items-start gap-1 text-[11px] text-warning">
+              <TriangleAlert size={13} className="mt-0.5 shrink-0" aria-hidden />
+              <span>
+                Este juez participa del consejo de este Round: aun anonimizado hay riesgo documentado de
+                auto-preferencia. Queda registrado en el análisis.
+              </span>
             </p>
           )}
           {judgeIsByoa && (
@@ -240,7 +241,7 @@ export function AnalyzeSection({ conversationId }: { conversationId: string | nu
             </p>
           )}
           {judgeIsByoa && !judgeOrgId && (
-            <p className="text-[11px] text-red-400">Elegí una organización de sesión antes de usar este juez.</p>
+            <p className="text-[11px] text-danger">Elegí una organización de sesión antes de usar este juez.</p>
           )}
 
           <label className="flex items-center gap-2 text-[11px] text-text-secondary">
@@ -248,7 +249,7 @@ export function AnalyzeSection({ conversationId }: { conversationId: string | nu
             Anonimizar respuestas ante el juez (default — Q30)
           </label>
           {!anonymized && (
-            <p className="text-[11px] text-yellow-500">
+            <p className="text-[11px] text-warning">
               Sin anonimizar, el juez ve qué proveedor escribió cada respuesta: el juicio deja de ser ciego. El
               análisis queda marcado.
             </p>
@@ -261,25 +262,16 @@ export function AnalyzeSection({ conversationId }: { conversationId: string | nu
           )}
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={!canRun}
-              onClick={handleRun}
-              className="rounded-md border border-accent-primary px-3 py-1.5 text-sm text-accent-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-            >
+            <Button variant="accent" size="md" disabled={!canRun} onClick={handleRun}>
               {phase ? `${phase}…` : "Correr análisis"}
-            </button>
+            </Button>
             {phase && abortFn && (
-              <button
-                type="button"
-                onClick={() => abortFn()}
-                className="rounded-md border border-border px-2 py-1.5 text-xs text-text-secondary"
-              >
+              <Button onClick={() => abortFn()} className="rounded-md py-1.5">
                 Cancelar
-              </button>
+              </Button>
             )}
           </div>
-          {runError && <p className="text-[11px] text-red-400">{runError}</p>}
+          {runError && <p className="text-[11px] text-danger">{runError}</p>}
 
           {analyses.length > 0 && (
             <ul className="flex flex-col gap-1 border-t border-border pt-2">
@@ -293,10 +285,10 @@ export function AnalyzeSection({ conversationId }: { conversationId: string | nu
                       onClick={() => setExpandedId(expanded ? null : a.id)}
                       className="flex w-full items-center justify-between gap-2 text-left text-[11px] text-text-primary"
                     >
-                      <span className="truncate">
-                        {statusBadge(a)} {a.kind === "compare" ? "Comparar" : "Resumir"} · juez{" "}
+                      <span className="flex min-w-0 items-center gap-1 truncate">
+                        <StatusBadge a={a} /> {a.kind === "compare" ? "Comparar" : "Resumir"} · juez{" "}
                         {panelDisplayLabel(a.judgePanelSourceId)}
-                        {a.judgeWasParticipant ? " ⚠" : ""}
+                        {a.judgeWasParticipant && <TriangleAlert size={12} className="shrink-0 text-warning" aria-label="juez participante" />}
                       </span>
                       <span className="shrink-0 text-text-secondary">
                         {new Date(a.createdAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
@@ -306,7 +298,8 @@ export function AnalyzeSection({ conversationId }: { conversationId: string | nu
                       <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2 text-[11px] text-text-primary">
                         <p className="text-text-secondary">
                           {a.anonymized ? "anonimizado (Q30)" : "SIN anonimizar"} ·{" "}
-                          {a.judgeWasParticipant ? "juez participante ⚠" : "juez fuera del consejo"}
+                          {a.judgeWasParticipant ? "juez participante" : "juez fuera del consejo"}
+                          {a.judgeWasParticipant && <TriangleAlert size={11} className="ml-1 inline text-warning" aria-hidden />}
                           {a.judgeModelId ? ` · ${a.judgeModelId}` : ""}
                           {a.latencyMs !== undefined ? ` · ${(a.latencyMs / 1000).toFixed(1)}s` : ""}
                         </p>
@@ -315,10 +308,10 @@ export function AnalyzeSection({ conversationId }: { conversationId: string | nu
                             Redacciones por anonimización: {a.redactions.map((r) => `${r.label}×${r.count}`).join(", ")}
                           </p>
                         )}
-                        {a.status === "error" && <p className="text-red-400">El juez falló: {a.errorMessage}</p>}
+                        {a.status === "error" && <p className="text-danger">El juez falló: {a.errorMessage}</p>}
                         {a.status === "parse_error" && (
                           <>
-                            <p className="text-yellow-500">Respuesta no parseable ({a.errorMessage}) — raw conservado:</p>
+                            <p className="text-warning">Respuesta no parseable ({a.errorMessage}) — raw conservado:</p>
                             <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-bg-base p-2 font-mono text-[10px]">
                               {a.rawResponse}
                             </pre>
@@ -365,6 +358,6 @@ export function AnalyzeSection({ conversationId }: { conversationId: string | nu
           )}
         </>
       )}
-    </section>
+    </Section>
   );
 }

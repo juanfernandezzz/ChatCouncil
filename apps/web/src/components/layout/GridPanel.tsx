@@ -1,7 +1,7 @@
 import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { gridLayouts } from "@chatcouncil/ui";
+import { Badge, Button, Select, TextInput, gridLayouts } from "@chatcouncil/ui";
 import { useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -34,11 +34,37 @@ function statusDot(status: Reply["attempts"][number]["status"] | undefined): str
     case "done":
       return "bg-accent-secondary";
     case "error":
-      return "bg-red-500";
+      return "bg-danger";
     case "aborted":
       return "bg-text-secondary";
     default:
       return "bg-text-secondary opacity-50";
+  }
+}
+
+/**
+ * Anillo de estado del panel (Fase 7 E2 — elemento signature).
+ * Mira el ÚLTIMO intento del reply más reciente del timeline:
+ * streaming/pending = en vuelo (pulso accent-primary) · done = reposo
+ * exitoso (accent-secondary tenue) · error = danger tenue · virgen o
+ * aborted = borde neutro. Utilidades en globals.css (keyframes propios
+ * que animan SOLO borde/box-shadow — animate-pulse pulsaría la tarjeta
+ * entera).
+ */
+function panelRingClass(timeline: PanelTimelineEntry[]): string {
+  const last = timeline[timeline.length - 1];
+  if (!last) return "border-border";
+  const attempt = last.reply.attempts[last.reply.attempts.length - 1];
+  switch (attempt?.status) {
+    case "streaming":
+    case "pending":
+      return "panel-ring-streaming";
+    case "done":
+      return "panel-ring-done";
+    case "error":
+      return "panel-ring-error";
+    default:
+      return "border-border";
   }
 }
 
@@ -58,7 +84,7 @@ function AttemptBlock({ entry, onRetry }: { entry: PanelTimelineEntry; onRetry: 
             {attempt?.content || (attempt?.status === "pending" ? "…" : "")}
           </p>
           {attempt?.status === "error" && (
-            <p className="mt-1 text-xs text-red-400">{attempt.errorMessage ?? "error"}</p>
+            <p className="mt-1 text-xs text-danger">{attempt.errorMessage ?? "error"}</p>
           )}
           <div className="mt-1 flex items-center gap-2 font-mono text-[10px] text-text-secondary">
             {attempt?.latencyMs != null && <span>{attempt.latencyMs}ms</span>}
@@ -123,25 +149,22 @@ function PanelCard({
 
   return (
     <div
-      className={`flex min-h-[220px] flex-col rounded-lg border border-border bg-surface-elevated ${focused ? "col-span-full row-span-full" : ""}`}
+      className={`flex min-h-[220px] flex-col rounded-lg border bg-surface-elevated ${panelRingClass(timeline)} ${focused ? "col-span-full row-span-full" : ""}`}
     >
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
-          <span
-            className={`rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
-              option.connectionMode === "byoa" ? "bg-accent-secondary/20 text-accent-secondary" : "bg-accent-primary/20 text-accent-primary"
-            }`}
-          >
+          <Badge variant={option.connectionMode === "byoa" ? "secondary" : "primary"} mono>
             {option.connectionMode}
-          </span>
+          </Badge>
           <span className="text-sm font-medium text-text-primary">{option.label}</span>
         </div>
         <div className="flex items-center gap-2">
           {locked && (
-            <select
+            <Select
+              fieldSize="xs"
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
-              className="rounded border border-border bg-bg-base px-1.5 py-1 font-mono text-[10px] text-text-secondary"
+              className="font-mono text-text-secondary"
               title="modelo para el próximo envío a este panel (E4)"
             >
               <option value={option.defaultModelId}>{option.defaultModelId}</option>
@@ -153,7 +176,7 @@ function PanelCard({
                     {m.verified ? "" : " (sin verificar)"}
                   </option>
                 ))}
-            </select>
+            </Select>
           )}
           <button type="button" onClick={onToggleFocus} className="text-xs text-text-secondary hover:text-text-primary">
             {focused ? "achicar" : "foco"}
@@ -186,19 +209,15 @@ function PanelCard({
           }}
           className="flex items-center gap-2 border-t border-border p-2"
         >
-          <input
+          <TextInput
             value={followUp}
             onChange={(e) => setFollowUp(e.target.value)}
             placeholder="continuar solo acá…"
-            className="min-w-0 flex-1 rounded border border-border bg-bg-base px-2 py-1 text-xs text-text-primary placeholder:text-text-secondary"
+            className="min-w-0 flex-1"
           />
-          <button
-            type="submit"
-            className="rounded border border-accent-primary px-2 py-1 text-xs text-accent-primary disabled:opacity-40"
-            disabled={!followUp.trim()}
-          >
+          <Button type="submit" variant="accent" disabled={!followUp.trim()}>
             enviar
-          </button>
+          </Button>
         </form>
       )}
     </div>

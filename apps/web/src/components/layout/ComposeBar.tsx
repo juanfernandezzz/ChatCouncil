@@ -1,4 +1,6 @@
+import { Image as ImageIcon, Search } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
+import { Button } from "@chatcouncil/ui";
 import { parsePanelSourceId, PROVIDER_CAPABILITIES, type SupportLevel } from "@chatcouncil/shared";
 import { useState } from "react";
 import {
@@ -109,26 +111,25 @@ export function ComposeBar({ onConversationReady }: { onConversationReady: (conv
       className="flex flex-col gap-2 rounded-lg border border-border bg-surface-elevated p-2"
     >
       <div className="flex items-center gap-2 px-1">
-        <button
-          type="button"
+        <Button
+          pill
+          variant={webSearch ? "accent" : "ghost"}
           onClick={() => setWebSearch(!webSearch)}
           title={webSearchTooltip(activePanelSourceIds)}
-          className={`rounded-full border px-2.5 py-0.5 text-[11px] transition-colors ${
-            webSearch
-              ? "border-accent-primary text-accent-primary"
-              : "border-border text-text-secondary hover:border-text-secondary"
-          }`}
+          className="flex items-center gap-1 px-2.5 py-0.5 text-[11px]"
         >
-          🔎 búsqueda web{webSearch ? " · ON" : ""}
-        </button>
-        <button
-          type="button"
+          <Search size={12} aria-hidden />
+          búsqueda web{webSearch ? " · ON" : ""}
+        </Button>
+        <Button
+          pill
           disabled
           title="Generación de imagen: diferida a v1.5 (Q31) — modelada en la matriz, sin UI activa todavía."
-          className="cursor-not-allowed rounded-full border border-border px-2.5 py-0.5 text-[11px] text-text-secondary opacity-40"
+          className="flex items-center gap-1 px-2.5 py-0.5 text-[11px]"
         >
-          🖼 imagen · v1.5
-        </button>
+          <ImageIcon size={12} aria-hidden />
+          imagen · v1.5
+        </Button>
       </div>
       <div className="flex items-center gap-2">
         <input
@@ -137,13 +138,9 @@ export function ComposeBar({ onConversationReady }: { onConversationReady: (conv
           placeholder="Prompt para todo el council…"
           className="flex-1 bg-transparent px-2 py-1.5 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none"
         />
-        <button
-          type="submit"
-          disabled={!prompt.trim() || sending}
-          className="rounded-md bg-accent-primary px-3 py-1.5 text-sm font-medium text-bg-base transition-opacity hover:opacity-90 disabled:opacity-40"
-        >
+        <Button type="submit" variant="solid" size="md" disabled={!prompt.trim() || sending}>
           Enviar
-        </button>
+        </Button>
       </div>
     </form>
   );

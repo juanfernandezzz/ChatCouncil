@@ -22,6 +22,7 @@
     "dexie": "^4.0.10",
     "dexie-react-hooks": "^4.4.0",
     "docx": "^9.7.1",
+    "lucide-react": "^1.25.0",
     "minisearch": "^7.2.0",
     "pdfmake": "^0.3.11",
     "react": "^19.0.0",

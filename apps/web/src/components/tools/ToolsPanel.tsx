@@ -1,6 +1,8 @@
+import { ChevronsRight, Wrench } from "lucide-react";
 import { useCouncilStore } from "@/store/useCouncilStore";
+import { Button } from "@chatcouncil/ui";
 import { AnalyzeSection } from "./AnalyzeSection";
-import { PdfSection } from "./PdfSection";
+import { ReportSection } from "./ReportSection";
 import { PromptTemplatesSection } from "./PromptTemplatesSection";
 
 /**
@@ -22,7 +24,7 @@ export function ToolsPanel() {
         title="Abrir herramientas"
         className="flex h-fit shrink-0 flex-col items-center gap-1 rounded-lg border border-border bg-surface-elevated px-1.5 py-3 text-xs text-text-secondary transition-colors hover:border-text-secondary"
       >
-        <span>🛠</span>
+        <Wrench size={14} aria-hidden />
         <span style={{ writingMode: "vertical-rl" }}>Herramientas</span>
       </button>
     );
@@ -32,18 +34,13 @@ export function ToolsPanel() {
     <aside className="flex w-80 shrink-0 flex-col gap-3 self-start rounded-lg border border-border bg-surface-elevated p-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-text-primary">Herramientas</h2>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          title="Colapsar"
-          className="rounded border border-border px-1.5 py-0.5 text-xs text-text-secondary hover:border-text-secondary"
-        >
-          »
-        </button>
+        <Button size="xs" onClick={() => setOpen(false)} title="Colapsar" className="text-xs">
+          <ChevronsRight size={14} aria-hidden />
+        </Button>
       </div>
       <div className="flex max-h-[calc(100vh-7rem)] flex-col gap-3 overflow-y-auto pr-0.5">
         <AnalyzeSection conversationId={activeConversationId} />
-        <PdfSection conversationId={activeConversationId} />
+        <ReportSection conversationId={activeConversationId} />
         <PromptTemplatesSection />
       </div>
     </aside>

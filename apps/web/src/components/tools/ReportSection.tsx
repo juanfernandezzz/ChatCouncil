@@ -1,4 +1,6 @@
+import { Check, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Button, Section, TextInput } from "@chatcouncil/ui";
 import { googleAuthConfigured } from "@/lib/google-auth";
 import { exportConversationPdf, generateConversationPdfBlob } from "@/lib/pdf/export-conversation";
 import { useCouncilStore } from "@/store/useCouncilStore";
@@ -9,9 +11,8 @@ import { useCouncilStore } from "@/store/useCouncilStore";
  * memoria que descargaría "Exportar PDF" (D1: un solo camino de
  * generación; nada toca el disco hasta que el usuario lo pida). El
  * DOCX (tablas copiables) se importa dinámico — chunk propio.
- * Deuda de naming asumida: el archivo se sigue llamando PdfSection
- * aunque ya exporta dos formatos (el zip de fases no expresa
- * renames; se renombra en Fase 7).
+ * Renombrado en Fase 7 (deuda de naming saldada): PdfSection →
+ * ReportSection — la sección exporta Ver/PDF/DOCX/mail, no sólo PDF.
  */
 
 type BusyKind = "view" | "pdf" | "docx";
@@ -21,7 +22,7 @@ interface ViewerState {
   filename: string;
 }
 
-export function PdfSection({ conversationId }: { conversationId: string | null }) {
+export function ReportSection({ conversationId }: { conversationId: string | null }) {
   const [busy, setBusy] = useState<BusyKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [viewer, setViewer] = useState<ViewerState | null>(null);
@@ -51,7 +52,7 @@ export function PdfSection({ conversationId }: { conversationId: string | null }
     try {
       const { sendReportByMail } = await import("@/lib/mail/send-report-mail");
       const sent = await sendReportByMail({ conversationId, to: mailTo, includePdf: mailPdf, includeDocx: mailDocx });
-      setMailResult(`enviado ✓ (${sent.attachmentNames.join(", ")})`);
+      setMailResult(`enviado (${sent.attachmentNames.join(", ")})`);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.warn("[chatcouncil:mail] envío falló:", message);
@@ -115,23 +116,18 @@ export function PdfSection({ conversationId }: { conversationId: string | null }
   };
 
   const btn = (kind: BusyKind, label: string, primary = false) => (
-    <button
-      type="button"
+    <Button
+      variant={primary ? "accent" : "ghost"}
+      size="md"
       disabled={!conversationId || busy !== null}
       onClick={() => void run(kind)}
-      className={
-        primary
-          ? "rounded-md border border-accent-primary px-3 py-1.5 text-sm text-accent-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-          : "rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary transition-colors hover:border-text-secondary disabled:cursor-not-allowed disabled:opacity-40"
-      }
     >
       {busy === kind ? "Generando…" : label}
-    </button>
+    </Button>
   );
 
   return (
-    <section className="flex flex-col gap-2 rounded-md border border-border p-3">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Informe</h3>
+    <Section title="Informe">
       <p className="text-[11px] leading-snug text-text-secondary">
         Conversación completa: prompts, respuestas por panel con metadatos (modelo, vía, latencia, tokens) y los
         análisis persistidos de cada Round. Vela sin descargar, o bajala como PDF o como DOCX (tablas copiables).
@@ -140,8 +136,8 @@ export function PdfSection({ conversationId }: { conversationId: string | null }
         {btn("view", "Ver informe", true)}
         {btn("pdf", "Exportar PDF")}
         {btn("docx", "Exportar DOCX")}
-        <button
-          type="button"
+        <Button
+          size="md"
           disabled={!conversationId || !mailConfigured}
           title={
             !mailConfigured
@@ -149,20 +145,19 @@ export function PdfSection({ conversationId }: { conversationId: string | null }
               : "Enviar el informe por Gmail con los adjuntos elegidos"
           }
           onClick={() => setMailOpen((o) => !o)}
-          className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary transition-colors hover:border-text-secondary disabled:cursor-not-allowed disabled:opacity-40"
         >
           Enviar por mail
-        </button>
+        </Button>
       </div>
       {mailOpen && mailConfigured && (
         <div className="flex flex-col gap-1.5 rounded border border-border p-2 text-[11px]">
           <label className="flex items-center gap-1.5 text-text-secondary">
             Para:
-            <input
+            <TextInput
               value={mailTo}
               onChange={(e) => setMailTo(e.target.value)}
               placeholder={accountEmail ?? "destinatario@dominio.com"}
-              className="flex-1 rounded border border-border bg-bg-base px-2 py-1 text-[11px] text-text-primary placeholder:text-text-secondary"
+              className="flex-1 px-2 py-1 text-[11px]"
             />
           </label>
           <div className="flex items-center gap-3 text-text-secondary">
@@ -174,16 +169,16 @@ export function PdfSection({ conversationId }: { conversationId: string | null }
               <input type="checkbox" checked={mailDocx} onChange={(e) => setMailDocx(e.target.checked)} className="accent-accent-primary" />
               DOCX
             </label>
-            <button
-              type="button"
-              disabled={mailBusy || !mailTo.trim() || (!mailPdf && !mailDocx)}
-              onClick={() => void handleSendMail()}
-              className="ml-auto rounded border border-accent-primary px-2 py-1 text-[11px] text-accent-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-            >
+            <Button variant="accent" disabled={mailBusy || !mailTo.trim() || (!mailPdf && !mailDocx)} onClick={() => void handleSendMail()} className="ml-auto">
               {mailBusy ? "Enviando…" : "Enviar"}
-            </button>
+            </Button>
           </div>
-          {mailResult && <p className="text-accent-secondary">{mailResult}</p>}
+          {mailResult && (
+            <p className="flex items-center gap-1 text-accent-secondary">
+              <Check size={12} aria-hidden />
+              {mailResult}
+            </p>
+          )}
           <p className="text-[10px] leading-snug text-text-secondary">
             Se envía desde TU cuenta de Gmail (Gmail API, mismo permiso que el sync). El adjunto es exactamente el
             mismo informe de Ver/PDF/DOCX.
@@ -191,7 +186,7 @@ export function PdfSection({ conversationId }: { conversationId: string | null }
         </div>
       )}
       {!conversationId && <p className="text-[11px] text-text-secondary">Abrí o creá una conversación primero.</p>}
-      {error && <p className="text-[11px] text-red-400">{error}</p>}
+      {error && <p className="text-[11px] text-danger">{error}</p>}
 
       {viewer && (
         <div
@@ -207,18 +202,15 @@ export function PdfSection({ conversationId }: { conversationId: string | null }
           >
             <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
               <span className="truncate text-xs text-text-secondary">{viewer.filename} · en memoria, sin descargar</span>
-              <button
-                type="button"
-                onClick={closeViewer}
-                className="shrink-0 rounded border border-border px-2 py-0.5 text-xs text-text-secondary hover:border-text-secondary"
-              >
-                Cerrar ✕
-              </button>
+              <Button size="xs" onClick={closeViewer} className="flex shrink-0 items-center gap-1 px-2 text-xs">
+                Cerrar
+                <X size={12} aria-hidden />
+              </Button>
             </div>
             <iframe title="Vista previa del informe (PDF en memoria)" src={viewer.url} className="h-full w-full flex-1 bg-white" />
           </div>
         </div>
       )}
-    </section>
+    </Section>
   );
 }

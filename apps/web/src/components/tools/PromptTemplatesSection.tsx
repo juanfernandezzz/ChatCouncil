@@ -1,8 +1,10 @@
 import { useLiveQuery } from "dexie-react-hooks";
+import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { createId, db, type PromptTemplate } from "@/lib/db";
 import { deleteTemplateWithTombstone, extractTemplateVariables, interpolateTemplate } from "@/lib/prompt-templates";
 import { useCouncilStore } from "@/store/useCouncilStore";
+import { Button, Section, TextArea, TextInput } from "@chatcouncil/ui";
 
 /**
  * Librería de prompts (Q29) — Fase 5. El esquema PromptTemplate existe
@@ -91,48 +93,45 @@ export function PromptTemplatesSection() {
   };
 
   return (
-    <section className="flex flex-col gap-2 rounded-md border border-border p-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Plantillas</h3>
-        <button
-          type="button"
+    <Section
+      title="Plantillas"
+      action={
+        <Button
+          variant="accent"
           onClick={() => setEditor({ id: null, title: "", body: "", tagsRaw: "" })}
-          className="rounded border border-accent-primary px-2 py-0.5 text-[11px] text-accent-primary"
+          className="flex items-center gap-1 py-0.5 text-[11px]"
         >
-          + nueva
-        </button>
-      </div>
+          <Plus size={12} aria-hidden />
+          nueva
+        </Button>
+      }
+    >
 
-      <input
+      <TextInput
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="buscar por título o tag…"
-        className="rounded border border-border bg-bg-base px-2 py-1 text-xs text-text-primary placeholder:text-text-secondary focus:outline-none"
       />
 
       {pendingInsert !== null && (
         <div className="flex flex-col gap-1 rounded border border-accent-secondary p-2">
           <p className="text-[11px] text-text-primary">El input ya tiene texto. ¿Reemplazarlo con la plantilla?</p>
           <div className="flex gap-2">
-            <button
-              type="button"
+            <Button
+              variant="success"
               onClick={() => {
                 setComposePrompt(pendingInsert);
                 setPendingInsert(null);
                 setUsingId(null);
                 setVarValues({});
               }}
-              className="rounded border border-accent-secondary px-2 py-0.5 text-[11px] text-accent-secondary"
+              className="py-0.5 text-[11px]"
             >
               Sí, reemplazar
-            </button>
-            <button
-              type="button"
-              onClick={() => setPendingInsert(null)}
-              className="rounded border border-border px-2 py-0.5 text-[11px] text-text-secondary"
-            >
+            </Button>
+            <Button onClick={() => setPendingInsert(null)} className="py-0.5 text-[11px]">
               No
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -153,29 +152,20 @@ export function PromptTemplatesSection() {
                   {tpl.title}
                 </span>
                 <div className="flex shrink-0 gap-1">
-                  <button
-                    type="button"
-                    onClick={() => startUse(tpl)}
-                    className="rounded border border-accent-primary px-1.5 py-0.5 text-[10px] text-accent-primary"
-                  >
+                  <Button variant="accent" size="xs" onClick={() => startUse(tpl)}>
                     usar
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button
+                    size="xs"
                     onClick={() =>
                       setEditor({ id: tpl.id, title: tpl.title, body: tpl.body, tagsRaw: tpl.tags.join(", ") })
                     }
-                    className="rounded border border-border px-1.5 py-0.5 text-[10px] text-text-secondary"
                   >
                     editar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void removeTemplate(tpl)}
-                    className="rounded border border-border px-1.5 py-0.5 text-[10px] text-text-secondary"
-                  >
+                  </Button>
+                  <Button size="xs" onClick={() => void removeTemplate(tpl)}>
                     borrar
-                  </button>
+                  </Button>
                 </div>
               </div>
               {tpl.tags.length > 0 && (
@@ -188,23 +178,20 @@ export function PromptTemplatesSection() {
                       <span className="w-24 truncate font-mono" title={v}>
                         {v}
                       </span>
-                      <input
+                      <TextInput
+                        fieldSize="xs"
                         value={varValues[v] ?? ""}
                         onChange={(e) => setVarValues((prev) => ({ ...prev, [v]: e.target.value }))}
-                        className="flex-1 rounded border border-border bg-bg-base px-1.5 py-0.5 text-[11px] text-text-primary focus:outline-none"
+                        className="flex-1"
                       />
                     </label>
                   ))}
                   {Object.values(varValues).some((v) => !v.trim()) && (
-                    <p className="text-[10px] text-yellow-500">Hay variables vacías — se insertan en blanco (no bloquea).</p>
+                    <p className="text-[10px] text-warning">Hay variables vacías — se insertan en blanco (no bloquea).</p>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => insertText(interpolateTemplate(tpl.body, varValues))}
-                    className="self-start rounded border border-accent-primary px-2 py-0.5 text-[11px] text-accent-primary"
-                  >
+                  <Button variant="accent" onClick={() => insertText(interpolateTemplate(tpl.body, varValues))} className="self-start py-0.5 text-[11px]">
                     Insertar en el input
-                  </button>
+                  </Button>
                 </div>
               )}
             </li>
@@ -214,44 +201,33 @@ export function PromptTemplatesSection() {
 
       {editor && (
         <div className="flex flex-col gap-1 rounded border border-accent-primary p-2">
-          <input
+          <TextInput
             value={editor.title}
             onChange={(e) => setEditor({ ...editor, title: e.target.value })}
             placeholder="título"
-            className="rounded border border-border bg-bg-base px-2 py-1 text-xs text-text-primary focus:outline-none"
           />
-          <textarea
+          <TextArea
             value={editor.body}
             onChange={(e) => setEditor({ ...editor, body: e.target.value })}
             placeholder={"cuerpo — usá {{variable}} para pedir valores al usar"}
             rows={5}
-            className="rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-text-primary focus:outline-none"
+            className="px-2 py-1 font-mono text-[11px]"
           />
-          <input
+          <TextInput
             value={editor.tagsRaw}
             onChange={(e) => setEditor({ ...editor, tagsRaw: e.target.value })}
             placeholder="tags separados por coma"
-            className="rounded border border-border bg-bg-base px-2 py-1 text-xs text-text-primary focus:outline-none"
           />
           <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={!editor.title.trim() || !editor.body.trim()}
-              onClick={() => void saveEditor()}
-              className="rounded border border-accent-primary px-2 py-0.5 text-[11px] text-accent-primary disabled:opacity-40"
-            >
+            <Button variant="accent" disabled={!editor.title.trim() || !editor.body.trim()} onClick={() => void saveEditor()} className="py-0.5 text-[11px]">
               Guardar
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditor(null)}
-              className="rounded border border-border px-2 py-0.5 text-[11px] text-text-secondary"
-            >
+            </Button>
+            <Button onClick={() => setEditor(null)} className="py-0.5 text-[11px]">
               Cancelar
-            </button>
+            </Button>
           </div>
         </div>
       )}
-    </section>
+    </Section>
   );
 }

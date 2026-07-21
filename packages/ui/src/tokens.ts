@@ -21,6 +21,22 @@ export const colors = {
   accentSecondary: "#10B981", // exito / done
   textPrimary: "#EDEDED",
   textSecondary: "#8A8A8A",
+  danger: "#F87171", // Fase 7 E4 — error/fallo (reemplaza text-red-400/bg-red-500 stock)
+  warning: "#FBBF24", // Fase 7 E4 — advertencia (reemplaza text-yellow-500 stock)
+} as const;
+
+/**
+ * Paleta de IMPRESIÓN (Fase 7 E5) — el PDF/DOCX es claro a propósito
+ * (el tema oscuro no se imprime). Única fuente para los builders de
+ * informe; los hexes locales de build-doc-definition/build-docx se
+ * eliminaron a favor de este objeto.
+ */
+export const printColors = {
+  ink: "#1a1a1a",
+  muted: "#6b6b6b",
+  rule: "#d9d9d9",
+  codeBg: "#f2f2f2",
+  accent: "#0d7f8c", // el cian del tema, oscurecido para papel
 } as const;
 
 export const fonts = {

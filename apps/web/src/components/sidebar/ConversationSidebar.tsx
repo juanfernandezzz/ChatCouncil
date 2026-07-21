@@ -1,10 +1,12 @@
 import { useLiveQuery } from "dexie-react-hooks";
+import { Plus, X } from "lucide-react";
 import MiniSearch from "minisearch";
 import { useMemo, useState } from "react";
 import { db, type Conversation } from "@/lib/db";
 import { deleteConversationLocal, listConversationsForSidebar } from "@/lib/conversation-repo";
 import { getLastConversationId, setLastConversationId } from "@/lib/last-conversation";
 import { useCouncilStore } from "@/store/useCouncilStore";
+import { Button, TextInput } from "@chatcouncil/ui";
 import { AccountSyncSection } from "./AccountSyncSection";
 
 interface SearchDoc {
@@ -84,18 +86,14 @@ export function ConversationSidebar({
 
   return (
     <aside className="flex w-64 shrink-0 flex-col gap-2 border-r border-border p-3">
-      <button
-        type="button"
-        onClick={onNewConversation}
-        className="rounded-md border border-accent-primary px-3 py-1.5 text-xs font-medium text-accent-primary transition-opacity hover:opacity-90"
-      >
-        + Nueva conversación
-      </button>
-      <input
+      <Button variant="accent" size="md" onClick={onNewConversation} className="flex items-center justify-center gap-1 text-xs font-medium">
+        <Plus size={13} aria-hidden />
+        Nueva conversación
+      </Button>
+      <TextInput
         value={query}
         onChange={(e) => handleQueryChange(e.target.value)}
         placeholder="Buscar en el historial…"
-        className="rounded border border-border bg-bg-base px-2 py-1 text-xs text-text-primary placeholder:text-text-secondary"
       />
       <div className="scrollbar-thin flex-1 space-y-1 overflow-y-auto">
         {visible.map((c: Conversation) => (
@@ -117,9 +115,9 @@ export function ConversationSidebar({
               aria-label={`Borrar "${c.title}"`}
               title="Borrar conversación"
               onClick={() => void handleDelete(c)}
-              className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded px-1 text-[11px] text-text-secondary hover:text-red-400 group-hover:block"
+              className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded px-1 text-text-secondary hover:text-danger group-hover:block"
             >
-              ✕
+              <X size={12} aria-hidden />
             </button>
           </div>
         ))}

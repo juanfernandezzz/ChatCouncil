@@ -1564,7 +1564,7 @@ poco y en cuenta propia).
 
 ---
 
-## Fase 7 — Design system + media pack 🟡 (implementación 2026-07-21 — ledger §0.10)
+## Fase 7 — Design system + media pack ✅ (implementación 2026-07-21 — ledger §0.10)
 
 - Formalizar el "elemento signature" de la identidad visual: el
   anillo de estado por panel (`accent-secondary` en reposo,

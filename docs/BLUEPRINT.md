@@ -1032,6 +1032,77 @@ no GETs pelados).
       fase6 (47/47) en la máquina real; push a main; CI verde
       (Run #16, 34s) sobre commit `13bbf65`.
 
+### 0.10 Fase 7 — design system + media pack (decisiones, 2026-07-21)
+
+**Entrevista E1–E6 (decisiones cerradas con Juan — no se reabren):**
+
+- **E1 — Extracción mínima dirigida a `packages/ui`:** Button
+  (ghost/accent/solid/success/danger; xs/sm/md; prop `pill`), Badge
+  (neutral/primary/secondary/warning/danger; prop `mono`), Section
+  (caja rounded-md border p-3 con título uppercase y `action`
+  opcional), TextInput/TextArea/Select (fieldSize xs/sm), BrandMark.
+  Cada variante mapea 1:1 a las clases Tailwind REALES que las Fases
+  4/5/6 acumularon inline a propósito (§0.7). Se migran los 9
+  componentes de producción + App.tsx; los paneles de `src/dev/` NO.
+  `react` como peerDependency de ui; tsconfig de ui con `jsx:
+  react-jsx`; globals.css suma `@source "../../../../packages/ui/src"`
+  (Tailwind no escanea código fuera del root de la app por sí solo).
+- **E2 — Anillo signature (NO existía — se construye):** el contenedor
+  de PanelCard tenía `border-border` estático; el streaming sólo se
+  veía en el statusDot. Semántica: stream en vuelo → anillo
+  accent-primary pulsando con **keyframes propios que animan SOLO
+  borde/box-shadow** (`animate-pulse` pulsaría la tarjeta entera);
+  reposo con último intento exitoso → borde accent-secondary tenue
+  (color-mix con border); último intento fallido → danger tenue; panel
+  virgen → border-border. Utilidades `panel-ring-*` en globals.css.
+- **E3 — Lucide:** `lucide-react` entra a apps/web (no había NINGUNA
+  librería de íconos — la mezcla era unicode/emoji). Se reemplazan
+  sólo símbolos usados como control o estado EN JSX RENDERIZADO:
+  ✕/×→X, ⚠→TriangleAlert, ✓/✗→Check/X, 🔎→Search, 🖼→Image (alias
+  ImageIcon), 🛠→Wrench, »→ChevronsRight, "+ nueva"→Plus. EXCEPCIÓN
+  dura: símbolos en contextos de STRING (title/tooltip, label del
+  `<optgroup>` de AnalyzeSection) no pueden ser componentes — quedan
+  como texto. Los tipográficos en prosa (— … →) quedan. Tamaños
+  12–16px consistentes.
+- **E4 — Tokens nuevos:** `--color-danger: #F87171` y
+  `--color-warning: #FBBF24` en el @theme, espejados en tokens.ts
+  (regla operativa del archivo). Migran TODOS los usos stock:
+  text-red-400, bg-red-500 (statusDot error), text-yellow-500.
+  Criterio de aceptación ENDURECIDO: los componentes nuevos tampoco
+  usan colores stock de Tailwind — gate por grep en cierre.
+- **E5 — Marca + media pack:** hub-and-spoke (nodo central = el
+  prompt, 6 nodos perimetrales = el consejo), monocromo, geometría
+  única en `packages/ui/src/brand.ts` (viewBox 100, hub r=9, 6 nodos
+  r=6.5 sobre anillo r=34 desde -90° cada 60°, radios stroke 3.5
+  recortados de r=9 a r=27.5, redondeo 2 decimales). Derivados:
+  (a) favicon.svg en apps/web/public (tile #0A0A0A rx 20 + marca
+  #00E5FF) + `<link rel="icon">`; (b) íconos de extensión 16/48/128
+  PNG en apps/extension/public/icon/ + `manifest.icons` explícito en
+  wxt.config.ts — rasterizados con sharp instalado FUERA del repo
+  (sharp NO entra al lockfile); (c) header del PDF: la marca via
+  primitivas CANVAS de pdfmake (line/ellipse con lineCap round)
+  mapeadas desde `brandMarkGeometry()` — decisión: sin parser SVG —
+  + wordmark; reemplaza el placeholder de texto.
+  build-doc-definition.ts consume `printColors` desde @chatcouncil/ui
+  (sus 5 hexes locales se eliminan). Og-image: fuera de alcance.
+  Generador de SVGs en `src/dev/generate-brand-assets.ts` (vite-node,
+  sin sharp).
+- **E6 — Sync post-reload:** en AccountSyncSection, con
+  `enabled && !googleTokenReady` el estado se presenta "sync en
+  pausa · reconectar" en estilo **warning** (NO danger — no es un
+  fallo del motor, es el token implicit-grant que no sobrevive al
+  reload por diseño de GIS) con botón "Reconectar sync" → `syncNow()`
+  (gesto → prompt GIS, mecanismo E4 de F6 intacto — CERO cambio de
+  comportamiento del motor). Fallos reales con token presente siguen
+  en danger.
+
+**Decisiones menores declaradas:** header de la SPA → "fase 7 · design
+system" + BrandMark junto al h1; `PdfSection.tsx` → `ReportSection.tsx`
+(componente y archivo; único importador ToolsPanel; el `git rm` del
+viejo va explícito en el prompt de Code — el zip no expresa deletes);
+el ⚠ del optgroup queda (string); el mailResult "enviado ✓" se
+renderiza con ícono Check + texto plano.
+
 ---
 
 ## 1. Topología y grafo de dependencias
@@ -1378,7 +1449,7 @@ poco y en cuenta propia).
 
 ---
 
-## Fase 7 — Design system + media pack 🔜
+## Fase 7 — Design system + media pack 🟡 (implementación 2026-07-21 — ledger §0.10)
 
 - Formalizar el "elemento signature" de la identidad visual: el
   anillo de estado por panel (`accent-secondary` en reposo,

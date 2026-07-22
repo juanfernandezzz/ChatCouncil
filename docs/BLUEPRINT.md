@@ -8,9 +8,11 @@
 
 **Estado global:** Fases 0–9 completas y verificadas. Roadmap v1 completo (Fase 9 cerrada
 2026-07-22 — CI/CD, E2E Playwright, release v0.2.0; ledgers §0.1–§0.11). Fase 8
-(móvil) ⏸ post-v1 por decisión registrada. El orden de dependencia estricta de Q34
-(reconciliado con la rotación de 2026-07-11, ver §0.7) se cumplió: funcionalidad
-primero, diseño al final, templado de release al cierre.
+(móvil) ⏸ post-v1 por decisión registrada. **Veredicto de la prueba extensiva de Juan
+(2026-07-22): v1 pasó sus gates técnicos pero NO es un producto usable — el roadmap v2
+("el 1.0 real") queda planificado como plan maestro al final de este documento, con
+hallazgo de proceso registrado. Siguiente: Fase 10 — usabilidad crítica.** El orden de
+dependencia de Q34 se mantiene en v2: funcionalidad primero, rediseño estético al final.
 
 **Leyenda:** ✅ hecho y verificado · 🔜 siguiente · ⏳ bloqueado por lo anterior
 
@@ -1834,6 +1836,157 @@ error de red, no el badge de extensión); en desktop nada cambia.
 
 **Criterio de aceptación:** un tag `v0.2.0` dispara CI, sube un zip de
 extensión descargable como artifact/release sin pasos manuales.
+
+---
+
+## Roadmap v2 — plan maestro ("el 1.0 real", 2026-07-22)
+
+**Origen.** Prueba extensiva de Juan sobre la v0.2.0 publicada. Veredicto sin
+atenuantes: v1 cerró todos sus gates técnicos y sin embargo NO es usable como
+producto. Lo más grave: **no existe UI de producción para cargar una llave BYOK**
+— el mensaje "sin llave guardada — cargala en el panel BYOK" apunta a un panel
+que sólo existe en `src/dev/` (ByokTestPanel/ByoaTestPanel, desmontados de
+producción); un usuario real no puede ni ingresar su llave de Google. Además:
+BYOA quedó en un solo proveedor (claude.ai) sin configuración de ningún tipo
+(ni modelo, ni deep research, ni nivel de esfuerzo), sin panel de cuentas; el
+texto de las respuestas no se puede seleccionar ni copiar (el click-arrastre
+mueve el panel); el sidebar no colapsa; la estética no corresponde al carácter
+de la herramienta; y la UI mezcla idiomas ("Prompt para todo el council…").
+
+**Hallazgo de proceso (§ledger, corrección PERMANENTE desde Fase 10):** los
+criterios de aceptación de v1 verificaron flujos internos (harness, E2E con
+llaves sembradas por `localStorage`, paneles de prueba en dev) pero NINGUNA
+fase exigió el recorrido de primer uso real. El E2E de Fase 9 siembra llaves
+por `addInitScript` precisamente porque no hay UI para cargarlas — el síntoma
+estaba a la vista y no se leyó. **Regla nueva: toda fase de v2 incluye en su
+aceptación un recorrido de primer uso en limpio (perfil de navegador nuevo,
+sin devtools, sin datos manuales): lo que un usuario real puede hacer define
+si la fase cierra.** "Green build ≠ código embarcado" gana su corolario:
+"aceptación técnica ≠ producto usable".
+
+**Principios de v2 (decisiones de Juan, 2026-07-22 — no se reabren sin él):**
+
+- **El foco principal de ChatCouncil es BYOA.** BYOK es soporte, no el centro.
+- **Cuentas de prueba disponibles:** Claude Pro y Gemini Pro (pagas); el resto
+  de proveedores, cuentas gratuitas. Toda capacidad se acepta contra lo que
+  esas cuentas permiten; lo no probable se marca honesto en la UI ("no
+  verificado"), jamás se simula.
+- **Idioma: español neutro ÚNICO.** Sin voseo en UI ni en documentación nueva
+  (verificado 2026-07-22: los .md del repo no contienen reglas de voseo — la
+  especificación vivía en las reglas de conversación del proyecto, ya
+  corregidas; el ledger histórico no se reescribe). En texto en español JAMÁS
+  se mezcla "council": la palabra es **consejo** ("Prompt para todo el
+  consejo…"). El nombre propio "ChatCouncil" es marca y no se traduce.
+- **Estética objetivo (dirección, no prescripción):** profesional, sobria,
+  académico-investigativa. NO blanco como color principal; NO estética de
+  SaaS genérico. Paleta con carácter de biblioteca / laboratorio de
+  investigación en tono NO claro (madera, papel envejecido, ceniza — como
+  concepto). Tipografía de carácter científico y serio pero bella, menos
+  "digital" que Inter/JetBrains Mono. Alguna textura o efecto generado por
+  código para quitar planitud (criterio de implementación). Media pack
+  rehecho EN SU TOTALIDAD con la nueva estética: ícono igual de simplista
+  pero conceptualizado sobre la idea del consejo como institución antigua
+  (p. ej. mesa del consejo en deliberación).
+- **El rediseño va al final** (Q34 se sostiene: función primero), pero es
+  fase obligatoria de cierre de v2, no opcional.
+
+**Fases (cada una abre en su propia conversación, entrevista E-series,
+patrón Paso 0, aceptación real con recorrido de primer uso):**
+
+### Fase 10 — Usabilidad crítica: cuentas, llaves e interacción base 🔜
+
+- **Panel de cuentas de producción** (nuevo, accesible desde el shell):
+  gestión de llaves BYOK por proveedor (ingresar / editar / borrar / probar
+  con un ping barato), y estado de sesión BYOA por proveedor (detectada / no
+  detectada, con enlace para abrir sesión). Todo mensaje que hoy referencia
+  "el panel BYOK" apunta a este panel real. Las reglas de `key-vault.ts` y
+  `guard:keys` se respetan (el panel entra al allowlist del guard con
+  justificación en ledger).
+- **Interacción de paneles:** el texto de las respuestas es seleccionable y
+  copiable; el drag para reordenar se dispara SOLO desde una manija/botón
+  direccional visible en el header del panel, nunca desde el cuerpo.
+- **Sidebar de conversaciones colapsable horizontalmente** (estado
+  persistido).
+- **Purga de idioma en UI:** barrido completo de strings a español neutro y
+  "council"→"consejo" en los 10 archivos que hoy lo mezclan (verificado por
+  grep 2026-07-22). Gate de artefacto: grep de "council" sobre el bundle
+  compilado = 0 apariciones fuera de la marca "ChatCouncil".
+- **Aceptación (primer uso en limpio):** perfil nuevo → cargar llave de
+  Google POR LA UI → armar consejo → enviar → seleccionar y copiar una
+  respuesta → colapsar/expandir sidebar → recargar y verificar persistencia.
+
+### Fase 11 — BYOA multiproveedor (el corazón del producto) ⏳
+
+- Los 6 proveedores del inventario original de Fase 3, clase "chat
+  mainstream": **claude.ai (hecho), ChatGPT, Gemini, DeepSeek, Perplexity,
+  Grok** — mismo patrón que claude.ai (endpoint interno de completion con la
+  sesión abierta; `dom` sólo si no hay endpoint reutilizable; cada uno es
+  ingeniería inversa propia con su `AdapterDescriptor.notes` fechado).
+- Manifest `adapters.json` con entrada por proveedor (la extensión sigue
+  siendo runner agnóstico); allowlist de orígenes de sesión y
+  `host_permissions` espejados 1:1, como manda el patrón de Fase 3.
+- Panel de cuentas (Fase 10) extendido con los 6 estados de sesión.
+- **Aceptación real:** un round con TODOS los proveedores BYOA con sesión
+  disponible respondiendo en paralelo en el Chrome real de Juan (Claude Pro,
+  Gemini Pro, y cuentas gratuitas del resto). Si un proveedor resulta
+  técnicamente bloqueado (p. ej. anti-bot insalvable), se registra en ledger
+  con evidencia y se marca en la UI como no disponible — no se simula.
+
+### Fase 12 — Capacidades por proveedor: modelo, research, esfuerzo ⏳
+
+- **Selector de modelo por panel** para BYOA y BYOK (retoma el diferido de
+  Fase 4: selector agrupado del mockup de Juan) + descubrimiento de modelos
+  por proveedor (diferido de Fase 3).
+- **Toggles de capacidades donde el proveedor las tenga:** deep research,
+  nivel de razonamiento/esfuerzo, y las que el inventario detecte (p. ej.
+  búsqueda web). Matriz de capacidades declarada por proveedor × tier de
+  cuenta (free/Pro), consumida por la UI: sólo se muestra lo que existe, y
+  lo no probado con las cuentas disponibles se marca "no verificado".
+- Ojo arquitectónico registrado en Fase 3: las superficies research-agent
+  pueden no mapear limpio al contrato `AdapterChunk` v1 (sólo texto) — si
+  deep research lo exige, la extensión del contrato se decide en la
+  entrevista de esta fase, no se improvisa.
+- **Aceptación real:** en Claude Pro y Gemini Pro, elegir modelo distinto
+  del default, activar deep research y nivel de esfuerzo donde exista, y
+  recibir respuesta coherente con lo elegido; en cuentas free, verificar el
+  gating honesto.
+
+### Fase 13 — Herramientas personalizables ⏳
+
+- Los prompts de **Comparar / Resumir** dejan de ser fijos: editables desde
+  el panel de herramientas, con **restaurar predeterminados** por prompt y
+  **prompts personalizados adicionales** que procesen las respuestas del
+  consejo (misma tubería que Comparar/Resumir: selección de respuestas →
+  prompt → salida al panel de análisis, respetando el sello de anonimato
+  del juez donde aplique — `guard:judge` sigue mandando).
+- Persistencia en Dexie + sync a Drive (mismas reglas de pureza de
+  `guard:sync`; los prompts personalizados NO son secretos y sí se
+  sincronizan).
+- **Aceptación real:** editar el prompt de Resumir, verlo reflejado en un
+  análisis; crear un prompt personalizado y ejecutarlo; restaurar
+  predeterminados y verificar el texto original.
+
+### Fase 14 — Rediseño estético integral + media pack ⏳ (cierre de v2)
+
+- Paleta nueva completa según la dirección estética registrada arriba
+  (reemplaza la actual `#0A0A0A`/cian/esmeralda), tipografía nueva (UI y
+  código), textura/efecto generado por código, aplicados vía los tokens de
+  `packages/ui` (la inversión de Fase 7 en primitivas y grep-gates de
+  hex/stock es exactamente lo que hace este reemplazo acotado: se tocan
+  tokens y globals, no componentes).
+- **Media pack rehecho en su totalidad:** favicon, íconos de la extensión
+  (16/48/128), header del PDF, marca — ícono simplista con el concepto
+  "mesa del consejo".
+- Los gates de artefacto de Fase 7 se REESCRIBEN para la identidad nueva
+  (los markers `cc-brand-mark`/`ellipse` y las variables actuales caducan
+  con ella; el patrón de gates se conserva, su contenido cambia).
+- **Aceptación real:** revisión visual de Juan pantalla por pantalla, PDF
+  exportado con la identidad nueva, extensión con íconos nuevos cargada.
+
+**Fuera de v2 (siguen diferidos, sin cambio):** Fase 8 móvil ⏸ ·
+habilitación de terceros + panel de administración (post-1.0, ledger §0.11
+E7) · backoff de reposo del puerto (Fase 1) · clases 2 y 3 del inventario
+BYOA más allá de lo que Fase 12 exija.
 
 ---
 

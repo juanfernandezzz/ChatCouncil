@@ -6,14 +6,13 @@
 > releer todo el hilo de la entrevista. Cross-referencias `Qn` apuntan a
 > las respuestas de la entrevista de requerimientos original.
 
-**Estado global:** Fases 0–5 completas y verificadas (Fase 5 cerrada
-2026-07-17 — herramientas del panel lateral: juez anonimizado, informe
-PDF/DOCX + visor, plantillas, toggles; ledgers §0.1–§0.8). **Siguiente:
-Fase 6 — autenticación y sync a Drive.** Fases 6–9 pendientes, en orden
-de dependencia estricta (Q34, redacción reconciliada con la rotación de
-2026-07-11: no construir sobre cimientos abiertos — la funcionalidad se
-cierra primero y el diseño, que es superficie sobre sustancia ya
-cerrada, va al final; ver §0.7).
+**Estado global:** Fases 0–7 completas y verificadas (Fase 7 cerrada
+2026-07-21 — design system + media pack; ledgers §0.1–§0.10). Fase 8
+(móvil) ⏸ post-v1 por decisión registrada. **Siguiente y ÚLTIMA del
+roadmap v1: Fase 9 — CI/CD y templado de release** (decisiones en
+§0.11). El orden de dependencia estricta de Q34 (reconciliado con la
+rotación de 2026-07-11, ver §0.7) se cumplió: funcionalidad primero,
+diseño al final, templado de release al cierre.
 
 **Leyenda:** ✅ hecho y verificado · 🔜 siguiente · ⏳ bloqueado por lo anterior
 
@@ -1218,6 +1217,103 @@ salidas reales):**
       máquina real; push (dos commits, patrón Paso 0); CI verde
       commit-exacto.
 
+### 0.11 Fase 9 — CI/CD y templado de release (decisiones, 2026-07-21)
+
+**Baseline re-ejecutada COMPLETA en sandbox al abrir la fase (Node
+v22.22.2 / pnpm 11.9.0, HEAD 1a26d14, salidas reales):** install
+frozen OK · typecheck 5/5 · 3 guards OK · build:web con TODOS los
+gates F5/F6/F7 verdes (incl. grep-gate hex/stock y favicon en dist) ·
+build:ext 32.03 kB con 6/6 markers, offscreen limpio, manifest.icons
+verificado en el JSON compilado · harness fase5 54/54 y fase6 47/47 ·
+`zip:ext` pre-volado (17.05 kB, `chatcouncilextension-0.1.0-chrome.zip`).
+
+**Hallazgo previo a la entrevista (contradice el texto original de la
+Fase 9):** el alcance decía "versionar `wxt.config.ts`", pero
+`wxt.config.ts` NO tiene campo de versión — WXT toma la versión del
+manifest compilado de `apps/extension/package.json#version` (verificado
+en el JSON compilado: `version: 0.1.0`), y `wxt zip` hereda ese número
+en el nombre del archivo. La fuente real de la versión es el
+package.json de la extensión. E3 decide sobre esa realidad, no sobre el
+texto.
+
+**Entrevista E1–E9 (aprobadas por Juan 2026-07-21; E2 con aclaración,
+E7 con adición suya):**
+
+- **E1 — Transporte del E2E: mock de red vía `page.route`.** El flujo
+  crítico (prompt → streaming en N paneles → exportar PDF) NO necesita
+  extensión: openai y anthropic rutean `direct` (declarados
+  supported/supported-with-header; `effectiveCorsStatus` sin probe
+  previo los deja pasar) y la SPA fetchea desde la página — exactamente
+  lo que Playwright intercepta. Llaves falsas sembradas en
+  `localStorage` (`chatcouncil:byok:key:<id>`, formato string plano del
+  vault) vía `addInitScript`; interceptación de
+  `api.openai.com/v1/chat/completions` y `api.anthropic.com/v1/messages`
+  devolviendo SSE sintético en el dialecto REAL de cada proveedor.
+  Ejercita el pipeline completo de producción: vault → routing →
+  parser SSE → Dexie → lock de layout → streaming en UI → export PDF
+  (evento download + assert de bytes `%PDF`). Cero secretos, cero red
+  real, determinista. Descartados: provider fake en código (invasivo
+  sin ganancia) y BYOK real con secret de Actions (flaky + costo; los
+  secrets de Actions no violan la regla llaves-jamás-al-repo/Drive,
+  pero se decide NO usarlos en v1). El test corre contra `vite preview`
+  sobre el build real de `dist` (filosofía de gates: lo compilado, no
+  el dev server).
+- **E2 — Extensión/puente FUERA del E2E de CI (aclarado).** La duda de
+  Juan ("¿la extensión es necesaria?") se respondió: SÍ es el corazón
+  del producto — todo BYOA (cookie httpOnly que sólo el navegador
+  adjunta desde el offscreen) y el proxy BYOK de seguridad viven ahí;
+  sólo anthropic/google funcionan garantizado sin ella. Lo que E2
+  decide es únicamente que el Chrome de prueba de CI no la CARGA:
+  el flujo crítico no la necesita y cargar extensiones en headless de
+  CI multiplica fragilidad. La extensión real se verifica en cada fase
+  en el Chrome real. Diferido nominado: E2E del puente si alguna vez
+  se justifica.
+- **E3 — Fuente de verdad de la versión: `apps/extension/package.json`**
+  (la que WXT ya lee). El workflow de release tiene GATE de igualdad:
+  tag `vX.Y.Z` ≠ version → el release FALLA con mensaje claro
+  (`scripts/check-release-version.mjs`, también corrible local). CERO
+  auto-mutación en CI (escribir la versión desde el tag genera drift
+  local↔CI). Flujo: bump de versión en commit normal → tag sobre ese
+  commit → CI verifica y publica. El `version` del package.json raíz
+  se sincroniza en el mismo commit por higiene, SIN gate.
+- **E4 — Release por tag: workflow separado `release.yml`** con
+  `on: push: tags: ["v*"]`, que RE-CORRE la suite completa de gates
+  (un tag puede apuntar a cualquier commit — nada se publica sin
+  verificar ese árbol) y crea el GitHub Release con el zip adjunto
+  (`gh release create` con el token del workflow, `permissions:
+  contents: write`; sin actions de terceros). **Refinamiento declarado
+  antes de escribir código:** el `workflow_dispatch` adicional
+  mencionado en la entrevista SE DESCARTA — un dispatch sin tag
+  obligaría al CI a crear el tag (contra E3: cero mutación); el gatillo
+  es el tag y punto. `ci.yml` de push/PR queda con su rol.
+- **E5 — Harness offline AL CI: sí.** fase5 (54) + fase6 (47) vía
+  vite-node como pasos propios en ci.yml y release.yml (deterministas,
+  segundos, ya cazaron bugs reales). Los `test` placeholder de los
+  paquetes no se tocan.
+- **E6 — Playwright corre en CADA push** (determinista y rápido con
+  E1; su valor es cazar regresiones temprano). `@playwright/test`
+  devDep de apps/web, script `test:e2e`, ejecutado tras `build:web`.
+- **E7 — Clave RSA de dev SE MANTIENE para v0.2.0** (único usuario:
+  Juan; regenerar ahora rompería el ID ya cargado en su Chrome y el
+  `VITE_EXTENSION_ID` default). Regenerarla es PRECONDICIÓN de
+  distribución a terceros, no de releases propios. **Adición de Juan
+  (registrada como diferido post-1.0):** habilitación de otros
+  usuarios mediante un panel de administración accesible sólo por él;
+  antes de eso, prueba extensiva propia de todo el producto funcional.
+  Nada de esto es alcance de v1.
+- **E8 — DEPLOY.md** gana la sección "Release" (cómo cortar vX.Y.Z,
+  qué hace CI, dónde queda el zip) y la nota de la clave se corrige
+  según E7.
+- **E9 — Verificabilidad declarada.** Los workflows de Actions no se
+  ejecutan en sandbox y `act` no entra al stack. Verificable local:
+  estructura/parseo de los YAML, typecheck de la suite E2E, harness,
+  builds y gates, y la ejecución de Playwright SI el CDN de binarios
+  está alcanzable desde el sandbox (a confirmar en implementación; si
+  no, la ejecución real queda "sólo máquina de Code + CI" y así se
+  registra). Verificable SÓLO online: el run de ci.yml en push y el
+  criterio de aceptación entero (tag `v0.2.0` → Release con zip, sin
+  pasos manuales).
+
 ---
 
 ## 1. Topología y grafo de dependencias
@@ -1637,17 +1733,22 @@ error de red, no el badge de extensión); en desktop nada cambia.
 
 ---
 
-## Fase 9 — CI/CD y templado de release 🔜
+## Fase 9 — CI/CD y templado de release 🟡 (decisiones cerradas 2026-07-21 — ledger §0.11)
 
 - Ya existe el workflow base (`.github/workflows/ci.yml`): typecheck +
   lint + test + build + zip de la extensión, artifact subido en cada
-  push. Pendiente: Playwright para al menos el flujo crítico (enviar
-  prompt → ver streaming en N paneles → exportar PDF).
-- Proceso de release de la extensión: versionar `wxt.config.ts` en
-  sync con tags de git, adjuntar el zip a un GitHub Release (Q8: sigue
-  sin Chrome Web Store en v1, la release de GitHub es la distribución).
-- Documentar en `docs/DEPLOY.md` (ya escrito) el paso a paso de Netlify
-  — mantenerlo actualizado si cambia la estructura del monorepo.
+  push. Esta fase agrega: Playwright para el flujo crítico (enviar
+  prompt → ver streaming en N paneles → exportar PDF) con mock de red
+  (E1), harness offline al CI (E5), y `release.yml` por tag (E4).
+- Proceso de release de la extensión: la versión vive en
+  `apps/extension/package.json` (la fuente que WXT compila al manifest
+  — corrección de §0.11 sobre el texto original que decía
+  `wxt.config.ts`), con gate de igualdad tag↔version en el workflow
+  (E3); el zip se adjunta a un GitHub Release (Q8: sigue sin Chrome
+  Web Store en v1, la release de GitHub es la distribución, con la
+  clave de dev — E7).
+- Documentar en `docs/DEPLOY.md` el proceso de release (E8) —
+  mantenerlo actualizado si cambia la estructura del monorepo.
 
 **Criterio de aceptación:** un tag `v0.2.0` dispara CI, sube un zip de
 extensión descargable como artifact/release sin pasos manuales.

@@ -6,13 +6,11 @@
 > releer todo el hilo de la entrevista. Cross-referencias `Qn` apuntan a
 > las respuestas de la entrevista de requerimientos original.
 
-**Estado global:** Fases 0–7 completas y verificadas (Fase 7 cerrada
-2026-07-21 — design system + media pack; ledgers §0.1–§0.10). Fase 8
-(móvil) ⏸ post-v1 por decisión registrada. **Siguiente y ÚLTIMA del
-roadmap v1: Fase 9 — CI/CD y templado de release** (decisiones en
-§0.11). El orden de dependencia estricta de Q34 (reconciliado con la
-rotación de 2026-07-11, ver §0.7) se cumplió: funcionalidad primero,
-diseño al final, templado de release al cierre.
+**Estado global:** Fases 0–9 completas y verificadas. Roadmap v1 completo (Fase 9 cerrada
+2026-07-22 — CI/CD, E2E Playwright, release v0.2.0; ledgers §0.1–§0.11). Fase 8
+(móvil) ⏸ post-v1 por decisión registrada. El orden de dependencia estricta de Q34
+(reconciliado con la rotación de 2026-07-11, ver §0.7) se cumplió: funcionalidad
+primero, diseño al final, templado de release al cierre.
 
 **Leyenda:** ✅ hecho y verificado · 🔜 siguiente · ⏳ bloqueado por lo anterior
 
@@ -1380,22 +1378,22 @@ La primera ejecución real del test es en la máquina de Code
 (sin `act` en el stack, por decisión).
 
 **ACEPTACIÓN REAL (Code, máquina real — pendiente):**
-- [ ] `pnpm install` (lockfile cambió: @playwright/test) +
+- [x] `pnpm install` (lockfile cambió: @playwright/test) +
       `playwright install chromium` local; typecheck 5/5; 3 guards;
       harness fase5 54/54 y fase6 47/47; `build:web`; **`pnpm
       test:e2e` PASA en la máquina real** (primera ejecución real de
       la suite); `build:ext` + gates; `release:check v0.2.0` OK.
-- [ ] Push de los dos commits (patrón Paso 0) a main; **ci.yml verde
+- [x] Push de los dos commits (patrón Paso 0) a main; **ci.yml verde
       commit-exacto** — el run nuevo incluye harness + E2E (más largo
       que los ~34s históricos: instala Chromium).
-- [ ] Tag `v0.2.0` sobre el commit de cierre + push del tag →
+- [x] Tag `v0.2.0` sobre el commit de cierre + push del tag →
       **release.yml verde**: Release publicado en GitHub con
       `chatcouncilextension-0.2.0-chrome.zip` adjunto, SIN pasos
       manuales (criterio de aceptación de la fase).
-- [ ] Descargar el zip del Release, descomprimir, cargar en
+- [x] Descargar el zip del Release, descomprimir, cargar en
       `chrome://extensions` (CON dos puntos): la extensión versión
       0.2.0 carga y el badge de la SPA la detecta.
-- [ ] Flip del heading de Fase 9 a ✅ + marcar esta checklist
+- [x] Flip del heading de Fase 9 a ✅ + marcar esta checklist
       (patrón formalizado al cierre de F7).
 
 ---
@@ -1817,7 +1815,7 @@ error de red, no el badge de extensión); en desktop nada cambia.
 
 ---
 
-## Fase 9 — CI/CD y templado de release 🟡 (decisiones cerradas 2026-07-21 — ledger §0.11)
+## Fase 9 — CI/CD y templado de release ✅ (cerrada 2026-07-22 — ledger §0.11)
 
 - Ya existe el workflow base (`.github/workflows/ci.yml`): typecheck +
   lint + test + build + zip de la extensión, artifact subido en cada

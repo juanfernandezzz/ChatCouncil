@@ -97,7 +97,7 @@ test("prompt → streaming en 2 paneles → exportar PDF", async ({ page }) => {
   await page
     .getByPlaceholder("Prompt para todo el council…")
     .fill("¿Cuál es el veredicto del consejo?");
-  await page.getByRole("button", { name: "Enviar" }).click();
+  await page.getByRole("button", { name: "Enviar", exact: true }).click();
 
   // Streaming completado en ambos paneles (el texto sólo puede venir
   // del mock) + lock de layout disparado por el primer envío (Q14).

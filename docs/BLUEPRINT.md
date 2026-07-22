@@ -11,7 +11,7 @@
 (móvil) ⏸ post-v1 por decisión registrada. **Veredicto de la prueba extensiva de Juan
 (2026-07-22): v1 pasó sus gates técnicos pero NO es un producto usable — el roadmap v2
 ("el 1.0 real") queda planificado como plan maestro al final de este documento, con
-hallazgo de proceso registrado. Siguiente: Fase 10 — usabilidad crítica.** El orden de
+hallazgo de proceso registrado. **Fase 10 cerrada 2026-07-22 — panel de cuentas BYOK/BYOA, drag handle, sidebar colapsable, purga idioma, E2E por UI; ledger §0.12. Siguiente: Fase 11 — BYOA multiproveedor.** El orden de
 dependencia de Q34 se mantiene en v2: funcionalidad primero, rediseño estético al final.
 
 **Leyenda:** ✅ hecho y verificado · 🔜 siguiente · ⏳ bloqueado por lo anterior
@@ -1435,17 +1435,17 @@ sobre el bundle compilado = 0 apariciones fuera de la marca.
 
 **ACEPTACIÓN REAL (recorrido de primer uso en limpio — regla nueva de
 v2):**
-- [ ] typecheck 5/5 · 3 guards OK (guard:keys con el allowlist nuevo) ·
+- [x] typecheck 5/5 · 3 guards OK (guard:keys con el allowlist nuevo) ·
       harness fase5 54/54 y fase6 47/47 · build:web con gates ·
-      build:ext con 6/6 markers · E2E verde (actualizada si el flujo
-      cambió).
-- [ ] Gate de idioma: grep "council" sobre `apps/web/dist` = 0 fuera
+      build:ext con 6/6 markers · E2E verde (actualizada para cargar
+      llaves por la UI del panel de cuentas).
+- [x] Gate de idioma: grep "council" sobre `apps/web/dist` = 0 fuera
       de la marca "ChatCouncil".
-- [ ] Perfil de navegador NUEVO (sin devtools, sin datos sembrados):
+- [x] Perfil de navegador NUEVO (sin devtools, sin datos sembrados):
       cargar llave de Google POR LA UI → armar consejo → enviar →
       seleccionar y copiar una respuesta → colapsar/expandir sidebar →
       recargar y verificar persistencia (colapso + llave + conversación).
-- [ ] Push, ci.yml verde commit-exacto, flip del heading a ✅ + esta
+- [x] Push, ci.yml verde commit 9f1c074, flip del heading a ✅ + esta
       checklist marcada.
 
 ---
@@ -1943,7 +1943,7 @@ si la fase cierra.** "Green build ≠ código embarcado" gana su corolario:
 **Fases (cada una abre en su propia conversación, entrevista E-series,
 patrón Paso 0, aceptación real con recorrido de primer uso):**
 
-### Fase 10 — Usabilidad crítica: cuentas, llaves e interacción base 🟡 (decisiones cerradas 2026-07-22 — ledger §0.12)
+### Fase 10 — Usabilidad crítica: cuentas, llaves e interacción base ✅ (cerrada 2026-07-22 — ledger §0.12)
 
 - **Panel de cuentas de producción** (nuevo, accesible desde el shell):
   gestión de llaves BYOK por proveedor (ingresar / editar / borrar / probar

@@ -1314,6 +1314,90 @@ E7 con adición suya):**
   criterio de aceptación entero (tag `v0.2.0` → Release con zip, sin
   pasos manuales).
 
+**Implementación (2026-07-21, sandbox):**
+
+- `apps/web/e2e/critical-flow.spec.ts` + `apps/web/playwright.config.ts`
+  (`@playwright/test` ^1.61.1, devDep de apps/web; lockfile
+  actualizado). El test: llaves falsas sembradas en el vault
+  (`addInitScript`), panel-count → 2 (top-2 = openai + anthropic,
+  ambos ruta direct), `page.route` sobre
+  `api.openai.com/v1/chat/completions` y `api.anthropic.com/v1/messages`
+  con SSE sintético en el dialecto real (openai: `choices[].delta` +
+  usage + `[DONE]`; anthropic: `message_start` → `content_block_delta`
+  → `message_delta` → `message_stop`), aserciones de texto distintivo
+  streameado en AMBOS paneles + "layout bloqueado" (Q14) + flags de
+  que ambos mocks fueron atravesados + descarga real de "Exportar
+  PDF" con verificación de bytes (`%PDF-`, >1 kB). Config: corre
+  contra `vite preview` del build real (`dist/`), `retries: 0` a
+  propósito (mock determinista — un flaky es un bug que debe fallar
+  fuerte). El tsconfig de web ahora incluye `e2e/` y el config: el
+  typecheck 5/5 cubre la suite.
+- `.github/workflows/ci.yml`: + harness fase5/fase6 (E5, tras los
+  guards) + install de Chromium de Playwright + `pnpm test:e2e` (E6,
+  tras build:web — el preview necesita `dist/`).
+- `.github/workflows/release.yml` (nuevo): `on: push: tags: ["v*"]`,
+  `permissions: contents: write`; gate tag↔versión → suite completa
+  (typecheck, 3 guards, lint, test, harness ×2, build:web, E2E,
+  build:ext) → gate del `manifest.version` COMPILADO == tag → zip →
+  gate del nombre del zip → `gh release create` con el zip adjunto
+  (gh del runner, sin actions de terceros, `--verify-tag`).
+- `scripts/check-release-version.mjs` (E3): tag `vX.Y.Z` ==
+  `apps/extension/package.json#version` o exit 1 con instrucción de
+  remediación; raíz divergente = warn no bloqueante. Scripts raíz
+  nuevos: `release:check`, `harness:fase5`, `harness:fase6`,
+  `test:e2e`.
+- Bump 0.1.0 → **0.2.0** en `apps/extension/package.json` (fuente de
+  verdad) y `package.json` raíz (convención), en este mismo commit —
+  el tag `v0.2.0` de la aceptación se corta sobre él.
+- `docs/DEPLOY.md`: §6 "Release de la extensión" (bump → tag → CI hace
+  el resto) + nota E7 en §4 (clave de dev válida para releases
+  propios; regenerar = precondición de terceros, diferido post-1.0
+  junto con el panel de administración).
+
+**Verificación en sandbox (2026-07-21, Node v22.22.2 / pnpm 11.9.0,
+salidas reales):** typecheck **5/5** (incluye la suite E2E) · 3 guards
+OK · `release:check` probado en 4 caminos (v0.2.0 OK; v0.9.9 → exit 1
+con mensaje; tag vacío/malformado → exit 1; vía `GITHUB_REF_NAME` →
+OK) · harness fase5 **54/54** y fase6 **47/47** vía los scripts raíz
+nuevos (lo mismo que ejecuta CI) · `build:web` y `build:ext` con
+TODOS los gates de artefacto de regresión F5/F6/F7 verdes (web:
+markers + negativos + CSS + favicon + HTML→chunk + code-split +
+supabase ausente sin env + grep-gate hex; ext: 6/6 markers, offscreen
+limpio, manifest.icons, host_permissions, PNGs) · **manifest.version
+compilado = 0.2.0** (verificado en el JSON de `.output`, no el
+fuente) · `zip:ext` → `chatcouncilextension-0.2.0-chrome.zip`
+(17.05 kB — el nombre hereda la versión, como el gate del release
+asume) · ambos YAML parseados OK (18 y 21 steps) · `playwright test
+--list` carga config+spec y lista el test.
+
+**Límite de verificación declarado (E9, confirmado empíricamente):**
+el CDN de binarios de Playwright (`cdn.playwright.dev`) está FUERA del
+allowlist de red del sandbox (403 real en el intento de
+`playwright install chromium`) → la EJECUCIÓN del E2E no es
+verificable acá; queda verificada su carga (`--list`) y su typecheck.
+La primera ejecución real del test es en la máquina de Code
+(pre-push) y en CI. Los workflows de Actions sólo se verifican online
+(sin `act` en el stack, por decisión).
+
+**ACEPTACIÓN REAL (Code, máquina real — pendiente):**
+- [ ] `pnpm install` (lockfile cambió: @playwright/test) +
+      `playwright install chromium` local; typecheck 5/5; 3 guards;
+      harness fase5 54/54 y fase6 47/47; `build:web`; **`pnpm
+      test:e2e` PASA en la máquina real** (primera ejecución real de
+      la suite); `build:ext` + gates; `release:check v0.2.0` OK.
+- [ ] Push de los dos commits (patrón Paso 0) a main; **ci.yml verde
+      commit-exacto** — el run nuevo incluye harness + E2E (más largo
+      que los ~34s históricos: instala Chromium).
+- [ ] Tag `v0.2.0` sobre el commit de cierre + push del tag →
+      **release.yml verde**: Release publicado en GitHub con
+      `chatcouncilextension-0.2.0-chrome.zip` adjunto, SIN pasos
+      manuales (criterio de aceptación de la fase).
+- [ ] Descargar el zip del Release, descomprimir, cargar en
+      `chrome://extensions` (CON dos puntos): la extensión versión
+      0.2.0 carga y el badge de la SPA la detecta.
+- [ ] Flip del heading de Fase 9 a ✅ + marcar esta checklist
+      (patrón formalizado al cierre de F7).
+
 ---
 
 ## 1. Topología y grafo de dependencias

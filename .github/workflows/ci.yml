@@ -45,8 +45,20 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Harness offline Fase 5 (informe/juez — Fase 9, E5)
+        run: pnpm harness:fase5
+
+      - name: Harness offline Fase 6 (sync/mail — Fase 9, E5)
+        run: pnpm harness:fase6
+
       - name: Build web
         run: pnpm build:web
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @chatcouncil/web exec playwright install --with-deps chromium
+
+      - name: E2E flujo crítico (Playwright, red mockeada — Fase 9, E1/E6)
+        run: pnpm test:e2e
 
       - name: Build extension
         run: pnpm build:ext

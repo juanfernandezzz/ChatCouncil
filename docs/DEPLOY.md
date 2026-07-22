@@ -79,6 +79,14 @@ openssl genpkey -algorithm RSA -out extension-key.pem -pkeyopt rsa_keygen_bits:2
 openssl rsa -pubout -in extension-key.pem -outform DER | openssl base64 -A
 ```
 
+**Cuándo hace falta (Fase 9, E7):** regenerar la clave es precondición
+de distribuir la extensión a TERCEROS, no de cortar releases para uso
+propio — los GitHub Releases de v0.2.x salen con la clave de dev a
+propósito (regenerarla rompería el ID ya cargado en el Chrome del
+único usuario y el `VITE_EXTENSION_ID` por defecto). La habilitación de
+otros usuarios (clave nueva + panel de administración) está registrada
+en el BLUEPRINT como diferido post-1.0.
+
 Ese output va en `apps/extension/wxt.config.ts`, campo `manifest.key`.
 Para saber qué `VITE_EXTENSION_ID` le corresponde (Chrome deriva el ID
 del hash SHA-256 de la clave pública, no es arbitrario), corré esto con
@@ -114,3 +122,32 @@ si algún día publicás en Chrome Web Store.
    quedar en `bjplhepllcbcpnhnpnpmcecddbjmlpch` — si coincide, el
    badge de la SPA (`pnpm dev`, `localhost:5173`) debería pasar de
    "Extensión no instalada" a "Extensión conectada" sin tocar nada más.
+
+## 6. Release de la extensión (Fase 9 — desde v0.2.0)
+
+La distribución v1 es el GitHub Release (Q8: sin Chrome Web Store). El
+proceso es cero-manual después del tag:
+
+1. **Bump de versión** en un commit normal:
+   `apps/extension/package.json#version` es la fuente de verdad (es lo
+   que WXT compila al `manifest.version` y al nombre del zip); el
+   `version` del `package.json` raíz se sincroniza en el mismo commit
+   por convención. El CI **jamás** muta versiones (E3).
+2. **Tag sobre ese commit** y push del tag:
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+3. **`release.yml` hace el resto**: gate de igualdad tag↔versión
+   (falla con mensaje claro si divergen), suite completa de gates
+   (typecheck, 3 guards, harness fase5/fase6, builds, E2E de flujo
+   crítico con red mockeada), gate del `manifest.version` compilado,
+   zip, y `gh release create` con el zip adjunto. Si CUALQUIER gate
+   falla, no hay release.
+4. El zip queda descargable en
+   `github.com/juanfernandezzz/ChatCouncil/releases` como
+   `chatcouncilextension-X.Y.Z-chrome.zip`. Instalación: §5 de esta
+   guía (descomprimir + cargar descomprimida).
+
+Además, **cada push a `main`** sigue subiendo el zip como artifact de
+CI (`ci.yml`), que ahora también corre los harness offline y el E2E.

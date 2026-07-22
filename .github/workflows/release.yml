@@ -1,0 +1,108 @@
+# Release de la extensión por tag (Fase 9, E3/E4).
+#
+# Gatillo: push de un tag `vX.Y.Z` — y SOLO eso (el workflow_dispatch
+# considerado en la entrevista se descartó: un dispatch sin tag
+# obligaría al CI a crear el tag, contra E3 — cero mutación en CI).
+#
+# Un tag puede apuntar a cualquier commit, así que este workflow
+# RE-CORRE la suite completa de gates antes de publicar nada: no existe
+# "release de un árbol sin verificar". Después crea el GitHub Release
+# con el zip de la extensión adjunto (`gh` del runner, sin actions de
+# terceros). Q8: la Release de GitHub ES la distribución en v1.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.2"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Gate tag ↔ versión (E3 — la versión vive en apps/extension/package.json)
+        run: node scripts/check-release-version.mjs "$GITHUB_REF_NAME"
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Guard key-vault isolation (Q10)
+        run: pnpm guard:keys
+
+      - name: Guard judge anonymity (Q30)
+        run: pnpm guard:judge
+
+      - name: Guard sync storage purity (Fase 6, E7)
+        run: pnpm guard:sync
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Harness offline Fase 5 (informe/juez)
+        run: pnpm harness:fase5
+
+      - name: Harness offline Fase 6 (sync/mail)
+        run: pnpm harness:fase6
+
+      - name: Build web
+        run: pnpm build:web
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @chatcouncil/web exec playwright install --with-deps chromium
+
+      - name: E2E flujo crítico (Playwright, red mockeada)
+        run: pnpm test:e2e
+
+      - name: Build extension
+        run: pnpm build:ext
+
+      - name: Gate de artefacto — manifest.version compilado == tag
+        run: |
+          node -e "
+            const m = require('./apps/extension/.output/chrome-mv3/manifest.json');
+            const want = process.env.GITHUB_REF_NAME.slice(1);
+            if (m.version !== want) {
+              console.error('manifest.version compilado ' + m.version + ' != tag ' + want);
+              process.exit(1);
+            }
+            console.log('manifest.version compilado OK: ' + m.version);
+          "
+
+      - name: Zip extension
+        run: pnpm zip:ext
+
+      - name: Gate de artefacto — el zip lleva la versión del tag en el nombre
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          ls apps/extension/.output/*"${VER}"*.zip
+
+      - name: Crear GitHub Release con el zip adjunto
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" apps/extension/.output/*.zip \
+            --verify-tag \
+            --title "ChatCouncil $GITHUB_REF_NAME" \
+            --notes "Zip de la extensión ChatCouncil Bridge (autodistribución, Q8: sin Chrome Web Store en v1). Instalación: descomprimir y cargar como extensión descomprimida desde chrome://extensions — paso a paso en docs/DEPLOY.md §5–§6. Este release usa la clave de desarrollo del repo (E7): apto para uso propio; la distribución a terceros requiere regenerar la clave (post-1.0)."

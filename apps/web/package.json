@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "echo \"(web) no lint configured yet\"",
-    "test": "echo \"(web) no tests yet\""
+    "test": "echo \"(web) no tests yet\"",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@chatcouncil/adapters": "workspace:*",
@@ -30,6 +31,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "^4.0.0",
     "@types/pdfmake": "^0.3.3",
     "@types/react": "^19.0.2",

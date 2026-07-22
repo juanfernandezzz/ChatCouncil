@@ -153,7 +153,7 @@ export function AnalyzeSection({ conversationId }: { conversationId: string | nu
   return (
     <Section title="Comparar / Resumir">
 
-      {!conversationId && <p className="text-[11px] text-text-secondary">Abrí o creá una conversación primero.</p>}
+      {!conversationId && <p className="text-[11px] text-text-secondary">Abre o crea una conversación primero.</p>}
 
       {conversationId && (
         <>
@@ -241,7 +241,7 @@ export function AnalyzeSection({ conversationId }: { conversationId: string | nu
             </p>
           )}
           {judgeIsByoa && !judgeOrgId && (
-            <p className="text-[11px] text-danger">Elegí una organización de sesión antes de usar este juez.</p>
+            <p className="text-[11px] text-danger">Elige una organización de sesión antes de usar este juez.</p>
           )}
 
           <label className="flex items-center gap-2 text-[11px] text-text-secondary">

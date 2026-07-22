@@ -22,6 +22,11 @@ const VAULT_PATH = "apps/web/src/lib/key-vault.ts";
 const ALLOWED_IMPORTERS = new Set([
   "apps/web/src/lib/byok-client.ts",
   "apps/web/src/dev/ByokTestPanel.tsx",
+  // Fase 10, E1 (§0.12): UI de PRODUCCIÓN del vault — sucesora de
+  // ByokTestPanel para gestionar llaves (guardar/borrar/probar). Igual
+  // que el panel dev: nunca imprime la llave (sólo maskKey) y limpia el
+  // draft del estado de React al guardar.
+  "apps/web/src/components/shell/AccountsPanel.tsx",
   // Fase 4, E4: sólo usa hasKey() (booleano de presencia) para filtrar
   // el selector por disponibilidad real — nunca lee ni expone el valor
   // de la llave. Ampliación explícita y documentada, no un bypass.

@@ -58,14 +58,6 @@ function anthropicSseBody(): string {
 }
 
 test("prompt → streaming en 2 paneles → exportar PDF", async ({ page }) => {
-  // Llaves FALSAS en el formato exacto del vault (string plano en
-  // localStorage con el prefijo de key-vault.ts). Nunca tocan una red
-  // real: los endpoints están interceptados más abajo.
-  await page.addInitScript(() => {
-    localStorage.setItem("chatcouncil:byok:key:openai", "sk-e2e-fake-openai");
-    localStorage.setItem("chatcouncil:byok:key:anthropic", "sk-ant-e2e-fake");
-  });
-
   let openAiHit = false;
   let anthropicHit = false;
 
@@ -88,6 +80,18 @@ test("prompt → streaming en 2 paneles → exportar PDF", async ({ page }) => {
 
   await page.goto("/");
 
+  // Fase 10 (§0.12): las llaves FALSAS entran POR LA UI del panel de
+  // cuentas — el mismo recorrido de primer uso de un usuario real, que
+  // era exactamente lo que el sembrado por addInitScript escondía
+  // (hallazgo de proceso del roadmap v2). Nunca tocan una red real:
+  // los endpoints están interceptados arriba.
+  await page.getByRole("button", { name: "Cuentas" }).click();
+  await page.getByLabel("Llave de API de ChatGPT (OpenAI)").fill("sk-e2e-fake-openai");
+  await page.getByRole("button", { name: "Guardar la llave de ChatGPT (OpenAI)" }).click();
+  await page.getByLabel("Llave de API de Claude (Anthropic)").fill("sk-ant-e2e-fake");
+  await page.getByRole("button", { name: "Guardar la llave de Claude (Anthropic)" }).click();
+  await page.getByRole("button", { name: "Cerrar" }).click();
+
   // Pre-lock: reducir el consejo a 2 paneles → top-2 de la prioridad
   // por defecto = byok:openai + byok:anthropic (los dos con llave).
   await page.getByRole("button", { name: "2", exact: true }).click();
@@ -95,7 +99,7 @@ test("prompt → streaming en 2 paneles → exportar PDF", async ({ page }) => {
   await expect(page.getByText("Claude (Anthropic)").first()).toBeVisible();
 
   await page
-    .getByPlaceholder("Prompt para todo el council…")
+    .getByPlaceholder("Prompt para todo el consejo…")
     .fill("¿Cuál es el veredicto del consejo?");
   await page.getByRole("button", { name: "Enviar", exact: true }).click();
 

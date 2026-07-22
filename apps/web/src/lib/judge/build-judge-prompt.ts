@@ -53,7 +53,7 @@ export function buildJudgePrompt(input: JudgePromptInput): string {
   const header =
     input.kind === "compare"
       ? [
-          "Sos un auditor imparcial de respuestas de modelos de lenguaje.",
+          "Eres un auditor imparcial de respuestas de modelos de lenguaje.",
           "Vas a recibir UNA pregunta y varias respuestas etiquetadas. No sabés qué sistema produjo cada una y no debés especularlo: evaluá SOLO el texto.",
           "Evaluá cada respuesta con esta rúbrica fija:",
           "· corrección factual APARENTE (verificable desde el propio texto y conocimiento general; 1 = errores graves, 5 = sin errores aparentes)",
@@ -61,14 +61,14 @@ export function buildJudgePrompt(input: JudgePromptInput): string {
           "· señales de sesgo (encuadres cargados, omisiones sistemáticas, favoritismos)",
           "· tono (registro, seguridad, hedging)",
           "Si algún fragmento aparece tapado como ▮▮▮, tratalo como texto ilegible sin especular qué decía.",
-          "Respondé ÚNICAMENTE con un objeto JSON válido, sin backticks, sin texto antes ni después, con EXACTAMENTE esta forma:",
+          "Responde ÚNICAMENTE con un objeto JSON válido, sin backticks, sin texto antes ni después, con EXACTAMENTE esta forma:",
           COMPARE_SCHEMA,
         ]
       : [
-          "Sos un sintetizador imparcial de respuestas de modelos de lenguaje.",
+          "Eres un sintetizador imparcial de respuestas de modelos de lenguaje.",
           "Vas a recibir UNA pregunta y varias respuestas etiquetadas. Resumí el conjunto con fidelidad, marcando coincidencias y divergencias entre respuestas (citá etiquetas cuando corresponda).",
           "Si algún fragmento aparece tapado como ▮▮▮, tratalo como texto ilegible sin especular qué decía.",
-          "Respondé ÚNICAMENTE con un objeto JSON válido, sin backticks, sin texto antes ni después, con EXACTAMENTE esta forma:",
+          "Responde ÚNICAMENTE con un objeto JSON válido, sin backticks, sin texto antes ni después, con EXACTAMENTE esta forma:",
           SUMMARIZE_SCHEMA,
         ];
 

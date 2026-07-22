@@ -370,7 +370,7 @@ export function startSyncEngine(): void {
       },
       error: (err: unknown) => {
         console.warn("[chatcouncil:sync] watcher falló:", err instanceof Error ? err.message : err);
-        setState({ status: "error", message: "watcher de cambios caído — usá Sincronizar ahora" });
+        setState({ status: "error", message: "watcher de cambios caído — usa Sincronizar ahora" });
       },
     });
   });

@@ -185,7 +185,7 @@ export function ReportSection({ conversationId }: { conversationId: string | nul
           </p>
         </div>
       )}
-      {!conversationId && <p className="text-[11px] text-text-secondary">Abrí o creá una conversación primero.</p>}
+      {!conversationId && <p className="text-[11px] text-text-secondary">Abre o crea una conversación primero.</p>}
       {error && <p className="text-[11px] text-danger">{error}</p>}
 
       {viewer && (

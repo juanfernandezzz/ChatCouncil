@@ -101,7 +101,7 @@ export function sendByoaPrompt(
     return inert;
   }
   if (!opts.orgId) {
-    failAsync("elegí una organización de sesión primero (Detectar sesión Claude)");
+    failAsync("elige una organización de sesión primero (Detectar sesión Claude)");
     return inert;
   }
 

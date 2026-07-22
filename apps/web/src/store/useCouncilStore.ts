@@ -54,6 +54,11 @@ interface CouncilState {
   modelOverrideByPanel: Record<string, string>;
   setModelOverride: (panelSourceId: string, modelId: string) => void;
 
+  // --- Fase 10 (E1): el vault vive fuera de React; este contador avisa a
+  // los consumidores de listPanelOptions() que una llave cambió ---
+  keyVaultVersion: number;
+  bumpKeyVaultVersion: () => void;
+
   // --- Fase 5: input global compartido (Q29: la librería de plantillas inyecta acá) + toggles Q31 + panel de herramientas ---
   composePrompt: string;
   setComposePrompt: (value: string) => void;
@@ -128,6 +133,9 @@ export const useCouncilStore = create<CouncilState>((set, get) => ({
   modelOverrideByPanel: {},
   setModelOverride: (panelSourceId, modelId) =>
     set((s) => ({ modelOverrideByPanel: { ...s.modelOverrideByPanel, [panelSourceId]: modelId } })),
+
+  keyVaultVersion: 0,
+  bumpKeyVaultVersion: () => set((s) => ({ keyVaultVersion: s.keyVaultVersion + 1 })),
 
   composePrompt: "",
   setComposePrompt: (value) => set({ composePrompt: value }),

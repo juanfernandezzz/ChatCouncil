@@ -139,7 +139,7 @@ export function PromptTemplatesSection() {
       <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
         {filtered.length === 0 && (
           <li className="text-[11px] text-text-secondary">
-            {templates.length === 0 ? "Sin plantillas todavía — creá la primera." : "Nada matchea la búsqueda."}
+            {templates.length === 0 ? "Sin plantillas todavía — crea la primera." : "Nada matchea la búsqueda."}
           </li>
         )}
         {filtered.map((tpl) => {
@@ -209,7 +209,7 @@ export function PromptTemplatesSection() {
           <TextArea
             value={editor.body}
             onChange={(e) => setEditor({ ...editor, body: e.target.value })}
-            placeholder={"cuerpo — usá {{variable}} para pedir valores al usar"}
+            placeholder={"cuerpo — usa {{variable}} para pedir valores al usar"}
             rows={5}
             className="px-2 py-1 font-mono text-[11px]"
           />

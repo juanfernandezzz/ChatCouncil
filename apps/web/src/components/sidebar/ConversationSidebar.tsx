@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { Plus, X } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Plus, X } from "lucide-react";
 import MiniSearch from "minisearch";
 import { useMemo, useState } from "react";
 import { db, type Conversation } from "@/lib/db";
@@ -37,6 +37,25 @@ async function searchConversations(query: string): Promise<Set<string>> {
   return new Set(results.map((r) => (r as unknown as SearchDoc & { conversationId: string }).conversationId));
 }
 
+/** Fase 10 E4: preferencia de dispositivo — localStorage, nunca Dexie/Drive. */
+const SIDEBAR_COLLAPSED_KEY = "chatcouncil:ui:sidebar-collapsed";
+
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function writeCollapsed(value: boolean): void {
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(value));
+  } catch {
+    // storage no disponible: la preferencia simplemente no persiste
+  }
+}
+
 export function ConversationSidebar({
   activeConversationId,
   onSelect,
@@ -46,6 +65,7 @@ export function ConversationSidebar({
   onSelect: (conversationId: string) => void;
   onNewConversation: () => void;
 }) {
+  const [collapsed, setCollapsed] = useState(readCollapsed);
   const [query, setQuery] = useState("");
   const [matchingIds, setMatchingIds] = useState<Set<string> | null>(null);
   const conversations = useLiveQuery(() => listConversationsForSidebar(), []) ?? [];
@@ -74,7 +94,7 @@ export function ConversationSidebar({
 
   /** Fase 6 (E3): borrado con tombstone — sin él, el sync resucitaría la conversación. */
   const handleDelete = async (conv: Conversation) => {
-    if (!window.confirm(`¿Borrar la conversación "${conv.title}"? Se borra acá y, si el sync está activo, también en Drive.`)) return;
+    if (!window.confirm(`¿Borrar la conversación "${conv.title}"? Se borra aquí y, si el sync está activo, también en Drive.`)) return;
     await deleteConversationLocal(conv.id);
     if (conv.id === activeConversationId) {
       setActiveConversation(null, []);
@@ -84,12 +104,45 @@ export function ConversationSidebar({
     }
   };
 
+  const toggleCollapsed = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    writeCollapsed(next);
+  };
+
+  if (collapsed) {
+    return (
+      <aside className="flex w-10 shrink-0 flex-col items-center gap-2 border-r border-border py-3">
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label="Expandir el panel de conversaciones"
+          title="Expandir el panel de conversaciones"
+          className="rounded p-1.5 text-text-secondary hover:text-text-primary"
+        >
+          <PanelLeftOpen size={16} aria-hidden />
+        </button>
+      </aside>
+    );
+  }
+
   return (
     <aside className="flex w-64 shrink-0 flex-col gap-2 border-r border-border p-3">
-      <Button variant="accent" size="md" onClick={onNewConversation} className="flex items-center justify-center gap-1 text-xs font-medium">
-        <Plus size={13} aria-hidden />
-        Nueva conversación
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button variant="accent" size="md" onClick={onNewConversation} className="flex flex-1 items-center justify-center gap-1 text-xs font-medium">
+          <Plus size={13} aria-hidden />
+          Nueva conversación
+        </Button>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label="Colapsar el panel de conversaciones"
+          title="Colapsar el panel de conversaciones"
+          className="rounded p-1.5 text-text-secondary hover:text-text-primary"
+        >
+          <PanelLeftClose size={16} aria-hidden />
+        </button>
+      </div>
       <TextInput
         value={query}
         onChange={(e) => handleQueryChange(e.target.value)}

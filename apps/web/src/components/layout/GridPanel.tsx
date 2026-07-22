@@ -1,6 +1,7 @@
 import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
 import { Badge, Button, Select, TextInput, gridLayouts } from "@chatcouncil/ui";
 import { useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -126,6 +127,8 @@ interface PanelCardProps {
   onContinueHere: (panelSourceId: string, modelId: string, text: string) => void;
   onScroll?: (scrollTop: number) => void;
   scrollTopExternal?: number;
+  /** Fase 10 E3: listeners de dnd-kit para la manija — el drag sale SOLO de aquí, nunca del cuerpo. */
+  dragHandleProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
 }
 
 function PanelCard({
@@ -138,6 +141,7 @@ function PanelCard({
   onContinueHere,
   onScroll,
   scrollTopExternal,
+  dragHandleProps,
 }: PanelCardProps) {
   const [followUp, setFollowUp] = useState("");
   const [selectedModel, setSelectedModel] = useState(option.defaultModelId);
@@ -153,6 +157,17 @@ function PanelCard({
     >
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
+          {dragHandleProps && (
+            <button
+              type="button"
+              {...dragHandleProps}
+              aria-label={`Arrastrar para reordenar el panel ${option.label}`}
+              title="Arrastrar para reordenar"
+              className="-ml-1 cursor-grab touch-none rounded p-0.5 text-text-secondary hover:text-text-primary active:cursor-grabbing"
+            >
+              <GripVertical size={14} aria-hidden />
+            </button>
+          )}
           <Badge variant={option.connectionMode === "byoa" ? "secondary" : "primary"} mono>
             {option.connectionMode}
           </Badge>
@@ -212,7 +227,7 @@ function PanelCard({
           <TextInput
             value={followUp}
             onChange={(e) => setFollowUp(e.target.value)}
-            placeholder="continuar solo acá…"
+            placeholder="continuar solo aquí…"
             className="min-w-0 flex-1"
           />
           <Button type="submit" variant="accent" disabled={!followUp.trim()}>
@@ -224,12 +239,25 @@ function PanelCard({
   );
 }
 
-function SortablePanelSlot({ id, children }: { id: string; children: React.ReactNode }) {
+/**
+ * Fase 10 E3: el wrapper ya NO lleva los listeners de drag — se los
+ * pasa al hijo (render prop) para que vivan sólo en la manija del
+ * header. El cuerpo del panel queda libre: seleccionar y copiar texto
+ * no dispara reordenamiento.
+ */
+function SortablePanelSlot({
+  id,
+  children,
+}: {
+  id: string;
+  children: (dragHandleProps: React.ButtonHTMLAttributes<HTMLButtonElement>) => React.ReactNode;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition };
+  const handleProps = { ...attributes, ...(listeners ?? {}) } as React.ButtonHTMLAttributes<HTMLButtonElement>;
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      {children}
+    <div ref={setNodeRef} style={style}>
+      {children(handleProps)}
     </div>
   );
 }
@@ -241,6 +269,7 @@ export function CouncilGrid({ loaded }: { loaded: LoadedConversation | null }) {
   const priorityPanelSourceIds = useCouncilStore((s) => s.priorityPanelSourceIds);
   const byoaSessionConfirmed = useCouncilStore((s) => s.byoaSessionConfirmed);
   const byoaSelectedOrgIdByProvider = useCouncilStore((s) => s.byoaSelectedOrgIdByProvider);
+  const keyVaultVersion = useCouncilStore((s) => s.keyVaultVersion);
 
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [scrollSync, setScrollSync] = useState(false);
@@ -250,7 +279,7 @@ export function CouncilGrid({ loaded }: { loaded: LoadedConversation | null }) {
   const options = useMemo(
     () => listPanelOptions({ byoaSessionConfirmed }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [byoaSessionConfirmed],
+    [byoaSessionConfirmed, keyVaultVersion],
   );
   const optionsById = useMemo(() => new Map(options.map((o) => [o.panelSourceId, o])), [options]);
 
@@ -307,7 +336,7 @@ export function CouncilGrid({ loaded }: { loaded: LoadedConversation | null }) {
           );
         }
         const timeline = loaded ? buildPanelTimeline(loaded, panelSourceId) : [];
-        const card = (
+        const renderCard = (dragHandleProps?: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
           <PanelCard
             option={option}
             timeline={timeline}
@@ -325,13 +354,14 @@ export function CouncilGrid({ loaded }: { loaded: LoadedConversation | null }) {
                 : undefined
             }
             scrollTopExternal={scrollSync ? scrollTopRef.current : undefined}
+            {...(dragHandleProps ? { dragHandleProps } : {})}
           />
         );
         return isLayoutLocked || focusedId ? (
-          <div key={panelSourceId}>{card}</div>
+          <div key={panelSourceId}>{renderCard()}</div>
         ) : (
           <SortablePanelSlot key={panelSourceId} id={panelSourceId}>
-            {card}
+            {(handleProps) => renderCard(handleProps)}
           </SortablePanelSlot>
         );
       })}

@@ -135,7 +135,7 @@ export function ComposeBar({ onConversationReady }: { onConversationReady: (conv
         <input
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Prompt para todo el council…"
+          placeholder="Prompt para todo el consejo…"
           className="flex-1 bg-transparent px-2 py-1.5 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none"
         />
         <Button type="submit" variant="solid" size="md" disabled={!prompt.trim() || sending}>

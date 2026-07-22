@@ -1,8 +1,10 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { KeyRound } from "lucide-react";
 import { ComposeBar } from "@/components/layout/ComposeBar";
 import { CouncilGrid } from "@/components/layout/GridPanel";
+import { AccountsPanel } from "@/components/shell/AccountsPanel";
 import { ExtensionBadge } from "@/components/shell/ExtensionBadge";
 import { ConversationSidebar } from "@/components/sidebar/ConversationSidebar";
 import { ToolsPanel } from "@/components/tools/ToolsPanel";
@@ -36,7 +38,7 @@ function MobileNotice() {
       </p>
       <p className="text-sm leading-relaxed text-text-secondary">
         El puente hacia los proveedores depende de una extensión de navegador, y los navegadores
-        móviles no pueden alojarla. Abrí esta misma dirección desde Chrome (o un navegador
+        móviles no pueden alojarla. Abre esta misma dirección desde Chrome (o un navegador
         Chromium) de escritorio con la extensión instalada.
       </p>
       <p className="font-mono text-xs text-text-secondary">
@@ -109,6 +111,7 @@ export default function App() {
   const setExtensionStatus = useCouncilStore((s) => s.setExtensionStatus);
   const activeConversationId = useCouncilStore((s) => s.activeConversationId);
   const setActiveConversation = useCouncilStore((s) => s.setActiveConversation);
+  const [accountsOpen, setAccountsOpen] = useState(false);
 
   const loaded = useLiveQuery(
     () => (activeConversationId ? loadConversation(activeConversationId) : Promise.resolve(null)),
@@ -159,11 +162,20 @@ export default function App() {
             <BrandMark size={22} className="text-accent-primary" />
             <div className="flex items-baseline gap-2">
               <h1 className="text-lg font-semibold tracking-tight text-text-primary">ChatCouncil</h1>
-              <span className="font-mono text-xs text-text-secondary">fase 7 · design system</span>
+              <span className="font-mono text-xs text-text-secondary">consejo de modelos</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <ByoaSessionBar />
+            <button
+              type="button"
+              onClick={() => setAccountsOpen(true)}
+              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs text-text-secondary transition-colors hover:border-text-secondary hover:text-text-primary"
+              title="Gestionar llaves de API y sesiones de proveedor"
+            >
+              <KeyRound size={13} aria-hidden />
+              Cuentas
+            </button>
             <ExtensionBadge />
           </div>
         </header>
@@ -208,6 +220,7 @@ export default function App() {
       </div>
 
       <ToolsPanel />
+      <AccountsPanel open={accountsOpen} onClose={() => setAccountsOpen(false)} />
     </div>
   );
 }

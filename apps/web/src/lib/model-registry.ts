@@ -41,7 +41,7 @@ export function listPanelOptions(ctx: AvailabilityContext): PanelOption[] {
       models: cfg.models ?? [],
       defaultModelId: cfg.defaultModel,
     };
-    if (!available) opt.unavailableReason = "sin llave guardada — cargala en el panel BYOK";
+    if (!available) opt.unavailableReason = "sin llave guardada — agrégala en el panel de Cuentas";
     out.push(opt);
   }
 
@@ -56,7 +56,7 @@ export function listPanelOptions(ctx: AvailabilityContext): PanelOption[] {
       models: cfg.models ?? [],
       defaultModelId: BYOA_ACCOUNT_DEFAULT_SENTINEL,
     };
-    if (!available) opt.unavailableReason = "sesión no detectada — confirmala en el selector de organización";
+    if (!available) opt.unavailableReason = "sesión no detectada — detéctala en el panel de Cuentas";
     out.push(opt);
   }
 

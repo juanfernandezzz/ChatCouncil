@@ -33,7 +33,7 @@ export interface SentReport {
 }
 
 export async function sendReportByMail(opts: SendReportOptions): Promise<SentReport> {
-  if (!opts.includePdf && !opts.includeDocx) throw new Error("elegí al menos un adjunto (PDF o DOCX)");
+  if (!opts.includePdf && !opts.includeDocx) throw new Error("elige al menos un adjunto (PDF o DOCX)");
   const to = opts.to.trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) throw new Error(`destinatario inválido: "${to}"`);
 
@@ -90,7 +90,7 @@ export async function sendReportByMail(opts: SendReportOptions): Promise<SentRep
       // Trampa conocida (BLUEPRINT, Fase 6): en testing mode, un 403
       // access_denied casi siempre es "falta el test user en la consola",
       // no un bug del código.
-      throw new Error(`Gmail rechazó el envío (HTTP 403). Si el OAuth client está en modo testing, verificá que tu cuenta esté agregada como test user en la consola de Google.${detail ? ` · ${detail}` : ""}`);
+      throw new Error(`Gmail rechazó el envío (HTTP 403). Si el OAuth client está en modo testing, verifica que tu cuenta esté agregada como test user en la consola de Google.${detail ? ` · ${detail}` : ""}`);
     }
     throw new Error(`Gmail send → HTTP ${resp.status}${detail ? ` · ${detail}` : ""}`);
   }

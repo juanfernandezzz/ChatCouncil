@@ -65,7 +65,7 @@ export function sendToPanel(
 
   // BYOA: necesita orgId de sesión (E8) antes de poder despachar nada.
   if (!opts.orgId) {
-    return inertFailure("elegí una organización de sesión antes de enviar a este panel", handlers.onError);
+    return inertFailure("elige una organización de sesión antes de enviar a este panel", handlers.onError);
   }
   const byoaOpts: Parameters<typeof sendByoaPrompt>[0] = {
     providerId: parsed.providerId,

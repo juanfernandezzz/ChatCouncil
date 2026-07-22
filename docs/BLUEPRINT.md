@@ -1398,6 +1398,56 @@ La primera ejecución real del test es en la máquina de Code
 - [x] Flip del heading de Fase 9 a ✅ + marcar esta checklist
       (patrón formalizado al cierre de F7).
 
+### 0.12 Fase 10 — usabilidad crítica: cuentas, llaves e interacción base (decisiones, 2026-07-22)
+
+**Baseline al abrir la fase (máquina real de Code, Node 22.22.2 /
+pnpm 11.9.0, HEAD c4ba4aa):** la suite completa quedó verde en el CI
+del commit c4ba4aa (docs-only sobre 5069795, cuyo run incluyó install
+frozen, typecheck 5/5, 3 guards, harness fase5 54/54 y fase6 47/47,
+build:web con gates, build:ext con 6/6 markers y E2E 1/1). No se
+re-ejecutó localmente al abrir: el CI commit-exacto es la evidencia.
+
+**Entrevista E1–E4 (aprobadas por Juan 2026-07-22):**
+
+- **E1 — Panel de cuentas: modal desde el shell.** Botón en el header
+  del shell abre un dialog con sección por proveedor: gestión de llaves
+  BYOK (ingresar / editar / borrar / probar) y estado de sesión BYOA
+  (Fase 10: sólo claude.ai; Fase 11 lo extiende a 6). No agrega rutas.
+  El panel entra al allowlist de `guard:keys` con esta justificación:
+  es la UI de producción del vault, mismo rol que tenía ByokTestPanel
+  en dev.
+- **E2 — Prueba de llave: botón "Probar" manual.** Ping = completion
+  mínima (~1 token de salida) al modelo más barato del proveedor.
+  Estados: sin probar / válida / inválida (con el error del proveedor).
+  Nunca automático al guardar.
+- **E3 — Reordenamiento de paneles: manija de drag en el header.**
+  Ícono de agarre visible; el drag se dispara SOLO desde la manija. El
+  cuerpo del panel queda libre: texto seleccionable y copiable
+  (`user-select` restaurado + sin listeners de drag en el cuerpo).
+- **E4 — Sidebar colapsable: estado en localStorage.** Preferencia de
+  dispositivo, no de datos: no entra a Dexie ni al sync de Drive
+  (`guard:sync` intacto).
+
+**Alcance fijado por el plan maestro (no requirió entrevista):** purga
+de idioma a español neutro con "council"→"consejo" en strings de UI
+(marca "ChatCouncil" intacta) + gate de artefacto: grep de "council"
+sobre el bundle compilado = 0 apariciones fuera de la marca.
+
+**ACEPTACIÓN REAL (recorrido de primer uso en limpio — regla nueva de
+v2):**
+- [ ] typecheck 5/5 · 3 guards OK (guard:keys con el allowlist nuevo) ·
+      harness fase5 54/54 y fase6 47/47 · build:web con gates ·
+      build:ext con 6/6 markers · E2E verde (actualizada si el flujo
+      cambió).
+- [ ] Gate de idioma: grep "council" sobre `apps/web/dist` = 0 fuera
+      de la marca "ChatCouncil".
+- [ ] Perfil de navegador NUEVO (sin devtools, sin datos sembrados):
+      cargar llave de Google POR LA UI → armar consejo → enviar →
+      seleccionar y copiar una respuesta → colapsar/expandir sidebar →
+      recargar y verificar persistencia (colapso + llave + conversación).
+- [ ] Push, ci.yml verde commit-exacto, flip del heading a ✅ + esta
+      checklist marcada.
+
 ---
 
 ## 1. Topología y grafo de dependencias
@@ -1893,7 +1943,7 @@ si la fase cierra.** "Green build ≠ código embarcado" gana su corolario:
 **Fases (cada una abre en su propia conversación, entrevista E-series,
 patrón Paso 0, aceptación real con recorrido de primer uso):**
 
-### Fase 10 — Usabilidad crítica: cuentas, llaves e interacción base 🔜
+### Fase 10 — Usabilidad crítica: cuentas, llaves e interacción base 🟡 (decisiones cerradas 2026-07-22 — ledger §0.12)
 
 - **Panel de cuentas de producción** (nuevo, accesible desde el shell):
   gestión de llaves BYOK por proveedor (ingresar / editar / borrar / probar

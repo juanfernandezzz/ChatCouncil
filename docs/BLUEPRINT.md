@@ -1689,6 +1689,219 @@ asume):** si el WAF fingerprintea la forma del request, la ventana no
 salva a ese proveedor y se cae al escalamiento same-origin o a
 BLOQUEADO. Se sabrá en el recon, no antes.
 
+**ENMIENDA (2026-07-23, tras el recon — §0.15):** esta sección trata
+"challenge" como categoría única. El recon obligó a partirla en dos. Un
+**captcha/challenge** lo resuelve un humano y le corresponde la ventana
+descrita arriba. Un **proof-of-work** (sentinel de ChatGPT,
+`create_pow_challenge` de DeepSeek) NO admite humano: es una función de
+costo que ningún usuario "resuelve", y reimplementarla es trabajo de
+protocolo, no evasión de un desafío humano. Aplicarle la regla del
+párrafo "línea que NO se cruza" haría inviable el producto entero sin
+proteger a nadie. La regla sigue intacta para challenges humanos. Ver
+§0.15 para la evidencia y el límite de esta distinción.
+
+---
+
+### 0.15 Fase 11 — recon-spike: evidencia y revisión de decisiones (2026-07-23)
+
+**Método y límites.** CDP sobre las sesiones ya logueadas de Juan en su
+Chrome real; UN prompt corto por proveedor más un segundo turno para
+threading; cero cookies, tokens, headers de auth o datos personales
+capturados; cero código y cero commits en ese paso. **Lo que el recon NO
+podía medir y no midió:** si un endpoint funciona cross-origin desde el
+offscreen con la cookie adjunta — sin `host_permissions` para esos
+orígenes no hay cookie cross-origin, y desde la propia página del
+proveedor todo es same-origin. Esa medición es de implementación, no de
+recon. **Fallo de método registrado:** la instrumentación se hizo con JS
+inyectado que se ahogó con objetos `Request`/`URL`, y eso causó los dos
+huecos (path de Perplexity, endpoint de Grok). La segunda pasada usa CDP
+directo — `Network.requestWillBeSent` + `Network.getRequestPostData` —
+que es lo que el prompt original pretendía y no se cumplió.
+
+**Evidencia por proveedor.**
+
+- **ChatGPT** (`https://chatgpt.com`, cuenta Gratis) — evidencia
+  COMPLETA. Probe de sesión limpio: `GET /backend-api/settings/user` →
+  200 logueado / **401 JSON** deslogueado. Completion:
+  `POST /backend-api/f/conversation`, body JSON, respuesta **SSE**. Body
+  con `parent_message_id` (UUID de 36 chars), `model`, `messages` y
+  telemetría de UI. Threading confirmado en el turno 2 con la MISMA forma
+  que claude.ai. Ids de modelo visibles: `gpt-5-3`, `gpt-5-5`,
+  `gpt-5-mini`, `gpt-5-3-mini`, `gpt-5-5-mini`, `auto`. Anti-abuso:
+  Cloudflare (`cf-ray`, `server: cloudflare`) + **sentinel propio
+  (`sentinel/chat-requirements` prepare+finalize), proof-of-work
+  obligatorio POR TURNO**. Veredicto: reutilizable, con el sentinel como
+  riesgo concentrado.
+- **DeepSeek** (`https://chat.deepseek.com`) — evidencia COMPLETA y
+  decisiva. **La auth NO es cookie:** `credentials:'omit'` devolvió 200;
+  el token vive en `localStorage.userToken` y su propio JS arma el header
+  `authorization`. Threading explícito de 3 pasos:
+  `POST /api/v0/chat_session/create` → `POST /api/v0/chat/create_pow_challenge`
+  → `POST /api/v0/chat/completion`, con `chat_session_id`,
+  `parent_message_id` (turno 1 `null`, turno 2 **number**, no UUID),
+  `prompt` como texto directo (sin array `messages`) y flags
+  `thinking_enabled`/`search_enabled`. Anti-abuso: el más denso de los
+  cinco — PoW por turno (`x-ds-pow-response`), headers de fingerprint
+  (`x-client-*`) y **AWS WAF**. Veredicto: **inalcanzable por
+  offscreen+cookie**, ver hallazgo transversal 1.
+- **Gemini** (`https://gemini.google.com`, cuenta Pro) — evidencia
+  PARCIAL. Sin probe de sesión limpio: el documento raíz `/app` responde
+  200+HTML en cualquier estado y la detección real ocurre client-side vía
+  RPCs `batchexecute`. Completion:
+  `POST /_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate`,
+  body urlencoded con `f.req` (JSON anidado propietario) y `at` (token
+  anti-XSRF embebido en el HTML de la página, **no** cookie). Respuesta:
+  prefijo `)]}'` + arrays anidados propietarios — **ni SSE ni JSON
+  plano**, o sea parser bespoke sin reuso posible del de Anthropic.
+  Anti-abuso: sin Cloudflare, pero **WAA/BotGuard**
+  (`waa-pa.clients6.google.com/.../Waa/Create`) al cargar. **Threading NO
+  determinado** — no se observó una segunda llamada a `StreamGenerate`;
+  Code lo declaró como hueco en vez de inventarlo. Veredicto: viable sólo
+  en apariencia; el `at` por página + la atestación WAA + el framing
+  propietario lo vuelven el más caro de los tres en alcance.
+- **Perplexity** (`https://www.perplexity.ai`, plan gratuito) —
+  evidencia PARCIAL. Probe de sesión NO identificado. Path de completion
+  NO confirmado (fallo de instrumentación), pero body sí, con confianza
+  alta: JSON con `query_str` y `params` (30 claves) incluyendo
+  `frontend_uuid`, `frontend_context_uuid`, `mode`, `model_preference` y
+  **`time_from_first_type`** — señal CONDUCTUAL que mide latencia de
+  tipeo humano. Respuesta SSE confirmada. Sin `parent_message_id`: la
+  continuidad parece inferirse del uuid de conversación en la URL.
+  Anti-abuso: Cloudflare (+ `/cdn-cgi/rum`). **Modelo de auth NO
+  verificado** (no se corrió el test de `credentials:'omit'`).
+  Veredicto: dificultad media, evidencia insuficiente para diseñar.
+- **Grok** (`https://grok.com`) — INCOMPLETO. Probe:
+  `GET /api/auth/session` (patrón NextAuth estándar). **Endpoint de
+  completion NO encontrado** tras búsqueda bajo `/rest/app-chat/*`,
+  `/rest/conversations/*` y variantes; la señal más fuerte fue un POST a
+  `/` que sería un **Server Action de Next.js**, no decodificado por el
+  mismo fallo de instrumentación. Estructura de conversación expuesta en
+  la URL: `/c/<uuid-conversación>?rid=<uuid-respuesta>`. Anti-abuso:
+  Cloudflare. Veredicto: gap de método, NO evidencia de bloqueo — pero si
+  se confirma el Server Action, el id de acción de Next.js depende del
+  build y rota en cada deploy, lo que movería a Grok de "hueco" a "sin
+  endpoint estable" (confianza moderada, a confirmar leyendo el header
+  `Next-Action`).
+
+**Hallazgo transversal 1 — la auth BYOA tiene DOS transportes, no uno.**
+DeepSeek autentica por `localStorage`, no por cookie, y está probado
+empíricamente. El offscreen **no puede** leer el `localStorage` de otro
+origen bajo ningún `host_permissions`: está particionado por origen y el
+offscreen corre en el origen de la extensión; sólo un content script en
+esa página lo alcanza. Esto NO es anti-bot: es un modelo de
+autenticación distinto, y rompe una suposición que el propio contrato
+documenta — `types.ts`, doc de `ByoaTransport`: "De dónde sale el texto
+del cuerpo: siempre el puente (offscreen)". En §0.14 el content script
+figuraba como escape ante WAF; la evidencia lo asciende a **transporte de
+primera clase** (ver E9).
+
+**Hallazgo transversal 2 — el proof-of-work por turno es la norma.**
+ChatGPT y DeepSeek lo exigen en CADA turno, y son justamente los dos con
+evidencia completa. De acá sale la enmienda a §0.14 (PoW ≠ captcha).
+**Límite honesto:** no está medido, en ninguno de los dos, si el seed
+viene ofuscado o atestado. Si lo está, reimplementar el PoW pasa de
+trabajoso a frágil o inviable. Es hoy el principal desconocido del
+proyecto y el riesgo concentrado de Round A.
+
+**Hallazgo transversal 3 — el contrato asume más de claude de lo que
+registró §0.13.** Contrastado contra `types.ts`:
+`rootParentMessageUuid: string` (DeepSeek usa `null` y luego un NUMBER;
+Perplexity no tiene id de padre); `buildCreateConversation` obligatorio
+(Perplexity puede no necesitarlo); `buildGetThread` +
+`parseLastAssistantMessageUuid`, que son el baile de tres pasos de
+claude y ninguno de los otros replica. E2 sigue bien orientado —
+extender, no reescribir — pero la superficie a extender es mayor que la
+declarada.
+
+**E9 (NUEVA, decidida por Juan 2026-07-23) — el transporte es un eje
+declarado del contrato.** Cada proveedor declara
+`authTransport: "cookie" | "page"` en vez de que el offscreen sea
+suposición universal. `"cookie"` = el camino actual (offscreen +
+`credentials:"include"`, claude.ai y presumiblemente ChatGPT).
+`"page"` = content script same-origin en una pestaña del proveedor, para
+los casos que exigen contexto de página (token en `localStorage`,
+scraping de token anti-XSRF, cookies `SameSite` estrictas, señales
+conductuales, fingerprint de WAF). El campo entra AHORA, en el refactor
+de Round A, aunque el transporte `"page"` se implemente recién en Fase
+11b: deja el lugar hecho y evita un segundo refactor. **Condición que
+preserva Q1:** si se implementa `"page"`, el content script debe ser un
+relay de fetch GENÉRICO, sin lógica de proveedor — la extensión sigue
+siendo runner agnóstico.
+
+**E1 REVISADA (autocorrección de Claude sobre §0.13).** La partición
+original —Round A = refactor + ChatGPT + Gemini— se fundaba en que
+"ChatGPT es demasiado claude-like para estresar la abstracción". Es
+**falso**: ChatGPT no tiene concepto de organización, que es exactamente
+el eje que E2 generaliza (`orgId` → `sessionScopeId?` opcional); un
+proveedor SIN scope es el test correcto de volver el scope opcional. Y
+Gemini, propuesto como el que "estresaría de verdad", tiene el threading
+indeterminado: no se diseña un contrato contra evidencia incompleta.
+Partición vigente:
+- **Round A:** generalización del contrato (E2 + E9) + **ChatGPT solo**.
+- **Round B:** **Perplexity + Gemini**, tras la segunda pasada de recon.
+
+**Decisión de alcance (opción B, elegida por Juan 2026-07-23) — MODIFICA
+el criterio de aceptación registrado.** El plan maestro y §0.13 pedían
+"un round real con TODOS los proveedores con sesión disponible". La
+evidencia dice que DeepSeek es inalcanzable por cookie y que Grok no
+tiene endpoint conocido. **Fase 11 cierra con los viables por
+transporte `"cookie"`** (claude.ai, ChatGPT, Perplexity y Gemini si
+sobrevive a la segunda pasada). **DeepSeek y Grok salen a una Fase 11b**
+con el transporte `"page"` — no como diferimiento vago sino como trabajo
+comprometido con evidencia. Se registra explícitamente que esto modifica
+el criterio de aceptación de la fase; no es una reinterpretación
+silenciosa.
+
+**Consecuencia sobre E5 (re-aprobación de permisos).** E5 buscaba UNA
+sola re-aprobación con los 6 orígenes de golpe. Con la opción B son
+**dos**: Fase 11 agrega los 3 orígenes de los proveedores que realmente
+implementa (`https://chatgpt.com`, `https://gemini.google.com`,
+`https://www.perplexity.ai`) llevando `host_permissions` de 4 a 7, y
+Fase 11b agrega los de DeepSeek y Grok. Se acepta el costo: pedir
+permisos para proveedores no implementados sería "ampliar permisos para
+un hipotético", exactamente lo que el comentario de `wxt.config.ts` ya
+rechaza. Los 3 entran juntos en Round A (no de a uno por round) porque
+son alcance comprometido, no hipotético. Si Gemini cae en la segunda
+pasada, su origen se REMUEVE en el commit de cierre: quitar un
+`host_permission` no dispara re-aprobación, sólo agregarlo.
+
+**Riesgo de deriva registrado (afecta E8).**
+`BYOA_SESSION_ALLOWED_ORIGINS` es DERIVADA (map sobre
+`BYOA_PROVIDERS[].sessionOrigin`), mientras que `host_permissions` es una
+lista MANUAL en `wxt.config.ts`. Agregar un proveedor extiende la
+allowlist sola pero NO el manifiesto: el espejo 1:1 se rompe en silencio,
+typecheck no lo nota y el fallo aparece recién en runtime como fetch sin
+cookie. El gate estructural de E8 (allowlist === `host_permissions`) deja
+de ser higiene y pasa a ser obligatorio en Round A.
+
+**Precedente de conducta registrado.** Grok exigió confirmar el año de
+nacimiento con la advertencia "no podrás cambiarlo más adelante" — un
+cambio IRREVERSIBLE de configuración sobre la cuenta real de Juan. Code
+canceló el diálogo y lo escaló en vivo; Juan lo resolvió desde su
+navegador. Queda como regla: **el agente nunca ejecuta cambios
+irreversibles de cuenta**, aunque estén en el camino de una tarea
+autorizada. Nota de producto derivada: el recorrido de primer uso en
+perfil limpio puede toparse con gates de PRODUCTO (edad, términos,
+onboarding) que no son anti-bot y que igual exigen acción del usuario —
+la ventana de §0.14 sirve para esa clase también.
+
+**Agenda de la segunda pasada de recon (CDP directo, en orden):**
+1. **Determinación de `authTransport`** en ChatGPT, Gemini y Perplexity
+   vía el test de `credentials:'omit'`. Hoy sólo se corrió en DeepSeek.
+   Es la medición que GATEA E9: si Perplexity también resulta
+   token-en-localStorage, el conjunto `"cookie"` se reduce a claude +
+   ChatGPT y la partición cambia otra vez.
+2. **Factibilidad del sentinel de ChatGPT**: forma de las respuestas de
+   `prepare`/`finalize` y si la prueba exigida es derivable de esa
+   respuesta sola, o si depende de estado ofuscado de la página. Gatea
+   Round A entero.
+3. **Perplexity**: path exacto de completion + probe de sesión.
+4. **Gemini**: mecanismo de threading, con la red capturando desde ANTES
+   del segundo turno.
+
+Los ítems 1 y 2 gatean Round A y se corren antes de escribir código; 3 y
+4 gatean Round B.
+
 ---
 
 ## 1. Topología y grafo de dependencias
@@ -2206,22 +2419,50 @@ patrón Paso 0, aceptación real con recorrido de primer uso):**
   Google POR LA UI → armar consejo → enviar → seleccionar y copiar una
   respuesta → colapsar/expandir sidebar → recargar y verificar persistencia.
 
-### Fase 11 — BYOA multiproveedor (el corazón del producto) 🟡 (decisiones E1–E8 tomadas 2026-07-23 — ledger §0.13; política de challenge §0.14)
+### Fase 11 — BYOA multiproveedor (el corazón del producto) 🟡 (E1–E8 en §0.13 · política de challenge §0.14 · recon + E9 + alcance revisado §0.15)
 
-- Los 6 proveedores del inventario original de Fase 3, clase "chat
-  mainstream": **claude.ai (hecho), ChatGPT, Gemini, DeepSeek, Perplexity,
-  Grok** — mismo patrón que claude.ai (endpoint interno de completion con la
-  sesión abierta; `dom` sólo si no hay endpoint reutilizable; cada uno es
-  ingeniería inversa propia con su `AdapterDescriptor.notes` fechado).
+- **Alcance vigente tras el recon (§0.15, opción B de Juan):** los
+  proveedores viables por transporte `"cookie"` — **claude.ai (hecho),
+  ChatGPT, Perplexity, y Gemini si sobrevive a la segunda pasada de
+  recon**. DeepSeek y Grok pasan a **Fase 11b** con el transporte
+  `"page"`: el primero por autenticar con `localStorage` en vez de
+  cookie (inalcanzable desde el offscreen), el segundo por no tener
+  endpoint de completion conocido. Cada adaptador sigue siendo ingeniería
+  inversa propia con su `AdapterDescriptor.notes` fechado.
+- **Partición (E1 revisada en §0.15):** Round A = generalización del
+  contrato (E2 + E9) + ChatGPT solo · Round B = Perplexity + Gemini.
+- **E9:** cada proveedor declara `authTransport: "cookie" | "page"`; el
+  campo entra en Round A aunque `"page"` se implemente en Fase 11b.
 - Manifest `adapters.json` con entrada por proveedor (la extensión sigue
   siendo runner agnóstico); allowlist de orígenes de sesión y
-  `host_permissions` espejados 1:1, como manda el patrón de Fase 3.
-- Panel de cuentas (Fase 10) extendido con los 6 estados de sesión.
-- **Aceptación real:** un round con TODOS los proveedores BYOA con sesión
-  disponible respondiendo en paralelo en el Chrome real de Juan (Claude Pro,
-  Gemini Pro, y cuentas gratuitas del resto). Si un proveedor resulta
-  técnicamente bloqueado (p. ej. anti-bot insalvable), se registra en ledger
-  con evidencia y se marca en la UI como no disponible — no se simula.
+  `host_permissions` espejados 1:1 — con **gate estructural obligatorio**
+  en Round A, porque la allowlist es derivada y el manifiesto es manual
+  (riesgo de deriva silenciosa, §0.15).
+- Panel de cuentas (Fase 10) extendido con los estados de sesión de los
+  proveedores en alcance.
+- **Aceptación real (MODIFICADA respecto del plan maestro — ver §0.15):**
+  un round con todos los proveedores BYOA **en alcance de esta fase** con
+  sesión disponible respondiendo en paralelo en el Chrome real de Juan.
+  Un proveedor técnicamente bloqueado se registra en ledger con evidencia
+  y se marca en la UI como no disponible — no se simula.
+
+### Fase 11b — BYOA por transporte `"page"`: DeepSeek y Grok ⏳
+
+- **Transporte `"page"`** (E9): content script same-origin en una pestaña
+  del proveedor, para los casos que exigen contexto de página. **Debe ser
+  un relay de fetch GENÉRICO, sin lógica de proveedor**, o se rompe Q1
+  (runner agnóstico). Acá entra la Q2 diferida desde Fase 3: gestión del
+  ciclo de vida de pestañas (`chrome.tabGroups`), que deja de ser
+  hipótesis y pasa a ser requisito con evidencia.
+- **DeepSeek**: auth por `localStorage.userToken` + PoW por turno +
+  headers de fingerprint + AWS WAF (§0.15). **Grok**: primero confirmar o
+  descartar el Server Action de Next.js — si el id de acción rota con
+  cada build, no hay endpoint estable y el proveedor se reevalúa.
+- `host_permissions` suma acá `https://chat.deepseek.com` y
+  `https://grok.com` (segunda re-aprobación, costo aceptado en §0.15).
+- **Aceptación real:** DeepSeek respondiendo en el consejo por transporte
+  `"page"` en el Chrome real de Juan, con la extensión sin lógica de
+  proveedor en el content script (verificable por gate).
 
 ### Fase 12 — Capacidades por proveedor: modelo, research, esfuerzo ⏳
 

@@ -1450,6 +1450,247 @@ v2):**
 
 ---
 
+### 0.13 Fase 11 — BYOA multiproveedor (decisiones, 2026-07-23)
+
+**Baseline REEJECUTADA sobre este árbol (HEAD e91b3a8, Node 22.22.2 /
+pnpm 11.9.0), con salidas reales — la baseline verde de conversaciones
+anteriores no cuenta:** `install --frozen-lockfile` OK · typecheck 5/5 ·
+`guard:keys` (allowlist con AccountsPanel) / `guard:judge` / `guard:sync`
+OK · harness fase5 54/54 · fase6 47/47 · `build:web` limpio con gate de
+idioma verificado de forma rigurosa (ocurrencias de "council" NO
+precedidas por "chat" sobre `dist` = 0) y pdfmake en chunk propio ·
+`build:ext` limpio con markers en `background.js`
+(`byoa:start`/`byoa:proxy`/`byok:start`/`handshake`/`resume`), offscreen
+CON `byoa:start` y SIN `stream:resume`, `manifest.icons` 16/48/128 y
+`host_permissions` actuales (4 orígenes). E2E: 1 test listado por
+`playwright test --list`; **NO ejecutable en sandbox** (CDN de binarios
+bloqueado por allowlist, 403 registrado en §0.11) → su ejecución real es
+**solo máquina de Code + CI**. Dato registrado: `pnpm lint` y `pnpm test`
+son stubs no-op en los 5 paquetes — la verificación real de este repo son
+los harness + los gates de artefacto, no esos dos scripts.
+
+**Hallazgo de arranque (reencuadra el alcance del plan maestro).** El
+plan decía "mismo patrón que claude.ai". Leído el código real, ese patrón
+NO es reutilizable tal cual: todo BYOA está moldeado sobre el modelo
+**organización + conversación** de claude.ai. `byoa-org.ts` pega a
+`/api/organizations` y espera un array de orgs; `byoa-client.ts:103`
+falla duro sin `orgId`; consumen `byoaSelectedOrgIdByProvider`
+`ComposeBar.tsx:95`, `GridPanel.tsx:302/315`, `AnalyzeSection.tsx:125` y
+la store; `App.tsx:65` tiene `const providerId = "claude"` con TODO de
+generalizar. Ningún otro proveedor tiene "organizaciones". Sumar 5
+proveedores NO es sumar 5 configs: exige extender el contrato de sesión y
+threading y tocar ~7 archivos de consumo. En cambio SÍ se reusa 1:1 lo
+verificado en Fase 3: runner agnóstico (`background.ts` sólo importa los
+allowlists, ningún dialecto entra a la extensión), `byoa:proxy` como HTTP
+crudo genérico, y el espejo allowlist ↔ `host_permissions`.
+
+**Entrevista E1–E8 (aprobada por Juan 2026-07-23; E4 corregida por él en
+dos vueltas — ver E4″):**
+
+- **E1 — Partición: recon-spike primero, después 2 rounds.** Un paso
+  previo de captura-sola (sin código, precedente Fase 4 Round B) decide
+  la composición real de los grupos; recién con esa evidencia se sellan.
+  Propuesta provisoria: **Round A** = refactor del contrato + ChatGPT +
+  Gemini; **Round B** = DeepSeek + Perplexity + Grok. Un feature-commit
+  por round. Fundamento: el refactor sólo se valida contra un 2.º
+  proveedor DISTINTO de claude; ChatGPT es demasiado claude-like para
+  estresar la abstracción, Gemini (cuenta paga, mayor valor esperado) la
+  estresa de verdad, y co-diseñar contra ambos evita re-refactorizar en
+  Round B. Fallback documentado: Gemini pasa a Round B si Round A pesa.
+- **E2 — Generalización del contrato: extender, no reescribir.**
+  `ByoaProviderConfig` suma `sessionProbe()` → `{sessionOk, scopes?}`
+  normalizado (reemplaza el `/api/organizations` hardcodeado) y `orgId`
+  pasa a `sessionScopeId?` OPCIONAL: claude conserva org-como-scope, los
+  proveedores sin scope no mandan ninguno; el threading se declara por
+  proveedor. Fundamento: claude.ai está verificado y funciona; reescribir
+  arriesga regresión sin ganancia. **Guarda anti-regresión:** el
+  `fase11-harness` fija el shape actual de claude ANTES del refactor
+  (test de caracterización), para que cualquier deriva rompa el harness.
+- **E3 — Descubrimiento de endpoints: Code vía CDP sobre las sesiones
+  abiertas de Juan**, con captura manual de Juan como fallback (el
+  sandbox no tiene Chrome ni sesiones). Se captura SÓLO el shape (url,
+  método, headers no-auth, esquema del body). **PROHIBIDO** que cookies,
+  tokens o headers de autenticación entren a código, ledger, transcripts
+  o fixtures: la auth es la cookie que adjunta el navegador con
+  `credentials:"include"`, y el código nunca la ve.
+- **E4″ — Challenge/captcha: resolución del USUARIO, sin bloqueo
+  automático.** Corrección de Juan sobre la recomendación original (que
+  proponía dejar los challenges fuera de alcance y marcar "bloqueado"):
+  la herramienta se detiene, abre el desafío en el navegador de Juan, él
+  lo resuelve en su sesión, y la herramienta sigue. Detalle completo,
+  mecanismo y política de reintento: **§0.14**.
+- **E5 — `host_permissions`: un solo commit con los 6 orígenes de
+  sesión** (una única re-aprobación, no cinco), espejando 1:1
+  `BYOA_SESSION_ALLOWED_ORIGINS`. Se documenta en `DEPLOY.md` + nota en
+  `AccountsPanel` sobre re-habilitar la extensión tras actualizar.
+  Matiz honesto (confianza moderada): "Chrome deshabilita la extensión al
+  subir permisos" es firme para Chrome Web Store; en distribución
+  **unpacked** (la de v1) el reload aplica los permisos frescos. La
+  prueba es el reload real de Code, no la aserción.
+- **E6 — `adapters.json` y naming.** Verificado por grep en esta sesión:
+  `byoaPriority`, `manifestVersion` y el `protocolVersion` DEL
+  MANIFIESTO no los consume ningún código — el SW sólo lee
+  `providers[].{id,byoaStrategy,healthy}`. Son documentales; subir
+  `manifestVersion` 1→2 no rompe caches (TTL 10 min, campos desconocidos
+  tolerados). **Contradicción señalada y resuelta:** `byoaPriority`
+  mezclaba convención de app (`claude`) con familia-API
+  (`openai/anthropic/google/glm`), y `panel-source.ts:7` anticipaba
+  `byoa:"openai"` para ChatGPT — pero claude.ai se registró como
+  `"claude"`, no `"anthropic"`. Se unifica a **ids de app**
+  (`claude, chatgpt, gemini, deepseek, perplexity, grok`): la identidad
+  BYOA es la cuenta/app, no la familia de API, siguiendo el precedente
+  ya embarcado. Migración = cero (ningún dato persistido usa
+  `byoa:openai`; sólo `byoa:claude` está cableado). Se actualizan el
+  comentario de `panel-source.ts` y `byoaPriority` para seguir al
+  precedente, no al revés.
+- **E7 — Proveedor que exija DOM: preferir `endpoint` siempre.** Si la
+  captura muestra que no hay endpoint reutilizable, se DIFIERE ese
+  proveedor a una continuación en vez de construir DOM + `tabGroups`
+  dentro de esta fase (DOM es sumidero de mantenimiento: cualquier
+  rediseño de UI rompe el selector). Se marca "no disponible (requiere
+  DOM — diferido)" en UI y ledger. **Excepción:** si el DOM-only resulta
+  ser Gemini (cuenta de mayor valor), se escala a Juan para decisión
+  explícita en vez de auto-diferirlo.
+- **E8 — Offline vs solo-online.** Nuevo `fase11-harness` (vite-node),
+  sin llamadas vivas ni cookies: (1) builders por proveedor contra
+  fixtures; (2) parser de `sessionProbe` con cuerpo autenticado y con
+  HTML de login; (3) extracción del parent-uuid de threading por
+  proveedor; (4) **gate estructural**: `BYOA_SESSION_ALLOWED_ORIGINS`
+  === conjunto de `host_permissions` (el espejo 1:1 pasa de vista a
+  test). El E2E (red mockeada) suma un round multi-proveedor simulado.
+  **Solo-online (Code + Chrome real de Juan):** fetch credenciales
+  reales, detección de sesión real, round paralelo real y la
+  determinación de anti-bot.
+
+---
+
+### 0.14 Fase 11 — política de challenge/anti-bot (decisión de Juan, 2026-07-23)
+
+**Decisión.** Ante un challenge (Cloudflare, Turnstile, captcha), la
+herramienta NO abandona al proveedor: abre el desafío en el navegador de
+Juan para que **él** lo resuelva en su propia sesión, y reintenta. Es
+human-in-the-loop, no evasión automática.
+
+**Línea que NO se cruza (permanente).** Ni Claude ni Code resuelven,
+completan ni evaden challenges en ningún momento — incluido el recon con
+CDP: si Code topa un challenge durante la captura, corta y se lo pasa a
+Juan. El único que resuelve un desafío es el usuario, en su navegador.
+
+**Riesgo de TOS: decisión de Juan, no hallazgo verificado.** Juan
+sostiene que no hay violación de TOS porque el desafío lo resuelve el
+usuario. Queda registrado que ese fundamento NO se verificó y que, como
+está formulado, no se sostiene: lo que gobierna no es quién hace clic
+sino si el acceso PROGRAMÁTICO a un endpoint interno está permitido, y
+varios de estos proveedores restringen el acceso automatizado o por
+cliente no oficial con independencia de quién resuelva el challenge. La
+decisión de seguir adelante es de Juan, sobre sus propias cuentas y su
+propio riesgo, y así se registra — no como "verificado que no rompe TOS".
+
+**Corrección técnica: el popup NO puede contener el challenge.** El
+fetch BYOA vive en el offscreen (`offscreen/main.ts`, rama `!res.ok` →
+`finishError`), que es un documento SIN UI visible. Y un challenge
+devuelto a `fetch()` es HTML de un origen ajeno: su JS es origin-bound,
+debe correr EN el origen del proveedor y setear ahí la cookie de
+clearance. Pintarlo fuera de ese origen no limpia nada. Lo que sí
+consigue el objetivo: **abrir una ventana real del navegador en el origen
+del proveedor**; resuelto ahí, la clearance queda como cookie de ese
+origen y viaja sola en el siguiente fetch por `credentials:"include"` —
+el mismo mecanismo verificado en §0.4.
+
+**Mecanismo (sobre seams que ya existen en el repo):**
+1. **Detección** en el offscreen, antes de `finishError`: se clasifica
+   como challenge si status 403/503 **y** `content-type: text/html`
+   donde se esperaba JSON/SSE **y** hay marcadores de challenge en el
+   cuerpo. Nunca se loggea el cuerpo entero: snippet acotado, jamás
+   cookies ni headers.
+2. **Señal**: nuevo relay `stream:challenge {requestId, origin}`. Esto
+   TOCA el protocolo del puente y contradice lo dicho en E6 ("no
+   bumpear") — se señala en vez de deslizarlo. Se resuelve por el
+   precedente ya documentado en `bridge-protocol.ts`: Fase 2 renombró
+   `byoa:resume → stream:resume` DENTRO de v2 sin bump, porque v2 tiene
+   cero consumidores externos y "un v3 sería teatro de compatibilidad".
+   Se aplica ese mismo precedente: cambio aditivo dentro de v2.
+3. **Ventana**: el SW abre `chrome.windows.create({type:"popup"})` en el
+   origen del proveedor. **Dedupe POR ORIGEN**: una sola ventana por
+   origen; si seis paneles topan Cloudflare a la vez se abre UNA y los
+   demás requests esperan esa clearance.
+4. **UI**: `onChallenge?` / `onChallengeCleared?` en `StreamHandlers`,
+   con la misma forma que los `onReconnecting?`/`onResumed?` que ya
+   existen (`bridge-client.ts:60-69`) y que `byoa-client` ya reenvía. El
+   panel muestra "esperando que resuelvas la verificación" — jamás una
+   respuesta inventada.
+
+**Política de reintento (corregida por Juan: el tope de 1 intento estaba
+sub-argumentado y era exagerado).** El diseño NO cuenta reintentos a
+ciegas: clasifica el fallo.
+- **Propiedad estructural que hace innecesario un tope agresivo:** no
+  existe reintento automático. TODO reintento está precedido por una
+  acción humana (resolver la ventana). El bucle es human-paced por
+  construcción, así que el riesgo de martillar el WAF viene de la
+  frecuencia de intentos, no de un contador.
+- **Re-challenge INMEDIATO** (el request posterior a la clearance vuelve
+  a ser challengeado sin que ninguno haya pasado en el medio) = señal
+  estructural: la clearance no es lo que falta. No se insiste por esa
+  vía; se escala (ver abajo).
+- **Challenge POSTERIOR a un request exitoso** = expiración de TTL de la
+  clearance, comportamiento normal y no un fallo: se trata como
+  challenge nuevo y se vuelve a abrir la ventana, sin tope de sesión.
+- **Tope de 2 ciclos CONSECUTIVOS sin resolver** (no 1): deja lugar a un
+  transitorio real (ventana cerrada antes de tiempo, clearance que
+  aterriza tarde) sin convertirse en martillo.
+- **Agotado el tope NO se bloquea automáticamente:** el proveedor queda
+  en estado "verificación no superada" con un botón **Reintentar** que
+  Juan acciona. El humano sigue en el bucle también para la decisión de
+  reintentar.
+
+**Por qué un reintento puede fallar aun con el challenge resuelto (las
+razones que faltaban):**
+- El fetch del offscreen es **cross-site**: viaja con `Origin` de la
+  extensión y `Sec-Fetch-Site: cross-site`. Un WAF que puntúe esos
+  signos re-challengea CADA request con independencia de la clearance,
+  porque la clearance prueba "un humano usó un navegador", no "esta
+  forma de request está permitida". Confianza moderada; se mide.
+- La cookie de clearance puede estar acotada por atributos (`SameSite`)
+  o ligada a señales adicionales. §0.4 verificó que la cookie de sesión
+  de claude.ai SÍ se adjunta desde el offscreen, pero eso es empírico
+  para claude.ai y NO generaliza a una clearance de otro proveedor
+  (confianza baja en la generalización).
+- **Seguridad de las cuentas de Juan (razón real del tope):** reintentos
+  repetidos contra un WAF elevan el bot-score y pueden terminar
+  marcando o limitando la cuenta. Con cuentas PAGAS (Claude Pro, Gemini
+  Pro) ese daño no es recuperable dentro de la sesión. El tope existe
+  para proteger las cuentas, no por purismo.
+
+**Escalamiento antes de declarar bloqueado (respuesta a "¿por qué no un
+workaround?").** Si el patrón es re-challenge inmediato y estructural, la
+salida NO es rendirse: es cambiar el transporte para que el request deje
+de ser cross-site — hacer el fetch desde un **content script en una
+pestaña real del origen del proveedor**, donde `Sec-Fetch-Site` es
+same-origin y las cookies fluyen naturalmente. Es exactamente el camino
+Q2 (gestión de pestañas) diferido desde Fase 3, que con esta decisión
+entra a la fase también para la estrategia `endpoint`, no sólo para
+`dom`. **Q1 sobrevive** si —y sólo si— ese content script es un relay de
+fetch GENÉRICO (sin lógica de proveedor): la extensión sigue siendo
+runner agnóstico.
+
+**"BLOQUEADO con evidencia" queda reservado** para: (a) el transporte
+same-origin también falla, o (b) el endpoint rechaza con independencia
+del challenge. La corrección de Juan SUBE la vara de evidencia: ya no
+alcanza con "apareció un challenge". Evidencia = status HTTP + snippet
+corto NO-auth, jamás cookies ni headers.
+
+**Consecuencias registradas:** entra Q2 a la fase; el criterio de
+aceptación se endurece; y si algún proveedor challengea de forma
+estable, resolver un desafío pasa a ser PARTE del recorrido de primer
+uso, no una excepción.
+
+**Riesgo residual declarado (confianza moderada-baja, se mide y no se
+asume):** si el WAF fingerprintea la forma del request, la ventana no
+salva a ese proveedor y se cae al escalamiento same-origin o a
+BLOQUEADO. Se sabrá en el recon, no antes.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```
@@ -1965,7 +2206,7 @@ patrón Paso 0, aceptación real con recorrido de primer uso):**
   Google POR LA UI → armar consejo → enviar → seleccionar y copiar una
   respuesta → colapsar/expandir sidebar → recargar y verificar persistencia.
 
-### Fase 11 — BYOA multiproveedor (el corazón del producto) ⏳
+### Fase 11 — BYOA multiproveedor (el corazón del producto) 🟡 (decisiones E1–E8 tomadas 2026-07-23 — ledger §0.13; política de challenge §0.14)
 
 - Los 6 proveedores del inventario original de Fase 3, clase "chat
   mainstream": **claude.ai (hecho), ChatGPT, Gemini, DeepSeek, Perplexity,

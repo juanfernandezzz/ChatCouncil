@@ -2469,6 +2469,28 @@ darse por buena.
 
 ---
 
+### 0.22 Fase 11 Round A p2a — revalidacion del ejecutor v5 con techos declarativos (2026-07-25)
+
+**Nota de proceso: esta entrada la escribe Code, no Claude — se revisa contra el codigo antes de darse por buena (precedente de §0.21).**
+
+Cuenta burner descansada ("Nadie Nada"), extension recargada manualmente por Juan tras el build (bloqueo tecnico: la automatizacion de navegador no puede interactuar con paginas `chrome://`, ni por extension ni por control de escritorio — ninguna herramienta disponible pudo hacer clic en "Reload" de `chrome://extensions`). Marcador `byoa-page-executor-v5 listo` confirmado en consola.
+
+**Disparo por consola (andamio de sonda, §0.16), no por la UI de ChatCouncil.** Se inyecto un listener y un `postMessage` manual replicando exactamente el contrato de `PROBE_TRIGGER`/`PROBE_EVENT` del content script, con la spec de §0.19 mas el bloque `timeouts` nuevo de E11.
+
+1. **Prompt corto, conversacion nueva:** `started → submitted → delta(5) → done(5)` en 6.16s. Limpio.
+
+2. **Mismo prompt corto, misma conversacion (el caso que rompia v3):** la pestana paso a `visibilityState: "hidden"` durante la corrida (efecto de la propia instrumentacion del navegador, no buscado). Secuencia: `started → submitted → delta(5) → delta(0) → stalled(4668ms) → delta(5) → done(5)` en 42.49s. Cerro bien — el conteo de nodos (v4/v5) no se confundio por la longitud igual a la respuesta anterior — pero tardo 7x mas que el caso 1 por el throttling de la pestana oculta, consistente con §0.20/§0.21.
+
+3. **Prompt largo ("contar hasta 300"), pestana oculta desde el arranque: FALLO REAL, no del ejecutor.** Secuencia: `started → submitted → delta(5) → delta(0) → stalled(4668ms) → error("sin contenido observable del asistente")` a los 45.4s (el techo `emptyResponseMs` por defecto). Verificado en el DOM en frio en ese momento: `nodeCount:3, lastLen:0` — CERO contenido real, no era un falso negativo del selector. Recien tras devolverle foco/click a la pestana el contenido broto de golpe: `lastLen:1091` (mismo largo que el run limpio de §0.20), generacion completa y correcta. **El ejecutor reporto correctamente lo que via: no minitio un `done`.** Pero el resultado practico es que un techo de 45s NO alcanza para una pestana oculta desde el inicio bajo throttling agresivo — mas severo que el caso de 85s de §0.20 (aca ni siquiera arranco el contenido en 45s). Esto **confirma con mas fuerza la decision de §0.21** (pestanas visibles mientras el round esta en vuelo) y dice que la sonda todavia no midio el umbral real de throttling — sigue abierto, ahora con evidencia de que puede superar los 45s partiendo de cero. No se ajusto el default: es una decision de diseno (que techo por defecto usar, o si directamente no hay techo fijo seguro sin la ventana visible) fuera del alcance de implementacion de esta corrida.
+
+4. **Validacion de E11 (techos por spec via el bloque nuevo):** para aislar el mecanismo de la variabilidad de red, se uso un `assistantMessage.selector` que deliberadamente no matchea nada (contenido real = 0 garantizado) con `timeouts.emptyResponseMs: 3000`. Resultado: `started → submitted → error("sin contenido observable del asistente")` a ~3.6s desde `submitted`, contra los ~45s del default. Confirma que `ByoaPageSpec.timeouts` viaja como dato y `timeoutOf()` lo lee y lo antepone al valor compilado — el mecanismo de E11 funciona de punta a punta.
+
+**Gates de artefacto:** los 6 verificados sobre `content-scripts/byoa-page.js` compilado (regla ASCII de §0.19) dieron el resultado esperado — `byoa-page-executor-v5`=1, `-v4`=0, `submitReadyMs`=1, `emptyResponseMs`=1, `aria-disabled`=1, `eval`/`new Function`=0, `document.cookie`/`localStorage`/`sessionStorage`/`authorization`=0.
+
+**Pendiente que esta corrida no midio:** el umbral real de throttling de Chrome para pestanas ocultas desde el arranque (caso 3 mostro que supera comodamente los 45s). p2b sigue debiendo instrumentarlo en vez de asumirlo, ahora con mas urgencia dado que el caso 3 es peor que el de §0.20.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

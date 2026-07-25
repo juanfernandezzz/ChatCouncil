@@ -2401,6 +2401,74 @@ EMPTY_RESPONSE_TIMEOUT_MS 45_000 ms — techo con CERO avance de contenido tras 
 
 ---
 
+### 0.21 Fase 11 Round A p2a — revision de §0.20, correccion de alcance y techos declarativos (2026-07-25)
+
+**Revision de §0.20.** Se leyo entero contra el codigo pusheado. Es
+correcto y valioso: el hallazgo del contenedor vacio del asistente es un
+defecto REAL de v2 que no se habia visto —el corte no venia por
+`quiescenceMs` sino por la otra rama del loop, `structurallyComplete &&
+idle > 400`, que se cumple apenas desaparece el stop-button aunque el
+contenedor siga sin texto— y la leccion que deja esta bien generalizada:
+NINGUNA PROPIEDAD NUMERICA DEL CONTENIDO ES UN IDENTIFICADOR DE "TURNO
+NUEVO"; hace falta identidad estructural. La correccion v4
+(`countAssistantNodes` con `baselineNodeCount = 0` cubriendo el primer
+mensaje sin rama especial) es mejor que la que se habia entregado en v2.
+
+**CORRECCION DE ALCANCE: §0.17 NO queda cerrado.** §0.20 afirma que el
+background "cierra §0.17", y su propio parrafo siguiente lo contradice: el
+estrangulamiento de Chrome **se intensifica con la DURACION del
+ocultamiento**, y una pestana ocultada hace rato hizo que el mismo turno
+tardara ~85 s contra los ~7 s de una recien ocultada. El desconocido que
+§0.17 registro era exactamente ese —generaciones largas y background
+prolongado—, asi que la evidencia de §0.20 no lo cierra: lo **confirma y
+lo caracteriza**. Lo que si queda probado es algo mas acotado y de todos
+modos util: **con ocultamiento breve, la pestana oculta no impide que el
+DOM se actualice ni que el ejecutor lo detecte** (prompt largo, 1091
+caracteres integros, `visibilityState: hidden` verificado sin refrentar).
+
+**Consecuencia arquitectonica que §0.20 no saca, y que cambia una decision
+de §0.17.** §0.17 concluyo que las pestanas de proveedor podian vivir
+OCULTAS en una sola ventana con `chrome.tabGroups`, apoyandose en que B
+(pestana oculta) habia pasado. Con el hallazgo de duracion, esa conclusion
+deja de sostenerse para sesiones largas: un consejo con seis pestanas
+ocultas durante una sesion entera cae justo en el regimen degradado.
+**Decision (revisa §0.17):** mientras un round esta EN VUELO, las pestanas
+de proveedor viven en una ventana **visible** (puede estar sin foco — por
+la subsuncion de §0.17, visible sin foco no sufre ni pausa ni
+estrangulamiento); entre rounds pueden quedar ocultas. Se evita el regimen
+degradado exactamente cuando importa, sin obligar al mosaico permanente.
+Esto rehabilita parcialmente la idea original de Juan de las "mini
+ventanas", pero acotada a la ventana de tiempo en que hace falta.
+Confianza moderada: la duracion umbral del estrangulamiento no se midio y
+queda abierta; p2b debe instrumentarla en vez de asumirla.
+
+**Degradacion de la cuenta burner:** se acepta como observacion, con el
+matiz de que sigue siendo correlacional — no se aislo la causa (rate
+limiting, capacidad del tier gratuito u otra). La recuperacion tras varias
+horas de descanso es corroboracion razonable, no prueba.
+
+**Entregado en este commit — techos de tiempo DECLARATIVOS (E11).**
+`SUBMIT_READY_MS`, `SUBMIT_CONFIRM_MS` y `EMPTY_RESPONSE_TIMEOUT_MS` eran
+constantes compiladas. La evidencia de §0.20 muestra que el valor correcto
+depende del proveedor Y de las condiciones (7 s contra 85 s para el mismo
+turno), asi que un techo fijo obliga a recompilar la extension para
+ajustarlo — exactamente lo que E11 existe para evitar. Ahora
+`ByoaPageSpec.timeouts` transporta `submitReadyMs`, `submitConfirmMs` y
+`emptyResponseMs` como DATO opcional; el ejecutor los lee con `timeoutOf()`
+y cae a los valores por defecto si faltan. Se ajustan editando
+`adapters.json` y esperando el TTL. Marcador subido a
+`byoa-page-executor-v5`.
+
+**Nota de proceso.** §0.20 lo escribio Code, no Claude, contra la
+instruccion explicita del prompt de esa entrega. Se revisa y se ratifica
+—con la correccion de alcance de arriba— porque el contenido es correcto y
+porque la regla vigente de Juan privilegia el trabajo autonomo con menos
+confirmaciones. Queda como precedente: el ledger puede escribirlo Code,
+pero toda entrada escrita por Code se revisa contra el codigo antes de
+darse por buena.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

@@ -157,6 +157,24 @@ export interface ByoaPageSpec {
    * persona lo resuelva en la ventana real.
    */
   humanGate?: { selector: string }[];
+  /**
+   * Techos de tiempo, en milisegundos. Viven en la spec y NO en el codigo
+   * (E11) porque el valor correcto depende del proveedor y de las
+   * condiciones: §0.20 midio el mismo turno en ~7 s con la pestana recien
+   * ocultada y en ~85 s con una pestana ocultada hace rato, por el
+   * estrangulamiento progresivo de Chrome. Un techo fijo compilado obliga
+   * a recompilar la extension para ajustarlo; aca se ajusta editando el
+   * manifiesto remoto. Si se omiten, rigen los valores por defecto del
+   * ejecutor.
+   */
+  timeouts?: {
+    /** Espera a que el control de envio exista y este accionable. */
+    submitReadyMs?: number;
+    /** Espera a que el envio produzca un cambio observable. */
+    submitConfirmMs?: number;
+    /** Techo con CERO avance de contenido tras el envio. */
+    emptyResponseMs?: number;
+  };
 }
 
 /**

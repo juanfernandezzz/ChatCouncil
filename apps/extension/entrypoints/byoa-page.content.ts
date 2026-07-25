@@ -48,7 +48,7 @@ const PROBE_TRIGGER = "chatcouncil:byoa-page:probe";
 const PROBE_EVENT = "chatcouncil:byoa-page:event";
 
 /** Marcador para el gate de artefacto: prueba que el módulo embarcó. */
-const EXECUTOR_MARKER = "byoa-page-executor-v4";
+const EXECUTOR_MARKER = "byoa-page-executor-v5";
 
 type ExecutorEvent =
   | { kind: "started" }
@@ -62,6 +62,19 @@ type ExecutorEvent =
 function emit(ev: ExecutorEvent): void {
   // Sólo forma y longitudes; jamás el texto de la respuesta ni credenciales.
   window.postMessage({ source: PROBE_EVENT, marker: EXECUTOR_MARKER, ...ev }, window.location.origin);
+}
+
+/**
+ * Lee un techo de tiempo de la spec, con respaldo al valor por defecto.
+ * Los techos son DATO (viajan en adapters.json), no codigo: §0.21.
+ */
+function timeoutOf(
+  spec: ByoaPageSpec,
+  key: "submitReadyMs" | "submitConfirmMs" | "emptyResponseMs",
+  fallback: number,
+): number {
+  const v = spec.timeouts?.[key];
+  return typeof v === "number" && v > 0 ? v : fallback;
 }
 
 function findOne(selector: string): Element | null {
@@ -148,7 +161,7 @@ async function waitForEnabled(selector: string, timeoutMs: number): Promise<Elem
  */
 async function submit(spec: ByoaPageSpec, composer: Element): Promise<boolean> {
   if (spec.submit.kind === "click") {
-    const btn = await waitForEnabled(spec.submit.selector, SUBMIT_READY_MS);
+    const btn = await waitForEnabled(spec.submit.selector, timeoutOf(spec, "submitReadyMs", SUBMIT_READY_MS));
     if (!btn) return false;
     (btn as HTMLElement).click();
     return true;
@@ -180,7 +193,7 @@ async function confirmSubmitted(
     if ((composer.textContent ?? "").trim() === "") return true;
     if (marker && findOne(marker)) return true;
     if (readAssistantText(spec).length > baselineLength) return true;
-    if (Date.now() - started > SUBMIT_CONFIRM_MS) return false;
+    if (Date.now() - started > timeoutOf(spec, "submitConfirmMs", SUBMIT_CONFIRM_MS)) return false;
     await new Promise((r) => setTimeout(r, 100));
   }
 }
@@ -282,7 +295,7 @@ async function run(spec: ByoaPageSpec, prompt: string): Promise<void> {
       if (hasNewContent && structurallyComplete(spec) && idle > 400) break;
       if (hasNewContent && idle > idleLimit) break;
 
-      if (!hasNewContent && Date.now() - loopStart > EMPTY_RESPONSE_TIMEOUT_MS) {
+      if (!hasNewContent && Date.now() - loopStart > timeoutOf(spec, "emptyResponseMs", EMPTY_RESPONSE_TIMEOUT_MS)) {
         emit({ kind: "error", message: "sin contenido observable del asistente" });
         return;
       }

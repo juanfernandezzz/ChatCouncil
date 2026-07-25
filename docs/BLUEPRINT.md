@@ -1904,6 +1904,219 @@ Los ítems 1 y 2 gatean Round A y se corren antes de escribir código; 3 y
 
 ---
 
+**ENMIENDA a §0.15 (2026-07-24, ver §0.16):** la "Fase 11b" que esta
+sección creó quedó **disuelta** por E10 — el transporte `"page"` pasó a ser
+primario y DeepSeek y Grok dejaron de ser casos especiales. Las menciones a
+Fase 11b dentro de §0.15 son registro histórico de la decisión tal como se
+tomó, no una fase vigente del roadmap. La opción B que Juan eligió ahí
+queda superada por el reencuadre a director: ya no hay un conjunto
+"inalcanzable por cookie" que haya que diferir.
+
+---
+
+### 0.16 Fase 11 — prior art, reencuadre a "director" y transporte `"page"` primario (2026-07-24)
+
+**Origen.** Juan detuvo la implementación para preguntar si el proyecto
+valía la pena o si existían caminos más simples, mencionando Arena.ai y
+GodMode y pidiendo explícitamente no limitarse a esos ejemplos. Se hizo
+una investigación amplia de prior art. Lo que sigue son los hallazgos y
+las decisiones que salieron de ahí.
+
+**Hallazgos del prior art (con las correcciones de Juan aplicadas).**
+
+- **ChatHub** (extensión de Chrome, ~200.000 usuarios, creada en marzo de
+  2023, versión de tienda 4.1.1 de mayo de 2026) es la única herramienta
+  ampliamente distribuida que ofrece explícitamente BYOA por sesión del
+  navegador. Su arquitectura, verificada sobre su `manifest.config.ts`
+  open source, es un **híbrido**: content script *same-origin* SÓLO para
+  ChatGPT (`chatgpt-inpage-proxy.ts`), y `host_permissions` + fetch
+  credenciado + reescritura de headers con `declarativeNetRequest` para
+  los demás proveedores. **Corrección de Juan (2026-07-24):** ChatHub NO
+  cubre el caso de uso hoy — su versión web es de código cerrado, usa APIs
+  propias pagas y su tier gratuito tiene límites extremos; su extensión es
+  gratuita pero está muy desactualizada y no funcional. No cuenta como
+  competencia. Lo que SÍ queda en pie de ese hallazgo: (a) el nicho es
+  sostenible, porque sobrevivieron tres años; (b) la parte de su
+  arquitectura que funcionaba era la same-origin, y la registrada como
+  fallando es justamente la de fetch credenciado desde fuera (issues
+  #1187 y #862, "Please pass cloudflare check", con el propio vendor
+  empujando al usuario a modo API key).
+- **GodMode** (smol-ai, 5,8k estrellas, MIT): app **Electron** que abre
+  **webviews con las webapps reales y completas** de cada proveedor; el
+  prompt se inyecta en todos a la vez. No usa API keys ni reimplementa
+  endpoints. **Efectivamente abandonado:** último release
+  v1.0.0-beta.10 de noviembre de 2023, último commit alrededor de julio
+  de 2024, 53 issues abiertos (varios de login roto sin resolver desde
+  2024). Murió por falta de mantenimiento, NO porque la arquitectura
+  fuera inviable — dato central para la decisión de abajo.
+- **ChatALL** (sucesor al que apunta el propio README de GodMode): misma
+  familia de enfoque, y su README admite que los bots con "Web Access"
+  "are inherently less reliable and frequently face stability issues, as
+  service providers regularly update their web interfaces and security
+  measures". Confesión directa del costo del enfoque.
+- **Arena** (antes LMArena / Chatbot Arena / LMSYS; renombrada
+  oficialmente el 28 de enero de 2026, hoy `arena.ai`, Arena
+  Intelligence Inc., Series A de US$150M en enero de 2026): **NO
+  reemplaza el caso de uso.** Resuelve ranking por votos ciegos entre
+  modelos ANÓNIMOS servidos por infraestructura propia, no por las
+  cuentas del usuario; y advierte que las conversaciones pueden
+  divulgarse a los proveedores y públicamente. Es evaluación, no uso
+  práctico privado.
+- **El resto del mercado no hace BYOA:** agregadores BYOK (OpenRouter,
+  TypingMind), plataformas con suscripción propia (Poe, Sider, Merlin,
+  Monica) y clientes open source que exigen API keys (LibreChat, Open
+  WebUI, LobeChat, Jan, Chatbox). De todo el espacio, sólo ChatHub,
+  GodMode y ChatALL intentan usar las sesiones reales del usuario.
+- **Ecosistema de ingeniería inversa:** existe un proyecto por cada muro
+  que enfrentó el recon — el PoW del sentinel de ChatGPT **SÍ es
+  derivable** fuera de la página (varios repos lo hacen; el writeup de
+  performance.dev describe el iframe `sentinel/frame.html` con su
+  `sdk.js` versionado aparte para fingerprintear al cliente en
+  aislamiento), las cookies de Gemini y su `StreamGenerate`, el PoW en
+  WebAssembly de DeepSeek (`sha3_wasm_bg.wasm`), el transporte
+  **WebSocket** de Perplexity (confirmado, cierra ese hueco del recon), y
+  wrappers de Grok por cookie. **Pero** requieren replicar el entorno del
+  navegador, spoofing de TLS/JA3 y a veces decodificar bytecode de
+  Turnstile en una VM; muchos advierten inestabilidad y varios están sin
+  mantenimiento. Conclusión operativa: derivable **a costo absurdo**. La
+  respuesta al gate de Round A que quedó abierto en §0.15 no es "se
+  puede" sino "se puede y no conviene".
+
+**Reencuadre del producto (idea de Juan, 2026-07-24) — de CLIENTE a
+DIRECTOR.** Se desacopla **display** de **extracción**. El display sale
+gratis porque es la UI real del proveedor, mostrada en ventanas/pestañas
+reales; sólo se automatizan dos cosas: (1) inyectar el prompt en todos los
+proveedores a la vez, y (2) cosechar la respuesta para las herramientas de
+análisis. ChatCouncil deja de ser un cliente que reimplementa proveedores
+y pasa a ser un director que maneja sus UIs reales.
+
+Esto **disuelve** los bloqueos registrados en §0.15, no los rodea: el PoW
+del sentinel lo genera el JS de ChatGPT; el `localStorage` de DeepSeek es
+accesible porque el content script es same-origin; el token `at` y la
+atestación WAA de Gemini los produce la página; el WebSocket de Perplexity
+y el Server Action de Grok no hace falta descubrirlos. Y los challenges
+aparecen en una pestaña REAL y visible que Juan resuelve: la ventana de
+§0.14 deja de ser andamiaje y pasa a ser el comportamiento natural del
+sistema.
+
+Costo aceptado: fragilidad ante rediseños de UI. Se acepta porque una
+rotura de DOM es **visible y barata** (cambiar un selector) mientras que
+una rotura de PoW es invisible y cuesta semanas; y porque **degrada con
+gracia** — si falla la extracción, Juan igual ve la respuesta en la
+pestaña real, lo que respeta la regla de no simular jamás.
+
+**E10 (NUEVA) — el transporte `"page"` pasa a ser PRIMARIO y la Fase 11b
+se disuelve.** §0.15 mandaba `"page"` a una Fase 11b como transporte de
+dos rezagados. Queda revertido: `"page"` es el transporte del proveedor
+más importante y más difícil, y es el único que el prior art muestra
+sobreviviendo. DeepSeek y Grok dejan de ser casos especiales: son
+proveedores `"page"` como los demás. **claude.ai se queda en `"cookie"`**
+— funciona y está verificado, no se toca, y de paso prueba que los dos
+transportes conviven.
+
+**E9 AMPLIADA — `authTransport` es una unión discriminada, no un campo de
+texto.** El recon ya había señalado que podía hacer falta un segundo eje
+(§0.15, nota sobre `ByoaHttpRequest`); queda confirmado. Un adaptador
+`"cookie"` tiene forma de petición HTTP (`{url, method, headers, body}`);
+un adaptador `"page"` tiene forma de DOM (dónde inyectar, qué observar,
+cómo detectar fin de respuesta). Forzar ambos en una sola interfaz sería
+un error de diseño: el contrato se parte por `authTransport`, y cada rama
+lleva su propia configuración.
+
+**E11 (NUEVA) — los selectores viven en `adapters.json`, y son
+DECLARATIVOS.** Verificado en esta sesión: el service worker fetchea
+`https://chatcouncil.netlify.app/adapters.json` con TTL. Poniendo los
+selectores ahí, un proveedor roto por un rediseño se arregla **editando un
+JSON y esperando el TTL**: sin recompilar, sin reinstalar la extensión,
+sin tocar el repo. Es la respuesta concreta al riesgo de mantenimiento que
+mató a GodMode, y preserva Q1: el content script es un **ejecutor
+genérico** sin lógica de proveedor.
+**Restricción de seguridad, no negociable:** el manifiesto transporta
+SÓLO datos declarativos (selectores y enums de estrategia), **nunca
+cadenas evaluables**. `adapters.json` es remoto y el ejecutor corre dentro
+de páginas logueadas de Juan; si el manifiesto pudiera transportar código,
+un manifiesto comprometido correría JS arbitrario con su sesión. Se
+verifica por gate.
+
+**E12 (NUEVA, decisión de Juan) — BYOA es prioridad SIEMPRE; BYOK es
+opcional.** Cuando BYOA y BYOK compitan por esfuerzo o por espacio en la
+UI, gana BYOA. Consecuencia inmediata: **se rechaza integrar OpenRouter.**
+Claude lo había recomendado como "piso de fiabilidad" (una config sobre el
+factory `openAiCompatProvider` existente, cientos de modelos sin
+anti-bot). Juan lo descartó porque exige pagar créditos de API, lo que
+contradice la tesis del producto — aprovechar las suscripciones que ya
+paga — y porque sólo tiene una API key gratuita de Google.
+**Error propio registrado:** Claude puso trabajo BYOK opcional en el
+camino crítico de una fase cuyo propósito declarado es BYOA, motivado por
+nerviosismo ante el riesgo del pivote. La corrección de Juan es correcta.
+El único piso que queda es el BYOK de Google ya embarcado, y alcanza.
+
+**Estrategia de cuentas de prueba (decisión de Juan, 2026-07-24).**
+Claude Pro y Gemini Pro con sus cuentas REALES, porque las capacidades
+pagas son parte de lo que hay que validar y no se pueden probar en tier
+gratuito. ChatGPT, DeepSeek, Perplexity y Grok con una cuenta **burner**.
+Observación que reduce el riesgo: como claude.ai se queda en `"cookie"` y
+ya funciona, **la única cuenta paga que necesita trabajo de DOM es Gemini
+Pro** — y entra en Round B, cuando el ejecutor ya esté probado y el
+volumen de iteración sea bajo. La iteración pesada (probar la arquitectura
+entera de cero) cae en ChatGPT, que está en la burner. Matices honestos:
+las cuentas nuevas suelen recibir MÁS fricción anti-bot, no menos; y un
+selector validado en tier gratuito puede no valer en Pro. **Code nunca
+hace el login:** Juan se loguea en su navegador y Code usa la sesión ya
+abierta.
+
+**DESCONOCIDO ABIERTO que gatea el diseño de UI de Round A.** Varias
+webapps pausan o degradan el streaming cuando la pestaña está oculta (Page
+Visibility API), y Chrome estrangula timers en background. Si eso ocurre,
+las pestañas de proveedor NO pueden estar escondidas y el layout cambia.
+**No está medido.** Es la primera medición de Round A, antes de
+comprometer el diseño. Confianza: desconocida a propósito.
+
+**Distinción que probablemente lo resuelve (y que refuerza la idea
+original de Juan de "6 mini ventanas").** `document.visibilityState` NO
+depende del foco sino de si la superficie está visible en pantalla: una
+**ventana visible pero sin foco** reporta `"visible"`, mientras que una
+**pestaña de fondo dentro de una ventana** reporta `"hidden"`. Si eso se
+confirma, el layout de ventanas en mosaico —lo que Juan describió— no
+sufre ni pausas ni estrangulamiento, y el riesgo queda confinado al diseño
+alternativo de pestañas ocultas en una sola ventana. Confianza moderada,
+por eso la medición de Round A debe comparar los DOS casos (ventana
+visible sin foco vs. pestaña oculta) y no sólo uno: de eso depende si el
+consejo puede compactarse en una ventana o exige mosaico.
+
+**Composición de rounds vigente (reemplaza la de §0.15):**
+- **Round A:** generalización del contrato (E2 + E9 ampliada) + ejecutor
+  genérico de content script manejado por `adapters.json` (E11) +
+  **ChatGPT** como primer proveedor `"page"` de punta a punta, en la
+  cuenta burner. Precedido por la medición de visibilidad.
+- **Round B:** Gemini Pro, Perplexity, DeepSeek y Grok por `"page"` —
+  ahora todos con la misma forma.
+
+**Alcance y distribución (decisión de Juan, 2026-07-24) — MODIFICA lo
+registrado en §0.14.** ChatCouncil **no será comercial ni distribuido**;
+el repo pasará a privado al terminar, para que nadie lo tome y lo venda.
+Es para uso de Juan y, a lo sumo, de un colega al que él mismo invite.
+Consecuencias registradas: (a) la preocupación de §0.14 sobre el riesgo de
+ToS para cuentas de TERCEROS queda sin objeto — el riesgo lo corre Juan
+sobre sus propias cuentas y lo acepta explícitamente; (b) las políticas de
+la Chrome Web Store dejan de aplicar, porque la extensión se carga
+unpacked: no rigen ni la política de propósito único ni la de código
+alojado remotamente, y se pueden usar los permisos que hagan falta sin
+revisión. La restricción de E11 sobre datos declarativos se mantiene
+igual, porque es de SEGURIDAD y no de política de tienda.
+(c) "Admin con invitaciones" que Juan describe es la capa de IDENTIDAD
+(Supabase, Fase 6), distinta del panel de cuentas de PROVEEDOR de Fase 10;
+no existe todavía y se agenda como fase corta posterior a que el consejo
+responda.
+
+**Lo que el pivote NO descarta:** el contrato, el puente SPA↔extensión, la
+store, el panel de cuentas, la exportación, los guards, el CI y claude.ai
+funcionando. Lo que se descarta es la reimplementación de endpoints
+internos de cinco proveedores — que nunca se escribió. Se pierde el
+esfuerzo de recon, no código embarcado.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```
@@ -2419,50 +2632,64 @@ patrón Paso 0, aceptación real con recorrido de primer uso):**
   Google POR LA UI → armar consejo → enviar → seleccionar y copiar una
   respuesta → colapsar/expandir sidebar → recargar y verificar persistencia.
 
-### Fase 11 — BYOA multiproveedor (el corazón del producto) 🟡 (E1–E8 en §0.13 · política de challenge §0.14 · recon + E9 + alcance revisado §0.15)
+### Fase 11 — BYOA multiproveedor: el director (el corazón del producto) 🟡 (ledger §0.13–§0.16; arquitectura vigente en §0.16)
 
-- **Alcance vigente tras el recon (§0.15, opción B de Juan):** los
-  proveedores viables por transporte `"cookie"` — **claude.ai (hecho),
-  ChatGPT, Perplexity, y Gemini si sobrevive a la segunda pasada de
-  recon**. DeepSeek y Grok pasan a **Fase 11b** con el transporte
-  `"page"`: el primero por autenticar con `localStorage` en vez de
-  cookie (inalcanzable desde el offscreen), el segundo por no tener
-  endpoint de completion conocido. Cada adaptador sigue siendo ingeniería
-  inversa propia con su `AdapterDescriptor.notes` fechado.
-- **Partición (E1 revisada en §0.15):** Round A = generalización del
-  contrato (E2 + E9) + ChatGPT solo · Round B = Perplexity + Gemini.
-- **E9:** cada proveedor declara `authTransport: "cookie" | "page"`; el
-  campo entra en Round A aunque `"page"` se implemente en Fase 11b.
-- Manifest `adapters.json` con entrada por proveedor (la extensión sigue
-  siendo runner agnóstico); allowlist de orígenes de sesión y
-  `host_permissions` espejados 1:1 — con **gate estructural obligatorio**
-  en Round A, porque la allowlist es derivada y el manifiesto es manual
-  (riesgo de deriva silenciosa, §0.15).
+- **Arquitectura vigente (§0.16, reencuadre de Juan) — DIRECTOR, no
+  cliente.** ChatCouncil no reimplementa los endpoints internos de los
+  proveedores: maneja sus **UIs reales**. Se desacopla display de
+  extracción — el display sale gratis (ventanas/pestañas reales del
+  proveedor) y sólo se automatizan la inyección simultánea del prompt y la
+  cosecha de la respuesta para las herramientas de análisis.
+- **Transporte `"page"` es PRIMARIO (E10).** Content script same-origin en
+  una pestaña del proveedor: el JS del propio sitio genera los tokens
+  anti-abuso (PoW del sentinel, `at` + WAA de Gemini), el `localStorage`
+  es accesible, y no hace falta descubrir el WebSocket de Perplexity ni el
+  Server Action de Grok. **claude.ai se queda en `"cookie"`** — funciona,
+  no se toca, y prueba que los dos transportes conviven. Acá entra la Q2
+  diferida desde Fase 3: ciclo de vida de pestañas (`chrome.tabGroups`,
+  permiso ya declarado en el manifest).
+- **Contrato partido por `authTransport` (E9 ampliada):** unión
+  discriminada — la rama `"cookie"` lleva forma de petición HTTP, la rama
+  `"page"` lleva forma de DOM (dónde inyectar, qué observar, cómo detectar
+  fin de respuesta).
+- **Selectores en `adapters.json`, declarativos (E11).** Un proveedor roto
+  por un rediseño se arregla editando un JSON y esperando el TTL: sin
+  recompilar ni reinstalar. El content script es un ejecutor GENÉRICO sin
+  lógica de proveedor (preserva Q1). **Jamás cadenas evaluables** — el
+  manifiesto es remoto y el ejecutor corre en páginas logueadas;
+  verificable por gate.
+- **BYOA es prioridad siempre; BYOK es opcional (E12).** OpenRouter
+  rechazado (exigiría pagar créditos de API, contra la tesis del
+  producto). El piso de fiabilidad es el BYOK de Google ya embarcado.
+- **Rounds:** Round A = medición de visibilidad + contrato generalizado +
+  ejecutor genérico + **ChatGPT** de punta a punta (cuenta burner) ·
+  Round B = **Gemini Pro**, Perplexity, DeepSeek, Grok por `"page"`.
+- **Gate estructural obligatorio en Round A:** allowlist de orígenes ===
+  `host_permissions`, porque la allowlist es derivada y el manifiesto es
+  manual (riesgo de deriva silenciosa, §0.15).
 - Panel de cuentas (Fase 10) extendido con los estados de sesión de los
   proveedores en alcance.
-- **Aceptación real (MODIFICADA respecto del plan maestro — ver §0.15):**
-  un round con todos los proveedores BYOA **en alcance de esta fase** con
-  sesión disponible respondiendo en paralelo en el Chrome real de Juan.
-  Un proveedor técnicamente bloqueado se registra en ledger con evidencia
-  y se marca en la UI como no disponible — no se simula.
+- **Primera medición de Round A, antes de comprometer el diseño de UI:**
+  si las webapps pausan el streaming con la pestaña oculta (Page
+  Visibility API) o Chrome estrangula el background, las pestañas de
+  proveedor no pueden estar escondidas y el layout cambia (§0.16).
+- **Aceptación real:** un round con todos los proveedores en alcance
+  respondiendo en paralelo en el Chrome real de Juan — Claude Pro y Gemini
+  Pro con sus cuentas reales, el resto con la burner. Un proveedor
+  técnicamente bloqueado se registra en ledger con evidencia y se marca en
+  la UI como no disponible — no se simula. Si falla la extracción pero la
+  respuesta se ve en la pestaña real, eso es degradación aceptable y se
+  reporta como tal, nunca se rellena.
 
-### Fase 11b — BYOA por transporte `"page"`: DeepSeek y Grok ⏳
+### Fase 11.5 — Identidad: admin e invitaciones ⏳
 
-- **Transporte `"page"`** (E9): content script same-origin en una pestaña
-  del proveedor, para los casos que exigen contexto de página. **Debe ser
-  un relay de fetch GENÉRICO, sin lógica de proveedor**, o se rompe Q1
-  (runner agnóstico). Acá entra la Q2 diferida desde Fase 3: gestión del
-  ciclo de vida de pestañas (`chrome.tabGroups`), que deja de ser
-  hipótesis y pasa a ser requisito con evidencia.
-- **DeepSeek**: auth por `localStorage.userToken` + PoW por turno +
-  headers de fingerprint + AWS WAF (§0.15). **Grok**: primero confirmar o
-  descartar el Server Action de Next.js — si el id de acción rota con
-  cada build, no hay endpoint estable y el proveedor se reevalúa.
-- `host_permissions` suma acá `https://chat.deepseek.com` y
-  `https://grok.com` (segunda re-aprobación, costo aceptado en §0.15).
-- **Aceptación real:** DeepSeek respondiendo en el consejo por transporte
-  `"page"` en el Chrome real de Juan, con la extensión sin lógica de
-  proveedor en el content script (verificable por gate).
+- Capa de IDENTIDAD (Supabase, Fase 6), distinta del panel de cuentas de
+  PROVEEDOR de Fase 10. Juan como admin de su propio despliegue, capaz de
+  invitar a un colega puntual. No existe todavía (§0.16).
+- Fase corta y posterior a que el consejo responda: no bloquea nada de
+  Fase 11 y no debe adelantarse a la funcionalidad central.
+- Alcance mínimo a propósito: sin roles complejos, sin organizaciones, sin
+  facturación — ChatCouncil no es comercial ni se distribuye (§0.16).
 
 ### Fase 12 — Capacidades por proveedor: modelo, research, esfuerzo ⏳
 

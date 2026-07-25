@@ -2369,6 +2369,38 @@ del envio. Se repite con v2.
 
 ---
 
+### 0.20 Fase 11 Round A p2a — repetición con v2/v3/v4: contenedor vacío, dos defectos de completitud y background confirmado (2026-07-25)
+
+**Repetición de la sonda con v2 (corregido §0.19): el envío ya funcionaba, pero apareció un defecto distinto y más sutil.** Prompt corto ("decime hola"): la secuencia dio `started → submitted → done{textLength:0}`, sin ningún `delta` intermedio. La respuesta llegó bien y se veía completa en pantalla — el `done` mentía.
+
+**Diagnóstico: el contenedor `.markdown` del asistente se crea VACÍO antes de tener texto — es un estado real de la UI de ChatGPT, no un bug de selector.** Se confirmó con instrumentación paralela (`MutationObserver` + polling directo del DOM, fuera del ejecutor): el nodo aparece (`asstCount:1`) con `textContent.length: 0`, y sólo después se llena. El selector `[data-message-author-role="assistant"] .markdown` es correcto — se verificó consultándolo directamente en frío, con `count` y `len` coincidiendo con el contenido final. Subir `quiescenceMs` (se probó con 1500, 4000 y 9000 ms) **no lo arregla**: el corte no pasa por `idle > idleLimit`, pasa por la otra rama del loop — `structurallyComplete(spec) && idle > 400` — que se cumple en cuanto el stop-button desaparece, sin importar si el contenedor de texto sigue vacío.
+
+**Corrección v3: exigir avance real sobre el turno anterior antes de declarar `done`.** Se agregó `EMPTY_RESPONSE_TIMEOUT_MS = 45_000` como techo absoluto de espera con cero contenido (red de seguridad: sin esto, un contenedor que nunca se llena cuelga el turno para siempre, violando el mismo principio que ya obligaba a `quiescenceMs` a existir como fallback). El gate de completitud pasó a exigir `lastLength > baselineLength` (longitud del último mensaje del asistente ANTES de enviar el prompt nuevo) en vez de sólo inactividad.
+
+**v3 tenía un defecto propio, hallado en la prueba (d): comparar por LONGITUD es incorrecto.** Mandar el mismo prompt corto dos veces en la misma conversación: la primera respuesta fue "¡Hola! 👋 ¿Cómo estás? ¿En qué puedo ayudarte?" (46 caracteres), la segunda "¡Hola! 😊" (~9 caracteres) — más CORTA que la anterior. `lastLength > baselineLength` nunca se cumplió, y el turno colgó hasta el error de 45s aunque el DOM ya tuviera la respuesta nueva completa. Lección: ninguna propiedad numérica del contenido (longitud) es un identificador válido de "es un turno nuevo"; hace falta identidad estructural.
+
+**Corrección v4: contar nodos, no comparar longitudes.** Se agregó `countAssistantNodes(spec)` (cuenta cuántos nodos matchean `assistantMessage.selector` en un momento dado) y el gate de completitud pasó a exigir `lastLength > 0 && countAssistantNodes(spec) > baselineNodeCount` — un nodo de asistente que NO existía antes del envío, con texto no vacío. Esto es correcto sin importar si la respuesta nueva es más larga, más corta o de longitud parecida a la anterior, y también cubre el caso del primer mensaje de una conversación (`baselineNodeCount = 0`) sin rama especial. Confirmado con la cuenta descansada: primera vuelta `started → submitted → delta(50) → done(50)` en 7.4s; segunda vuelta en la misma conversación completó con la respuesta corta real (9 caracteres) sin repetir el cuelgue de v3.
+
+**Background confirmado limpio para generaciones normales (cierra §0.17).** Prompt largo ("contar hasta 300") con la pestaña realmente oculta (`document.visibilityState: hidden`, verificado sin refrentarla) desde el arranque: `started → submitted → delta(1083) → done(1083)` en ~8s, contenido final de 1091 caracteres verificado íntegro. El DOM se actualiza con normalidad en segundo plano; no hace falta mantener la pestaña activa para que el streaming avance.
+
+**Hallazgo nuevo, no buscado: el throttling de pestañas ocultas de Chrome se intensifica con la DURACIÓN del ocultamiento, y eso sí afecta la detección.** En la repetición de la prueba (d), una pestaña que llevaba un rato larga acumulando estado oculto (por cambios de foco de pruebas previas en la misma sesión, no por el escenario que se estaba probando) hizo que el mismo turno tardara 85s en vez de los ~7s típicos — el `MutationObserver` y el loop de 200ms del ejecutor corrieron mucho más lento de lo esperado. El ejecutor no mintió: emitió `stalled` y después `error: "sin contenido observable del asistente"` en vez de fingir un `done` vacío, que es el comportamiento correcto por diseño. Pero el DOM, consultado después, sí tenía la respuesta completa — el error fue por timeout corto para esas condiciones, no por un defecto de lógica. Distinto del caso limpio de arriba: 8-12s de ocultamiento breve no dispara este throttling agresivo; una pestaña oculta un rato largo, sí. No se investigó cuánto tiempo exactamente es el umbral — queda abierto.
+
+**Degradación observada de la cuenta burner bajo uso intensivo.** A medida que avanzó la sesión (varias decenas de mensajes en menos de una hora), los tiempos de primer token subieron notablemente (de ~6-9s a 45-70s+), independientemente del ejecutor. Se cortó la sonda para no seguir empeorando la señal; se retomó horas después con la cuenta descansada y los tiempos volvieron a la normalidad. No confundir esto con un defecto del producto.
+
+**Techos de tiempo actuales, en `apps/extension/entrypoints/byoa-page.content.ts`** (constantes del ejecutor, no de la spec — quedan pendientes de mover a la spec declarativa por E11):
+```
+SUBMIT_READY_MS          5_000 ms  — control de envío aparece y se habilita tras escribir
+SUBMIT_CONFIRM_MS        6_000 ms  — confirmación de que el envío tuvo efecto observable
+EMPTY_RESPONSE_TIMEOUT_MS 45_000 ms — techo con CERO avance de contenido tras el envío (nuevo en v3/v4)
+```
+`quiescenceMs` no es una constante del archivo: viaja en `spec.completion` (dato, no código, por E11); en las pruebas manuales se usó 1500ms.
+
+**Gates de artefacto verificados sobre lo COMPILADO**, siguiendo la regla ASCII-only de §0.19: marcador `byoa-page-executor-v4` presente (=1) en `content-scripts/byoa-page.js`, `byoa-page-executor-v2` y `-v3` ausentes (=0), `aria-disabled` presente, **0** ocurrencias de `eval`/`new Function`, **0** ocurrencias de `document.cookie`/`localStorage`/`sessionStorage`/`authorization`.
+
+**Commits de esta ronda:** `85735e8` (v2, corrección de la carrera de tiempo en el envío) y `6b2eb08` (v4, corrección del gate de completitud — v3 no se commiteó por separado, quedó reemplazado por v4 antes del commit).
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

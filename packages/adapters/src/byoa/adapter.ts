@@ -36,12 +36,12 @@
  */
 
 import type { Adapter, AdapterChunk, ProviderThreadState, SendOptions } from "@chatcouncil/shared";
-import type { ByoaCompletionParams, ByoaProviderConfig, ByoaTransport } from "./types";
+import type { ByoaCompletionParams, ByoaCookieProviderConfig, ByoaTransport } from "./types";
 
 export interface ByoaAdapterDeps {
   /** Organización de sesión elegida (uuid). null → error explícito. */
   getOrgId(): string | null;
-  transportFor(cfg: ByoaProviderConfig): ByoaTransport;
+  transportFor(cfg: ByoaCookieProviderConfig): ByoaTransport;
   /** Override del modelo a nivel instancia (el harness crea un adapter por envío). */
   model?: string;
 }
@@ -52,7 +52,7 @@ function isAbortError(err: unknown): boolean {
 
 /** Paso 3: housekeeping post-turno. Nunca lanza — un fallo acá degrada a "sin providerThread", no a error del turno. */
 async function fetchThreadState(
-  cfg: ByoaProviderConfig,
+  cfg: ByoaCookieProviderConfig,
   transport: ByoaTransport,
   orgId: string,
   conversationUuid: string,
@@ -68,7 +68,7 @@ async function fetchThreadState(
   return lastMessageId ? { conversationUuid, lastMessageId } : null;
 }
 
-export function createByoaAdapter(cfg: ByoaProviderConfig, deps: ByoaAdapterDeps): Adapter {
+export function createByoaAdapter(cfg: ByoaCookieProviderConfig, deps: ByoaAdapterDeps): Adapter {
   const controllers = new Map<string, AbortController>();
 
   async function* run(opts: SendOptions): AsyncGenerator<AdapterChunk> {

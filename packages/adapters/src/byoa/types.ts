@@ -62,11 +62,32 @@ export interface ByoaStreamParser {
   end(): AdapterChunk[];
 }
 
-export interface ByoaProviderConfig {
+/**
+ * Campos comunes a las dos ramas de transporte (E9 ampliada, §0.16).
+ */
+export interface ByoaProviderCommon {
   id: string;
   label: string;
   /** Origin de la sesión. De acá deriva el allowlist del proxy BYOA. */
   sessionOrigin: string;
+  /**
+   * Registro curado para el selector (Fase 4, E4). IMPORTANTE: acá
+   * "verified" es más estricto que en BYOK — un id de modelo público y
+   * oficial puede seguir siendo `verified: false` si nunca se probó como
+   * override en ESTE endpoint interno (distinto de la API pública).
+   */
+  models?: CuratedModel[];
+  notes?: string;
+}
+
+/**
+ * Rama "cookie": el camino verificado en Fase 3 — offscreen con
+ * `credentials:"include"` contra el endpoint interno del proveedor. Tiene
+ * forma de PETICIÓN HTTP. Hoy sólo claude.ai (§0.16, E10: claude.ai se
+ * queda acá porque funciona y no se toca).
+ */
+export interface ByoaCookieProviderConfig extends ByoaProviderCommon {
+  authTransport: "cookie";
   /** parent_message_uuid del PRIMER turno (raíz de una conversación nueva). */
   rootParentMessageUuid: string;
   buildCreateConversation(params: ByoaCreateParams): ByoaHttpRequest;
@@ -86,17 +107,87 @@ export interface ByoaProviderConfig {
    * próximo turno (degradación suave, nunca un error del turno actual).
    */
   parseLastAssistantMessageUuid(body: string): string | null;
-  /**
-   * Registro curado para el selector (Fase 4, E4). IMPORTANTE: acá
-   * "verified" es más estricto que en BYOK — un id de modelo público y
-   * oficial puede seguir siendo `verified: false` si nunca se probó como
-   * override en ESTE endpoint interno (distinto de la API pública).
-   */
-  models?: CuratedModel[];
-  notes?: string;
 }
 
-/** De dónde sale el texto del cuerpo: siempre el puente (offscreen). */
+/**
+ * Rama "page" (E10/E11, §0.16) — ESPECIFICACIÓN DECLARATIVA.
+ * ----------------------------------------------------------
+ * El content script same-origin es un EJECUTOR GENÉRICO: interpreta esta
+ * spec y no sabe nada del proveedor (preserva Q1, runner agnóstico). Toda
+ * la estrategia viaja en `adapters.json`, así que un rediseño de UI se
+ * arregla editando un JSON y esperando el TTL — sin recompilar ni
+ * reinstalar la extensión.
+ *
+ * RESTRICCIÓN DE SEGURIDAD (E11, no negociable): esta spec transporta SÓLO
+ * datos declarativos — selectores y enums. JAMÁS cadenas evaluables ni
+ * código. El manifiesto es remoto y el ejecutor corre dentro de páginas
+ * LOGUEADAS del usuario: si pudiera transportar código, un manifiesto
+ * comprometido correría JS arbitrario con la sesión de la persona. Se
+ * verifica por gate.
+ */
+export interface ByoaPageSpec {
+  /** URL a abrir para arrancar una conversación nueva. */
+  newConversationUrl: string;
+  /** Dónde se escribe el prompt. */
+  composer: {
+    selector: string;
+    kind: "textarea" | "contenteditable";
+  };
+  /** Cómo se dispara el envío. */
+  submit:
+    | { kind: "click"; selector: string }
+    | { kind: "key"; key: "Enter" };
+  /** Subárbol que observa el MutationObserver. */
+  responseRoot: { selector: string };
+  /** De dónde se lee el texto del asistente; `pick` resuelve cuál turno. */
+  assistantMessage: { selector: string; pick: "last" };
+  /**
+   * Cómo se sabe que la generación terminó. `quiescence` es el fallback
+   * universal y debe existir siempre como red: si el marcador estructural
+   * cambia con un rediseño, el turno igual cierra en vez de colgarse.
+   */
+  completion:
+    | { kind: "element-gone"; selector: string; quiescenceMs: number }
+    | { kind: "element-present"; selector: string; quiescenceMs: number }
+    | { kind: "quiescence"; quiescenceMs: number };
+  /**
+   * Selectores que delatan que hace falta intervención HUMANA (challenge,
+   * captcha, gate de producto). Al detectarse, el ejecutor NO intenta
+   * resolver nada: emite la señal de challenge de §0.14 para que la
+   * persona lo resuelva en la ventana real.
+   */
+  humanGate?: { selector: string }[];
+}
+
+/**
+ * Rama "page": transporte PRIMARIO desde §0.16 (E10). El JS del propio
+ * sitio genera los tokens anti-abuso, el `localStorage` es accesible y no
+ * hace falta descubrir endpoints internos.
+ */
+export interface ByoaPageProviderConfig extends ByoaProviderCommon {
+  authTransport: "page";
+  page: ByoaPageSpec;
+}
+
+/**
+ * Unión discriminada por `authTransport` (E9 ampliada, §0.16). Forzar las
+ * dos ramas en una sola interfaz sería un error de diseño: una tiene forma
+ * de petición HTTP y la otra de DOM.
+ */
+export type ByoaProviderConfig =
+  | ByoaCookieProviderConfig
+  | ByoaPageProviderConfig;
+
+/**
+ * De dónde sale el texto del cuerpo en la rama "cookie": el puente
+ * (byoa:proxy → offscreen con credentials:"include").
+ *
+ * NOTA (§0.16): esto YA NO es universal. La suposición original —"siempre
+ * el puente"— se rompió con la evidencia del recon (§0.15): DeepSeek
+ * autentica por localStorage, inalcanzable desde el offscreen. La rama
+ * "page" no usa este transporte: su texto sale del DOM observado por el
+ * ejecutor genérico dentro de la página.
+ */
 export interface ByoaTransport {
   /**
    * Ejecuta la request y entrega el cuerpo como TEXTO ya decodificado, en

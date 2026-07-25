@@ -100,6 +100,15 @@ export function sendByoaPrompt(
     failAsync("la extensión no está conectada (BYOA usa la sesión del navegador vía la extensión)");
     return inert;
   }
+  if (cfg.authTransport !== "cookie") {
+    // §0.16 (E10): la rama "page" es el transporte primario de Fase 11,
+    // pero su ejecutor genérico llega en el commit siguiente de Round A.
+    // Falla explícito y honesto — jamás una respuesta simulada.
+    failAsync(
+      `el proveedor "${cfg.label}" usa transporte de página, todavía no disponible en esta versión`,
+    );
+    return inert;
+  }
   if (!opts.orgId) {
     failAsync("elige una organización de sesión primero (Detectar sesión Claude)");
     return inert;

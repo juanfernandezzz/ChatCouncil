@@ -42,15 +42,16 @@
  */
 
 import { createAnthropicParser } from "../byok/anthropic";
-import type { ByoaCompletionParams, ByoaCreateParams, ByoaGetThreadParams, ByoaProviderConfig } from "./types";
+import type { ByoaCompletionParams, ByoaCreateParams, ByoaGetThreadParams, ByoaCookieProviderConfig } from "./types";
 
 const CLAUDE_ORIGIN = "https://claude.ai";
 /** Raíz de una conversación nueva: el server acepta este parent en el 1er turno. */
 const ROOT_PARENT_MESSAGE_UUID = "00000000-0000-4000-8000-000000000000";
 
-export const claudeByoaProvider: ByoaProviderConfig = {
+export const claudeByoaProvider: ByoaCookieProviderConfig = {
   id: "claude",
   label: "Claude (claude.ai · sesión)",
+  authTransport: "cookie",
   sessionOrigin: CLAUDE_ORIGIN,
   rootParentMessageUuid: ROOT_PARENT_MESSAGE_UUID,
 

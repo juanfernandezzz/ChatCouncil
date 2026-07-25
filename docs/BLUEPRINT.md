@@ -2117,6 +2117,107 @@ esfuerzo de recon, no código embarcado.
 
 ---
 
+### 0.17 Fase 11 Round A — medición de visibilidad y contrato partido (2026-07-24)
+
+**Resultado de la medición (gate de diseño de UI declarado en §0.16).**
+Ejecutada por Code sobre sesiones reales: ChatGPT en la cuenta burner,
+Gemini en la cuenta Pro. Sólo timestamps y conteos de mutación — sin
+contenido de respuestas, sin cookies, sin headers.
+
+| Proveedor | Escenario | Resultado | `visibilityState` |
+|---|---|---|---|
+| ChatGPT | oculta (de hecho ventana minimizada, `screenLeft = -32000`) | 58 mutaciones en ~39 s; **continuó**, en rachas, sin corte total ni acumulación final | `"hidden"` constante |
+| Gemini Pro | visible con foco (primeros 3,1 s) | 2211 mutaciones; streaming normal | `"visible"` real (ventana en 0,0) |
+| Gemini Pro | oculta (transición espontánea a los 3,1 s, con `visibilitychange` real disparado) | 1929 mutaciones entre 3,1 s y 16,8 s; **continuó** sin pausa | `"hidden"` |
+
+**Veredicto: el streaming NO se pausa ni se acumula con la pestaña
+oculta**, en los dos proveedores medidos, para respuestas de 15–40 s.
+ChatGPT incluso se midió en un estado MÁS severo que "oculta" (ventana
+minimizada).
+
+**El escenario C queda CERRADO por subsunción, no por medición.** Code lo
+declaró como hueco abierto —correctamente, porque no pudo producirlo— pero
+no hace falta medirlo: C ("ventana visible sin foco") es **estrictamente
+menos adverso** que B ("pestaña oculta"). Toda condición adversa de C está
+también presente en B: ambas pierden el foco, pero sólo B reporta
+`visibilityState: "hidden"` y sólo B sufre el estrangulamiento de
+background de Chrome. Como B pasó, C pasa a fortiori. Confianza alta,
+derivada de la especificación de la Page Visibility API y del
+comportamiento documentado de Chrome, no de medición directa.
+Consecuencia: **el DESCONOCIDO ABIERTO de §0.16 queda resuelto y a favor
+del diseño preferido.** No hace falta mosaico de ventanas: las pestañas de
+proveedor pueden vivir ocultas en una sola ventana con `chrome.tabGroups`
+(permiso ya declarado en el manifest desde Fase 7), y la persona mira sólo
+la SPA. El mosaico queda como fallback disponible, no como requisito.
+
+**Límite de tooling registrado — caso (a) de la regla de autonomía.** La
+ventana de Chrome que maneja la automatización de Code **no es una ventana
+real visible en el escritorio**: el sistema la mantiene fuera de pantalla o
+minimizada, y Code confirmó que no tiene vía para restaurarla o enfocarla a
+nivel de sistema operativo (los navegadores sólo se otorgan en modo
+lectura, y la propia herramienta advierte no rodear esa restricción — Code
+la respetó). Por lo tanto: **cualquier tarea que exija una ventana real
+visible o con foco a nivel de escritorio es TÉCNICAMENTE IMPOSIBLE para el
+agente** y es uno de los dos casos legítimos de escalamiento a Juan. Queda
+registrado para no volver a pedirla.
+
+**Corrección importante para no leer mal la evidencia.** Code reportó que
+el tipeo sintético a una pestaña que no está al frente llegó incompleto
+(entraron sólo caracteres acentuados, el Enter no envió). Eso **NO predice
+un problema del producto** y no debe leerse como riesgo de la arquitectura:
+es una limitación de inyectar eventos de CDP desde fuera a una pestaña sin
+foco. El mecanismo de ChatCouncil es otro — un **content script
+same-origin** que escribe en el compositor y dispara eventos desde DENTRO
+de la página, lo que no depende del foco ni de la pestaña activa. Confianza
+alta.
+
+**Hueco que SÍ queda abierto y su manejo.** No se midieron respuestas
+largas (varios minutos). Chrome aplica estrangulamiento intensivo de
+temporizadores recién tras unos minutos en background, umbral que las
+corridas de 15–40 s no alcanzan. Nota mecánica: el estrangulamiento pega en
+`setTimeout`/`setInterval`, no en actualizaciones de DOM disparadas por
+red, y ni el streaming ni el `MutationObserver` son temporizadores — así
+que el riesgo es indirecto (un keepalive del sitio que se estrangule y
+corte la conexión). **Decisión: NO se bloquea Round A por esto.** Se mide
+durante la aceptación de Round A, que va a producir generaciones largas de
+todos modos, y el ejecutor incorpora **detección de estancamiento** (sin
+mutaciones durante una generación en vuelo) que se REPORTA a la persona.
+Nunca se rellena ni se simula: si se estanca, se dice.
+
+**Entregado en este commit — Round A, parte 1: contrato partido (E9
+ampliada).** `ByoaProviderConfig` pasa a ser una **unión discriminada** por
+`authTransport`:
+- `ByoaProviderCommon`: `id`, `label`, `sessionOrigin`, `models?`, `notes?`.
+- `ByoaCookieProviderConfig` (`authTransport: "cookie"`): la forma de
+  petición HTTP verificada en Fase 3. claude.ai declara esta rama y **no se
+  tocó nada de su lógica** — `createByoaAdapter` y el dialecto claude ahora
+  se tipan contra esta rama concreta en vez de contra la unión.
+- `ByoaPageProviderConfig` (`authTransport: "page"`) con `ByoaPageSpec`:
+  especificación **declarativa** del DOM — `newConversationUrl`,
+  `composer` (selector + `textarea`|`contenteditable`), `submit`
+  (`click`|`key`), `responseRoot`, `assistantMessage`, `completion`
+  (`element-gone`|`element-present`|`quiescence`, **todas con
+  `quiescenceMs` como red obligatoria** para que un rediseño no cuelgue el
+  turno) y `humanGate?` (selectores que delatan challenge o gate de
+  producto; el ejecutor NO resuelve nada, emite la señal de §0.14).
+- Se corrigió el doc de `ByoaTransport`, que afirmaba "siempre el puente
+  (offscreen)": esa suposición murió con la evidencia del recon (§0.15,
+  DeepSeek por `localStorage`). La rama `"page"` no usa ese transporte.
+- `byoa-client.ts` ahora **discrimina** por `authTransport` y falla
+  explícito ante un proveedor `"page"` mientras su ejecutor no exista —
+  mensaje honesto, jamás una respuesta simulada. El typecheck encontró ese
+  punto solo: es la unión discriminada haciendo su trabajo.
+
+**Riesgo de ingeniería identificado para la parte 2 de Round A** (el
+ejecutor genérico + ChatGPT): los compositores controlados por React o
+ProseMirror —el de ChatGPT entre ellos— suelen ignorar la asignación
+directa de `value`; requieren despachar eventos de entrada apropiados
+(`beforeinput`/`input`) para que el framework registre el cambio. Es
+detalle de implementación, no bloqueo, pero es el primer punto donde el
+ejecutor puede fallar de forma silenciosa y necesita gate propio.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

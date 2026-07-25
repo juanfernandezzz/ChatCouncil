@@ -2297,6 +2297,78 @@ punto de E11: son datos, no código.
 
 ---
 
+### 0.19 Fase 11 Round A p2a — resultado de la sonda y correccion (2026-07-25)
+
+**La sonda cumplio su funcion: encontro un defecto real, barato.** Se
+valido en el Chrome real de Juan con la cuenta burner. El content script se
+inyecto (marcador en consola) y los selectores reales de ChatGPT quedaron
+derivados de la UI, no adivinados:
+
+```
+composer:          #prompt-textarea            (contenteditable / ProseMirror)
+submit:            button[data-testid="send-button"]
+responseRoot:      main
+assistantMessage:  [data-message-author-role="assistant"] .markdown
+completion:        element-gone button[data-testid="stop-button"]
+```
+
+**El riesgo que se habia anticipado NO se materializo.** §0.17 predecia que
+el compositor controlado por React/ProseMirror rechazaria la escritura. No
+paso: el `beforeinput`/`input` funciono y el texto quedo. La falla estuvo
+en el codigo adyacente, escrito con menos cuidado justamente porque no se
+lo temia. Leccion registrada: se endurecio la parte temida y quedo ingenua
+la de al lado.
+
+**El defecto: carrera de tiempo en el envio.** `submit()` buscaba el boton
+de forma SINCRONA, en el mismo tick que la escritura. El control de envio
+de ChatGPT recien aparece o se habilita DESPUES de que React re-renderiza
+en respuesta al `input`, un tick mas tarde. Diagnostico de Code,
+verificado: justo despues del error el texto estaba completo en el
+compositor y el boton ya existia habilitado — simplemente no estaba en el
+DOM en el instante exacto de la busqueda. Secuencia observada, reproducible
+en dos corridas: `started` seguido de `error` en menos de 1 ms. Code NO
+reparo el ejecutor: reporto y escalo, como correspondia.
+
+**Correccion (ejecutor v2), y por que no alcanzaba con un `waitFor`.**
+El arreglo obvio —esperar a que el selector exista— es insuficiente: un
+boton presente pero DESHABILITADO acepta el click sin hacer nada y sin
+lanzar. Ese no-op silencioso terminaria en inactividad, salto por
+quiescencia y un `done` con 0 caracteres: una respuesta vacia disfrazada de
+exito, que es exactamente lo que este proyecto no permite. Entonces:
+- `waitForEnabled`: espera a que el control exista Y sea accionable (ni
+  `disabled` ni `aria-disabled="true"`), con techo de 5 s.
+- `confirmSubmitted`: tras el click, confirma que el envio TUVO EFECTO
+  observable — el compositor se vacio, aparecio el marcador de
+  "generando", o el texto del asistente crecio. Cualquiera alcanza y
+  ninguna es especifica de un proveedor. Sin confirmacion en 6 s, error
+  ruidoso; nunca deriva a un `done` falso.
+- Se agrega el evento `submitted` para que la secuencia sea legible:
+  `started` -> `submitted` -> `delta(s)` -> `done`.
+- Principio general que queda: DESPUES DE CUALQUIER ACCION QUE MUTE ESTADO
+  QUE EL FRAMEWORK POSEE, HAY QUE ESPERAR A QUE EL DOM ASIENTE ANTES DE LA
+  ACCION SIGUIENTE. No es especifico de ChatGPT ni del envio.
+
+**Hallazgo metodologico sobre los gates (afecta a todo el proyecto).** Al
+verificar que la correccion embarcara aparecieron dos trampas:
+1. Los IDENTIFICADORES SE RENOMBRAN AL MINIFICAR: `waitForEnabled` y
+   `confirmSubmitted` dan 0 en el artefacto compilado aunque el codigo este
+   ahi. Un gate sobre nombres de funcion es un gate que miente.
+2. El minificador ESCAPA LOS CARACTERES NO ASCII: un literal con tildes
+   queda como `env\xEDo`, asi que un grep con acentos devuelve 0 aunque la
+   cadena este presente. Con espanol neutro en todo el producto, esto
+   afecta a cualquier gate futuro sobre texto de UI.
+   REGLA: los gates de artefacto usan solo subcadenas ASCII, o marcadores
+   dedicados sin acentos.
+El marcador se subio a `byoa-page-executor-v2` para que el gate distinga el
+build corregido del anterior: v2 presente = 1, v1 = 0.
+
+**Pendiente que la sonda no alcanzo a medir.** El paso de respuesta larga
+con la pestana en segundo plano —que cierra el hueco de §0.17 sobre
+generaciones de varios minutos— no se ejecuto porque la corrida nunca paso
+del envio. Se repite con v2.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

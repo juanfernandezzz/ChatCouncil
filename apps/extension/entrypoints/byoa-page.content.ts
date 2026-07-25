@@ -30,15 +30,21 @@
 
 import type { ByoaPageSpec } from "@chatcouncil/adapters";
 
+/** Techo para que el control de envío aparezca y se habilite tras escribir. */
+const SUBMIT_READY_MS = 5_000;
+/** Techo para confirmar que el envío tuvo efecto observable. */
+const SUBMIT_CONFIRM_MS = 6_000;
+
 const PROBE_TRIGGER = "chatcouncil:byoa-page:probe";
 const PROBE_EVENT = "chatcouncil:byoa-page:event";
 
 /** Marcador para el gate de artefacto: prueba que el módulo embarcó. */
-const EXECUTOR_MARKER = "byoa-page-executor-v1";
+const EXECUTOR_MARKER = "byoa-page-executor-v2";
 
 type ExecutorEvent =
   | { kind: "started" }
   | { kind: "human-gate"; selector: string }
+  | { kind: "submitted" }
   | { kind: "delta"; textLength: number }
   | { kind: "stalled"; idleMs: number }
   | { kind: "done"; textLength: number; elapsedMs: number }
@@ -103,9 +109,37 @@ function writePrompt(el: Element, kind: ByoaPageSpec["composer"]["kind"], text: 
   return (host.textContent ?? "").includes(text);
 }
 
-function submit(spec: ByoaPageSpec, composer: Element): boolean {
+/** ¿El control está presente Y accionable? Un click sobre un botón
+ *  deshabilitado no hace nada y no lanza: sería un no-op SILENCIOSO. */
+function isEnabled(el: Element): boolean {
+  if ((el as HTMLButtonElement).disabled) return false;
+  if (el.getAttribute("aria-disabled") === "true") return false;
+  return true;
+}
+
+async function waitForEnabled(selector: string, timeoutMs: number): Promise<Element | null> {
+  const started = Date.now();
+  for (;;) {
+    const el = findOne(selector);
+    if (el && isEnabled(el)) return el;
+    if (Date.now() - started > timeoutMs) return null;
+    await new Promise((r) => setTimeout(r, 80));
+  }
+}
+
+/**
+ * Dispara el envío.
+ *
+ * CARRERA DE TIEMPO corregida en §0.19 (hallada por la sonda p2a): el
+ * control de envío de una UI con framework aparece o se habilita DESPUÉS
+ * de que el framework re-renderiza en respuesta al `input`, o sea un tick
+ * más tarde. Buscarlo en el mismo tick que la escritura lo encuentra
+ * ausente. Por eso se ESPERA a que exista Y esté habilitado, igual que ya
+ * se esperaba al compositor.
+ */
+async function submit(spec: ByoaPageSpec, composer: Element): Promise<boolean> {
   if (spec.submit.kind === "click") {
-    const btn = findOne(spec.submit.selector);
+    const btn = await waitForEnabled(spec.submit.selector, SUBMIT_READY_MS);
     if (!btn) return false;
     (btn as HTMLElement).click();
     return true;
@@ -114,6 +148,32 @@ function submit(spec: ByoaPageSpec, composer: Element): boolean {
   composer.dispatchEvent(new KeyboardEvent("keydown", opts));
   composer.dispatchEvent(new KeyboardEvent("keyup", opts));
   return true;
+}
+
+/**
+ * Confirma que el envío TUVO EFECTO. Sin esto, un click sobre un control
+ * que no reacciona es un no-op silencioso: el ejecutor esperaría, saltaría
+ * por inactividad y reportaría `done` con 0 caracteres — o sea una
+ * respuesta vacía disfrazada de éxito. Se prefiere un error ruidoso.
+ *
+ * Señales aceptadas, cualquiera alcanza y ninguna es específica de un
+ * proveedor: el compositor se vació, apareció el marcador de "generando",
+ * o el texto del asistente creció.
+ */
+async function confirmSubmitted(
+  spec: ByoaPageSpec,
+  composer: Element,
+  baselineLength: number,
+): Promise<boolean> {
+  const started = Date.now();
+  const marker = spec.completion.kind === "quiescence" ? null : spec.completion.selector;
+  for (;;) {
+    if ((composer.textContent ?? "").trim() === "") return true;
+    if (marker && findOne(marker)) return true;
+    if (readAssistantText(spec).length > baselineLength) return true;
+    if (Date.now() - started > SUBMIT_CONFIRM_MS) return false;
+    await new Promise((r) => setTimeout(r, 100));
+  }
 }
 
 /** ¿La generación terminó, según el marcador estructural de la spec? */
@@ -156,10 +216,16 @@ async function run(spec: ByoaPageSpec, prompt: string): Promise<void> {
     emit({ kind: "error", message: "el compositor no aceptó el texto" });
     return;
   }
-  if (!submit(spec, composer)) {
-    emit({ kind: "error", message: "no se pudo disparar el envío" });
+  const baselineLength = readAssistantText(spec).length;
+  if (!(await submit(spec, composer))) {
+    emit({ kind: "error", message: "el control de envío no apareció habilitado a tiempo" });
     return;
   }
+  if (!(await confirmSubmitted(spec, composer, baselineLength))) {
+    emit({ kind: "error", message: "el envío no produjo ningún cambio observable" });
+    return;
+  }
+  emit({ kind: "submitted" });
 
   const root = findOne(spec.responseRoot.selector) ?? document.body;
   const idleLimit = spec.completion.quiescenceMs;

@@ -48,7 +48,7 @@ const PROBE_TRIGGER = "chatcouncil:byoa-page:probe";
 const PROBE_EVENT = "chatcouncil:byoa-page:event";
 
 /** Marcador para el gate de artefacto: prueba que el módulo embarcó. */
-const EXECUTOR_MARKER = "byoa-page-executor-v5";
+const EXECUTOR_MARKER = "byoa-page-executor-v6";
 
 type ExecutorEvent =
   | { kind: "started" }
@@ -59,9 +59,43 @@ type ExecutorEvent =
   | { kind: "done"; textLength: number; elapsedMs: number }
   | { kind: "error"; message: string };
 
+/**
+ * Contabilidad de visibilidad (§0.23). §0.20 y §0.22 corrieron EL MISMO
+ * escenario —prompt largo con la pestana oculta desde el arranque— y dieron
+ * resultados opuestos: uno completo en ~8 s, el otro con CERO contenido a
+ * los 45 s. La variable de control nunca se identifico. En vez de seguir
+ * adivinando, cada evento sale ahora con el estado de visibilidad y con los
+ * milisegundos acumulados en oculto, para que toda corrida futura sea
+ * autoexplicativa y las anomalias queden atribuidas en vez de misteriosas.
+ */
+let hiddenAccumMs = 0;
+let hiddenSince: number | null = document.visibilityState === "hidden" ? Date.now() : null;
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    hiddenSince = Date.now();
+  } else if (hiddenSince !== null) {
+    hiddenAccumMs += Date.now() - hiddenSince;
+    hiddenSince = null;
+  }
+});
+
+function hiddenMs(): number {
+  return hiddenAccumMs + (hiddenSince === null ? 0 : Date.now() - hiddenSince);
+}
+
 function emit(ev: ExecutorEvent): void {
-  // Sólo forma y longitudes; jamás el texto de la respuesta ni credenciales.
-  window.postMessage({ source: PROBE_EVENT, marker: EXECUTOR_MARKER, ...ev }, window.location.origin);
+  // Solo forma, longitudes y tiempos; jamas el texto de la respuesta ni credenciales.
+  window.postMessage(
+    {
+      source: PROBE_EVENT,
+      marker: EXECUTOR_MARKER,
+      visibility: document.visibilityState,
+      hiddenMs: hiddenMs(),
+      ...ev,
+    },
+    window.location.origin,
+  );
 }
 
 /**

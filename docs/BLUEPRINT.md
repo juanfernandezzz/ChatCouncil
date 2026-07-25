@@ -2491,6 +2491,86 @@ Cuenta burner descansada ("Nadie Nada"), extension recargada manualmente por Jua
 
 ---
 
+### 0.23 Fase 11 — §0.20 y §0.22 se CONTRADICEN, y eso decide la orquestacion de p2b (2026-07-25)
+
+**Revision de §0.22 (escrita por Code).** Se leyo contra el codigo
+pusheado: es exacta y esta bien hecha. En particular hizo lo correcto en
+tres puntos — verifico el DOM EN FRIO en el caso del fallo
+(`nodeCount:3, lastLen:0`) para descartar un falso negativo del selector;
+aislo la validacion de E11 usando un selector que deliberadamente no
+matchea, sacando la variabilidad de red del experimento; y NO parcheo el
+techo por defecto, porque reconocio que "que numero poner" es decision de
+diseno y no implementacion. Se ratifica.
+
+**LA CONTRADICCION, que ninguna de las dos entradas nombra.** §0.20 caso
+(c) y §0.22 caso 3 son EL MISMO experimento — prompt largo, pestana oculta
+desde el arranque — y dieron resultados opuestos:
+
+| Corrida | Resultado | Contenido a los 45 s |
+|---|---|---|
+| §0.20 (c) | `done(1083)` en ~8 s, DOM verificado en oculto | completo mucho antes |
+| §0.22 (3) | `error` a los 45,4 s | **cero**, verificado en frio |
+
+Ninguna de las dos esta mal medida: las dos se verificaron consultando el
+DOM sin refrentar. La variable de control **no se identifico**. Puede ser
+estado de throttling acumulado a nivel navegador, presion de memoria,
+cantidad de pestanas, si la pestana estuvo alguna vez en primer plano, u
+otra cosa. No se sabe, y no se va a afirmar lo que no se midio.
+
+**Conclusion epistemica, que es mas fuerte que cualquiera de los dos
+resultados sueltos: el comportamiento de una pestana oculta es NO
+DETERMINISTA entre corridas.** Eso es peor que "es lento": un
+comportamiento lento se compensa con techos generosos, uno no determinista
+no se compensa con nada. §0.21 ya habia decidido usar ventana visible
+mientras el round esta en vuelo por prudencia; con esta evidencia deja de
+ser prudencia y pasa a ser **requisito**.
+
+**Consecuencia forzada sobre la orquestacion de p2b.** Si cada pestana de
+proveedor debe estar VISIBLE mientras genera, no pueden ser pestanas de una
+misma ventana: en una ventana solo una pestana es visible por vez. Tienen
+que ser **ventanas separadas, visibles simultaneamente** — es decir el
+mosaico que Juan propuso desde el principio, y que §0.17 habia descartado
+apoyandose en el resultado de §0.20 que ahora resulta no reproducible.
+Diseno de p2b, entonces:
+- Durante un round: una ventana chica por proveedor, creada con
+  `chrome.windows.create({ focused: false })`. Visible sin foco NO sufre ni
+  pausa ni estrangulamiento (subsuncion de §0.17, que sigue en pie), asi que
+  Juan puede trabajar en la SPA con el foco puesto ahi.
+- Entre rounds: se pueden ocultar o cerrar; el regimen malo solo importa
+  mientras se genera.
+- El tamano puede ser chico: el ejecutor no necesita que la ventana sea
+  grande, solo que no este oculta.
+
+**RIESGO NUEVO que p2b debe medir antes de fijar la geometria: la
+OCLUSION.** En algunas plataformas Chrome reporta `visibilityState:
+"hidden"` para una ventana completamente tapada por otra, no solo para una
+minimizada. Si eso aplica, maximizar la SPA encima del mosaico devolveria
+todos los proveedores al regimen degradado — el mismo problema con otra
+cara. No esta medido. p2b lo instrumenta antes de decidir la disposicion.
+
+**Entregado en este commit — el ejecutor deja de adivinar (v6).** La causa
+de fondo de esta contradiccion es que las corridas no registraban su propio
+contexto de visibilidad, asi que las anomalias quedaban sin atribuir. Ahora
+cada evento sale con `visibility` (el `visibilityState` en ese instante) y
+`hiddenMs` (milisegundos acumulados en oculto desde que cargo el ejecutor),
+mediante un contador alimentado por `visibilitychange`. Toda corrida futura
+queda autoexplicativa: si un turno tarda 45 s, el evento dice si la pestana
+estuvo oculta y cuanto. Es el instrumento que faltaba para medir el umbral
+de throttling en vez de seguir estimandolo. Sigue sin capturar contenido:
+solo estado, longitudes y tiempos.
+
+**Restriccion de flujo de trabajo registrada (caso (a) de la regla de
+autonomia).** La automatizacion de navegador NO puede interactuar con
+paginas `chrome://`, asi que **recargar la extension siempre requiere a
+Juan**. Consecuencia practica para todas las entregas siguientes: hay que
+AGRUPAR los cambios de extension y disenar cada corrida de validacion para
+cubrir muchos casos por recarga, en vez de iterar de a un cambio por vez.
+
+**Pendiente de p2b, con instrumento ya disponible:** medir el umbral real
+de throttling usando `hiddenMs`, y medir si la oclusion cuenta como oculto.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

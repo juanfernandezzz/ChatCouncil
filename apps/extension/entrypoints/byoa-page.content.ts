@@ -34,12 +34,21 @@ import type { ByoaPageSpec } from "@chatcouncil/adapters";
 const SUBMIT_READY_MS = 5_000;
 /** Techo para confirmar que el envío tuvo efecto observable. */
 const SUBMIT_CONFIRM_MS = 6_000;
+/**
+ * Techo absoluto de espera con CERO avance de contenido tras el envío.
+ * Hallazgo de la sonda p2a (§0.20): el contenedor del asistente puede
+ * existir y quedar quieto durante varios segundos ANTES de tener texto, así
+ * que la quietud sola no prueba que la respuesta esté completa. Sin este
+ * techo, exigir avance real dejaría el turno colgado para siempre si el
+ * contenedor nunca se llena.
+ */
+const EMPTY_RESPONSE_TIMEOUT_MS = 45_000;
 
 const PROBE_TRIGGER = "chatcouncil:byoa-page:probe";
 const PROBE_EVENT = "chatcouncil:byoa-page:event";
 
 /** Marcador para el gate de artefacto: prueba que el módulo embarcó. */
-const EXECUTOR_MARKER = "byoa-page-executor-v2";
+const EXECUTOR_MARKER = "byoa-page-executor-v4";
 
 type ExecutorEvent =
   | { kind: "started" }
@@ -195,6 +204,16 @@ function readAssistantText(spec: ByoaPageSpec): string {
   return node?.textContent ?? "";
 }
 
+/** Cuántos nodos de mensaje del asistente hay AHORA. Sirve para distinguir
+ *  "el turno nuevo ya tiene nodo propio" de "todavía apunta al anterior". */
+function countAssistantNodes(spec: ByoaPageSpec): number {
+  try {
+    return document.querySelectorAll(spec.assistantMessage.selector).length;
+  } catch {
+    return 0;
+  }
+}
+
 async function run(spec: ByoaPageSpec, prompt: string): Promise<void> {
   const t0 = Date.now();
   emit({ kind: "started" });
@@ -217,6 +236,7 @@ async function run(spec: ByoaPageSpec, prompt: string): Promise<void> {
     return;
   }
   const baselineLength = readAssistantText(spec).length;
+  const baselineNodeCount = countAssistantNodes(spec);
   if (!(await submit(spec, composer))) {
     emit({ kind: "error", message: "el control de envío no apareció habilitado a tiempo" });
     return;
@@ -229,6 +249,7 @@ async function run(spec: ByoaPageSpec, prompt: string): Promise<void> {
 
   const root = findOne(spec.responseRoot.selector) ?? document.body;
   const idleLimit = spec.completion.quiescenceMs;
+  const loopStart = Date.now();
   let lastMutation = Date.now();
   let lastLength = 0;
   let stallReported = false;
@@ -247,9 +268,24 @@ async function run(spec: ByoaPageSpec, prompt: string): Promise<void> {
     for (;;) {
       await new Promise((r) => setTimeout(r, 200));
       const idle = Date.now() - lastMutation;
+      // Un turno nuevo real: existe un nodo de asistente que NO estaba antes
+      // del envío (countAssistantNodes creció) Y ese nodo ya tiene texto.
+      // Comparar longitudes contra el turno anterior es INCORRECTO: una
+      // respuesta nueva más CORTA que la anterior (p.ej. "¡Hola!" tras un
+      // "¡Hola! ¿Cómo estás...?") nunca superaría ese umbral y el turno
+      // quedaría colgado hasta el error por timeout (hallazgo p2a, §0.21).
+      const hasNewContent = lastLength > 0 && countAssistantNodes(spec) > baselineNodeCount;
 
-      if (structurallyComplete(spec) && idle > 400) break;
-      if (idle > idleLimit) break;
+      // Sin avance real sobre el turno anterior, ninguna de las dos señales
+      // de fin cuenta como fin: ni el marcador estructural ni la inactividad
+      // prueban nada por sí solos si el contenedor sigue vacío (§0.20).
+      if (hasNewContent && structurallyComplete(spec) && idle > 400) break;
+      if (hasNewContent && idle > idleLimit) break;
+
+      if (!hasNewContent && Date.now() - loopStart > EMPTY_RESPONSE_TIMEOUT_MS) {
+        emit({ kind: "error", message: "sin contenido observable del asistente" });
+        return;
+      }
 
       // Estancamiento: se REPORTA, nunca se rellena (§0.17).
       if (!stallReported && idle > idleLimit * 3) {

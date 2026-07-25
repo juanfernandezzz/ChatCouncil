@@ -2218,6 +2218,85 @@ ejecutor puede fallar de forma silenciosa y necesita gate propio.
 
 ---
 
+### 0.18 Fase 11 Round A p2a — sonda del ejecutor genérico (2026-07-25)
+
+**Por qué una SONDA y no el camino productivo.** El ejecutor `"page"`
+contiene, por primera vez en el proyecto, una hipótesis que **no se puede
+verificar offline**: si los selectores funcionan sobre la UI real de
+ChatGPT. Toda la lógica anterior (parsers, threading, sync) se podía probar
+con fixtures; ésta no. Cablearlo de una a la SPA y al puente significaría
+apostar el protocolo, la orquestación de pestañas y el streaming a los
+paneles sobre una hipótesis sin medir. Se parte en dos:
+- **p2a (este commit):** ejecutor + spec de ChatGPT, disparado a mano en
+  la página, validando lo único que importa — ¿se puede escribir en el
+  compositor, disparar el envío, detectar el fin y extraer el texto?
+- **p2b (después):** cableado real — protocolo del puente, grupo de
+  pestañas, streaming a los paneles, registro del proveedor.
+
+**Hallazgo de permisos (bueno e inesperado).** El transporte `"page"`
+necesita MENOS permiso que el `"cookie"`: alcanza con el `matches` del
+content script para inyectarse, y **no requiere `host_permissions`**
+porque no hace fetch cross-origin — el trabajo ocurre dentro de la página.
+Verificado sobre el manifest compilado: `content_scripts` quedó registrado
+con `https://chatgpt.com/*` y `host_permissions` **sigue con los 4 de
+siempre, sin cambios**. Consecuencia para E5: el temido ciclo de
+re-aprobación de permisos **no se dispara** para los proveedores `"page"`.
+
+**Refinamiento del gate estructural de E8.** El gate planeado era
+allowlist de sesión === `host_permissions`. Con dos transportes eso es
+incorrecto: los orígenes de proveedores `"cookie"` deben estar en
+`host_permissions`, y los de proveedores `"page"` en los `matches` de
+content scripts. El gate pasa a ser **consciente del transporte**. Por eso
+en p2a ChatGPT **no se registra todavía** en `BYOA_PROVIDERS`: la sonda es
+autónoma y el radio de impacto queda mínimo.
+
+**Diseño del ejecutor (`byoa-page.content.ts`).** Interpreta la
+`ByoaPageSpec` declarativa y no sabe nada del proveedor (Q1 preservado).
+Decisiones que valen registrar:
+- **Escritura en el compositor:** se usa el setter nativo del prototipo más
+  un `input` con `bubbles` — no la asignación directa de `value`, que React
+  ignora porque mantiene su propio estado (riesgo anticipado en §0.17).
+  Para `contenteditable` se despacha `beforeinput`/`input`. **Falla
+  ruidosamente:** verifica que el texto haya quedado y reporta error si no.
+- **Detección de fin:** marcador estructural (`element-gone` /
+  `element-present`) **más** inactividad como red obligatoria, para que un
+  rediseño no cuelgue el turno.
+- **Estancamiento:** si no hay mutaciones durante una generación en vuelo,
+  se emite `stalled`. Se REPORTA, nunca se rellena.
+- **`humanGate`:** al detectar un challenge o gate de producto, el ejecutor
+  **se detiene y avisa**. No resuelve nada (§0.14).
+- **Sólo forma hacia afuera:** los eventos llevan longitudes y tiempos,
+  jamás el texto de la respuesta.
+
+**Gates de artefacto verificados sobre lo COMPILADO** (no sobre el
+fuente): marcador `byoa-page-executor-v1` presente en
+`content-scripts/byoa-page.js`; **0** ocurrencias de `eval`/`new Function`
+(E11); **0** ocurrencias de `document.cookie`, `localStorage`,
+`sessionStorage` o `authorization` — el ejecutor no toca credenciales ni
+siquiera por accidente.
+
+**ANDAMIO CON FECHA DE VENCIMIENTO.** El disparador de la sonda es un
+`window.postMessage`, lo que significa que **cualquier script de la página
+podría dispararlo**. Es aceptable para validar en la máquina de Juan con
+una extensión unpacked y una cuenta burner; **es inaceptable en p2b** y
+debe eliminarse ahí, reemplazado por un mensaje de la extensión
+(`chrome.runtime.onMessage`). Queda escrito para que no sobreviva por
+inercia.
+
+**Higiene de CI (hallazgo 2026-07-25).** Ni `ci.yml` ni `release.yml`
+declaraban `timeout-minutes`, así que aplicaba el default de **6 horas**
+por job: un run quedó ~17 minutos sin concluir y no había forma de que
+fallara rápido. Se agrega `timeout-minutes: 20` al job y un tope propio de
+8 minutos al paso de instalación de Playwright, que corre `apt-get` y es
+con diferencia el más pesado.
+
+**Lo que este commit NO prueba.** Que los selectores de ChatGPT sean los
+correctos. Es una hipótesis a validar en el navegador real de Juan con la
+cuenta burner. Si fallan, se corrigen en la spec — que es exactamente el
+punto de E11: son datos, no código.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

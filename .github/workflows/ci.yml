@@ -9,6 +9,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Sin esto aplica el default de 6 HORAS por job: un paso colgado quema
+    # runner durante horas en vez de fallar rapido (hallazgo 2026-07-25,
+    # un run quedo ~17 min en el paso mas pesado sin concluir).
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,6 +59,7 @@ jobs:
         run: pnpm build:web
 
       - name: Install Playwright Chromium
+        timeout-minutes: 8
         run: pnpm --filter @chatcouncil/web exec playwright install --with-deps chromium
 
       - name: E2E flujo crítico (Playwright, red mockeada — Fase 9, E1/E6)

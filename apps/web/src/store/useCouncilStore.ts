@@ -19,6 +19,7 @@ const DEFAULT_PRIORITY: string[] = [
   "byoa:claude",
   "byok:deepseek",
   "byok:perplexity",
+  "byoa:chatgpt",
 ];
 
 interface CouncilState {

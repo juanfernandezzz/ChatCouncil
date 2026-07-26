@@ -2707,6 +2707,56 @@ aparecer a ChatGPT en el panel de cuentas.
 
 ---
 
+### 0.26 Fase 11 p2b — ChatGPT registrado y gate E8 consciente del transporte (2026-07-25)
+
+**ChatGPT entra como primer proveedor `"page"`.** `chatgpt.ts` no tiene
+dialecto: es una ESPECIFICACION DECLARATIVA del DOM, con los selectores
+derivados de la UI real en el Chrome de Juan (§0.19) y validados de punta a
+punta en §0.20 y §0.22 — prompt corto, prompt repetido en la misma
+conversacion, y respuesta larga. Los techos van generosos a proposito
+(`emptyResponseMs: 90 s`) porque §0.20 midio el mismo turno en ~7 s y en
+~85 s segun el estado de la pestana, y §0.22 vio la cuenta degradarse bajo
+uso intensivo. Se ajustan desde `adapters.json` sin recompilar (E11): este
+archivo es el valor por defecto embarcado, no la unica fuente.
+
+**E8 pasa a ser CONSCIENTE DEL TRANSPORTE, y el espejo se vuelve
+ESTRUCTURAL en vez de verificado.** La derivacion se partio en dos:
+- `BYOA_SESSION_ALLOWED_ORIGINS` filtra por `authTransport === "cookie"`.
+  Son los unicos que hacen fetch cross-origin desde el offscreen y por lo
+  tanto los unicos que necesitan `host_permissions`. Meter ahi un proveedor
+  `"page"` le daria acceso de proxy que no usa.
+- `BYOA_PAGE_ORIGINS` y `BYOA_PAGE_MATCH_PATTERNS` filtran por
+  `authTransport === "page"`.
+
+Y el paso que elimina la clase de bug entera: **el content script IMPORTA
+`BYOA_PAGE_MATCH_PATTERNS` en vez de repetir la lista**. §0.15 habia
+registrado el riesgo de deriva silenciosa porque la allowlist era derivada
+y `host_permissions` era manual; para el transporte `"page"` esa deriva ya
+no es posible, porque agregar un proveedor extiende el `matches` solo. No
+hay gate que mantener: no hay dos listas.
+
+**Verificado sobre el MANIFEST COMPILADO** (no sobre el fuente):
+`content_scripts.matches` = `["https://chatgpt.com/*"]`,
+`host_permissions` = los 4 de siempre SIN chatgpt.com, y los dos conjuntos
+DISJUNTOS. Es decir: **registrar ChatGPT no disparo ninguna re-aprobacion
+de permisos**, confirmando en la practica el hallazgo de §0.18.
+
+**Higiene de `.gitignore`.** Se agregaron `_fase*/` —el staging de
+entregas, que quedaba untracked en cada corrida y aparecia en cada
+`git status`— y `package-lock.json`/`yarn.lock`, despues de que una corrida
+generara un lockfile espurio al ejecutar `npm install` en un repo pnpm
+(detectado y borrado a tiempo, pero es exactamente la clase de archivo que
+un `git add -A` distraido habria commiteado).
+
+**Estado: ChatGPT ya es disparable desde la SPA.** El circuito esta
+completo — la SPA manda `byoa:page` con la spec, el SW abre la ventana, el
+ejecutor la maneja, y los eventos vuelven traducidos al protocolo de
+stream que los paneles ya consumen. **Falta la validacion en el navegador
+real**, que es lo unico que este commit no puede probar: recargar la
+extension y disparar un round desde la UI.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

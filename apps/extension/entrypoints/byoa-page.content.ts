@@ -28,6 +28,7 @@
  * de la extensión (`chrome.runtime.onMessage`) y este camino se elimina.
  */
 
+import { BYOA_PAGE_MATCH_PATTERNS } from "@chatcouncil/adapters";
 import type { ByoaPageSpec } from "@chatcouncil/adapters";
 
 /** Techo para que el control de envío aparezca y se habilite tras escribir. */
@@ -46,7 +47,7 @@ const EMPTY_RESPONSE_TIMEOUT_MS = 45_000;
 
 
 /** Marcador para el gate de artefacto: prueba que el módulo embarcó. */
-const EXECUTOR_MARKER = "byoa-page-executor-v7";
+const EXECUTOR_MARKER = "byoa-page-executor-v8";
 
 type ExecutorEvent =
   | { kind: "started" }
@@ -358,7 +359,9 @@ async function run(spec: ByoaPageSpec, prompt: string): Promise<void> {
 }
 
 export default defineContentScript({
-  matches: ["https://chatgpt.com/*"],
+  // Derivado de los proveedores "page" del registro: el espejo es
+  // ESTRUCTURAL, no una lista paralela que pueda desincronizarse (§0.26).
+  matches: [...BYOA_PAGE_MATCH_PATTERNS],
   runAt: "document_idle",
   main() {
     browser.runtime.onMessage.addListener((message: unknown) => {

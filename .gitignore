@@ -22,3 +22,10 @@ dist/
 # testing
 coverage/
 .harness-out/
+
+# entregas por fase (staging, nunca se commitean)
+_fase*/
+
+# lockfile espurio si alguien corre npm en un repo pnpm
+package-lock.json
+yarn.lock

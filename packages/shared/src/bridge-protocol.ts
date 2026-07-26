@@ -100,6 +100,23 @@ export type BridgeRequest =
       fromSeq: number;
     }
   | { type: "byoa:abort"; requestId: string }
+  /**
+   * Transporte "page" (§0.25). La SPA manda la ESPECIFICACION del DOM y la
+   * extension la ejecuta: la estrategia sigue viviendo del lado del
+   * dialecto y la extension sigue siendo un runner agnostico (Q1), igual
+   * que `byoa:proxy` es HTTP crudo generico.
+   *
+   * Las respuestas reutilizan `stream:chunk`/`stream:done`/`stream:error`,
+   * asi que los paneles de la SPA consumen este transporte SIN CAMBIOS.
+   */
+  | {
+      type: "byoa:page";
+      requestId: string;
+      providerId: string;
+      prompt: string;
+      /** `ByoaPageSpec` serializada. Datos declarativos, nunca codigo (E11). */
+      spec: unknown;
+    }
   | {
       /**
        * Proxy BYOK (Fase 2, Q11). La SPA arma la request HTTP CRUDA —
@@ -179,7 +196,17 @@ export type BridgeResponse =
   | { type: "stream:chunk"; requestId: string; seq: number; chunk: string }
   | { type: "stream:done"; requestId: string; lastSeq: number; meta?: Record<string, unknown> }
   | { type: "stream:error"; requestId: string; message: string }
-  | { type: "stream:aborted"; requestId: string };
+  | { type: "stream:aborted"; requestId: string }
+  /**
+   * Hace falta intervencion HUMANA en la ventana real del proveedor
+   * (challenge, captcha o gate de producto). Nadie del lado del agente
+   * resuelve nada: §0.14.
+   *
+   * Cambio ADITIVO dentro de v2, sin bump: mismo precedente que el
+   * renombre `byoa:resume` -> `stream:resume` de Fase 2 — v2 no tiene
+   * consumidores externos y un v3 seria teatro de compatibilidad.
+   */
+  | { type: "stream:challenge"; requestId: string; origin: string };
 
 /**
  * El handshake NUNCA debe asumirse exitoso. `bridge-client.ts` debe

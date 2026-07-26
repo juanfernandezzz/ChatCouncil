@@ -2641,6 +2641,72 @@ la baja del andamio del `postMessage`, que vence en p2b por §0.18.
 
 ---
 
+### 0.25 Fase 11 p2b — cableado del transporte "page" (2026-07-25)
+
+**Decision de diseno que hace barato el cableado: el transporte "page"
+REUTILIZA el protocolo de stream existente.** La respuesta no estrena
+tipos propios — los eventos del ejecutor se traducen en el service worker
+a `stream:chunk` / `stream:done` / `stream:error`, que la SPA ya consume
+desde Fase 1. Consecuencia: **los paneles funcionan sin un solo cambio en
+la SPA**. El unico tipo nuevo del lado respuesta es `stream:challenge`,
+que §0.14 ya habia disenado y que hasta ahora no tenia emisor.
+`stream:challenge` es cambio ADITIVO dentro de v2, sin bump, por el mismo
+precedente del renombre `byoa:resume` -> `stream:resume` de Fase 2.
+
+**Peticion nueva `byoa:page { requestId, providerId, prompt, spec }`.** La
+SPA manda la ESPECIFICACION del DOM y la extension la ejecuta sin
+interpretarla, igual que `byoa:proxy` es HTTP crudo generico: la
+estrategia sigue viviendo en el dialecto y **Q1 (runner agnostico) queda
+intacto**. El SW abre o reutiliza la ventana del proveedor
+(`provider-windows.ts`, §0.24) y entrega la orden al content script.
+
+**El ANDAMIO DEL `postMessage` QUEDA DADO DE BAJA, como vencia desde
+§0.18.** El ejecutor ya no escucha ni emite por `window.postMessage`
+—canal en el que cualquier script de la pagina podia dispararlo y
+escucharlo— sino por `browser.runtime` contra la extension. Verificado
+sobre el compilado: 0 ocurrencias de `chatcouncil:byoa-page` en
+`content-scripts/byoa-page.js`.
+
+**El ejecutor ahora emite TEXTO, y por que eso no viola ninguna regla.**
+Hasta v6 emitia solo longitudes, que era lo correcto para una sonda de
+diagnostico. En produccion el texto ES el producto: tiene que llegar al
+panel. La regla vigente prohibe volcar contenido a LOGS, LEDGER,
+TRANSCRIPTS o FIXTURES — no prohibe que la respuesta del modelo viaje por
+el camino de datos hacia el panel de la propia persona, en su propia
+maquina. Se deja escrito para que una sesion futura no lea la regla al
+reves y rompa el producto por prudencia mal aplicada. Lo que sigue
+prohibido y verificado en 0: cookies, tokens, `localStorage`,
+`sessionStorage` y headers de autenticacion.
+
+**Robustez del arranque.** Una ventana recien creada puede no tener el
+ejecutor listo, asi que `sendToPageExecutor` reintenta con techo de 15 s
+en vez de fallar en el primer intento. El SW mantiene `pageRequests`
+(puerto de la SPA por `requestId`) y `pageSeq` (secuencia de chunks) para
+respetar el contrato de stream que ya existia.
+
+**Leccion de gates aplicada de nuevo (§0.19).** El marcador
+`PROVIDER_WINDOWS_MARKER` da 0 en el compilado aunque el modulo SI
+embarco: nadie importa la constante, solo las funciones, asi que el
+bundler la elimina. El gate util para ese modulo es `windows.create`
+(=1), y los mensajes de error propios (=1 cada uno). **Un marcador
+exportado que nadie usa no sirve como gate** — hay que grepear algo que
+el codigo vivo realmente contenga.
+
+**Gates verificados sobre lo compilado:** ejecutor
+`byoa-page-executor-v7`=1 y `-v6`=0 · `byoa:page:run`=1 ·
+`byoa:page:event`=1 · andamio `chatcouncil:byoa-page`=**0** ·
+`eval`/`new Function`=0 · credenciales=0. Background: `byoa:page`=1 ·
+`stream:challenge`=1 · `windows.create`=1.
+
+**Pendiente de p2b:** registrar ChatGPT en `BYOA_PROVIDERS` como proveedor
+`"page"` y hacer el gate de E8 CONSCIENTE DEL TRANSPORTE — los `"cookie"`
+deben espejar `host_permissions`, los `"page"` deben espejar los `matches`
+de content scripts, porque §0.18 mostro que el transporte `"page"` NO
+necesita `host_permissions`. Ese es el proximo commit, y es el que hace
+aparecer a ChatGPT en el panel de cuentas.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

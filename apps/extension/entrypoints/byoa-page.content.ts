@@ -44,17 +44,15 @@ const SUBMIT_CONFIRM_MS = 6_000;
  */
 const EMPTY_RESPONSE_TIMEOUT_MS = 45_000;
 
-const PROBE_TRIGGER = "chatcouncil:byoa-page:probe";
-const PROBE_EVENT = "chatcouncil:byoa-page:event";
 
 /** Marcador para el gate de artefacto: prueba que el módulo embarcó. */
-const EXECUTOR_MARKER = "byoa-page-executor-v6";
+const EXECUTOR_MARKER = "byoa-page-executor-v7";
 
 type ExecutorEvent =
   | { kind: "started" }
   | { kind: "human-gate"; selector: string }
   | { kind: "submitted" }
-  | { kind: "delta"; textLength: number }
+  | { kind: "delta"; textLength: number; text: string }
   | { kind: "stalled"; idleMs: number }
   | { kind: "done"; textLength: number; elapsedMs: number }
   | { kind: "error"; message: string };
@@ -84,18 +82,26 @@ function hiddenMs(): number {
   return hiddenAccumMs + (hiddenSince === null ? 0 : Date.now() - hiddenSince);
 }
 
+let activeRequestId: string | null = null;
+
 function emit(ev: ExecutorEvent): void {
-  // Solo forma, longitudes y tiempos; jamas el texto de la respuesta ni credenciales.
-  window.postMessage(
-    {
-      source: PROBE_EVENT,
-      marker: EXECUTOR_MARKER,
-      visibility: document.visibilityState,
-      hiddenMs: hiddenMs(),
-      ...ev,
-    },
-    window.location.origin,
-  );
+  // Jamas cookies, tokens ni headers. El TEXTO de la respuesta si viaja
+  // aca: es el camino de datos del producto hacia el panel de la persona
+  // (§0.25), distinto de volcarlo a logs, ledger, transcripts o fixtures.
+  const payload = {
+    ...ev,
+    envelope: "byoa:page:event" as const,
+    requestId: activeRequestId,
+    marker: EXECUTOR_MARKER,
+    visibility: document.visibilityState,
+    hiddenMs: hiddenMs(),
+  };
+  // Canal privado con la extension. Reemplaza al andamio de `postMessage`
+  // de §0.18, que vencia en p2b porque cualquier script de la pagina podia
+  // dispararlo y escucharlo.
+  void browser.runtime.sendMessage(payload).catch(() => {
+    // el service worker puede estar dormido: no es un error del turno
+  });
 }
 
 /**
@@ -303,10 +309,15 @@ async function run(spec: ByoaPageSpec, prompt: string): Promise<void> {
 
   const observer = new MutationObserver(() => {
     lastMutation = Date.now();
-    const len = readAssistantText(spec).length;
+    const text = readAssistantText(spec);
+    const len = text.length;
     if (len !== lastLength) {
       lastLength = len;
-      emit({ kind: "delta", textLength: len });
+      // El TEXTO viaja por el camino de datos del producto (hacia el panel
+      // de la persona, en su propia maquina). Eso NO es la "captura" que
+      // las reglas prohiben: lo prohibido es volcar contenido a logs,
+      // ledger, transcripts o fixtures. Ver §0.25.
+      emit({ kind: "delta", textLength: len, text });
     }
   });
   observer.observe(root, { childList: true, subtree: true, characterData: true });
@@ -350,12 +361,13 @@ export default defineContentScript({
   matches: ["https://chatgpt.com/*"],
   runAt: "document_idle",
   main() {
-    // ANDAMIO DE SONDA — se elimina en Round A p2b (ver cabecera).
-    window.addEventListener("message", (ev: MessageEvent) => {
-      if (ev.source !== window || ev.origin !== window.location.origin) return;
-      const data = ev.data as { source?: string; spec?: ByoaPageSpec; prompt?: string } | null;
-      if (!data || data.source !== PROBE_TRIGGER || !data.spec || !data.prompt) return;
-      void run(data.spec, data.prompt).catch((e: unknown) => {
+    browser.runtime.onMessage.addListener((message: unknown) => {
+      const m = message as
+        | { kind?: string; requestId?: string; spec?: ByoaPageSpec; prompt?: string }
+        | null;
+      if (!m || m.kind !== "byoa:page:run" || !m.spec || !m.prompt || !m.requestId) return;
+      activeRequestId = m.requestId;
+      void run(m.spec, m.prompt).catch((e: unknown) => {
         emit({ kind: "error", message: e instanceof Error ? e.message : "fallo desconocido" });
       });
     });

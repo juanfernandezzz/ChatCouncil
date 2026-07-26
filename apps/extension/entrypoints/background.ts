@@ -9,6 +9,7 @@ import {
   SELFTEST_PROVIDER_ID,
 } from "@chatcouncil/shared";
 import { BYOA_SESSION_ALLOWED_ORIGINS, BYOK_PROXY_ALLOWED_ORIGINS } from "@chatcouncil/adapters";
+import { openProviderWindow, tileGeometries } from "../lib/provider-windows";
 import {
   isDiagRequest,
   isOffscreenReady,
@@ -73,6 +74,13 @@ export default defineBackground(() => {
   });
 
   // Bus interno: sw-relay (chunks del offscreen -> broadcast) y diag (popup).
+  browser.runtime.onMessage.addListener((message: unknown) => {
+    const m = message as Record<string, unknown> | null;
+    if (m && m.envelope === "byoa:page:event") {
+      relayPageEvent(m);
+    }
+  });
+
   browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
     if (isOffscreenReady(message)) {
       offscreenReadyResolve?.();
@@ -96,6 +104,78 @@ function broadcast(payload: BridgeResponse): void {
       port.postMessage(payload);
     } catch {
       externalPorts.delete(port); // Port muerto
+    }
+  }
+}
+
+/** Puertos de la SPA esperando eventos del ejecutor, por requestId. */
+const pageRequests = new Map<string, ExternalPort>();
+/** Secuencia de chunks por requestId, para respetar el contrato de stream. */
+const pageSeq = new Map<string, number>();
+
+/**
+ * Entrega la orden al content script. La ventana recien creada puede no
+ * tener el ejecutor listo todavia, asi que se reintenta con techo en vez
+ * de fallar en el primer intento.
+ */
+async function sendToPageExecutor(tabId: number, payload: unknown): Promise<void> {
+  const deadline = Date.now() + 15_000;
+  for (;;) {
+    try {
+      await browser.tabs.sendMessage(tabId, payload);
+      return;
+    } catch {
+      if (Date.now() > deadline) throw new Error("el ejecutor de pagina no respondio a tiempo");
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+}
+
+/**
+ * Traduce los eventos del ejecutor al protocolo de stream que la SPA YA
+ * consume, para que los paneles funcionen sin cambios.
+ */
+function relayPageEvent(ev: Record<string, unknown>): void {
+  const requestId = typeof ev.requestId === "string" ? ev.requestId : null;
+  if (!requestId) return;
+  const port = pageRequests.get(requestId);
+  if (!port) return;
+
+  const kind = ev.kind;
+  if (kind === "delta" && typeof ev.text === "string") {
+    const seq = (pageSeq.get(requestId) ?? 0) + 1;
+    pageSeq.set(requestId, seq);
+    port.postMessage({ type: "stream:chunk", requestId, seq, chunk: ev.text } satisfies BridgeResponse);
+    return;
+  }
+  if (kind === "human-gate") {
+    port.postMessage({
+      type: "stream:challenge",
+      requestId,
+      origin: typeof ev.origin === "string" ? ev.origin : "",
+    } satisfies BridgeResponse);
+    return;
+  }
+  if (kind === "done") {
+    port.postMessage({
+      type: "stream:done",
+      requestId,
+      lastSeq: pageSeq.get(requestId) ?? 0,
+      meta: { visibility: ev.visibility, hiddenMs: ev.hiddenMs, elapsedMs: ev.elapsedMs },
+    } satisfies BridgeResponse);
+    pageRequests.delete(requestId);
+    pageSeq.delete(requestId);
+    return;
+  }
+  if (kind === "error" || kind === "stalled") {
+    const message =
+      kind === "stalled"
+        ? `sin avance observable (${String(ev.idleMs)} ms)`
+        : String(ev.message ?? "fallo del ejecutor de pagina");
+    if (kind === "error") {
+      port.postMessage({ type: "stream:error", requestId, message } satisfies BridgeResponse);
+      pageRequests.delete(requestId);
+      pageSeq.delete(requestId);
     }
   }
 }
@@ -149,6 +229,43 @@ async function handleExternal(port: ExternalPort, message: BridgeRequest): Promi
         requestId: message.requestId,
         fromSeq: message.fromSeq,
       });
+      return;
+    }
+
+    case "byoa:page": {
+      // Transporte "page" (§0.25). El SW abre/reutiliza la ventana del
+      // proveedor y le entrega la spec al ejecutor. No interpreta la spec:
+      // runner agnostico (Q1).
+      const spec = message.spec as { newConversationUrl?: string } | null;
+      const url = spec?.newConversationUrl;
+      if (!url) {
+        const err: BridgeResponse = {
+          type: "stream:error",
+          requestId: message.requestId,
+          message: "la spec del proveedor no trae newConversationUrl",
+        };
+        port.postMessage(err);
+        return;
+      }
+      pageRequests.set(message.requestId, port);
+      try {
+        const geo = tileGeometries(1, { left: 40, top: 40, width: 520, height: 720 })[0]!;
+        const ref = await openProviderWindow(message.providerId, url, geo);
+        await sendToPageExecutor(ref.tabId, {
+          kind: "byoa:page:run",
+          requestId: message.requestId,
+          prompt: message.prompt,
+          spec: message.spec,
+        });
+      } catch (e) {
+        pageRequests.delete(message.requestId);
+        const err: BridgeResponse = {
+          type: "stream:error",
+          requestId: message.requestId,
+          message: e instanceof Error ? e.message : "no se pudo iniciar el transporte de pagina",
+        };
+        port.postMessage(err);
+      }
       return;
     }
 

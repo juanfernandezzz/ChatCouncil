@@ -2571,6 +2571,76 @@ de throttling usando `hiddenMs`, y medir si la oclusion cuenta como oculto.
 
 ---
 
+### 0.24 Fase 11 p2b — medicion de visibilidad en la maquina de Juan y apertura del cableado (2026-07-25)
+
+**Como se midio.** Claude habia vuelto a pedir mediciones que exigen una
+ventana real visible, algo que §0.20 ya habia registrado como
+TECNICAMENTE IMPOSIBLE para el agente con la frase "queda registrado para
+no volver a pedirla" — error de Claude por no consultar su propia entrada.
+Code escalo correctamente (caso (a) de la regla de autonomia) y ofrecio
+investigar si el control de escritorio podia manejar el Chrome real; se
+DESCARTO esa via: §0.20 ya la habia cerrado y la herramienta advierte
+explicitamente no rodear esa restriccion. Se recorto el pedido a lo minimo
+—un snippet de consola y cuatro movimientos de ventana, ~45 segundos de
+Juan— porque la pregunta de fondo no necesitaba generar nada: alcanza con
+leer `document.visibilityState` en cada disposicion, y si dice "visible"
+el estrangulamiento de background no aplica por definicion.
+
+**Resultado, y un accidente afortunado.** `document.hasFocus()` dio
+`false` en TODAS las muestras, porque el foco lo tenia DevTools y no la
+pagina. Eso convirtio la corrida entera en la medicion del escenario que
+mas importaba:
+
+| Tramo | Duracion | visibility | foco | cadencia de muestreo |
+|---|---|---|---|---|
+| 8:04:38 – 8:05:23 | 45 s | `visible` | `false` | 3 s exactos |
+| 8:05:24 – 8:05:34 | 10 s | `hidden` | `false` | 3 s exactos |
+| 8:05:34 en adelante | — | `visible` | `false` | 3 s exactos |
+
+**Queda CONFIRMADO el supuesto que sostiene todo el mosaico: una ventana
+VISIBLE SIN FOCO reporta `visible` y no se estrangula** — 45 segundos
+sostenidos con la cadencia intacta. La subsuncion de §0.17 (visible sin
+foco es menos adverso que oculto) deja de ser inferencia y pasa a tener
+medicion directa.
+
+**Oclusion: un solo episodio oculto, de 10 segundos.** Las instrucciones
+pedian cuatro disposiciones con ~10 s cada una; si tapar la ventana por
+completo hubiera contado como oculto, tendrian que haber aparecido DOS
+episodios (tapada y minimizada) o uno mucho mas largo. Aparecio uno solo y
+de exactamente 10 s, lo que corresponde al paso de minimizar. Lectura: **la
+oclusion NO cuenta como oculto en la maquina de Juan**, y por lo tanto
+puede maximizar la SPA encima del mosaico sin degradar a los proveedores.
+Confianza moderada-alta, pendiente de una confirmacion de una linea de
+Juan sobre cual paso produjo el tramo oculto.
+Nota de alcance: la deteccion de oclusion de Chrome varia por plataforma,
+pero ChatCouncil no se distribuye (§0.16) — la medicion en la maquina de
+Juan ES la autoridad para este producto.
+
+**Lo que esta corrida NO mide, y no necesita medir.** La cadencia se
+mantuvo en 3 s exactos incluso durante los 10 s ocultos, o sea que el
+estrangulamiento intensivo no se activo — necesita minutos, no segundos.
+Asi que este dato NO contradice §0.20 ni §0.22 y tampoco cierra el umbral
+de ocultamiento prolongado. Deja de importar: la decision de §0.23 es no
+apoyarse en pestanas ocultas, y esta medicion confirma que la alternativa
+elegida es solida.
+
+**Entregado en este commit — `apps/extension/lib/provider-windows.ts`.**
+Primera pieza del cableado de p2b: abre y cierra una ventana por
+proveedor con `chrome.windows.create({ focused: false })`, con geometria
+en grilla (`tileGeometries`), apertura idempotente —reutiliza la ventana
+si ya existe, para no acumular huerfanas—, cierre tolerante a que la
+persona la haya cerrado a mano, y olvido por `windowId`. No sabe nada de
+ningun proveedor: recibe origenes y devuelve identificadores (Q1
+preservado). No lee cookies, no toca sesiones, no inyecta nada.
+
+**Pendiente de p2b:** protocolo del puente para el transporte `page`,
+streaming de los eventos del ejecutor a los paneles de la SPA, registro de
+ChatGPT en `BYOA_PROVIDERS` con el gate de E8 consciente del transporte
+(los `"cookie"` van a `host_permissions`, los `"page"` a los `matches`), y
+la baja del andamio del `postMessage`, que vence en p2b por §0.18.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

@@ -69,6 +69,12 @@ export interface ByoaPromptHandlers {
   onAborted: () => void;
   onReconnecting?: () => void;
   onResumed?: () => void;
+  /**
+   * Transporte "page": hace falta que la persona resuelva un desafío o un
+   * gate de producto en la ventana real del proveedor (§0.14). NO es
+   * terminal — el turno sigue cuando lo resuelve.
+   */
+  onChallenge?: (origin: string) => void;
 }
 
 export interface ByoaPromptOptions {
@@ -100,14 +106,24 @@ export function sendByoaPrompt(
     failAsync("la extensión no está conectada (BYOA usa la sesión del navegador vía la extensión)");
     return inert;
   }
-  if (cfg.authTransport !== "cookie") {
-    // §0.16 (E10): la rama "page" es el transporte primario de Fase 11,
-    // pero su ejecutor genérico llega en el commit siguiente de Round A.
-    // Falla explícito y honesto — jamás una respuesta simulada.
-    failAsync(
-      `el proveedor "${cfg.label}" usa transporte de página, todavía no disponible en esta versión`,
+  if (cfg.authTransport === "page") {
+    // §0.27: la guarda que había acá era TEMPORAL — "mientras su ejecutor no
+    // exista" (§0.17). El ejecutor existe y está validado, así que la
+    // condición venció y el transporte se cablea de verdad. La spec viaja
+    // desde el dialecto: la extensión no la interpreta (Q1).
+    const requestId = bridgeClient.byoaPage(
+      { providerId: cfg.id, prompt: opts.prompt, spec: cfg.page },
+      {
+        // El puente entrega incrementos de texto; el contrato de la SPA los
+        // consume como `onDelta`, igual que el camino cookie.
+        onChunk: (_seq, chunk) => handlers.onDelta(chunk),
+        onDone: () => handlers.onDone({}),
+        onError: handlers.onError,
+        onAborted: handlers.onAborted,
+        ...(handlers.onChallenge ? { onChallenge: handlers.onChallenge } : {}),
+      },
     );
-    return inert;
+    return { requestId, abort: () => bridgeClient.abort(requestId) };
   }
   if (!opts.orgId) {
     failAsync("elige una organización de sesión primero (Detectar sesión Claude)");

@@ -112,6 +112,8 @@ function broadcast(payload: BridgeResponse): void {
 const pageRequests = new Map<string, ExternalPort>();
 /** Secuencia de chunks por requestId, para respetar el contrato de stream. */
 const pageSeq = new Map<string, number>();
+/** Ultimo texto ya entregado por requestId, para emitir INCREMENTOS. */
+const pageText = new Map<string, string>();
 
 /**
  * Entrega la orden al content script. La ventana recien creada puede no
@@ -143,9 +145,24 @@ function relayPageEvent(ev: Record<string, unknown>): void {
 
   const kind = ev.kind;
   if (kind === "delta" && typeof ev.text === "string") {
+    // El ejecutor manda SNAPSHOTS del texto completo (robusto ante
+    // reescrituras del DOM); el contrato de `stream:chunk` es de
+    // INCREMENTOS acumulables. Se traduce acá con prefijo comun mas largo:
+    // el caso normal es crecimiento monotono y el incremento es el sufijo.
+    // LIMITACION DECLARADA (§0.27): si el proveedor REESCRIBE texto ya
+    // emitido (reflow de markdown, por ejemplo), el panel conserva lo viejo
+    // y solo recibe lo nuevo desde el punto de divergencia. Es aproximacion
+    // append-only, no se disimula.
+    const prev = pageText.get(requestId) ?? "";
+    const next = ev.text;
+    let i = 0;
+    while (i < prev.length && i < next.length && prev[i] === next[i]) i++;
+    const increment = next.slice(i);
+    pageText.set(requestId, next);
+    if (increment.length === 0) return;
     const seq = (pageSeq.get(requestId) ?? 0) + 1;
     pageSeq.set(requestId, seq);
-    port.postMessage({ type: "stream:chunk", requestId, seq, chunk: ev.text } satisfies BridgeResponse);
+    port.postMessage({ type: "stream:chunk", requestId, seq, chunk: increment } satisfies BridgeResponse);
     return;
   }
   if (kind === "human-gate") {
@@ -165,6 +182,7 @@ function relayPageEvent(ev: Record<string, unknown>): void {
     } satisfies BridgeResponse);
     pageRequests.delete(requestId);
     pageSeq.delete(requestId);
+    pageText.delete(requestId);
     return;
   }
   if (kind === "error" || kind === "stalled") {
@@ -176,6 +194,7 @@ function relayPageEvent(ev: Record<string, unknown>): void {
       port.postMessage({ type: "stream:error", requestId, message } satisfies BridgeResponse);
       pageRequests.delete(requestId);
       pageSeq.delete(requestId);
+      pageText.delete(requestId);
     }
   }
 }

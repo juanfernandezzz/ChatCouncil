@@ -67,6 +67,12 @@ export interface StreamHandlers {
   onReconnecting?: () => void;
   /** La reanudación prosperó; volviendo a recibir. */
   onResumed?: () => void;
+  /**
+   * Hace falta intervención HUMANA en la ventana real del proveedor
+   * (challenge, captcha o gate de producto). El stream NO es terminal: la
+   * persona resuelve en la ventana y el turno sigue (§0.14).
+   */
+  onChallenge?: (origin: string) => void;
 }
 
 interface StreamRecord {
@@ -209,6 +215,35 @@ class BridgeClient {
       return requestId;
     }
     this.port.postMessage({ type: "byoa:proxy", requestId, ...request });
+    return requestId;
+  }
+
+  /**
+   * Transporte "page" (§0.27): manda la spec declarativa del DOM y recibe
+   * los eventos del ejecutor ya traducidos al protocolo de stream, así que
+   * el consumidor es el MISMO que para cookie o proxy.
+   */
+  byoaPage(
+    request: { providerId: string; prompt: string; spec: unknown },
+    handlers: StreamHandlers,
+  ): string {
+    const requestId = crypto.randomUUID();
+    this.streams.set(requestId, {
+      kind: "byoa",
+      handlers,
+      lastSeq: -1,
+      pending: new Map(),
+      terminal: false,
+      doneLastSeq: null,
+    });
+    this.ensurePort();
+    if (!this.port) {
+      // Sin extensión no hay ventana de proveedor que manejar: piso
+      // inmediato, nunca un cuelgue silencioso.
+      this.finalizeAborted(requestId);
+      return requestId;
+    }
+    this.port.postMessage({ type: "byoa:page", requestId, ...request });
     return requestId;
   }
 
@@ -370,6 +405,14 @@ class BridgeClient {
         rec.handlers.onError(msg.message);
         return;
       }
+      case "stream:challenge": {
+        const rec = this.streams.get(msg.requestId);
+        // NO es terminal: la persona resuelve el desafío en la ventana real
+        // y el mismo stream sigue entregando (§0.14).
+        rec?.handlers.onChallenge?.(msg.origin);
+        return;
+      }
+
       case "stream:aborted": {
         this.finalizeAborted(msg.requestId);
         return;

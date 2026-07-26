@@ -2757,6 +2757,201 @@ extension y disparar un round desde la UI.
 
 ---
 
+### 0.27 Fase 11 p2b — el lado SPA del transporte "page" (2026-07-25)
+
+**Correccion de un reclamo FALSO de §0.25.** Ahi se escribio "el circuito
+esta completo" y "ChatGPT ya es disparable desde la SPA". Era falso: se
+habia construido el lado RECEPTOR (extension) y nunca el EMISOR (SPA).
+`bridge-client.ts` no tenia forma de mandar `byoa:page`, y
+`byoa-client.ts` seguia rechazando todo proveedor con
+`authTransport !== "cookie"`. Se verifico el lado extension y se afirmo la
+completitud sin recorrer el camino de vuelta — exactamente el tipo de
+reclamo no verificado que la disciplina del proyecto existe para evitar.
+Lo encontro Code al intentar el round real.
+
+**La guarda era TEMPORAL y su condicion habia vencido.** §0.17 la habia
+escrito con una condicion explicita — "mientras su ejecutor no exista" — y
+el ejecutor existe y esta validado desde §0.22. Code la interpreto como una
+frontera de alcance diferida a una ronda futura; no lo era. Era deuda con
+fecha de vencimiento y se paso de fecha sin que nadie la mirara. Leccion:
+una guarda temporal necesita su condicion de baja escrita EN EL LEDGER, no
+solo en el comentario del codigo, porque el comentario no se lee cuando se
+cierra la condicion.
+
+**Lo que se cableo.**
+- `bridgeClient.byoaPage({ providerId, prompt, spec }, handlers)`, con la
+  misma forma que `byoaProxy`: la spec viaja desde el dialecto y la
+  extension no la interpreta (Q1).
+- `StreamHandlers.onChallenge?` y `ByoaPromptHandlers.onChallenge?`, mas el
+  caso `stream:challenge` en el despachador. **NO es terminal**: la persona
+  resuelve el desafio en la ventana real y el mismo stream sigue
+  entregando, como manda §0.14.
+- `byoa-client.ts` rutea los proveedores `"page"` en vez de rechazarlos,
+  adaptando al contrato real de la SPA (`onDelta` por chunk, `onDone` con
+  meta).
+
+**Traduccion snapshot -> incremento, con su limitacion declarada.** El
+ejecutor emite el texto COMPLETO en cada delta, que es lo robusto ante
+reescrituras del DOM; pero `stream:chunk` es un contrato de INCREMENTOS
+acumulables. La traduccion se hace en el service worker por prefijo comun
+mas largo: en el caso normal —crecimiento monotono— el incremento es el
+sufijo y es exacto. **LIMITACION: si el proveedor reescribe texto ya
+emitido (por ejemplo un reflow de markdown al cerrarse un bloque de
+codigo), el panel conserva lo viejo y solo recibe lo nuevo desde el punto
+de divergencia.** Es una aproximacion append-only y se declara en vez de
+disimularse. Si aparece en la practica, la salida es un campo de reemplazo
+en el protocolo, no un parche silencioso.
+
+**Arreglo de Code que corresponde reconocer.** `DEFAULT_PRIORITY` en
+`useCouncilStore.ts` tenia seis entradas fijas de antes de que existiera el
+proveedor `chatgpt`, asi que el panel no aparecia en el tablero por mas que
+`listPanelOptions()` ya lo devolviera. Lo agrego al final para no reordenar
+los defaults ni romper el e2e, lo verifico entero y lo commiteo aparte
+(`cbf13f1`). Es exactamente la clase de arreglo que la regla de autonomia
+le asigna, y la escalada del bloqueo de protocolo tambien fue correcta.
+
+**Gates sobre lo compilado:** bundle web con `byoa:page`=1 y
+`stream:challenge`=1, y la guarda vieja ("todavia no disponible en esta
+version")=**0**. Background con `byoa:page`=1, `stream:challenge`=1,
+`windows.create`=1.
+
+**Lo que este commit sigue sin probar:** que el round real funcione en el
+navegador. Ahora si hay algo que disparar desde la UI, asi que es lo
+siguiente y es lo unico que falta para cerrar p2b.
+
+---
+
+### 0.28 REDISENO DEL PRODUCTO — consejo de tres roles (2026-07-26)
+
+**Origen.** Juan replanteo para que ChatCouncil sea una herramienta
+PERSONAL de investigacion en ciencias sociales (cuanti, cuali y mixta), de
+uso amplio, sin fines academicos ni de lucro. Se hizo una investigacion de
+prior art metodologico y una entrevista de diseno. Lo que sigue reemplaza
+la nocion previa de "comparar respuestas en paneles" por una arquitectura
+de TRES ROLES DISJUNTOS.
+
+**Aclaracion que fija el proposito (y corrige a Claude).** Juan NO estudia
+a los LLM: los usa como INSTRUMENTOS. Por lo tanto el fluff conversacional
+(saludos, preguntas de cierre) es irrelevante incluso como dato y se
+elimina. Claude habia argumentado lo contrario en §0.26 apoyandose en
+literatura sobre investigacion SOBRE modelos; no aplica a este proyecto.
+Claude tambien propuso separar el producto en dos segun si los modelos
+generan contenido o procesan datos del usuario: **Juan refuto esa
+distincion y tenia razon** — los modelos siempre producen el contenido, y
+bajo la decision de "divergencia como producto" la distincion no ramifica
+nada. Es UN producto. Sobrevive solo como atributo de ronda: si hay fuente
+adjunta, el error es verificable contra ella.
+
+**COMPOSICION FINAL (decision de Juan, 2026-07-26). Tres conjuntos
+DISJUNTOS, 7 turnos por ronda:**
+
+| Rol | Modelos | Que hace |
+|---|---|---|
+| **Investigadores** (etapa 1) | Claude, Gemini, ChatGPT, **GLM** | Reciben la misma pregunta en paralelo. Dialogo centralizado multi-turno: cada uno mantiene su propia conversacion. |
+| **Analistas** (etapa 2) | **Qwen** (extraccion), **Kimi** (analisis comparativo) | Dos llamadas batcheadas que producen UN output unificado. |
+| **Operador final** (etapa 3) | **DeepSeek** | Ejecuta las herramientas que el usuario escribe sobre el output unificado. |
+
+Perplexity SALE del consejo inicial y queda como investigador futuro, junto
+con Grok (postergado por limites del plan gratuito, §0.15). **La puerta
+queda abierta por diseno**: el numero de investigadores NO se codifica en
+ningun lado — ni en la lista de prioridad de paneles, ni en los prompts de
+los analistas, ni en la disposicion de ventanas. Es configuracion, no
+codigo. Precedente que lo prueba necesario: `DEFAULT_PRIORITY` tenia seis
+entradas fijas y por eso ChatGPT no aparecia en el tablero aunque el
+registro ya lo devolvia (arreglado en cbf13f1).
+
+**Consecuencia epistemica de sacar a Perplexity, que conviene registrar.**
+Los cuatro investigadores quedan siendo modelos parametricos, sin
+recuperacion. Eso ELIMINA el confundidor que Claude habia senalado —
+mezclar un modelo que cita fuentes con tres que responden de memoria hace
+que cualquier acuerdo o desacuerdo mezcle dos causas—. A cambio se pierde
+el anclaje en fuentes. **Decision pendiente derivada:** si se activa el
+modo de busqueda en Claude, Gemini o ChatGPT, debe activarse en TODOS por
+igual; dejarlo al default de cada proveedor reintroduce exactamente el
+confundidor que se acaba de eliminar. Esto le da contenido concreto a la
+Fase 12 (capacidades por proveedor).
+
+**LO QUE LA ENTREVISTA ELIMINO del plan.** Estas capas se habian propuesto
+y NO van, cada una con su motivo:
+- Acuerdo entre codificadores (alfa de Krippendorff): requiere ~80-140
+  unidades codificadas y el uso es pregunta por pregunta — serian 20 a 35
+  rondas antes de que el numero signifique algo. No es metrica por ronda.
+- Codificacion deductiva con libro de codigos: las categorias EMERGEN.
+- Fijado de versiones y prompts citables: sin fines academicos.
+- Medidas de estabilidad por k corridas: complejidad no pedida.
+- Normalizacion estilistica destructiva (reescribir respuestas): destruye
+  el dato primario. El crudo es canonico SIEMPRE.
+
+**HALLAZGOS QUE SOSTIENEN EL DISENO** (de la investigacion de prior art):
+- Los LLM **no se autocorrigen sin criterio externo nuevo**; tras
+  "auto-corregir" el desempeno suele empeorar (Huang et al., ICLR 2024).
+  Por eso la etapa 2 no puede ser "volver a analizar": tiene que aportar
+  una operacion que antes no existia.
+- **Errores correlacionados**: un panel de nueve jueces de siete familias
+  aporto el equivalente a ~2 votos independientes; se pierde ~3/4 de la
+  independencia nominal (Apple ML Research, arXiv 2605.29800). Sumar
+  modelos NO suma independencia en proporcion.
+- Los LLM anotan bien texto corto y **mal prosa larga y ambigua**, con
+  sobre-etiquetado severo. La salida de etapa 1 es exactamente eso.
+
+**POR QUE LA ETAPA 2 SE JUSTIFICA IGUAL.** Porque cambia de funcion: deja
+de analizar y pasa a **hacer comparable**. La divergencia es el PRODUCTO
+(decision de Juan), y toda operacion sobre divergencia es COMPARATIVA —
+no se puede hacer mirando una respuesta aislada. De ahi las dos llamadas:
+- **2a Extraccion (Qwen).** Convierte las N respuestas en afirmaciones
+  separadas y atribuidas por origen. No juzga, no puntua, no reescribe.
+  Qwen por tener la tasa de alucinacion mas baja entre modelos frontera:
+  la extraccion es donde inventar es el peor error.
+- **2b Analisis comparativo (Kimi).** Opera sobre las afirmaciones: que se
+  comparte, que dice cada uno que nadie mas dice, donde se contradicen, y
+  **de que tipo es cada desacuerdo** (definicion, evidencia, enfasis,
+  valores). Ese ultimo punto es donde vive el matiz que Juan busca.
+- **Los conteos salen del CODIGO, no de un modelo.** "3 de 4 afirman X" se
+  calcula sobre las afirmaciones extraidas: exacto y gratis. Pedirle a un
+  modelo un "analisis cuantitativo" de prosa produce numeros
+  impresionistas con apariencia de dato.
+
+**POR QUE LA ETAPA 3 NO ES "UNIFICAR".** Si la etapa 2 ya entrega un output
+unificado con su analisis comparativo, "unificar" seria sintetizar lo ya
+sintetizado. Su rol real es otro y es solido: **es la capa del USUARIO**.
+La etapa 2 es infraestructura fija que siempre corre igual; la etapa 3
+ejecuta los prompts que Juan escribe, agrega y modifica. Por eso merece
+modelo propio y es el unico punto configurable del pipeline.
+
+**Herramientas: convergencia Y divergencia.** La herramienta por defecto
+deja de ser "resumen" y pasa a ser **analisis de convergencia y
+divergencia**. Las herramientas por defecto son inmutables (linea base) y
+el usuario puede agregar, modificar y eliminar las suyas. Motivo de fondo:
+el objetivo declarado de Juan es "no buscamos union ni caos, buscamos
+matiz" — una sintesis que promedia destruye lo que se quiere conservar.
+
+**Contexto de los analistas: solo el turno actual.** No ven el historial.
+Comparan las respuestas A ESTA pregunta. Ver como cada modelo se movio a lo
+largo del dialogo es una herramienta de la etapa 3 que lee el historial, no
+una responsabilidad de la etapa 2.
+
+**Riesgo aceptado y su mitigacion.** DeepSeek como unico operador final es
+un punto unico de sesgo interpretativo, en una herramienta cuya premisa es
+no depender del sesgo de un modelo. Se acepta porque los paneles siguen
+mostrando el crudo: la etapa 3 es LENTE, nunca reemplazo. Cuanto mas
+mecanica sea la etapa 2 —extraer, comparar, listar— menos margen
+interpretativo queda aguas abajo.
+
+**Disjuncion de roles como GATE, no como convencion.** Existe el precedente
+exacto: `guard-judge-anonymity.mjs` hace cumplir por topologia de imports
+que el juez nunca vea la identidad del proveedor. El mismo patron debe
+hacer cumplir que investigadores, analistas y operador sean conjuntos
+disjuntos, para que nadie pueda configurar por accidente a un modelo como
+su propio evaluador.
+
+**Lo que NO se descarta del trabajo hecho.** El transporte `"page"`, el
+ejecutor generico, la orquestacion de ventanas, la anonimizacion con gate,
+las plantillas editables en Dexie y claude.ai por `"cookie"` siguen enteros
+y son la base de las tres etapas: los siete modelos se conectan por el
+mismo mecanismo.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```
@@ -3272,98 +3467,86 @@ patrón Paso 0, aceptación real con recorrido de primer uso):**
   Google POR LA UI → armar consejo → enviar → seleccionar y copiar una
   respuesta → colapsar/expandir sidebar → recargar y verificar persistencia.
 
-### Fase 11 — BYOA multiproveedor: el director (el corazón del producto) 🟡 (ledger §0.13–§0.16; arquitectura vigente en §0.16)
+### Fase 11 — Consejo de investigadores (etapa 1) 🟡 (ledger §0.13–§0.28; arquitectura vigente en §0.28)
 
-- **Arquitectura vigente (§0.16, reencuadre de Juan) — DIRECTOR, no
-  cliente.** ChatCouncil no reimplementa los endpoints internos de los
-  proveedores: maneja sus **UIs reales**. Se desacopla display de
-  extracción — el display sale gratis (ventanas/pestañas reales del
-  proveedor) y sólo se automatizan la inyección simultánea del prompt y la
-  cosecha de la respuesta para las herramientas de análisis.
-- **Transporte `"page"` es PRIMARIO (E10).** Content script same-origin en
-  una pestaña del proveedor: el JS del propio sitio genera los tokens
-  anti-abuso (PoW del sentinel, `at` + WAA de Gemini), el `localStorage`
-  es accesible, y no hace falta descubrir el WebSocket de Perplexity ni el
-  Server Action de Grok. **claude.ai se queda en `"cookie"`** — funciona,
-  no se toca, y prueba que los dos transportes conviven. Acá entra la Q2
-  diferida desde Fase 3: ciclo de vida de pestañas (`chrome.tabGroups`,
-  permiso ya declarado en el manifest).
-- **Contrato partido por `authTransport` (E9 ampliada):** unión
-  discriminada — la rama `"cookie"` lleva forma de petición HTTP, la rama
-  `"page"` lleva forma de DOM (dónde inyectar, qué observar, cómo detectar
-  fin de respuesta).
-- **Selectores en `adapters.json`, declarativos (E11).** Un proveedor roto
-  por un rediseño se arregla editando un JSON y esperando el TTL: sin
-  recompilar ni reinstalar. El content script es un ejecutor GENÉRICO sin
-  lógica de proveedor (preserva Q1). **Jamás cadenas evaluables** — el
-  manifiesto es remoto y el ejecutor corre en páginas logueadas;
-  verificable por gate.
-- **BYOA es prioridad siempre; BYOK es opcional (E12).** OpenRouter
-  rechazado (exigiría pagar créditos de API, contra la tesis del
-  producto). El piso de fiabilidad es el BYOK de Google ya embarcado.
-- **Rounds:** Round A = medición de visibilidad + contrato generalizado +
-  ejecutor genérico + **ChatGPT** de punta a punta (cuenta burner) ·
-  Round B = **Gemini Pro**, Perplexity, DeepSeek, Grok por `"page"`.
-- **Gate estructural obligatorio en Round A:** allowlist de orígenes ===
-  `host_permissions`, porque la allowlist es derivada y el manifiesto es
-  manual (riesgo de deriva silenciosa, §0.15).
-- Panel de cuentas (Fase 10) extendido con los estados de sesión de los
-  proveedores en alcance.
-- **Primera medición de Round A, antes de comprometer el diseño de UI:**
-  si las webapps pausan el streaming con la pestaña oculta (Page
-  Visibility API) o Chrome estrangula el background, las pestañas de
-  proveedor no pueden estar escondidas y el layout cambia (§0.16).
-- **Aceptación real:** un round con todos los proveedores en alcance
-  respondiendo en paralelo en el Chrome real de Juan — Claude Pro y Gemini
-  Pro con sus cuentas reales, el resto con la burner. Un proveedor
-  técnicamente bloqueado se registra en ledger con evidencia y se marca en
-  la UI como no disponible — no se simula. Si falla la extracción pero la
-  respuesta se ve en la pestaña real, eso es degradación aceptable y se
-  reporta como tal, nunca se rellena.
+- **Cuatro investigadores iniciales: Claude, Gemini, ChatGPT y GLM.**
+  Reciben la misma pregunta en paralelo, en un diálogo centralizado
+  multi-turno donde cada uno mantiene su propia conversación.
+- Perplexity y Grok quedan como **investigadores futuros**, no
+  descartados. Perplexity además reintroduce recuperación de fuentes, así
+  que al sumarlo hay que decidir cómo tratar la comparabilidad (§0.28).
+- **El número de investigadores NO se codifica en ningún lado**: ni en la
+  prioridad de paneles, ni en los prompts de los analistas, ni en la
+  disposición de ventanas. Es configuración. Precedente que lo prueba
+  necesario: `DEFAULT_PRIORITY` tenía seis entradas fijas y por eso
+  ChatGPT no aparecía en el tablero (arreglado en `cbf13f1`).
+- **Transporte:** claude.ai por `"cookie"` (funciona, no se toca); el
+  resto por `"page"` — content script same-origin, ejecutor genérico
+  manejado por `adapters.json`, ventana visible por proveedor mientras el
+  round está en vuelo (§0.21, §0.23, §0.24).
+- **Aceptación:** un round real con los cuatro respondiendo en paralelo en
+  el Chrome de Juan. Claude Pro y Gemini Pro con cuentas reales; el resto
+  con la cuenta burner (§0.16).
 
 ### Fase 11.5 — Identidad: admin e invitaciones ⏳
 
-- Capa de IDENTIDAD (Supabase, Fase 6), distinta del panel de cuentas de
-  PROVEEDOR de Fase 10. Juan como admin de su propio despliegue, capaz de
-  invitar a un colega puntual. No existe todavía (§0.16).
-- Fase corta y posterior a que el consejo responda: no bloquea nada de
-  Fase 11 y no debe adelantarse a la funcionalidad central.
-- Alcance mínimo a propósito: sin roles complejos, sin organizaciones, sin
-  facturación — ChatCouncil no es comercial ni se distribuye (§0.16).
+- Capa de identidad (Supabase, Fase 6), distinta del panel de cuentas de
+  proveedor. Juan como admin de su propio despliegue, capaz de invitar a
+  un colega puntual. Alcance mínimo: sin roles complejos, sin
+  organizaciones, sin facturación — no es comercial ni se distribuye.
+- Fase corta y posterior a que el consejo responda: no bloquea nada.
 
-### Fase 12 — Capacidades por proveedor: modelo, research, esfuerzo ⏳
+### Fase 12 — Capacidades por proveedor: modelo, búsqueda, esfuerzo ⏳
 
-- **Selector de modelo por panel** para BYOA y BYOK (retoma el diferido de
-  Fase 4: selector agrupado del mockup de Juan) + descubrimiento de modelos
-  por proveedor (diferido de Fase 3).
-- **Toggles de capacidades donde el proveedor las tenga:** deep research,
-  nivel de razonamiento/esfuerzo, y las que el inventario detecte (p. ej.
-  búsqueda web). Matriz de capacidades declarada por proveedor × tier de
-  cuenta (free/Pro), consumida por la UI: sólo se muestra lo que existe, y
-  lo no probado con las cuentas disponibles se marca "no verificado".
-- Ojo arquitectónico registrado en Fase 3: las superficies research-agent
-  pueden no mapear limpio al contrato `AdapterChunk` v1 (sólo texto) — si
-  deep research lo exige, la extensión del contrato se decide en la
-  entrevista de esta fase, no se improvisa.
-- **Aceptación real:** en Claude Pro y Gemini Pro, elegir modelo distinto
-  del default, activar deep research y nivel de esfuerzo donde exista, y
-  recibir respuesta coherente con lo elegido; en cuentas free, verificar el
-  gating honesto.
+- Selector de modelo y de nivel de esfuerzo por proveedor.
+- **Decisión con contenido nuevo desde §0.28:** el modo de búsqueda debe
+  poder fijarse de forma UNIFORME en los cuatro investigadores. Dejarlo al
+  default de cada proveedor mezcla respuestas paramétricas con respuestas
+  ancladas en fuentes, y eso convierte cualquier convergencia o divergencia
+  en un resultado de dos causas confundidas.
 
-### Fase 13 — Herramientas personalizables ⏳
+### Fase 13 — Capa de analistas (etapa 2) ⏳
 
-- Los prompts de **Comparar / Resumir** dejan de ser fijos: editables desde
-  el panel de herramientas, con **restaurar predeterminados** por prompt y
-  **prompts personalizados adicionales** que procesen las respuestas del
-  consejo (misma tubería que Comparar/Resumir: selección de respuestas →
-  prompt → salida al panel de análisis, respetando el sello de anonimato
-  del juez donde aplique — `guard:judge` sigue mandando).
-- Persistencia en Dexie + sync a Drive (mismas reglas de pureza de
-  `guard:sync`; los prompts personalizados NO son secretos y sí se
-  sincronizan).
-- **Aceptación real:** editar el prompt de Resumir, verlo reflejado en un
-  análisis; crear un prompt personalizado y ejecutarlo; restaurar
-  predeterminados y verificar el texto original.
+- **Dos llamadas batcheadas que producen UN output unificado**, con
+  contexto limitado al TURNO ACTUAL (nunca el historial):
+  - **13a Extracción — Qwen.** Convierte las N respuestas en afirmaciones
+    separadas y atribuidas por origen. No juzga, no puntúa, no reescribe.
+    Elegido por tener la tasa de alucinación más baja entre modelos
+    frontera: en extracción, inventar es el peor error posible.
+  - **13b Análisis comparativo — Kimi.** Opera sobre las afirmaciones
+    extraídas: qué se comparte, qué dice cada uno que nadie más dice,
+    dónde se contradicen, y de qué TIPO es cada desacuerdo (definición,
+    evidencia, énfasis, valores).
+- **Los conteos se calculan en CÓDIGO**, no los produce un modelo: sobre
+  las afirmaciones extraídas, "3 de 4 afirman X" es exacto y gratis.
+- **Limpieza de fluff por reglas**, determinista, y el crudo se conserva
+  siempre: la salida es vista derivada, nunca reemplazo (§0.28).
+- **Aceptación:** un round donde el output unificado permite ver, sin leer
+  las cuatro respuestas enteras, en qué coinciden y en qué divergen.
+
+### Fase 13.5 — Disjunción de roles como gate ⏳
+
+- Investigadores, analistas y operador deben ser conjuntos **disjuntos**,
+  verificado mecánicamente y no por convención. Precedente exacto:
+  `guard-judge-anonymity.mjs`, que hace cumplir por topología de imports
+  que el juez nunca vea la identidad del proveedor.
+- Impide configurar por accidente a un modelo como su propio evaluador.
+
+### Fase 13.6 — Operador final y herramientas editables (etapa 3) ⏳
+
+- **DeepSeek** ejecuta las herramientas sobre el output unificado de la
+  etapa 2. Su rol NO es "unificar" —eso ya lo hizo la etapa 2— sino ser
+  **la capa que maneja el usuario**: el único punto configurable del
+  pipeline (§0.28).
+- **La herramienta por defecto es análisis de convergencia Y divergencia**,
+  no "resumen": el objetivo declarado es el matiz, y una síntesis que
+  promedia destruye lo que se quiere conservar.
+- El usuario puede **agregar, modificar y eliminar** prompts de
+  herramientas. Los de fábrica son inmutables y sirven de línea base.
+  Infraestructura ya existente: `db.promptTemplates` en Dexie.
+- **Riesgo aceptado:** un solo operador es un punto único de sesgo
+  interpretativo. Se tolera porque los paneles siguen mostrando el crudo:
+  la etapa 3 es lente, nunca reemplazo.
 
 ### Fase 14 — Rediseño estético integral + media pack ⏳ (cierre de v2)
 

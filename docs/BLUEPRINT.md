@@ -2952,6 +2952,116 @@ mismo mecanismo.
 
 ---
 
+### 0.29 Etapa 2 — preparacion en codigo, analistas en paralelo (2026-07-26)
+
+**CORRECCION DE JUAN que reencuadra un hallazgo.** Claude venia usando el
+marco de VOTOS —mayoria, minoria, errores correlacionados que degradan la
+agregacion— importado de la literatura de LLM como evaluador. Juan lo
+rechazo: "no me importa tener mayoria y minoria, me interesa enriquecer la
+investigacion, esto no se trata de votos". Tiene razon y la distincion
+importa:
+- En un marco de AGREGACION, mas evaluadores sirven para estimar mejor una
+  etiqueta verdadera, y los errores correlacionados destruyen ese beneficio.
+- En un marco de ENRIQUECIMIENTO, los modelos no se promedian: se leen. La
+  correlacion de errores NO argumenta contra tener cuatro investigadores.
+**Lo que SI sobrevive de ese hallazgo, y es lo unico:** la convergencia
+entre modelos que comparten linaje de entrenamiento es evidencia DEBIL. El
+analisis de convergencia y divergencia no debe presentar el acuerdo como
+validacion — puede significar que comparten el mismo sesgo. Queda como
+requisito de redaccion de esa herramienta, no como limite al numero de
+investigadores.
+
+**Composicion confirmada: CUATRO investigadores** — Claude, Gemini, ChatGPT
+y GLM. Juan solo iba a bajar a tres para liberar GLM hacia la etapa 2; no
+hace falta, porque la etapa 2 no necesita un tercer modelo (ver abajo).
+
+**DEFECTO REAL encontrado en el codigo existente.** Juan intuyo que hacia
+falta anonimizar y barajar ANTES de que los analistas vean las respuestas.
+Verificado: `anonymize.ts` anonimizaba pero **NO barajaba** — cero
+ocurrencias de shuffle o random. Las etiquetas seguian el orden de panel,
+que es ESTABLE entre rondas, asi que "Modelo A" era siempre el mismo
+proveedor y la posicion filtraba identidad. El sesgo de posicion en
+modelos evaluadores esta documentado. El defecto existia hoy.
+
+**Por que la preparacion va en CODIGO y no en un modelo.** Juan habia
+propuesto un tercer modelo (etapa 2.1) que anonimizara, limpiara el fluff
+y barajara. Se descarta, y la razon es la que hace la diferencia:
+`guard-judge-anonymity.mjs` demuestra por TOPOLOGIA DE IMPORTS que
+`build-judge-prompt.ts` no puede recibir identidad de proveedor — no tiene
+ningun import. Eso es IMPOSIBILIDAD, no procedimiento. Un modelo que
+anonimiza es un paso que se CONFIA que se hizo bien: no es determinista,
+podria parafrasear al limpiar, cuesta llamadas de un presupuesto ajustado,
+y ningun guard puede demostrar nada sobre lo que decidio hacer. La
+preparacion determinista es estrictamente superior acá.
+
+**Entregado — barajado con semilla en `anonymize.ts`.** PRNG determinista
+(mulberry32) + Fisher-Yates, con la semilla como parametro OPCIONAL: sin
+semilla se conserva el comportamiento anterior, para no alterar en silencio
+lo ya verificado. No hace falta aleatoriedad criptografica; lo unico que
+importa es que la POSICION no quede correlacionada de forma estable con la
+IDENTIDAD. Al ser determinista, la ronda es reproducible: se puede volver a
+ver el orden exacto que vio el analista guardando la semilla.
+Sobre "aleatoriedad real imposible" (Juan): no era necesaria. Una semilla
+resuelve el problema mejor que un modelo, y encima deja trazabilidad.
+
+**Harness nuevo (`harness:fase11`, 8 verificaciones, en CI):** sin semilla
+conserva el orden de panel · misma semilla produce el mismo orden ·
+semillas distintas producen ordenes distintos · conserva las N respuestas ·
+sin duplicados · **el sello sigue mapeando etiqueta→panel correctamente
+tras barajar** (la verificacion que importa: si el sello se desalineara, la
+UI atribuiria respuestas al proveedor equivocado) · las etiquetas no
+filtran identidad · sin anonimizar no baraja.
+
+**ETAPA 2, forma final — dos llamadas, no cuatro:**
+1. **Codigo prepara:** limpieza de fluff por reglas (determinista) →
+   anonimizacion (modulo existente) → barajado con semilla.
+2. **Qwen y Kimi EN PARALELO** sobre el mismo material preparado. Qwen
+   extrae afirmaciones atribuidas por etiqueta; Kimi hace el analisis
+   comparativo.
+3. **Codigo reensambla** las respuestas limpias + los conteos exactos
+   (calculados sobre la extraccion) + los dos analisis, en el output
+   unificado que consume la etapa 3.
+
+**PARALELO, no secuencial — correccion de Claude.** Claude habia propuesto
+que Kimi comparara SOBRE la extraccion de Qwen. El instinto de Juan era
+mejor: asi Kimi heredaria los errores de Qwen, y si la extraccion se comio
+un matiz el analisis comparativo nunca lo recupera. En paralelo son dos
+vistas INDEPENDIENTES sobre el mismo material, y ninguna contamina a la
+otra.
+
+**Asimetria de cuotas que decide la asignacion de modelos.** Si un
+investigador se queda sin cuota, la ronda sigue con los demas y DEGRADA. Si
+un analista se queda sin cuota, la ronda MUERE — estan en el camino
+critico. Por lo tanto las cuotas generosas deben estar del lado de los
+analistas y el operador, no de los investigadores. Las unicas cuentas
+confiables por definicion son las dos pagas (Claude Pro, Gemini Pro).
+Perplexity y Grok quedan fuera del consejo inicial por cuotas gratuitas
+demasiado ajustadas (§0.28).
+
+**Correccion tecnica sobre multiples cuentas (Juan la acepto).** Dos
+sesiones del MISMO proveedor no conviven en un mismo perfil de Chrome: las
+cookies son por origen y por perfil, asi que loguear la segunda cierra la
+primera. Circunvenir limites horarios con varias cuentas exigiria PERFILES
+de Chrome separados, lo que complica la orquestacion de ventanas. No es una
+salida disponible sin trabajo extra considerable.
+
+**CABLEADO DE VERDAD, no solo agregado.** Al verificar aparecio la trampa
+de siempre: el barajado existia y el harness lo probaba, pero **ningun
+caller pasaba semilla**, asi que en el producto corriendo no cambiaba nada
+— capacidad agregada sin efecto, justo el patron que "green build != codigo
+embarcado" existe para atrapar. Se cablo: `run-analysis.ts` genera la
+semilla por ronda y la pasa, y `RoundAnalysis.shuffleSeed` la PERSISTE en
+Dexie para que el orden que vio el analista sea reconstruible. Gate sobre
+el bundle compilado: `shuffleSeed` presente y la constante del PRNG
+(`0x6d2b79f5`) presente — el identificador se minifica pero la constante
+numerica sobrevive, que es el marcador util segun §0.19/§0.25.
+
+**Pendiente inmediato:** extender el guard de anonimato a los prompts de
+los analistas, de modo que la garantia estructural que hoy protege al juez
+cubra tambien a Qwen y Kimi.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```
@@ -3507,16 +3617,24 @@ patrón Paso 0, aceptación real con recorrido de primer uso):**
 
 ### Fase 13 — Capa de analistas (etapa 2) ⏳
 
-- **Dos llamadas batcheadas que producen UN output unificado**, con
+- **Preparación en CÓDIGO, no con un modelo (§0.29):** limpieza de fluff
+  por reglas → anonimización (módulo existente, con garantía estructural en
+  CI) → **barajado con semilla**, para que la posición no quede
+  correlacionada con la identidad del proveedor. Ya entregado y con harness
+  propio (`harness:fase11`).
+- **Dos llamadas EN PARALELO sobre el mismo material preparado**, con
   contexto limitado al TURNO ACTUAL (nunca el historial):
-  - **13a Extracción — Qwen.** Convierte las N respuestas en afirmaciones
-    separadas y atribuidas por origen. No juzga, no puntúa, no reescribe.
+  - **Extracción — Qwen.** Convierte las N respuestas en afirmaciones
+    separadas y atribuidas por etiqueta. No juzga, no puntúa, no reescribe.
     Elegido por tener la tasa de alucinación más baja entre modelos
     frontera: en extracción, inventar es el peor error posible.
-  - **13b Análisis comparativo — Kimi.** Opera sobre las afirmaciones
-    extraídas: qué se comparte, qué dice cada uno que nadie más dice,
-    dónde se contradicen, y de qué TIPO es cada desacuerdo (definición,
-    evidencia, énfasis, valores).
+  - **Análisis comparativo — Kimi.** Qué se comparte, qué dice cada uno que
+    nadie más dice, dónde se contradicen, y de qué TIPO es cada desacuerdo
+    (definición, evidencia, énfasis, valores).
+  - **En paralelo y no en cadena** para que Kimi no herede los errores de
+    la extracción: son dos vistas independientes (§0.29).
+- **La convergencia NO se presenta como validación:** modelos que comparten
+  linaje pueden coincidir por compartir el sesgo, no por acertar (§0.29).
 - **Los conteos se calculan en CÓDIGO**, no los produce un modelo: sobre
   las afirmaciones extraídas, "3 de 4 afirman X" es exacto y gratis.
 - **Limpieza de fluff por reglas**, determinista, y el crudo se conserva

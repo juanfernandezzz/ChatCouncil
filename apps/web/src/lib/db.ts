@@ -244,6 +244,13 @@ export interface RoundAnalysis {
   /** true si el proveedor del juez participa de las respuestas analizadas (riesgo de auto-preferencia). */
   judgeWasParticipant: boolean;
   anonymized: boolean;
+  /**
+   * Semilla del barajado de orden (§0.29). Se persiste para que la ronda
+   * sea REPRODUCIBLE: con la semilla se puede reconstruir exactamente el
+   * orden que vio el analista. `undefined` en rondas anteriores al cambio
+   * o cuando no hubo anonimizacion.
+   */
+  shuffleSeed?: number;
   labelMap: AnalysisLabelEntry[];
   redactions: AnalysisRedaction[];
   rubricVersion: 1;

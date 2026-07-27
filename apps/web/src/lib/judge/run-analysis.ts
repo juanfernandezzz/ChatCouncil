@@ -165,7 +165,18 @@ export function runRoundAnalysis(params: RunAnalysisParams): RunningAnalysis {
       );
     }
 
-    const { labeled, seal, redactions } = anonymizeReplies(analyzable, params.anonymized);
+    // Semilla del barajado (§0.29). Se genera por ronda y se persiste, para
+    // que el orden que vio el analista sea reconstruible. Sin barajar, las
+    // etiquetas seguian el orden de panel — estable entre rondas — y la
+    // posicion filtraba la identidad del proveedor.
+    const shuffleSeed = params.anonymized
+      ? Math.floor(Math.random() * 0x7fffffff)
+      : undefined;
+    const { labeled, seal, redactions } = anonymizeReplies(
+      analyzable,
+      params.anonymized,
+      shuffleSeed,
+    );
 
     // Capa 3 (E2): post-scrub, cero términos identificatorios en los
     // textos etiquetados o el prompt NO sale. El prompt original del
@@ -231,6 +242,7 @@ export function runRoundAnalysis(params: RunAnalysisParams): RunningAnalysis {
       judgePanelSourceId: params.judge.panelSourceId,
       judgeWasParticipant,
       anonymized: params.anonymized,
+      shuffleSeed,
       labelMap: seal,
       redactions,
       rubricVersion: 1,

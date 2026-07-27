@@ -24,6 +24,7 @@
     "clean": "pnpm -r exec rm -rf dist .wxt node_modules/.cache",
     "harness:fase5": "pnpm --filter @chatcouncil/web exec vite-node src/dev/fase5-harness.ts",
     "harness:fase6": "pnpm --filter @chatcouncil/web exec vite-node src/dev/fase6-harness.ts",
+    "harness:fase11": "pnpm --filter @chatcouncil/web exec vite-node src/dev/fase11-harness.ts",
     "test:e2e": "pnpm --filter @chatcouncil/web run test:e2e",
     "release:check": "node scripts/check-release-version.mjs"
   },

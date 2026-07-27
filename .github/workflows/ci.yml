@@ -55,6 +55,9 @@ jobs:
       - name: Harness offline Fase 6 (sync/mail — Fase 9, E5)
         run: pnpm harness:fase6
 
+      - name: Harness Fase 11 (anonimizacion + barajado)
+        run: pnpm harness:fase11
+
       - name: Build web
         run: pnpm build:web
 

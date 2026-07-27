@@ -59,12 +59,60 @@ export interface AnonymizeOutput {
 
 const LABEL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-export function anonymizeReplies(replies: AnalyzableReply[], anonymized: boolean): AnonymizeOutput {
+/**
+ * PRNG determinista (mulberry32). No hace falta aleatoriedad
+ * criptográfica: lo único que importa es que la POSICIÓN no quede
+ * correlacionada de forma estable con la IDENTIDAD del proveedor. Al ser
+ * determinista dada la semilla, la ronda queda reproducible: se puede
+ * volver a ver exactamente el orden que vio el analista.
+ */
+function seededRandom(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Fisher-Yates con semilla. No muta la entrada. */
+function seededShuffle<T>(items: readonly T[], seed: number): T[] {
+  const out = [...items];
+  const rand = seededRandom(seed);
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
+
+export function anonymizeReplies(
+  replies: AnalyzableReply[],
+  anonymized: boolean,
+  /**
+   * Semilla de barajado (§0.29). Cuando se pasa Y `anonymized` es true, el
+   * ORDEN de las respuestas se baraja antes de etiquetar.
+   *
+   * POR QUÉ: sin esto las etiquetas seguían el orden de panel, que es
+   * ESTABLE entre rondas — o sea que "Modelo A" era siempre el mismo
+   * proveedor y la posición filtraba identidad. El sesgo de posición en
+   * modelos evaluadores está documentado, así que un orden fijo contamina
+   * el análisis con señal que no es contenido. Barajar lo corta.
+   *
+   * Sin semilla se conserva el comportamiento anterior (orden de panel),
+   * para no alterar en silencio lo que ya estaba verificado.
+   */
+  shuffleSeed?: number,
+): AnonymizeOutput {
+  const source =
+    anonymized && typeof shuffleSeed === "number" ? seededShuffle(replies, shuffleSeed) : replies;
   const labeled: LabeledReply[] = [];
   const seal: SealEntry[] = [];
   const redactions: RedactionCount[] = [];
 
-  replies.forEach((reply, i) => {
+  source.forEach((reply, i) => {
     const label = anonymized ? `Modelo ${LABEL_LETTERS[i % LABEL_LETTERS.length]}` : reply.displayName;
     let text = reply.text;
     let count = 0;

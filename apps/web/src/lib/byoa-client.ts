@@ -79,8 +79,8 @@ export interface ByoaPromptHandlers {
 
 export interface ByoaPromptOptions {
   providerId: string;
-  /** uuid de la organización de sesión elegida en el panel. */
-  orgId: string;
+  /** uuid de la organización de sesión elegida en el panel. Ausente en transporte "page" (§0.30). */
+  orgId?: string;
   prompt: string;
   model?: string;
   /** Hilo previo de ESTE panel (Fase 4, E2) — ausente en el primer turno. */
@@ -129,13 +129,14 @@ export function sendByoaPrompt(
     failAsync("elige una organización de sesión primero (Detectar sesión Claude)");
     return inert;
   }
+  const orgId = opts.orgId;
 
   const transport = makeByoaBridgeTransport({
     onReconnecting: handlers.onReconnecting,
     onResumed: handlers.onResumed,
   });
   const deps: ByoaAdapterDeps = {
-    getOrgId: () => opts.orgId,
+    getOrgId: () => orgId,
     transportFor: () => transport,
   };
   if (opts.model !== undefined) deps.model = opts.model;

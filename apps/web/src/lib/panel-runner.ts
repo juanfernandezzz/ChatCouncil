@@ -1,3 +1,4 @@
+import { BYOA_PROVIDERS } from "@chatcouncil/adapters";
 import { parsePanelSourceId, type ConversationTurn, type ProviderThreadState } from "@chatcouncil/shared";
 import { sendByoaPrompt, type ByoaPromptHandlers } from "./byoa-client";
 import { sendByokPrompt, type ByokPromptHandlers } from "./byok-client";
@@ -63,8 +64,11 @@ export function sendToPanel(
     return sendByokPrompt(byokOpts, byokHandlers);
   }
 
-  // BYOA: necesita orgId de sesión (E8) antes de poder despachar nada.
-  if (!opts.orgId) {
+  // BYOA "cookie" necesita orgId de sesión (E8) antes de poder despachar nada.
+  // BYOA "page" (§0.30) no pasa por detección de org — abre la ventana real
+  // del proveedor y ahí se resuelve la sesión — así que esta guarda no aplica.
+  const byoaCfg = BYOA_PROVIDERS[parsed.providerId];
+  if (byoaCfg?.authTransport !== "page" && !opts.orgId) {
     return inertFailure("elige una organización de sesión antes de enviar a este panel", handlers.onError);
   }
   const byoaOpts: Parameters<typeof sendByoaPrompt>[0] = {

@@ -116,6 +116,35 @@ const pageSeq = new Map<string, number>();
 const pageText = new Map<string, string>();
 
 /**
+ * Keepalive del transporte "page". A diferencia de BYOK (linea 25: el fetch
+ * vive en el offscreen porque el SW muere a los ~30s), acá el estado
+ * pendiente (`pageRequests` et al.) SI vive en memoria del SW mientras el
+ * turno corre — y un turno "page" puede tardar hasta ~90s (los techos de
+ * chatgpt.ts). Sin esto, un SW que se suspende a mitad de turno pierde los
+ * Maps; cuando el content script manda el evento `done` final, el SW
+ * revivido no encuentra el puerto y lo descarta en silencio — el panel
+ * queda colgado para siempre sin error. Llamar una API de chrome.* reinicia
+ * el timer de inactividad del SW (mecanismo documentado de Chrome), asi
+ * que un ping periodico barato alcanza. Se activa solo mientras haya algun
+ * pageRequest pendiente.
+ */
+let pageKeepAliveTimer: ReturnType<typeof setInterval> | null = null;
+
+function ensurePageKeepAlive(): void {
+  if (pageKeepAliveTimer !== null) return;
+  pageKeepAliveTimer = setInterval(() => {
+    void browser.runtime.getPlatformInfo();
+  }, 20_000);
+}
+
+function stopPageKeepAliveIfIdle(): void {
+  if (pageRequests.size > 0) return;
+  if (pageKeepAliveTimer === null) return;
+  clearInterval(pageKeepAliveTimer);
+  pageKeepAliveTimer = null;
+}
+
+/**
  * Entrega la orden al content script. La ventana recien creada puede no
  * tener el ejecutor listo todavia, asi que se reintenta con techo en vez
  * de fallar en el primer intento.
@@ -160,8 +189,13 @@ function relayPageEvent(ev: Record<string, unknown>): void {
     const increment = next.slice(i);
     pageText.set(requestId, next);
     if (increment.length === 0) return;
-    const seq = (pageSeq.get(requestId) ?? 0) + 1;
-    pageSeq.set(requestId, seq);
+    // Convencion de `seq` 0-indexada (igual que el offscreen, main.ts:84):
+    // el cliente arranca en lastSeq=-1 y drena esperando el chunk 0 primero.
+    // Arrancar en 1 (bug anterior) dejaba el primer chunk inalcanzable y el
+    // stream jamas drenaba ni terminaba, sin importar cuanto tardara la
+    // respuesta real.
+    const seq = pageSeq.get(requestId) ?? 0;
+    pageSeq.set(requestId, seq + 1);
     port.postMessage({ type: "stream:chunk", requestId, seq, chunk: increment } satisfies BridgeResponse);
     return;
   }
@@ -177,12 +211,16 @@ function relayPageEvent(ev: Record<string, unknown>): void {
     port.postMessage({
       type: "stream:done",
       requestId,
-      lastSeq: pageSeq.get(requestId) ?? 0,
+      // pageSeq guarda el PROXIMO seq a asignar (= cantidad de chunks
+      // enviados); el ultimo real es esa cuenta menos uno. Sin chunks
+      // (respuesta vacia), da -1, igual que el offscreen con total=0.
+      lastSeq: (pageSeq.get(requestId) ?? 0) - 1,
       meta: { visibility: ev.visibility, hiddenMs: ev.hiddenMs, elapsedMs: ev.elapsedMs },
     } satisfies BridgeResponse);
     pageRequests.delete(requestId);
     pageSeq.delete(requestId);
     pageText.delete(requestId);
+    stopPageKeepAliveIfIdle();
     return;
   }
   if (kind === "error" || kind === "stalled") {
@@ -195,6 +233,7 @@ function relayPageEvent(ev: Record<string, unknown>): void {
       pageRequests.delete(requestId);
       pageSeq.delete(requestId);
       pageText.delete(requestId);
+      stopPageKeepAliveIfIdle();
     }
   }
 }
@@ -267,6 +306,7 @@ async function handleExternal(port: ExternalPort, message: BridgeRequest): Promi
         return;
       }
       pageRequests.set(message.requestId, port);
+      ensurePageKeepAlive();
       try {
         const geo = tileGeometries(1, { left: 40, top: 40, width: 520, height: 720 })[0]!;
         const ref = await openProviderWindow(message.providerId, url, geo);
@@ -278,6 +318,7 @@ async function handleExternal(port: ExternalPort, message: BridgeRequest): Promi
         });
       } catch (e) {
         pageRequests.delete(message.requestId);
+        stopPageKeepAliveIfIdle();
         const err: BridgeResponse = {
           type: "stream:error",
           requestId: message.requestId,

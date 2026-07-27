@@ -48,5 +48,17 @@ t("las etiquetas son genericas", d.labeled.every(l => /^Modelo [A-Z]$/.test(l.la
 const e = anonymizeReplies(replies, false, 12345);
 t("sin anonimizar conserva el orden de panel", e.seal[0]!.panelSourceId === "p0");
 
+// --- §0.30: disponibilidad segun transporte ---
+import { listPanelOptions } from "../lib/model-registry";
+const opts = listPanelOptions({ byoaSessionConfirmed: new Set<string>() });
+const byoa = opts.filter((o) => o.connectionMode === "byoa");
+const page = byoa.filter((o) => o.providerId === "chatgpt");
+const cookie = byoa.filter((o) => o.providerId === "claude");
+t("un proveedor page esta disponible SIN deteccion previa", page.every((o) => o.available));
+t("un proveedor cookie NO esta disponible sin deteccion", cookie.every((o) => !o.available));
+const conDeteccion = listPanelOptions({ byoaSessionConfirmed: new Set(["claude"]) })
+  .filter((o) => o.providerId === "claude");
+t("un proveedor cookie se habilita al detectar", conDeteccion.every((o) => o.available));
+
 console.log(`[fase11-harness] ${ok} OK · ${fail} FALLOS`);
 if (fail > 0) process.exit(1);

@@ -126,7 +126,11 @@ function ByoaProviderRow({ providerId }: { providerId: string }) {
 
   const cfg = BYOA_PROVIDERS[providerId];
   if (!cfg) return null;
-  const confirmed = byoaSessionConfirmed.has(providerId);
+  // §0.30: los proveedores "page" no tienen detección previa de sesión — el
+  // ejecutor la descubre al abrir la ventana real. La detección de
+  // organizaciones es específica del transporte "cookie" (claude.ai).
+  const isPage = cfg.authTransport === "page";
+  const confirmed = isPage || byoaSessionConfirmed.has(providerId);
   const orgs = byoaOrgsByProvider[providerId] ?? [];
   const extensionReady = extensionStatus.state === "connected";
 
@@ -146,16 +150,22 @@ function ByoaProviderRow({ providerId }: { providerId: string }) {
     <div className="flex flex-col gap-1.5 border-b border-border py-2 last:border-b-0">
       <div className="flex flex-wrap items-center gap-2">
         <span className="min-w-40 text-sm text-text-primary">{cfg.label}</span>
-        {confirmed ? (
+        {isPage ? (
+          <span className="text-xs text-text-secondary">
+            se verifica al abrir la ventana del proveedor
+          </span>
+        ) : confirmed ? (
           <Badge variant="secondary">sesión detectada{orgs.length > 1 ? ` · ${orgs.length} organizaciones` : ""}</Badge>
         ) : (
           <span className="text-xs text-text-secondary">sesión no detectada</span>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="accent" onClick={detect} disabled={detecting || !extensionReady} title={extensionReady ? undefined : "Requiere la extensión de ChatCouncil conectada."}>
-          {detecting ? "detectando…" : confirmed ? "Volver a detectar" : "Detectar sesión"}
-        </Button>
+        {isPage ? null : (
+          <Button variant="accent" onClick={detect} disabled={detecting || !extensionReady} title={extensionReady ? undefined : "Requiere la extensión de ChatCouncil conectada."}>
+            {detecting ? "detectando…" : confirmed ? "Volver a detectar" : "Detectar sesión"}
+          </Button>
+        )}
         <a
           href={cfg.sessionOrigin}
           target="_blank"

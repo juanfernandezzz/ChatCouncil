@@ -46,7 +46,17 @@ export function listPanelOptions(ctx: AvailabilityContext): PanelOption[] {
   }
 
   for (const cfg of Object.values(BYOA_PROVIDERS)) {
-    const available = ctx.byoaSessionConfirmed.has(cfg.id);
+    // §0.30: la disponibilidad depende del TRANSPORTE.
+    //  · "cookie" exige detección previa: el offscreen hace fetch credenciado
+    //    y sin sesión confirmada no hay a qué apuntar.
+    //  · "page" NO la exige: el ejecutor abre la ventana REAL del proveedor y
+    //    descubre el estado de sesión ahí mismo. Pedir una detección previa
+    //    duplicaría —peor— lo que la propia página ya dice, y hoy la detección
+    //    es claude-shaped (pega a /api/organizations), endpoint que sólo
+    //    claude.ai tiene: exigirla dejaba a los proveedores "page"
+    //    permanentemente no disponibles.
+    const available =
+      cfg.authTransport === "page" ? true : ctx.byoaSessionConfirmed.has(cfg.id);
     const opt: PanelOption = {
       panelSourceId: encodePanelSourceId({ connectionMode: "byoa", providerId: cfg.id }),
       connectionMode: "byoa",

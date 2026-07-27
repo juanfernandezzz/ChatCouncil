@@ -3085,6 +3085,52 @@ trivialmente y da una falsa sensacion de cobertura.
 
 ---
 
+### 0.30 Bloqueo que impedia el round real, encontrado antes de correrlo (2026-07-26)
+
+**El defecto.** `model-registry.ts` decidia la disponibilidad de un panel
+BYOA con `ctx.byoaSessionConfirmed.has(cfg.id)`, y esa confirmacion solo se
+consigue apretando "Detectar sesion", que llama a
+`detectByoaOrganizations` — una funcion **claude-shaped**: pega a
+`/api/organizations`, endpoint que solo claude.ai tiene. Consecuencia:
+**ChatGPT no podia quedar disponible NUNCA**, porque la unica via para
+habilitarlo era un endpoint inexistente en su origen. El circuito completo
+estaba construido y pusheado (§0.25, §0.26, §0.27) y el round real habria
+fallado en el primer paso, antes de ejercitar nada de lo que se construyo.
+
+**Como se encontro.** Rastreando el camino de la UI hacia el despacho
+ANTES de pedir la validacion en el navegador, en vez de descubrirlo con
+Juan y Code delante de la pantalla. Vale registrarlo como metodo: cuando
+una entrega termina en "falta probarlo en el navegador", conviene recorrer
+el camino completo en el codigo primero — el bloqueo estaba a dos saltos de
+lectura.
+
+**La correccion, y su fundamento.** La disponibilidad ahora depende del
+TRANSPORTE:
+- `"cookie"` sigue exigiendo deteccion previa: el offscreen hace fetch
+  credenciado y sin sesion confirmada no hay a que apuntar.
+- `"page"` NO la exige. El ejecutor abre la ventana REAL del proveedor y
+  descubre el estado de sesion ahi mismo: si no hay sesion, el compositor
+  no matchea o salta un `humanGate`, y eso se reporta. Pedir una deteccion
+  previa duplicaria —peor, y con codigo especifico de claude— lo que la
+  propia pagina ya dice. Es la misma leccion de §0.29 en otra forma:
+  preferir que la realidad lo diga a mantener un procedimiento paralelo que
+  hay que recordar ejecutar.
+- En el panel de cuentas, los proveedores `"page"` ya no ofrecen "Detectar
+  sesion" (llamaria a un endpoint que no existe) sino la leyenda "se
+  verifica al abrir la ventana del proveedor" y el enlace al origen.
+
+**Harness ampliado a 11 verificaciones:** un proveedor `"page"` esta
+disponible SIN deteccion previa · un proveedor `"cookie"` NO esta
+disponible sin deteccion · un proveedor `"cookie"` se habilita al detectar.
+Las tres fijan la regla por transporte, asi que un cambio futuro que
+vuelva a acoplar la disponibilidad a la deteccion rompe el harness.
+
+**Ahora si no queda nada entre el codigo y el round real.** Lo unico
+pendiente es la validacion en el Chrome de Juan, que exige que el recargue
+la extension (caso (a) de la regla de autonomia, §0.23).
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

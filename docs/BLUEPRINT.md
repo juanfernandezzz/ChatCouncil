@@ -3056,9 +3056,32 @@ el bundle compilado: `shuffleSeed` presente y la constante del PRNG
 (`0x6d2b79f5`) presente — el identificador se minifica pero la constante
 numerica sobrevive, que es el marcador util segun §0.19/§0.25.
 
+**TERCER MODO DE GATE MENTIROSO (2026-07-26).** Code encontro que el gate
+`grep -c '6d2b79f5'` daba 0 aunque el barajado SI habia embarcado: el
+minificador convierte el literal hexadecimal `0x6d2b79f5` a su equivalente
+DECIMAL `1831565813`. Verificado: hex = 0, decimal = 1. Code diagnostico
+bien, no toco el codigo fuente (que estaba correcto) y lo reporto — la
+conducta correcta.
+Con esto van TRES formas en que un gate de artefacto puede mentir, todas
+descubiertas en esta fase:
+  1. §0.19 — los IDENTIFICADORES se renombran al minificar.
+  2. §0.19 — los caracteres NO ASCII se escapan (`env\xEDo`).
+  3. §0.25 — un marcador EXPORTADO que nadie importa se elimina por
+     tree-shaking.
+  4. §0.29 — los LITERALES NUMERICOS se reformatean (hex → decimal).
+**Regla consolidada:** un gate de artefacto solo es confiable sobre
+CADENAS DE TEXTO ASCII que el codigo vivo contenga literalmente. Nada de
+nombres de funcion, nada de acentos, nada de constantes numericas, nada de
+marcadores sin uso.
+**Correccion del gate, no del codigo:** el chequeo del PRNG se ELIMINA por
+redundante — `shuffleSeed` (=1) ya prueba que el barajado embarco, y es una
+cadena de texto. Buscar la forma decimal seria tratar el sintoma.
+
 **Pendiente inmediato:** extender el guard de anonimato a los prompts de
 los analistas, de modo que la garantia estructural que hoy protege al juez
-cubra tambien a Qwen y Kimi.
+cubra tambien a Qwen y Kimi. Se hace cuando esos prompts se escriban
+(Fase 13), no antes: un guard sobre una ruta que no existe pasa
+trivialmente y da una falsa sensacion de cobertura.
 
 ---
 

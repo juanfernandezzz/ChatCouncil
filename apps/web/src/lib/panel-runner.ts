@@ -15,7 +15,12 @@ import { sendByokPrompt, type ByokPromptHandlers } from "./byok-client";
 
 export interface PanelRunHandlers {
   onDelta: (text: string) => void;
-  onDone: (meta: { tokensIn?: number; tokensOut?: number; providerThread?: ProviderThreadState }) => void;
+  onDone: (meta: {
+    tokensIn?: number;
+    tokensOut?: number;
+    providerThread?: ProviderThreadState;
+    threadContinued?: boolean;
+  }) => void;
   onError: (message: string) => void;
   onAborted: () => void;
   onReconnecting?: () => void;

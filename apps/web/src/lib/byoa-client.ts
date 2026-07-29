@@ -63,7 +63,13 @@ function makeByoaBridgeTransport(lifecycle: ProxyLifecycle): ByoaTransport {
 
 export interface ByoaPromptHandlers {
   onDelta: (text: string) => void;
-  onDone: (meta: { tokensIn?: number; tokensOut?: number; providerThread?: ProviderThreadState }) => void;
+  onDone: (meta: {
+    tokensIn?: number;
+    tokensOut?: number;
+    providerThread?: ProviderThreadState;
+    /** Sólo transporte "page" (§0.31): false = la ventana se cerró y el turno arrancó conversación nueva. */
+    threadContinued?: boolean;
+  }) => void;
   onError: (message: string) => void;
   /** Terminal sin resultado: abort del usuario o piso A del puente. */
   onAborted: () => void;
@@ -117,7 +123,7 @@ export function sendByoaPrompt(
         // El puente entrega incrementos de texto; el contrato de la SPA los
         // consume como `onDelta`, igual que el camino cookie.
         onChunk: (_seq, chunk) => handlers.onDelta(chunk),
-        onDone: () => handlers.onDone({}),
+        onDone: (_lastSeq, meta) => handlers.onDone({ threadContinued: meta?.["threadContinued"] as boolean | undefined }),
         onError: handlers.onError,
         onAborted: handlers.onAborted,
         ...(handlers.onChallenge ? { onChallenge: handlers.onChallenge } : {}),

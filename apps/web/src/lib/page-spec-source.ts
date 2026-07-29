@@ -26,7 +26,21 @@
 
 import type { ByoaPageSpec } from "@chatcouncil/adapters";
 
-const MANIFEST_URL = "https://chatcouncil.netlify.app/adapters.json";
+/**
+ * RELATIVA a proposito (§0.33). La extension usa la URL absoluta porque un
+ * service worker NO tiene origen propio contra el cual resolver una ruta
+ * relativa; la SPA si lo tiene, y copiar la absoluta del SW sin preguntarse
+ * si el motivo aplicaba tenia una consecuencia concreta: en desarrollo la
+ * SPA leia el manifiesto de PRODUCCION, asi que editar
+ * `apps/web/public/adapters.json` no tenia ningun efecto y probar un
+ * selector nuevo obligaba a desplegar a Netlify — un ciclo lento distinto,
+ * pero lento igual, y ademas con un selector roto en produccion.
+ *
+ * Con ruta relativa el manifiesto se resuelve contra el MISMO origen que
+ * sirve la SPA: `localhost` en desarrollo, Netlify una vez desplegada. Se
+ * puede iterar un selector local hasta que funcione y recien ahi publicarlo.
+ */
+const MANIFEST_URL = "/adapters.json";
 /** Mismo TTL que usa el service worker para el manifiesto. */
 const TTL_MS = 10 * 60 * 1000;
 

@@ -3270,6 +3270,60 @@ mas probable: HMR de Vite reejecutando closures en dev.
 
 ---
 
+### 0.33 E11 VALIDADA en el navegador — y la URL del manifiesto (2026-07-29)
+
+**E11 dejo de ser papel: probado de punta a punta.** Code rompio a
+proposito el selector del compositor en `adapters.json`, y el turno fallo
+con "compositor no encontrado" — o sea que el override remoto SI manda
+sobre el valor compilado. Restauro el selector y ChatGPT volvio a
+responder, **sin recompilar la extension ni tocar una linea de codigo**.
+Ese era el punto entero del mecanismo y ahora esta demostrado, no
+declarado.
+
+**Conducta correcta de Code que vale registrar:** se nego a desplegar un
+selector roto al manifiesto PUBLICO de Netlify para probarlo, por ser una
+accion publica que no estaba autorizada, y valido el mecanismo apuntando a
+una URL local temporal. Es exactamente el criterio que corresponde.
+
+**El hallazgo: `MANIFEST_URL` apuntaba a PRODUCCION, tambien en
+desarrollo.** Claude copio la URL absoluta del service worker sin
+preguntarse si el motivo que la justificaba seguia aplicando. **No
+aplicaba:** un service worker no tiene origen propio contra el cual
+resolver una ruta relativa, por eso necesita absoluta; la SPA SI tiene
+origen. Consecuencia concreta: en desarrollo la SPA leia el manifiesto de
+produccion, asi que editar `apps/web/public/adapters.json` no tenia ningun
+efecto, y probar un selector nuevo obligaba a desplegar a Netlify — otro
+ciclo lento, y encima con un selector roto en produccion mientras se
+prueba.
+**Corregido a ruta relativa (`/adapters.json`):** se resuelve contra el
+mismo origen que sirve la SPA — `localhost` en desarrollo, Netlify una vez
+desplegada. Ahora se itera un selector localmente hasta que funcione y
+recien despues se publica, que es el flujo que E11 pretendia habilitar.
+Gate: `chatcouncil.netlify.app` = **0** en el bundle web.
+
+**Es el mismo error de metodo de §0.31, en su tercera aparicion:** heredar
+un valor o una convencion de otro contexto sin verificar que la razon que
+lo justificaba sigue vigente. Primero fue el indice base del protocolo,
+despues el keepalive del service worker, ahora la URL del manifiesto.
+**Regla:** al copiar algo de otro modulo, la pregunta no es "¿funciona
+aca?" sino "¿por que estaba asi alla, y ese motivo aplica aca?".
+
+**QUINTO MODO DE GATE MENTIROSO.** El gate `grep -c '"/adapters.json"'`
+dio 0 aunque la cadena estaba: el minificador convirtio las comillas dobles
+en **backticks** (`` `/adapters.json` ``). Sumado a los cuatro de §0.29:
+identificadores renombrados, no-ASCII escapados, marcadores sin uso
+tree-shakeados, literales numericos reformateados, y ahora **estilo de
+comillas cambiado**.
+**Regla afinada:** un gate de artefacto debe buscar la SUBCADENA DESNUDA,
+sin comillas de ningun tipo alrededor. Cualquier delimitador que se incluya
+en el patron es una apuesta sobre como lo va a emitir el minificador.
+
+**Pendiente que sigue abierto:** las entradas duplicadas en el log de
+`threadContinued` (§0.32). Sigue sin invalidar nada verificado, porque el
+criterio de verdad fue siempre la ventana real.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

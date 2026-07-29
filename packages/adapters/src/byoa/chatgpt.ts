@@ -36,8 +36,15 @@ export const chatgptByoaProvider: ByoaPageProviderConfig = {
     composer: { selector: "#prompt-textarea", kind: "contenteditable" },
     submit: { kind: "click", selector: 'button[data-testid="send-button"]' },
     responseRoot: { selector: "main" },
+    // ChatGPT dejó de envolver el texto en `.markdown` (visto 2026-07-29,
+    // round real p2b — la respuesta llegaba pero el extractor la reportaba
+    // "sin contenido observable" a los 90s). El nodo con
+    // data-message-author-role="assistant" ya trae SOLO el texto de la
+    // respuesta en su textContent (confirmado en vivo: sin botones de
+    // copiar/reintentar adentro), así que apuntar al nodo entero es más
+    // robusto que perseguir la clase de turno del build de OpenAI.
     assistantMessage: {
-      selector: '[data-message-author-role="assistant"] .markdown',
+      selector: '[data-message-author-role="assistant"]',
       pick: "last",
     },
     // El botón de detener existe mientras genera y desaparece al terminar.

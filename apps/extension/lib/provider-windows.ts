@@ -32,6 +32,18 @@ export interface ProviderWindowRef {
   providerId: string;
   windowId: number;
   tabId: number;
+  /**
+   * `true` si la ventana se CREO en esta llamada; `false` si se reutilizo una
+   * ya abierta.
+   *
+   * POR QUE IMPORTA (§0.31): en el transporte "page" la continuidad de hilo
+   * NO es un uuid que se pase de un turno al siguiente — es la PERSISTENCIA
+   * DE LA VENTANA. La conversacion vive en la UI real del proveedor: si la
+   * ventana sigue abierta, escribir en su compositor continua el hilo; si se
+   * cerro, el turno arranca una conversacion NUEVA. Sin este dato esa
+   * ruptura ocurria en SILENCIO y el usuario creia estar continuando.
+   */
+  created: boolean;
 }
 
 export interface TileGeometry {
@@ -81,7 +93,10 @@ export async function openProviderWindow(
   if (existing) {
     try {
       await browser.windows.get(existing.windowId);
-      return existing;
+      // Reutilizada: la pestana sigue en la conversacion del turno anterior,
+      // asi que escribir en su compositor CONTINUA el hilo. `url` se ignora a
+      // proposito — re-navegar aca destruiria la conversacion.
+      return { ...existing, created: false };
     } catch {
       open.delete(providerId);
     }
@@ -104,7 +119,7 @@ export async function openProviderWindow(
   if (win?.id === undefined || tab?.id === undefined) {
     throw new Error(`no se pudo abrir la ventana del proveedor ${providerId}`);
   }
-  const ref: ProviderWindowRef = { providerId, windowId: win.id, tabId: tab.id };
+  const ref: ProviderWindowRef = { providerId, windowId: win.id, tabId: tab.id, created: true };
   open.set(providerId, ref);
   return ref;
 }

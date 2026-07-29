@@ -114,6 +114,8 @@ const pageRequests = new Map<string, ExternalPort>();
 const pageSeq = new Map<string, number>();
 /** Ultimo texto ya entregado por requestId, para emitir INCREMENTOS. */
 const pageText = new Map<string, string>();
+/** Si el turno arranco ventana NUEVA (o sea: no continua el hilo previo). */
+const pageFreshWindow = new Map<string, boolean>();
 
 /**
  * Keepalive del transporte "page". A diferencia de BYOK (linea 25: el fetch
@@ -215,11 +217,18 @@ function relayPageEvent(ev: Record<string, unknown>): void {
       // enviados); el ultimo real es esa cuenta menos uno. Sin chunks
       // (respuesta vacia), da -1, igual que el offscreen con total=0.
       lastSeq: (pageSeq.get(requestId) ?? 0) - 1,
-      meta: { visibility: ev.visibility, hiddenMs: ev.hiddenMs, elapsedMs: ev.elapsedMs },
+      meta: {
+        visibility: ev.visibility,
+        hiddenMs: ev.hiddenMs,
+        elapsedMs: ev.elapsedMs,
+        // "continuo el hilo anterior" vs "arranco conversacion nueva" (§0.31)
+        threadContinued: pageFreshWindow.get(requestId) === false,
+      },
     } satisfies BridgeResponse);
     pageRequests.delete(requestId);
     pageSeq.delete(requestId);
     pageText.delete(requestId);
+    pageFreshWindow.delete(requestId);
     stopPageKeepAliveIfIdle();
     return;
   }
@@ -310,6 +319,10 @@ async function handleExternal(port: ExternalPort, message: BridgeRequest): Promi
       try {
         const geo = tileGeometries(1, { left: 40, top: 40, width: 520, height: 720 })[0]!;
         const ref = await openProviderWindow(message.providerId, url, geo);
+        // §0.31: si la ventana se creo, este turno NO continua el hilo
+        // anterior — arranca conversacion nueva. Se avisa en vez de dejar
+        // que la ruptura pase inadvertida.
+        pageFreshWindow.set(message.requestId, ref.created);
         await sendToPageExecutor(ref.tabId, {
           kind: "byoa:page:run",
           requestId: message.requestId,

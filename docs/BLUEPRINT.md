@@ -3131,6 +3131,68 @@ la extension (caso (a) de la regla de autonomia, §0.23).
 
 ---
 
+### 0.31 EL ROUND REAL FUNCIONA — y tres bugs con una sola causa raiz (2026-07-26)
+
+**Hito: el transporte `"page"` funciona de punta a punta en el navegador
+real.** Verificado por Code con la cuenta burner: el panel de ChatGPT
+aparece SIN apretar "Detectar sesion", la ventana real se abre, recibe el
+prompt, responde, y el texto llega en streaming al panel hasta cerrar en
+estado terminal. Prompt largo con la ventana visible sin foco: streameo
+completo en 26 s. Es la primera vez que el consejo responde de verdad por
+este camino.
+
+**Los tres bugs que hubo que arreglar, y por que son EL MISMO error.**
+1. `panel-runner.ts` exigia `orgId` a TODO panel BYOA sin mirar el
+   transporte. Es el mismo defecto que §0.30 corrigio en
+   `model-registry.ts` — Claude recorrio UN camino, lo declaro despejado, y
+   habia otro sitio de llamada con la misma suposicion claude-shaped.
+2. **El bug que colgaba todos los turnos:** el relay en `background.ts`
+   numeraba `seq` desde 1, pero el protocolo de stream que ya usaban BYOK y
+   el offscreen es **0-indexado** (`offscreen/main.ts` usa
+   `state.chunks.length`) y el cliente arranca en `lastSeq: -1` esperando
+   el chunk 0. Como el primer chunk real era `seq:1`, el cliente nunca
+   drenaba ni marcaba `done`: el panel quedaba en "..." para siempre aunque
+   la ventana real ya hubiera respondido.
+3. El service worker MV3 se suspende a los ~30 s sin actividad y un turno
+   `"page"` puede tardar 90 s, perdiendo los `Map` en memoria que atan
+   `requestId` al puerto. Hubo que agregar keepalive. **El repo ya
+   documentaba ese riesgo para BYOK** — por eso ese streaming vive en el
+   offscreen.
+
+**Causa raiz unica:** Claude construyo el transporte `"page"` como un mundo
+paralelo en vez de heredar lo que los transportes existentes ya habian
+aprendido. Reutilizo el TIPO de mensaje (`stream:chunk`) sin reutilizar sus
+INVARIANTES (indice base 0), y estreno un camino de larga duracion sin
+revisar por que el camino anterior vivia en el offscreen.
+**Regla que queda:** reusar un protocolo obliga a leer su implementacion de
+referencia, no solo su tipo. Los invariantes no viajan en el tipo.
+
+**CONTINUIDAD DE HILO — decision de protocolo (escalada correctamente por
+Code).** Code observo que cada envio abria conversacion nueva y NO lo
+parcheo: identifico que era decision de diseno. Lo es, y se decide asi:
+**en el transporte `"page"` la continuidad de hilo NO es un uuid que se
+pase entre turnos — ES LA PERSISTENCIA DE LA VENTANA.** La conversacion
+vive en la UI real del proveedor: si la ventana sigue abierta, escribir en
+su compositor continua el hilo; si se cerro, el turno arranca conversacion
+nueva. Es coherente con el reencuadre a "director" (§0.16): el estado vive
+en la pagina, no en nuestro modelo de datos.
+`openProviderWindow` ya reutilizaba la ventana y NO re-navega a
+`newConversationUrl` al reutilizarla — re-navegar destruiria la
+conversacion. Lo que faltaba era que la ruptura fuera VISIBLE: ahora
+`ProviderWindowRef.created` distingue crear de reutilizar, y el turno
+reporta `threadContinued` en el meta del `stream:done`. Si la ventana se
+cerro entre turnos, el usuario se entera en vez de creer que continuo.
+Pendiente derivado, chico: una accion explicita de "nueva conversacion"
+para cuando SI se quiera arrancar de cero.
+
+**Sesion de claude.ai no confirmada (paso 5).** El round en paralelo con
+los dos transportes no se pudo validar porque el boton de deteccion de
+Claude no cambio de estado. Precondicion no verificada: hace falta saber si
+hay login activo de claude.ai en ESE Chrome. No es diagnosticable sin ese
+dato.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

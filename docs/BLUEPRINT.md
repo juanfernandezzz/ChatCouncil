@@ -3193,6 +3193,83 @@ dato.
 
 ---
 
+### 0.32 E11 pasa de promesa a mecanismo (2026-07-29)
+
+**Lo que el round real destapo.** ChatGPT dejo de envolver sus respuestas
+en la clase `.markdown`. El extractor no encontraba nodos y el turno
+expiraba a los 90 s reportando "sin contenido observable" — con la
+respuesta ya en pantalla. Es el PRIMER caso real de la fragilidad para la
+que E11 fue disenada. Y el arreglo tuvo que hacerse en
+`packages/adapters/src/byoa/chatgpt.ts` (commit `942bc92`): recompilar,
+pushear, esperar CI y recargar la extension. **Exactamente el ciclo que E11
+existia para evitar.**
+
+**Diagnostico: E11 estaba ESCRITA pero no IMPLEMENTADA.** §0.16 declaraba
+que "los selectores viven en adapters.json" y que un proveedor roto se
+arregla editando un JSON. Verificado ahora: la SPA **no consumia
+`adapters.json` en absoluto** — solo el service worker, y solo para
+`{id, byoaStrategy, healthy}`. Los selectores vivian unicamente en el
+codigo compilado. La promesa no tenia plumeria.
+
+**Entregado: el override remoto, con caida segura al valor compilado.**
+- `adapters.json` sube a `manifestVersion: 2` y puede transportar
+  `pageSpec` por proveedor. Se publica la spec vigente de ChatGPT, ya con
+  el selector corregido.
+- `page-spec-source.ts` valida la forma COMPLETA de la spec remota y, ante
+  cualquier desvio —campo faltante, enum invalido, timeout con tipo
+  incorrecto, basura— **rechaza el override entero** y usa el compilado. No
+  se hace merge parcial: dejaria specs a medio armar guiando a un ejecutor
+  que corre dentro de paginas logueadas.
+- La resolucion es SINCRONA para no meter latencia de red en el despacho;
+  la cache se calienta al arrancar la app y se refresca en segundo plano en
+  cada turno, con el mismo TTL de 10 minutos que ya usa el SW.
+- **El override es una MEJORA, nunca una dependencia:** si el manifiesto no
+  esta, esta caido o viene roto, el producto sigue funcionando con lo
+  compilado.
+
+**Trampa evitada, la misma de §0.29.** Al cablear aparecio que
+`primePageSpecs` no se llamaba desde ningun lado: la cache no se llenaba
+nunca y `resolvePageSpec` devolvia siempre el compilado — capacidad
+agregada sin efecto. Van tres veces que el mismo patron aparece (barajado
+en §0.29, y aca). **Regla:** agregar una capacidad y verificar que compila
+no prueba nada; hay que buscar al LLAMADOR.
+
+**Harness a 21 verificaciones** (de 11): spec bien formada aceptada ·
+rechazo por campo obligatorio faltante · por enum invalido · por
+`quiescenceMs` no positivo · por timeout con tipo incorrecto · por basura ·
+sin manifiesto cae al compilado · con manifiesto valido usa el override ·
+un proveedor sin override sigue en compilado.
+
+**Bugs del round que corrigio Code, ambos con la misma firma que §0.31.**
+1. `threadContinued` se calculaba en `background.ts` pero `byoa-client.ts`
+   descartaba el meta entero (`onDone: () => handlers.onDone({})`) — la
+   senal nunca salia de la extension. **Ese descarte lo escribio Claude en
+   §0.27** para satisfacer el tipo, y en §0.31 agrego una senal a un canal
+   que el mismo habia cortado cuatro entradas antes. Leccion: cuando se
+   tira informacion para satisfacer un tipo, hay que dejarlo anotado donde
+   se tira, no donde se produce.
+2. El log de ruptura de hilo dependia de `panelThreads`, que solo se llena
+   para BYOA cookie — para transporte page nunca iba a disparar.
+
+**VERIFICACION MAS FUERTE DEL PROYECTO HASTA AHORA.** Los tres valores de
+`threadContinued` se contrastaron contra la VENTANA REAL, no contra la
+consola: en el paso 2 ChatGPT recordo textualmente el primer mensaje; en el
+paso 3, tras cerrar la ventana, no lo recordaba. La senal es fiel al hecho
+que pretende describir, comprobado por el comportamiento del proveedor y no
+por nuestra propia telemetria.
+
+**Round mixto confirmado:** Claude (cookie) y ChatGPT (page) respondieron
+en paralelo en el mismo round, sin interferencia entre transportes.
+
+**Anotado sin resolver:** entradas duplicadas en el log de
+`threadContinued` con timestamps identicos, lo que sugiere que `onDone`
+podria dispararse mas de una vez en algunos casos. No invalida lo
+verificado —el criterio de verdad fue la ventana real— pero conviene
+descartarlo antes de confiar en telemetria basada en ese log. Hipotesis
+mas probable: HMR de Vite reejecutando closures en dev.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

@@ -1,4 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
+import { primePageSpecs } from "./lib/page-spec-source";
 import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { KeyRound } from "lucide-react";
@@ -50,6 +51,12 @@ function MobileNotice() {
 
 /** E8: detectar sesión + elegir organización BYOA. Sólo se muestra si hay un panel BYOA en el set activo. */
 function ByoaSessionBar() {
+  // Calienta la cache de specs remotas al arrancar, para que el PRIMER
+  // turno ya use los selectores vigentes del manifiesto (§0.32).
+  useEffect(() => {
+    void primePageSpecs();
+  }, []);
+
   const activePanelSourceIds = useCouncilStore(useShallow((s) => s.activePanelSourceIds()));
   const byoaSessionConfirmed = useCouncilStore((s) => s.byoaSessionConfirmed);
   const byoaOrgsByProvider = useCouncilStore((s) => s.byoaOrgsByProvider);

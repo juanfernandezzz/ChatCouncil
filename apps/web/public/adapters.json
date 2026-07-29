@@ -1,17 +1,81 @@
 {
-  "manifestVersion": 1,
+  "manifestVersion": 2,
   "protocolVersion": 1,
-  "updatedAt": "2026-07-10T00:00:00Z",
-  "notes": "Manifiesto remoto (Q9). La extension y la SPA lo consultan en runtime para saber que adaptadores existen, con que estrategia (dom/endpoint) y si estan sanos. Editar y desplegar este archivo estatico en Netlify permite apagar o parchear un adaptador roto sin esperar un release de la extension.",
+  "updatedAt": "2026-07-29T00:00:00Z",
+  "notes": "Manifiesto remoto. La extension y la SPA lo consultan en runtime. Desde manifestVersion 2 puede transportar `pageSpec` por proveedor: los SELECTORES del transporte page viven aca, asi que un rediseno de UI se arregla editando este archivo y esperando el TTL, sin recompilar ni reinstalar la extension (E11, §0.32). SOLO datos declarativos: la SPA valida la forma completa y ante cualquier desvio cae al valor compilado.",
   "byoaPriorityNote": "Testabilidad primero (Fase 3): 'claude' (claude.ai) es el primer adaptador BYOA de punta a punta — endpoint interno CON ESTADO (crear conversacion + completion SSE Messages), auth por cookie de sesion. Es el mas testeable; el resto sigue pending-reverse-engineering.",
-  "byoaPriority": ["claude", "openai", "anthropic", "google", "deepseek", "perplexity", "glm"],
+  "byoaPriority": [
+    "claude",
+    "chatgpt",
+    "gemini",
+    "glm",
+    "qwen",
+    "kimi",
+    "deepseek"
+  ],
   "providers": [
-    { "id": "claude", "byoaStrategy": "endpoint", "healthy": true },
-    { "id": "openai", "byoaStrategy": "pending-reverse-engineering", "healthy": null },
-    { "id": "anthropic", "byoaStrategy": "pending-reverse-engineering", "healthy": null },
-    { "id": "google", "byoaStrategy": "pending-reverse-engineering", "healthy": null },
-    { "id": "deepseek", "byoaStrategy": "pending-reverse-engineering", "healthy": null },
-    { "id": "perplexity", "byoaStrategy": "pending-reverse-engineering", "healthy": null },
-    { "id": "glm", "byoaStrategy": "pending-reverse-engineering", "healthy": null }
+    {
+      "id": "claude",
+      "byoaStrategy": "endpoint",
+      "healthy": true
+    },
+    {
+      "id": "chatgpt",
+      "byoaStrategy": "page",
+      "healthy": true,
+      "pageSpec": {
+        "newConversationUrl": "https://chatgpt.com/",
+        "composer": {
+          "selector": "#prompt-textarea",
+          "kind": "contenteditable"
+        },
+        "submit": {
+          "kind": "click",
+          "selector": "button[data-testid=\"send-button\"]"
+        },
+        "responseRoot": {
+          "selector": "main"
+        },
+        "assistantMessage": {
+          "selector": "[data-message-author-role=\"assistant\"]",
+          "pick": "last"
+        },
+        "completion": {
+          "kind": "element-gone",
+          "selector": "button[data-testid=\"stop-button\"]",
+          "quiescenceMs": 1500
+        },
+        "timeouts": {
+          "submitReadyMs": 8000,
+          "submitConfirmMs": 10000,
+          "emptyResponseMs": 90000
+        }
+      }
+    },
+    {
+      "id": "gemini",
+      "byoaStrategy": "pending-reverse-engineering",
+      "healthy": null
+    },
+    {
+      "id": "glm",
+      "byoaStrategy": "pending-reverse-engineering",
+      "healthy": null
+    },
+    {
+      "id": "qwen",
+      "byoaStrategy": "pending-reverse-engineering",
+      "healthy": null
+    },
+    {
+      "id": "kimi",
+      "byoaStrategy": "pending-reverse-engineering",
+      "healthy": null
+    },
+    {
+      "id": "deepseek",
+      "byoaStrategy": "pending-reverse-engineering",
+      "healthy": null
+    }
   ]
 }

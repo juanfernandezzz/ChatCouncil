@@ -25,6 +25,7 @@ import {
   type ByoaTransport,
 } from "@chatcouncil/adapters";
 import type { ProviderThreadState } from "@chatcouncil/shared";
+import { primePageSpecs, resolvePageSpec } from "./page-spec-source";
 import { bridgeClient, type StreamHandlers } from "./bridge-client";
 
 type ProxyLifecycle = Pick<StreamHandlers, "onReconnecting" | "onResumed">;
@@ -113,12 +114,17 @@ export function sendByoaPrompt(
     return inert;
   }
   if (cfg.authTransport === "page") {
+    // Refresco en segundo plano: mantiene caliente la cache de specs remotas
+    // sin meter latencia de red en el camino del despacho. Si un proveedor
+    // rompe por rediseno, basta editar adapters.json — el proximo turno ya
+    // toma el selector corregido, sin recompilar (E11, §0.32).
+    void primePageSpecs();
     // §0.27: la guarda que había acá era TEMPORAL — "mientras su ejecutor no
     // exista" (§0.17). El ejecutor existe y está validado, así que la
     // condición venció y el transporte se cablea de verdad. La spec viaja
     // desde el dialecto: la extensión no la interpreta (Q1).
     const requestId = bridgeClient.byoaPage(
-      { providerId: cfg.id, prompt: opts.prompt, spec: cfg.page },
+      { providerId: cfg.id, prompt: opts.prompt, spec: resolvePageSpec(cfg.id, cfg.page) },
       {
         // El puente entrega incrementos de texto; el contrato de la SPA los
         // consume como `onDelta`, igual que el camino cookie.

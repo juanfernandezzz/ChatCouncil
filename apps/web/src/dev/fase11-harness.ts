@@ -60,5 +60,37 @@ const conDeteccion = listPanelOptions({ byoaSessionConfirmed: new Set(["claude"]
   .filter((o) => o.providerId === "claude");
 t("un proveedor cookie se habilita al detectar", conDeteccion.every((o) => o.available));
 
+// --- §0.32: override remoto de la spec de pagina ---
+import { parsePageSpec, resolvePageSpec, __seedPageSpecCache, __resetPageSpecCache } from "../lib/page-spec-source";
+import { BYOA_PROVIDERS } from "@chatcouncil/adapters";
+
+const chatgpt = BYOA_PROVIDERS.chatgpt;
+const compiled = chatgpt && chatgpt.authTransport === "page" ? chatgpt.page : null;
+t("chatgpt sigue siendo proveedor page", compiled !== null);
+
+const valida = {
+  newConversationUrl: "https://x.test/",
+  composer: { selector: "#c", kind: "contenteditable" },
+  submit: { kind: "click", selector: "#s" },
+  responseRoot: { selector: "main" },
+  assistantMessage: { selector: "#a", pick: "last" },
+  completion: { kind: "element-gone", selector: "#stop", quiescenceMs: 1500 },
+};
+t("una spec bien formada se acepta", parsePageSpec(valida) !== null);
+t("se rechaza si falta un campo obligatorio", parsePageSpec({ ...valida, composer: undefined }) === null);
+t("se rechaza un enum invalido", parsePageSpec({ ...valida, composer: { selector: "#c", kind: "raro" } }) === null);
+t("se rechaza quiescenceMs no positivo", parsePageSpec({ ...valida, completion: { kind: "quiescence", quiescenceMs: 0 } }) === null);
+t("se rechaza un timeout con tipo incorrecto", parsePageSpec({ ...valida, timeouts: { submitReadyMs: "8000" } }) === null);
+t("se rechaza basura", parsePageSpec(null) === null && parsePageSpec("x") === null && parsePageSpec([]) === null);
+
+__resetPageSpecCache();
+if (compiled) {
+  t("sin manifiesto cae al valor compilado", resolvePageSpec("chatgpt", compiled) === compiled);
+  __seedPageSpecCache({ chatgpt: parsePageSpec(valida)! });
+  t("con manifiesto valido usa el override", resolvePageSpec("chatgpt", compiled).composer.selector === "#c");
+  t("un proveedor sin override sigue en compilado", resolvePageSpec("otro", compiled) === compiled);
+  __resetPageSpecCache();
+}
+
 console.log(`[fase11-harness] ${ok} OK · ${fail} FALLOS`);
 if (fail > 0) process.exit(1);

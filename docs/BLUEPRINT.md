@@ -3473,6 +3473,65 @@ registrado en §0.20 como imposible para el agente.
 
 ---
 
+### 0.36 Escribi el requisito y lo violé una entrada despues (2026-07-29)
+
+**El bloqueo.** GLM quedo registrado como proveedor, el header confirmaba
+"7 adaptadores", el harness daba 30/30 — y GLM **no aparecia como opcion en
+ningun panel**, con ningun conteo. Code lo rastreo mecanicamente leyendo
+`useCouncilStore.ts` y `GridPanel.tsx`: `DEFAULT_PRIORITY` era una lista
+FIJA de siete `panelSourceId`, `activePanelSourceIds()` solo hacia `.slice()`
+sobre ella, y no existia ningun camino de UI para traer al tablero un
+adaptador que no estuviera en esa lista. `listPanelOptions()` si incluia a
+GLM; nadie consumia esa lista completa.
+
+**Es la tercera vez y la responsabilidad es de Claude, agravada.** En
+`cbf13f1` ChatGPT no aparecia por lo mismo y Code lo arreglo agregando la
+entrada. En **§0.28 Claude escribio como REQUISITO**: "el numero de
+investigadores NO se codifica en ningun lado: ni en la prioridad de paneles,
+ni en los prompts de los analistas, ni en la disposicion de ventanas", y
+citaba ese mismo precedente. Una entrada despues registro GLM y no toco la
+lista. Documentar la trampa con precision y caer en ella igual es peor que
+no conocerla: prueba que anotar un requisito no lo hace cumplir.
+
+**Por que agregar `"byoa:glm"` a la lista NO era la solucion.** Arreglaba
+esta instancia y dejaba la trampa armada para Gemini, Qwen, Kimi y DeepSeek.
+Mantener una lista PARALELA al registro garantiza que se desincronice: el
+defecto no era el contenido de la lista sino su existencia.
+
+**Solucion estructural.** `DEFAULT_PRIORITY` deja de ser un literal y se
+DERIVA del registro:
+- `PREFERRED_ORDER` conserva el orden de los paneles que ya existian —hace
+  falta para que los defaults y el e2e sean estables— pero **ya no es la
+  lista completa: es solo una sugerencia de orden**.
+- La prioridad efectiva es `PREFERRED_ORDER` primero y despues **todo lo que
+  el registro conozca y no este listado**. Registrar un proveedor alcanza
+  para que sea seleccionable, sin tocar el store.
+- Verificado: 8 paneles posibles, `byoa:glm` incluido.
+
+**Harness a 36** (de 30), con la verificacion que cierra la clase de bug:
+**todo id de `BYOA_PROVIDERS` tiene su panel correspondiente**. Si mañana se
+registra Qwen y algo vuelve a mantener una lista paralela, el harness falla
+antes de que nadie abra el navegador. Ademas: no hay `panelSourceId`
+duplicado, y glm/chatgpt/claude figuran entre los paneles posibles.
+Nota de metodo: se valida la FUENTE (el registro) y no el store, porque
+importar el store en `vite-node` arrastra Dexie y APIs de navegador que no
+existen ahi — primer intento fallo por eso.
+
+**Leccion generalizable, y es sobre metodo mas que sobre codigo.** Un
+requisito escrito en el ledger no se hace cumplir solo. Cuando se registra
+una invariante del tipo "X no debe estar codificado en ningun lado", el
+mismo commit deberia dejar el gate que la verifica — si no, es una nota de
+intencion. Van tres apariciones de esta misma lista y las dos primeras se
+resolvieron agregando una entrada, que es tratar el sintoma.
+
+**Sigue pendiente la validacion en vivo de GLM** (prompt corto, que el texto
+no arrastre "Thought Process", el `modelLabel`, y el round de tres en
+paralelo). No se pudo hacer porque no habia forma de invocar a GLM desde la
+SPA. Code hizo bien en no arreglar `useCouncilStore.ts` por su cuenta: no
+estaba entre los archivos autorizados del commit ya pusheado.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

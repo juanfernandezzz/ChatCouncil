@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { listPanelOptions } from "../lib/model-registry";
 import type { ExtensionStatus } from "@/lib/bridge-client";
 import type { ByoaOrganization } from "@/lib/byoa-org";
 
@@ -12,7 +13,20 @@ export type PanelCount = (typeof PANEL_COUNT_OPTIONS)[number];
  * entran a esta lista cuando tengan adaptador, no antes (mostrar un
  * panel sin adaptador confundiría con "disponible" cuando no lo está).
  */
-const DEFAULT_PRIORITY: string[] = [
+/**
+ * ORDEN preferido de los paneles. NO es la lista completa: es una
+ * SUGERENCIA DE ORDEN para los que ya existían, y cualquier proveedor del
+ * registro que no figure acá se agrega igual al final.
+ *
+ * POR QUE ASI (§0.36). Antes era una lista FIJA y cerrada, y eso rompio dos
+ * veces seguidas: ChatGPT no aparecia en el tablero pese a estar registrado
+ * (arreglado en `cbf13f1`), y despues GLM tampoco. §0.28 habia dejado
+ * escrito como REQUISITO que "el numero de investigadores no se codifica en
+ * ningun lado, ni en la prioridad de paneles" — y la implementacion lo
+ * violaba. Mantener una lista paralela al registro garantiza que se
+ * desincronice; derivarla del registro hace imposible el olvido.
+ */
+const PREFERRED_ORDER: readonly string[] = [
   "byok:openai",
   "byok:anthropic",
   "byok:google",
@@ -21,6 +35,22 @@ const DEFAULT_PRIORITY: string[] = [
   "byok:perplexity",
   "byoa:chatgpt",
 ];
+
+/**
+ * Prioridad efectiva: el orden preferido primero, y despues TODO lo que el
+ * registro conozca y no este listado, en el orden en que el registro lo
+ * expone. Asi registrar un proveedor alcanza para que sea seleccionable, sin
+ * tocar este archivo.
+ */
+function buildDefaultPriority(): string[] {
+  const todos = listPanelOptions({ byoaSessionConfirmed: new Set<string>() }).map(
+    (o) => o.panelSourceId,
+  );
+  const conocidos = new Set(PREFERRED_ORDER);
+  return [...PREFERRED_ORDER.filter((id) => todos.includes(id)), ...todos.filter((id) => !conocidos.has(id))];
+}
+
+const DEFAULT_PRIORITY: string[] = buildDefaultPriority();
 
 interface CouncilState {
   // --- Composición pre-lock (Q25b): editable hasta el primer envío ---

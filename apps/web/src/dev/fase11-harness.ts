@@ -111,5 +111,19 @@ import { BYOA_PAGE_MATCH_PATTERNS, BYOA_SESSION_ALLOWED_ORIGINS } from "@chatcou
 t("los matches incluyen a glm", BYOA_PAGE_MATCH_PATTERNS.some((m) => m.includes("chat.z.ai")));
 t("glm NO entra al allowlist de cookie", !BYOA_SESSION_ALLOWED_ORIGINS.some((o) => o.includes("chat.z.ai")));
 
+// --- §0.36: la prioridad de paneles NO puede desincronizarse del registro ---
+// Se valida la FUENTE (el registro) y no el store: importar el store en
+// vite-node arrastra Dexie y APIs de navegador que no existen aca.
+const todosLosPaneles = listPanelOptions({ byoaSessionConfirmed: new Set<string>() }).map((o) => o.panelSourceId);
+t("todo proveedor del registro es alcanzable como panel", todosLosPaneles.length >= 8);
+t("glm figura entre los paneles posibles", todosLosPaneles.includes("byoa:glm"));
+t("chatgpt figura entre los paneles posibles", todosLosPaneles.includes("byoa:chatgpt"));
+t("claude figura entre los paneles posibles", todosLosPaneles.includes("byoa:claude"));
+t("no hay panelSourceId duplicado", new Set(todosLosPaneles).size === todosLosPaneles.length);
+// Un proveedor BYOA nuevo debe quedar alcanzable sin editar el store: se
+// verifica que TODO id de BYOA_PROVIDERS tenga su panel correspondiente.
+const byoaIds = Object.keys(BYOA_PROVIDERS).map((id) => `byoa:${id}`);
+t("todo proveedor BYOA del registro tiene panel", byoaIds.every((id) => todosLosPaneles.includes(id)));
+
 console.log(`[fase11-harness] ${ok} OK · ${fail} FALLOS`);
 if (fail > 0) process.exit(1);

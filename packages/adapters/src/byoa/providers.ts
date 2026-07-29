@@ -23,12 +23,14 @@
  */
 
 import { chatgptByoaProvider } from "./chatgpt";
+import { glmByoaProvider } from "./glm";
 import { claudeByoaProvider } from "./claude";
 import type { ByoaProviderConfig } from "./types";
 
 export const BYOA_PROVIDERS: Record<string, ByoaProviderConfig> = {
   claude: claudeByoaProvider,
   chatgpt: chatgptByoaProvider,
+  glm: glmByoaProvider,
 };
 
 export const BYOA_PROVIDER_IDS: readonly string[] = Object.freeze(Object.keys(BYOA_PROVIDERS));

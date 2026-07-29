@@ -47,7 +47,7 @@ const EMPTY_RESPONSE_TIMEOUT_MS = 45_000;
 
 
 /** Marcador para el gate de artefacto: prueba que el módulo embarcó. */
-const EXECUTOR_MARKER = "byoa-page-executor-v8";
+const EXECUTOR_MARKER = "byoa-page-executor-v9";
 
 type ExecutorEvent =
   | { kind: "started" }
@@ -55,7 +55,7 @@ type ExecutorEvent =
   | { kind: "submitted" }
   | { kind: "delta"; textLength: number; text: string }
   | { kind: "stalled"; idleMs: number }
-  | { kind: "done"; textLength: number; elapsedMs: number }
+  | { kind: "done"; textLength: number; elapsedMs: number; modelLabel: string | null }
   | { kind: "error"; message: string };
 
 /**
@@ -255,7 +255,33 @@ function readAssistantText(spec: ByoaPageSpec): string {
     return "";
   }
   const node = nodes[nodes.length - 1];
-  return node?.textContent ?? "";
+  if (!node) return "";
+
+  const exclude = spec.assistantMessage.exclude;
+  if (!exclude || exclude.length === 0) return node.textContent ?? "";
+
+  // Se clona para NO tocar la pagina de la persona: restar subarboles sobre
+  // el DOM vivo alteraria lo que ella ve.
+  const copy = node.cloneNode(true) as Element;
+  for (const sel of exclude) {
+    try {
+      copy.querySelectorAll(sel).forEach((el) => {
+        el.remove();
+      });
+    } catch {
+      // selector invalido: se ignora esa exclusion, no se rompe el turno
+    }
+  }
+  return copy.textContent ?? "";
+}
+
+/** Etiqueta de modelo que muestra la UI, si la spec dice donde mirar. */
+function readModelLabel(spec: ByoaPageSpec): string | null {
+  const sel = spec.modelLabel?.selector;
+  if (!sel) return null;
+  const el = findOne(sel);
+  const text = el?.textContent?.trim();
+  return text && text.length > 0 && text.length < 120 ? text : null;
 }
 
 /** Cuántos nodos de mensaje del asistente hay AHORA. Sirve para distinguir
@@ -352,7 +378,14 @@ async function run(spec: ByoaPageSpec, prompt: string): Promise<void> {
         emit({ kind: "stalled", idleMs: idle });
       }
     }
-    emit({ kind: "done", textLength: readAssistantText(spec).length, elapsedMs: Date.now() - t0 });
+    emit({
+      kind: "done",
+      textLength: readAssistantText(spec).length,
+      elapsedMs: Date.now() - t0,
+      // Deteccion de deriva de version (§0.28): que modelo dijo la UI que
+      // estaba respondiendo en ESTE turno.
+      modelLabel: readModelLabel(spec),
+    });
   } finally {
     observer.disconnect();
   }

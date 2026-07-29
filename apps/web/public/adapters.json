@@ -59,8 +59,42 @@
     },
     {
       "id": "glm",
-      "byoaStrategy": "pending-reverse-engineering",
-      "healthy": null
+      "byoaStrategy": "page",
+      "healthy": true,
+      "pageSpec": {
+        "newConversationUrl": "https://chat.z.ai/",
+        "composer": {
+          "selector": "#chat-input",
+          "kind": "textarea"
+        },
+        "submit": {
+          "kind": "click",
+          "selector": "#send-message-button"
+        },
+        "responseRoot": {
+          "selector": "#messages-container"
+        },
+        "assistantMessage": {
+          "selector": ".chat-assistant .markdown-prose",
+          "pick": "last",
+          "exclude": [
+            ".thinking-chain-container"
+          ]
+        },
+        "completion": {
+          "kind": "element-gone",
+          "selector": "[aria-label=\"Stop\"]",
+          "quiescenceMs": 1200
+        },
+        "timeouts": {
+          "submitReadyMs": 8000,
+          "submitConfirmMs": 12000,
+          "emptyResponseMs": 120000
+        },
+        "modelLabel": {
+          "selector": "button[aria-label=\"Select a model\"]"
+        }
+      }
     },
     {
       "id": "qwen",

@@ -82,6 +82,10 @@ export function parsePageSpec(raw: unknown): ByoaPageSpec | null {
   if (!isObj(responseRoot) || !isStr(responseRoot.selector)) return null;
   if (!isObj(assistantMessage) || !isStr(assistantMessage.selector)) return null;
   if (assistantMessage.pick !== "last") return null;
+  const exclude = assistantMessage.exclude;
+  if (exclude !== undefined) {
+    if (!Array.isArray(exclude) || !exclude.every(isStr)) return null;
+  }
 
   if (!isObj(completion) || !isPosNum(completion.quiescenceMs)) return null;
   if (completion.kind === "element-gone" || completion.kind === "element-present") {
@@ -94,6 +98,10 @@ export function parsePageSpec(raw: unknown): ByoaPageSpec | null {
   if (humanGate !== undefined) {
     if (!Array.isArray(humanGate)) return null;
     if (!humanGate.every((g) => isObj(g) && isStr(g.selector))) return null;
+  }
+  const modelLabel = raw.modelLabel;
+  if (modelLabel !== undefined) {
+    if (!isObj(modelLabel) || !isStr(modelLabel.selector)) return null;
   }
   const timeouts = raw.timeouts;
   if (timeouts !== undefined) {

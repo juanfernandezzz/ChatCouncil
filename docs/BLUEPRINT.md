@@ -3404,6 +3404,75 @@ en la UI, o un TTL mas corto. No es bloqueante.
 
 ---
 
+### 0.35 GLM registrado — y el segundo proveedor cuyo selector "obvio" viene sucio (2026-07-29)
+
+**Tercer investigador en el consejo.** Code derivo los selectores de
+chat.z.ai en el Chrome real de Juan, inspeccionando el DOM y confirmando el
+ciclo de generacion con capturas — no adivinando. Aplico §0.34: al no tener
+sesion en su propio pane, cambio a Claude in Chrome en vez de pedirle nada
+a Juan.
+
+**EL HALLAZGO, y obliga a extender el contrato.** GLM inyecta un bloque
+colapsable de "Thought Process" **dentro del mismo contenedor** que la
+respuesta final, asi que leer `textContent` del contenedor arrastraba el
+razonamiento pegado al texto limpio. Code propuso apuntar a los hijos que
+no son ese bloque:
+`.chat-assistant .markdown-prose > *:not(.thinking-chain-container)`.
+**Esa solucion no funciona con nuestro ejecutor**, y conviene entender por
+que: `readAssistantText` hace `querySelectorAll` y toma el ULTIMO nodo, asi
+que con ese selector se quedaria unicamente con el ultimo parrafo de la
+respuesta. El diagnostico de Code era correcto; el remedio, incompatible
+con la forma de extraccion.
+**Solucion adoptada — `assistantMessage.exclude`:** se sigue apuntando al
+CONTENEDOR y se le RESTAN los subarboles que sobran. El ejecutor clona el
+nodo antes de restar, para no tocar la pagina que la persona esta viendo.
+Un selector invalido en `exclude` se ignora sin romper el turno.
+Se espera que aplique tambien a los modos de razonamiento de otros
+proveedores: **van dos seguidos** cuyo selector obvio venia con ruido
+estructural — ChatGPT con `.markdown`, GLM con el bloque de pensamiento.
+Deja de ser anecdota y pasa a ser el caso normal.
+
+**`modelLabel` implementado, cerrando un pendiente de §0.28.** Ahi se habia
+decidido capturar la etiqueta de modelo que muestra la UI para poder
+DETECTAR la deriva de version —bajo BYOA el proveedor puede cambiar el
+modelo por debajo sin avisar— y nunca se habia implementado. GLM la expone
+en `button[aria-label="Select a model"]` (mostraba "GLM-5.2"), asi que el
+campo entra al contrato y el evento `done` lo reporta por turno.
+
+**El espejo estructural funciono solo.** Registrar GLM extendio los
+`matches` del content script sin tocar nada mas: el manifiesto compilado
+paso a `["https://chat.z.ai/*", "https://chatgpt.com/*"]` y
+`host_permissions` quedo intacto en los 4 de siempre — el transporte
+`"page"` sigue sin necesitarlos (§0.18). Dos verificaciones nuevas del
+harness lo fijan.
+
+**PRECISION SOBRE EL ALCANCE DE E11, que corrige lo que Claude dijo al
+cerrar la fase anterior.** Se afirmo que agregar un proveedor seria "solo
+editar un JSON". Es falso: los `matches` del content script se derivan de
+`BYOA_PROVIDERS`, que es codigo COMPILADO. **E11 cubre el MANTENIMIENTO de
+selectores de un proveedor ya registrado, no el ALTA de uno nuevo.** Un
+proveedor nuevo exige recompilar y que Juan recargue la extension. Se
+podria evitar con registro dinamico de content scripts y permisos
+opcionales por proveedor; queda anotado, no se hace ahora.
+
+**Harness a 30 verificaciones** (de 21): glm registrado como page · glm
+descarta el bloque de razonamiento · glm declara donde mirar la etiqueta de
+modelo · `exclude` bien formado se acepta · `exclude` mal formado se rechaza
+· `modelLabel` bien formado se acepta · mal formado se rechaza · los matches
+incluyen a glm · glm NO entra al allowlist de cookie.
+
+**Nota de metodo de Code, util para las proximas derivaciones:** los dos
+primeros intentos de escribir en el compositor de GLM fallaron en silencio
+—el foco aterrizaba bien pero el `value` quedaba vacio— y funciono recien
+al hacer clic por coordenada y tipear inmediatamente. Es la misma clase de
+carrera que §0.19 encontro en ChatGPT entre escribir y que el framework
+re-renderice.
+
+**Pendiente:** Gemini, bloqueado por el problema de foco de ventana ya
+registrado en §0.20 como imposible para el agente.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

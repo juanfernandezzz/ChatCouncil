@@ -140,7 +140,22 @@ export interface ByoaPageSpec {
   /** Subárbol que observa el MutationObserver. */
   responseRoot: { selector: string };
   /** De dónde se lee el texto del asistente; `pick` resuelve cuál turno. */
-  assistantMessage: { selector: string; pick: "last" };
+  /**
+   * `exclude` (§0.35): subarboles a DESCARTAR antes de leer el texto. Nace
+   * de GLM, que inyecta un bloque colapsable de "Thought Process" DENTRO del
+   * mismo contenedor que la respuesta final: leer `textContent` a secas
+   * arrastraba el razonamiento pegado al texto limpio. Apuntar el selector a
+   * los hijos que no son el bloque de pensamiento NO sirve, porque
+   * `pick: "last"` se quedaria solo con el ultimo parrafo. La forma correcta
+   * es seguir apuntando al CONTENEDOR y restarle lo que sobra.
+   */
+  assistantMessage: { selector: string; pick: "last"; exclude?: string[] };
+  /**
+   * Donde la UI muestra la etiqueta del modelo vigente (§0.28). Sirve para
+   * DETECTAR la deriva de version: bajo BYOA el proveedor puede cambiar el
+   * modelo por debajo sin avisar, y sin esto la deriva es invisible.
+   */
+  modelLabel?: { selector: string };
   /**
    * Cómo se sabe que la generación terminó. `quiescence` es el fallback
    * universal y debe existir siempre como red: si el marcador estructural

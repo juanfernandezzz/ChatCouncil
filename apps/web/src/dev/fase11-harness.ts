@@ -92,5 +92,24 @@ if (compiled) {
   __resetPageSpecCache();
 }
 
+// --- §0.35: GLM registrado, exclude y modelLabel ---
+const glm = BYOA_PROVIDERS.glm;
+t("glm esta registrado como proveedor page", !!glm && glm.authTransport === "page");
+if (glm && glm.authTransport === "page") {
+  t("glm descarta el bloque de razonamiento", (glm.page.assistantMessage.exclude ?? []).length > 0);
+  t("glm declara donde mirar la etiqueta de modelo", !!glm.page.modelLabel?.selector);
+}
+const conExclude = { ...valida, assistantMessage: { selector: "#a", pick: "last", exclude: [".x"] } };
+t("se acepta exclude bien formado", parsePageSpec(conExclude) !== null);
+t("se rechaza exclude que no es arreglo de strings",
+  parsePageSpec({ ...valida, assistantMessage: { selector: "#a", pick: "last", exclude: [1] } }) === null);
+t("se acepta modelLabel bien formado", parsePageSpec({ ...valida, modelLabel: { selector: "#m" } }) !== null);
+t("se rechaza modelLabel mal formado", parsePageSpec({ ...valida, modelLabel: { selector: 1 } }) === null);
+
+// el espejo estructural: agregar un proveedor page extiende los matches solo
+import { BYOA_PAGE_MATCH_PATTERNS, BYOA_SESSION_ALLOWED_ORIGINS } from "@chatcouncil/adapters";
+t("los matches incluyen a glm", BYOA_PAGE_MATCH_PATTERNS.some((m) => m.includes("chat.z.ai")));
+t("glm NO entra al allowlist de cookie", !BYOA_SESSION_ALLOWED_ORIGINS.some((o) => o.includes("chat.z.ai")));
+
 console.log(`[fase11-harness] ${ok} OK · ${fail} FALLOS`);
 if (fail > 0) process.exit(1);

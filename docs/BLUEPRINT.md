@@ -3324,6 +3324,86 @@ criterio de verdad fue siempre la ventana real.
 
 ---
 
+### 0.34 REGLA PERMANENTE DE ESCALAMIENTO + E11 validada de punta a punta (2026-07-29)
+
+## Regla permanente: no pedirle a Juan lo que el agente puede hacer
+
+Vale para TODAS las conversaciones y no hace falta repetirla en cada
+prompt. Complementa la regla de autonomia de 2026-07-24 dandole contenido
+operativo: aquella decia "escalar solo si es tecnicamente imposible o si es
+decision de diseno", pero no decia CUALES son los imposibles, y esa
+vaguedad produjo escalamientos innecesarios.
+
+**LISTA COMPLETA de lo que el agente NO puede hacer.** Es corta y cerrada;
+cualquier cosa fuera de ella es trabajo del agente:
+1. Abrir, inspeccionar o recargar la extension (`chrome://extensions` esta
+   bloqueado para las herramientas de navegador).
+2. Dar foco o restaurar una ventana a nivel de SISTEMA OPERATIVO (§0.20:
+   la ventana de automatizacion no es una ventana real del escritorio).
+3. Resolver challenges o captchas (§0.14, linea dura).
+4. Cambios de configuracion de cuenta, sobre todo irreversibles (§0.15,
+   precedente del gate de edad de Grok).
+5. Desplegar a produccion.
+
+**TODO LO DEMAS ES DEL AGENTE:** levantar el dev server, editar archivos,
+recargar la SPA, mandar prompts, leer la consola, revertir cambios.
+
+**Chequeo mecanico que resuelve el caso mas frecuente.** Antes de pedir una
+recarga de extension:
+```
+git diff --name-only <commit_anterior> HEAD | grep -c '^apps/extension/'
+```
+Si da **0**, la extension ya cargada sirve tal cual y NO hay que recargar
+nada. Convierte un juicio en un comando.
+
+**Como escalar cuando toca:** intentar PRIMERO y escalar SOLO lo que fallo,
+con el error concreto. Nunca una lista preventiva de pasos manuales.
+Origen: el 2026-07-29 se empaqueto una cosa genuinamente imposible
+(recargar la extension) junto con cuatro que el agente si podia hacer y ya
+habia hecho antes, y se le paso el paquete entero a Juan — cuando ademas el
+commit no habia tocado `apps/extension/` y la recarga no hacia falta.
+
+---
+
+## E11 validada de punta a punta, por el agente, en el Chrome real
+
+Secuencia limpia corrida por Code sin pedirle nada a Juan, aplicando la
+regla de arriba (el diff-guard dio 0, asi que no pidio recarga):
+| Paso | Resultado |
+|---|---|
+| (a) baseline con la spec vigente | respondio **OK**, 15,6 s |
+| (b) selector del compositor roto a `#no-existe` en `adapters.json` | servido, confirmado por fetch directo sin cache |
+| (c) prompt con el selector roto | fallo con **"compositor no encontrado"**, 18,8 s, SIN tocar `page-spec-source.ts` |
+| (d) selector restaurado | respondio **LISTO**, 4,3 s |
+| (e) `git checkout --` | arbol limpio |
+
+El paso (c) es el que cierra el asunto: fallo **sin** el parche temporal que
+la vez anterior hubo que hacer sobre `page-spec-source.ts`, o sea que la
+ruta relativa de §0.33 hizo que el override local llegue de verdad a la SPA
+en desarrollo. **El ciclo de mantenimiento de E11 esta probado: un
+proveedor roto se arregla editando un JSON.**
+
+**Conducta epistemica de Code que corresponde registrar.** Encontro en la
+SPA una conversacion previa con tres intentos donde uno con selector roto
+SI habia respondido normal —lo contrario de lo esperado— y **no uso esos
+datos**, porque no sabia bajo que condiciones se habian generado. Corrio su
+propia secuencia limpia y reporto sobre esa. Es exactamente el criterio
+correcto: un dato de procedencia desconocida no se usa ni para confirmar ni
+para refutar.
+**Hipotesis sobre esa anomalia, sin verificar:** la cache de specs vive en
+estado de modulo con TTL de 10 minutos; un hot-update de Vite puede
+actualizar codigo sin reevaluar el modulo, dejando la spec vieja en
+memoria. Una recarga completa si la limpia — que es lo que hizo Code.
+Confianza moderada, no medido.
+
+**Consecuencia practica que conviene atender pronto:** ese TTL de 10
+minutos significa que en uso normal, arreglar un selector en el manifiesto
+tarda hasta 10 minutos en surtir efecto. Para un mecanismo cuyo proposito
+es arreglar rapido, conviene una accion explicita de "recargar manifiesto"
+en la UI, o un TTL mas corto. No es bloqueante.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

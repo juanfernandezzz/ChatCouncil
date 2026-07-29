@@ -180,12 +180,12 @@ export async function dispatchReply(
     onDelta: (text) => void appendAttemptDelta(reply.id, attemptId, text),
     onDone: (meta) => {
       void finishAttempt(reply.id, attemptId, { status: "done", tokensIn: meta.tokensIn, tokensOut: meta.tokensOut });
-      if (isByoa && meta.threadContinued === false && priorThread) {
-        // Transporte "page" (§0.31): había hilo previo pero la ventana del
-        // proveedor se cerró entre turnos — el turno arrancó conversación
-        // nueva sin que nadie lo pidiera. Visible en consola hasta que
-        // exista una señal en la UI.
-        console.warn(`[chatcouncil] hilo roto en panel "${reply.panelSourceId}": la ventana del proveedor se cerró y el turno arrancó una conversación nueva.`);
+      if (isByoa && meta.threadContinued !== undefined) {
+        // Transporte "page" (§0.31): la continuidad es la persistencia de
+        // la ventana, no un id que persistamos acá. Visible en consola
+        // hasta que exista una señal en la UI (pendiente derivado, ver
+        // BLUEPRINT §0.31).
+        console.info(`[chatcouncil] panel "${reply.panelSourceId}": threadContinued=${meta.threadContinued}`);
       }
       if (isByoa && meta.providerThread) {
         const thread: PanelThread = {

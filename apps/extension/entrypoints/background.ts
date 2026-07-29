@@ -217,9 +217,17 @@ function relayPageEvent(ev: Record<string, unknown>): void {
       // enviados); el ultimo real es esa cuenta menos uno. Sin chunks
       // (respuesta vacia), da -1, igual que el offscreen con total=0.
       lastSeq: (pageSeq.get(requestId) ?? 0) - 1,
+      // Reenvio OPACO (§0.37): se copia el evento y se QUITA lo que no debe
+      // viajar por aca, en vez de enumerar lo que si. Enumerar hizo que se
+      // perdieran `threadContinued` y despues `modelLabel`, cada uno agregado
+      // en un extremo del pipeline y descartado en un salto intermedio.
+      // `text` se excluye porque el contenido viaja por `stream:chunk`.
       meta: {
-        visibility: ev.visibility,
-        hiddenMs: ev.hiddenMs,
+        ...Object.fromEntries(
+          Object.entries(ev).filter(
+            ([k]) => !["kind", "text", "requestId", "marker", "envelope"].includes(k),
+          ),
+        ),
         elapsedMs: ev.elapsedMs,
         // "continuo el hilo anterior" vs "arranco conversacion nueva" (§0.31)
         threadContinued: pageFreshWindow.get(requestId) === false,

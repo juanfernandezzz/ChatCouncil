@@ -3532,6 +3532,74 @@ estaba entre los archivos autorizados del commit ya pusheado.
 
 ---
 
+### 0.37 El meta se pasa OPACO — la misma senal perdida dos veces (2026-07-29)
+
+**GLM validado en vivo.** Respondio "Lisboa" en 34,2 s con texto LIMPIO, sin
+nada del bloque "Thought Process" pegado: **`exclude` funciona**. Y el round
+en paralelo corrio con ChatGPT (13,8 s) y GLM (34,2 s) respondiendo en la
+misma tanda. Claude devolvio "Service is temporarily overloaded" de
+claude.ai — error externo real, confirmado con dos reintentos, y Code hizo
+bien en no seguir insistiendo contra un servicio saturado.
+
+**Nota de UX que salio del paso 1:** GLM no aparecia porque `panelCount` es
+6 por defecto y GLM queda 8vo en la prioridad derivada, detrás de los 5 BYOK
+y los 2 BYOA previos. No es un bug —la derivacion de §0.36 funciono— pero
+significa que **cada investigador nuevo entra fuera de la vista por
+defecto**. Con los 4 investigadores del diseno mas los analistas, el orden
+por defecto va a necesitar revision: hoy los BYOK van primero y son los que
+menos importan (§0.28: BYOA prima, BYOK es opcional). Anotado, no urgente.
+
+**EL DEFECTO, y es la MISMA falla dos veces seguidas.** `modelLabel` no se
+podia observar. Code lo rastreo: el content script lo calcula y lo mete en
+el evento `done`, pero el relay del background armaba el `meta` con una
+**lista explicita de campos** que no lo incluia. Y habia un SEGUNDO descarte
+en serie: `byoa-client.ts` extraia unicamente `threadContinued` del meta y
+tiraba el resto. Dos allowlists en cadena.
+Esto es exactamente lo registrado en §0.32, donde `threadContinued` se habia
+perdido por el mismo mecanismo en el mismo salto. Ahi se escribio la
+leccion — "cuando se tira informacion para satisfacer un tipo, hay que
+dejarlo anotado donde se tira" — y **una entrada despues se agrego
+`modelLabel` en un extremo del pipeline sin recorrerlo hasta el otro**.
+
+**Por que agregar `modelLabel` a las dos listas NO era la solucion.** Es lo
+que se hizo con `threadContinued` en §0.32, y por eso volvio a pasar. El
+defecto no es que falte un campo: es que **enumerar campos en un salto
+intermedio garantiza perder el proximo que se agregue**. El pipeline tiene
+cuatro saltos —content script → relay del background → bridge-client →
+byoa-client → panel— y cada allowlist es una oportunidad de perder una senal
+en silencio.
+
+**Solucion estructural: reenvio OPACO con exclusion, no enumeracion.**
+- El relay copia el evento del ejecutor y **quita** lo que no debe viajar
+  (`kind`, `text`, `requestId`, `marker`, `envelope`) en vez de enumerar lo
+  que si. `text` se excluye porque el contenido viaja por `stream:chunk`.
+- `byoa-client` pasa el meta entero con spread, en lugar de extraer campo
+  por campo. El tipo admite campos de diagnostico extra a proposito.
+- **Polaridad elegida a conciencia:** exclusion y no allowlist. Con
+  allowlist, olvidarse pierde datos en silencio; con exclusion, olvidarse
+  hace que un campo nuevo VIAJE. Lo segundo es visible y corregible; lo
+  primero ya fallo dos veces. El contenido de la respuesta —lo unico que no
+  debe ir por ahi— esta excluido explicitamente, y la regla de no capturar
+  credenciales se hace cumplir en el ejecutor, donde corresponde.
+
+**Harness a 41** (de 36), y la verificacion clave prueba la MECANICA, no el
+campo: un evento con `campoFuturoQueNadieEnumero: 42` debe llegar al meta
+sin que nadie lo agregue a ninguna lista. Ademas: el `text` NO viaja en
+meta, `modelLabel` sobrevive, los campos de sobre no ensucian, y la
+telemetria de visibilidad sobrevive.
+
+**Patron acumulado — seis apariciones del mismo error de metodo.** §0.31
+(indice base del protocolo reusado sin sus invariantes), §0.31 (camino de
+larga duracion sin heredar el keepalive), §0.32 (`threadContinued` perdido
+en un salto), §0.33 (URL del manifiesto copiada de otro contexto), §0.36
+(requisito escrito y violado una entrada despues), y este. **La forma comun:
+tocar UN extremo de una cadena sin recorrerla entera.** La contramedida que
+funciono en los tres ultimos casos no fue recordar mejor, fue quitar el
+lugar donde el olvido es posible: derivar en vez de duplicar, excluir en vez
+de enumerar, y dejar el gate en el mismo commit que declara la invariante.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

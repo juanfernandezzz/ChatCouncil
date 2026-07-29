@@ -125,5 +125,28 @@ t("no hay panelSourceId duplicado", new Set(todosLosPaneles).size === todosLosPa
 const byoaIds = Object.keys(BYOA_PROVIDERS).map((id) => `byoa:${id}`);
 t("todo proveedor BYOA del registro tiene panel", byoaIds.every((id) => todosLosPaneles.includes(id)));
 
+// --- §0.37: el meta se pasa OPACO, no enumerado ---
+// Se verifica la mecanica de reenvio, que es lo que fallo dos veces: un
+// campo nuevo del evento del ejecutor debe sobrevivir el salto sin que nadie
+// lo agregue a una lista.
+const EXCLUIDOS = ["kind", "text", "requestId", "marker", "envelope"];
+const reenviar = (ev: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(ev).filter(([k]) => !EXCLUIDOS.includes(k)));
+
+const evento = {
+  kind: "done", requestId: "r1", marker: "m", envelope: "e",
+  text: "CONTENIDO QUE NO DEBE VIAJAR EN META",
+  elapsedMs: 100, visibility: "visible", hiddenMs: 0,
+  modelLabel: "GLM-5.2",
+  campoFuturoQueNadieEnumero: 42,
+};
+const meta = reenviar(evento);
+t("el contenido de la respuesta NO viaja en meta", !("text" in meta));
+t("modelLabel sobrevive el salto", meta.modelLabel === "GLM-5.2");
+t("un campo nuevo sobrevive sin enumerarlo", meta.campoFuturoQueNadieEnumero === 42);
+t("los campos de sobre no ensucian el meta",
+  !("kind" in meta) && !("requestId" in meta) && !("marker" in meta) && !("envelope" in meta));
+t("la telemetria de visibilidad sobrevive", meta.visibility === "visible" && meta.hiddenMs === 0);
+
 console.log(`[fase11-harness] ${ok} OK · ${fail} FALLOS`);
 if (fail > 0) process.exit(1);

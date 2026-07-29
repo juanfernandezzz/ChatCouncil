@@ -70,6 +70,14 @@ export interface ByoaPromptHandlers {
     providerThread?: ProviderThreadState;
     /** Sólo transporte "page" (§0.31): false = la ventana se cerró y el turno arrancó conversación nueva. */
     threadContinued?: boolean;
+    /** Sólo transporte "page" (§0.28): etiqueta de modelo que mostró la UI del proveedor. */
+    modelLabel?: string | null;
+    /**
+     * Campos de diagnóstico adicionales que el transporte haya reportado.
+     * Se pasan OPACOS a propósito (§0.37): enumerarlos hizo que se
+     * perdieran dos señales seguidas en el camino.
+     */
+    [extra: string]: unknown;
   }) => void;
   onError: (message: string) => void;
   /** Terminal sin resultado: abort del usuario o piso A del puente. */
@@ -129,7 +137,10 @@ export function sendByoaPrompt(
         // El puente entrega incrementos de texto; el contrato de la SPA los
         // consume como `onDelta`, igual que el camino cookie.
         onChunk: (_seq, chunk) => handlers.onDelta(chunk),
-        onDone: (_lastSeq, meta) => handlers.onDone({ threadContinued: meta?.["threadContinued"] as boolean | undefined }),
+        // Paso OPACO del meta (§0.37): antes se extraia campo por campo y
+        // eso descarto `threadContinued` primero y `modelLabel` despues.
+        // Enumerar aca garantiza perder la proxima senal que se agregue.
+        onDone: (_lastSeq, meta) => handlers.onDone({ ...(meta ?? {}) }),
         onError: handlers.onError,
         onAborted: handlers.onAborted,
         ...(handlers.onChallenge ? { onChallenge: handlers.onChallenge } : {}),

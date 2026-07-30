@@ -148,5 +148,32 @@ t("los campos de sobre no ensucian el meta",
   !("kind" in meta) && !("requestId" in meta) && !("marker" in meta) && !("envelope" in meta));
 t("la telemetria de visibilidad sobrevive", meta.visibility === "visible" && meta.hiddenMs === 0);
 
+// --- §0.38: la procedencia se PERSISTE, no se loguea ---
+// La cadena tiene TRES saltos que enumeraban campos; §0.37 arreglo dos y se
+// detuvo. Se verifica la construccion de la procedencia, que es el extremo
+// donde la senal tiene que aterrizar para ser util.
+const armarProcedencia = (meta: Record<string, unknown>, isByoa: boolean) =>
+  isByoa
+    ? {
+        ...(meta.modelLabel !== undefined ? { modelLabel: meta.modelLabel } : {}),
+        ...(meta.threadContinued !== undefined ? { threadContinued: meta.threadContinued } : {}),
+        ...(typeof meta.visibility === "string" ? { visibility: meta.visibility } : {}),
+        ...(typeof meta.hiddenMs === "number" ? { hiddenMs: meta.hiddenMs } : {}),
+      }
+    : undefined;
+
+const pGlm = armarProcedencia({ modelLabel: "GLM-5.2", threadContinued: true, visibility: "visible", hiddenMs: 0 }, true);
+t("la etiqueta de modelo se persiste", pGlm?.modelLabel === "GLM-5.2");
+t("la continuidad de hilo se persiste", pGlm?.threadContinued === true);
+t("la telemetria de visibilidad se persiste", pGlm?.visibility === "visible" && pGlm?.hiddenMs === 0);
+
+const pNull = armarProcedencia({ modelLabel: null, threadContinued: false }, true);
+t("modelLabel null se persiste como null, no se descarta", pNull !== undefined && "modelLabel" in pNull);
+t("distingue null de ausente", pNull?.modelLabel === null);
+
+const pSinDeclarar = armarProcedencia({ threadContinued: true }, true);
+t("un modelLabel no declarado no inventa la clave", pSinDeclarar !== undefined && !("modelLabel" in pSinDeclarar));
+t("byok no genera procedencia", armarProcedencia({ tokensIn: 10 }, false) === undefined);
+
 console.log(`[fase11-harness] ${ok} OK · ${fail} FALLOS`);
 if (fail > 0) process.exit(1);

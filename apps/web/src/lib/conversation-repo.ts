@@ -1,5 +1,5 @@
 import { parsePanelSourceId } from "@chatcouncil/shared";
-import { db, createId, type Attempt, type Conversation, type PanelThread, type Reply, type Round, type RoundAnalysis } from "./db";
+import { db, createId, type Attempt, type AttemptProvenance, type Conversation, type PanelThread, type Reply, type Round, type RoundAnalysis } from "./db";
 import { sendToPanel, type PanelRunHandlers } from "./panel-runner";
 import { buildByokHistory } from "./thread-history";
 
@@ -130,7 +130,13 @@ export async function appendAttemptDelta(replyId: string, attemptId: string, tex
 export async function finishAttempt(
   replyId: string,
   attemptId: string,
-  outcome: { status: "done" | "error" | "aborted"; errorMessage?: string; tokensIn?: number; tokensOut?: number },
+  outcome: {
+    status: "done" | "error" | "aborted";
+    errorMessage?: string;
+    tokensIn?: number;
+    tokensOut?: number;
+    provenance?: AttemptProvenance;
+  },
 ): Promise<void> {
   await db.replies
     .where("id")
@@ -144,6 +150,7 @@ export async function finishAttempt(
       if (outcome.errorMessage !== undefined) attempt.errorMessage = outcome.errorMessage;
       if (outcome.tokensIn !== undefined) attempt.tokensIn = outcome.tokensIn;
       if (outcome.tokensOut !== undefined) attempt.tokensOut = outcome.tokensOut;
+      if (outcome.provenance !== undefined) attempt.provenance = outcome.provenance;
     });
 }
 
@@ -179,14 +186,24 @@ export async function dispatchReply(
   const handlers: PanelRunHandlers = {
     onDelta: (text) => void appendAttemptDelta(reply.id, attemptId, text),
     onDone: (meta) => {
-      void finishAttempt(reply.id, attemptId, { status: "done", tokensIn: meta.tokensIn, tokensOut: meta.tokensOut });
-      if (isByoa && meta.threadContinued !== undefined) {
-        // Transporte "page" (§0.31): la continuidad es la persistencia de
-        // la ventana, no un id que persistamos acá. Visible en consola
-        // hasta que exista una señal en la UI (pendiente derivado, ver
-        // BLUEPRINT §0.31).
-        console.info(`[chatcouncil] panel "${reply.panelSourceId}": threadContinued=${meta.threadContinued}`);
-      }
+      // Procedencia del turno (§0.38): se PERSISTE junto a la respuesta que
+      // la produjo. Antes `threadContinued` sólo iba a consola y
+      // `modelLabel` no iba a ningún lado, así que la deriva de versión que
+      // §0.28 quería detectar seguía siendo indetectable en la práctica.
+      const provenance: AttemptProvenance | undefined = isByoa
+        ? {
+            ...(meta.modelLabel !== undefined ? { modelLabel: meta.modelLabel } : {}),
+            ...(meta.threadContinued !== undefined ? { threadContinued: meta.threadContinued } : {}),
+            ...(typeof meta["visibility"] === "string" ? { visibility: meta["visibility"] } : {}),
+            ...(typeof meta["hiddenMs"] === "number" ? { hiddenMs: meta["hiddenMs"] } : {}),
+          }
+        : undefined;
+      void finishAttempt(reply.id, attemptId, {
+        status: "done",
+        tokensIn: meta.tokensIn,
+        tokensOut: meta.tokensOut,
+        ...(provenance && Object.keys(provenance).length > 0 ? { provenance } : {}),
+      });
       if (isByoa && meta.providerThread) {
         const thread: PanelThread = {
           id: panelThreadId(reply.conversationId, reply.panelSourceId),

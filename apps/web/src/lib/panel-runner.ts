@@ -20,6 +20,15 @@ export interface PanelRunHandlers {
     tokensOut?: number;
     providerThread?: ProviderThreadState;
     threadContinued?: boolean;
+    /** Sólo transporte "page" (§0.28): etiqueta de modelo que mostró la UI. */
+    modelLabel?: string | null;
+    /**
+     * TERCER salto de la cadena que enumeraba campos (§0.38). §0.37 arregló
+     * el relay y `byoa-client` y se detuvo ahí, así que `modelLabel` moría
+     * acá igual. Se pasan opacos por el mismo motivo: enumerar garantiza
+     * perder la próxima señal.
+     */
+    [extra: string]: unknown;
   }) => void;
   onError: (message: string) => void;
   onAborted: () => void;

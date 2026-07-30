@@ -3600,6 +3600,65 @@ de enumerar, y dejar el gate en el mismo commit que declara la invariante.
 
 ---
 
+### 0.38 La procedencia se PERSISTE — y §0.37 arreglo dos saltos de tres (2026-07-29)
+
+**Validado en vivo, y con la distincion que importaba.** GLM devolvio
+`modelLabel: "GLM-5.2"`; ChatGPT devolvio `modelLabel: null` **presente como
+clave**, no ausente. Eso separa "no esta declarado en la spec" de "se pierde
+en el camino": el campo viaja opaco, solo que vacio porque la spec de
+chatgpt en `adapters.json` todavia no declara donde mirar. El reenvio opaco
+de §0.37 funciona.
+Nota: Code tuvo que INSTRUMENTAR `bridgeClient` para observarlo, porque no
+existe ninguna superficie que lo muestre. Eso mismo es el defecto que esta
+entrada cierra.
+
+**§0.37 ARREGLO DOS SALTOS DE TRES.** La cadena es: ejecutor → relay del
+background → `bridge-client` → `byoa-client` → **`panel-runner`** →
+`conversation-repo` → panel. §0.37 abrio el relay y `byoa-client`, y se
+detuvo ahi. `PanelRunHandlers.onDone` en `panel-runner.ts` tambien
+enumeraba campos, asi que `modelLabel` moria un salto mas adelante igual.
+**Es la septima aparicion del mismo error de metodo** y la mas ironica: la
+entrada anterior declaraba "tocar UN extremo de una cadena sin recorrerla
+entera" como el patron a evitar, y se escribio recorriendo la cadena a
+medias. Contar los saltos ANTES de arreglarlos habria bastado; se
+arreglaron los dos que se habian visto.
+
+**El defecto de fondo, que era mas grave que el campo faltante.** §0.28
+decidio registrar la etiqueta de modelo para poder DETECTAR la deriva de
+version —bajo BYOA el proveedor puede cambiar el modelo por debajo sin
+avisar— y esa informacion no se persistia en ningun lado: `threadContinued`
+iba a una linea de `console.info` y `modelLabel` a ningun lugar. **Una
+deriva solo es detectable si queda escrita junto a la respuesta que la
+produjo.** Telemetria que solo existe si alguien mira la consola en el
+momento exacto del turno no sirve para una herramienta de investigacion
+cuyo valor es poder volver sobre lo que paso.
+
+**Entregado: `Attempt.provenance`.** Se persiste en Dexie, junto a la
+respuesta: `modelLabel`, `threadContinued`, `visibility` y `hiddenMs`. Se
+quito el `console.info`. Ausente en intentos anteriores al cambio, por lo
+que no hay migracion.
+Detalle deliberado: `modelLabel: null` **se persiste como null** en vez de
+descartarse, porque null y ausente significan cosas distintas — null es "la
+spec no declara donde mirar", ausente es "este transporte no reporta
+modelo". Dos verificaciones del harness fijan esa distincion.
+
+**Harness a 48** (de 41): la etiqueta de modelo se persiste · la continuidad
+de hilo se persiste · la telemetria de visibilidad se persiste · `null` se
+persiste como null y no se descarta · distingue null de ausente · un
+`modelLabel` no declarado no inventa la clave · BYOK no genera procedencia.
+
+**Pendientes chicos, ninguno bloqueante:**
+1. La spec de ChatGPT no declara `modelLabel` — es una linea en
+   `adapters.json` mas un selector a derivar del navegador. Es exactamente
+   el tipo de cambio que E11 habilita sin recompilar.
+2. Nada de la procedencia se MUESTRA todavia en la UI. Ya queda persistida,
+   asi que exponerla es trabajo de presentacion y puede esperar a la fase de
+   herramientas.
+3. Orden por defecto de los paneles: los BYOK van primero y §0.28 establece
+   que BYOA prima. Con 4 investigadores mas los analistas hay que revisarlo.
+
+---
+
 ## 1. Topología y grafo de dependencias
 
 ```

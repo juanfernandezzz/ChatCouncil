@@ -84,6 +84,25 @@ export interface Round {
   createdAt: number;
 }
 
+/**
+ * Procedencia de un turno bajo transporte "page" (§0.38). Se PERSISTE, no
+ * se loguea: §0.28 habia decidido registrar la etiqueta de modelo para poder
+ * DETECTAR la deriva de version —bajo BYOA el proveedor puede cambiar el
+ * modelo por debajo sin avisar— y hasta ahora esa informacion vivia como una
+ * linea de consola o en ningun lado. Una deriva solo es detectable si queda
+ * escrita junto a la respuesta que produjo.
+ */
+export interface AttemptProvenance {
+  /** Etiqueta de modelo que mostraba la UI del proveedor en ESE turno. */
+  modelLabel?: string | null;
+  /** `false` = la ventana se habia cerrado y el turno arranco hilo nuevo. */
+  threadContinued?: boolean;
+  /** Estado de visibilidad de la pestana al cerrar el turno. */
+  visibility?: string;
+  /** Milisegundos acumulados en oculto durante el turno. */
+  hiddenMs?: number;
+}
+
 export interface Attempt {
   id: string;
   status: ReplyStatus;
@@ -94,6 +113,8 @@ export interface Attempt {
   tokensIn?: number;
   tokensOut?: number;
   latencyMs?: number;
+  /** Procedencia del turno (§0.38). Ausente en intentos anteriores al cambio. */
+  provenance?: AttemptProvenance;
 }
 
 export interface Reply {

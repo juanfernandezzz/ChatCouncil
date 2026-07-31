@@ -9,6 +9,9 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@chatcouncil/providers": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "electron": "^33.0.0",

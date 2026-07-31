@@ -20,6 +20,8 @@
  *    con `exclude` sobre una copia, sin tocar la página que la persona ve.
  */
 
+import { contextBridge } from "electron";
+
 interface PageSpec {
   composer: { selector: string; kind: "textarea" | "contenteditable" };
   submit: { kind: "click"; selector: string } | { kind: "key"; key: "Enter" };
@@ -164,24 +166,20 @@ async function run(spec: PageSpec, prompt: string): Promise<RunResult> {
 }
 
 /**
- * Se expone en `window` del propio proveedor para que el proceso principal lo
- * invoque con `executeJavaScript`. En fases posteriores esto pasa a `ipcRenderer`
- * con `contextBridge`; en Fase 0 se mantiene mínimo a propósito.
+ * Se expone en el mundo principal para que el proceso principal lo invoque
+ * con `executeJavaScript` —que corre en el mundo principal de la página, no
+ * en el mundo aislado del preload—. Con `contextIsolation` activo,
+ * `Object.defineProperty(window, ...)` sólo llega al mundo aislado y queda
+ * invisible ahí afuera; `contextBridge.exposeInMainWorld` es el puente hecho
+ * para cruzar esa frontera. La spec viaja como ARGUMENTO en cada llamada
+ * —no como un global inyectado— para que el preload no dependa de que
+ * alguien la haya sembrado antes.
  */
-/**
- * Se expone en `window` del propio proveedor para que el proceso principal lo
- * invoque con `executeJavaScript`. La spec viaja como ARGUMENTO en cada
- * llamada —no como un global inyectado— para que el preload no dependa de
- * que alguien la haya sembrado antes.
- */
-Object.defineProperty(window, "__ccProvider", {
-  value: {
-    run: (spec: PageSpec, prompt: string) => run(spec, prompt),
-    read: (spec: PageSpec) => ({
-      text: readAssistant(spec),
-      generating: spec.completion.selector ? findOne(spec.completion.selector) !== null : false,
-      modelLabel: readModelLabel(spec),
-    }),
-  },
-  writable: false,
+contextBridge.exposeInMainWorld("__ccProvider", {
+  run: (spec: PageSpec, prompt: string) => run(spec, prompt),
+  read: (spec: PageSpec) => ({
+    text: readAssistant(spec),
+    generating: spec.completion.selector ? findOne(spec.completion.selector) !== null : false,
+    modelLabel: readModelLabel(spec),
+  }),
 });

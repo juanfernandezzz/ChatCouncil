@@ -212,7 +212,7 @@ burner para ChatGPT, las pagas para Claude y Gemini.
 
 ## 5. Roadmap
 
-### Fase 0 — Prueba de viabilidad ⏳
+### Fase 0 — Prueba de viabilidad 🟡
 **Un solo proveedor**, antes de portar nada. Tres cosas y sólo tres:
 1. La sesión persiste entre reinicios de la app.
 2. Se puede inyectar el prompt en la vista embebida.
@@ -221,6 +221,31 @@ burner para ChatGPT, las pagas para Claude y Gemini.
 Si algo de esto falla, se sabe con un día de trabajo y no con tres semanas.
 **Nada se construye encima hasta que estas tres estén verificadas en la
 máquina de Juan.**
+
+**Proveedor elegido: GLM.** Por dos motivos concretos: sus selectores ya
+están derivados y validados, así que un fallo será atribuible al armazón y
+no al selector; y es una cuenta gratuita, así que repetir el login mientras
+se ajusta la persistencia no toca ninguna cuenta paga.
+
+**Decisiones del armazón, con su fundamento:**
+- **`WebContentsView`**, no la etiqueta `<webview>` que usaba GodMode ni
+  `BrowserView`: es la API vigente para componer varias vistas en una
+  ventana.
+- **`session.fromPartition("persist:glm")`.** El prefijo `persist:` ES la
+  prueba 1: sin él la partición vive en memoria y hay que loguearse en cada
+  arranque. Una partición POR PROVEEDOR además permite convivir cuentas
+  distintas sin que se pisen — algo imposible en un mismo perfil de
+  navegador.
+- **Dos preloads en CommonJS**, uno por vista. Los preloads con sandbox no
+  admiten ESM; `electron-vite` resuelve ese detalle, que es de los fáciles
+  de equivocar.
+- **La spec viaja como ARGUMENTO** en cada llamada, no como un global
+  inyectado en la página: el preload no depende de que alguien la haya
+  sembrado antes.
+- **Lo que este código NO puede verificar desde el entorno de Claude:** que
+  la app arranque. Electron necesita una pantalla. Lo verificable acá fue el
+  typecheck y la estructura; lo demás es de la máquina de Juan, y así se
+  declara en vez de darlo por bueno.
 
 ### Fase 1 — Armazón y los cuatro investigadores ⏳
 Ventana única con las cuatro vistas dispuestas, compositor con la

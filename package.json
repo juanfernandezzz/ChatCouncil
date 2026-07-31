@@ -4,10 +4,16 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.9.0",
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "typecheck": "pnpm -r --parallel run typecheck",
-    "guard:judge": "node scripts/guard-judge-anonymity.mjs"
+    "guard:judge": "node scripts/guard-judge-anonymity.mjs",
+    "dev": "pnpm --filter @chatcouncil/desktop dev",
+    "build": "pnpm --filter @chatcouncil/desktop build"
   },
-  "devDependencies": { "typescript": "^7.0.2" }
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
 }

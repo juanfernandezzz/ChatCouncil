@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>ChatCouncil — Fase 0</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0; padding: 12px 16px; font: 14px/1.45 system-ui, sans-serif;
+        background: #1a1714; color: #e8e2d9;
+      }
+      h1 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; opacity: .6; margin: 0 0 10px; }
+      .fila { display: flex; gap: 8px; }
+      textarea {
+        flex: 1; min-height: 56px; resize: vertical; padding: 8px 10px;
+        background: #211d19; color: inherit; border: 1px solid #3a332c; border-radius: 6px; font: inherit;
+      }
+      button {
+        padding: 8px 14px; background: #3a332c; color: inherit;
+        border: 1px solid #4a4238; border-radius: 6px; cursor: pointer; font: inherit;
+      }
+      button:disabled { opacity: .5; cursor: default; }
+      #estado { margin-top: 10px; font-size: 13px; white-space: pre-wrap; opacity: .85; }
+      .ok { color: #9bbf8a; } .mal { color: #d98c7a; }
+    </style>
+  </head>
+  <body>
+    <h1>Fase 0 — prueba de viabilidad · GLM</h1>
+    <div class="fila">
+      <textarea id="prompt" placeholder="Escribe un prompt corto…"></textarea>
+      <button id="enviar">Enviar</button>
+      <button id="leer">Leer</button>
+      <button id="sesion">Sesión</button>
+    </div>
+    <div id="estado">Listo.</div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

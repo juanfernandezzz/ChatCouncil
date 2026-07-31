@@ -10,6 +10,7 @@
   "scripts": {
     "typecheck": "pnpm -r --parallel run typecheck",
     "guard:judge": "node scripts/guard-judge-anonymity.mjs",
+    "guard:artefacto": "node scripts/guard-artefacto.mjs",
     "dev": "pnpm --filter @chatcouncil/desktop dev",
     "build": "pnpm --filter @chatcouncil/desktop build"
   },

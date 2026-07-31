@@ -6,8 +6,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("cc", {
-  send: (prompt: string): Promise<unknown> => ipcRenderer.invoke("cc:send", prompt),
-  read: (): Promise<unknown> => ipcRenderer.invoke("cc:read"),
-  sessionInfo: (): Promise<{ partition: string; cookieCount: number }> =>
-    ipcRenderer.invoke("cc:session-info"),
+  investigadores: (): Promise<string[]> => ipcRenderer.invoke("cc:investigadores"),
+  difundir: (prompt: string): Promise<unknown[]> => ipcRenderer.invoke("cc:difundir", prompt),
+  leer: (): Promise<unknown[]> => ipcRenderer.invoke("cc:leer"),
+  sesiones: (): Promise<{ id: string; cookies: number }[]> => ipcRenderer.invoke("cc:sesiones"),
 });

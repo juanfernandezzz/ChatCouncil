@@ -1,15 +1,30 @@
 /**
- * renderer/main.ts — interfaz mínima de la Fase 0.
+ * renderer/main.ts — el compositor del consejo.
  *
- * Deliberadamente fea y chica: su único trabajo es ejercitar las tres
- * verificaciones. La interfaz de verdad llega en la Fase 1, y el rediseño
- * estético en la Fase 6.
+ * ChatCouncil NO muestra las respuestas: las interfaces de los proveedores
+ * SON los paneles y están abajo, con sus capacidades nativas a mano. Acá
+ * viven el compositor único, el estado por proveedor y —más adelante— la
+ * salida del análisis. Espejar el texto no aportaría ninguna capacidad
+ * nativa y traería toda la fragilidad que costó la v2.
  */
 
+interface Resultado {
+  id: string;
+  ok?: boolean;
+  error?: string;
+  modelLabel?: string | null;
+}
+interface Lectura {
+  id: string;
+  text: string;
+  generating: boolean;
+  error?: string;
+}
 interface CcBridge {
-  send: (prompt: string) => Promise<{ ok: boolean; error?: string; modelLabel?: string | null }>;
-  read: () => Promise<{ text: string; generating: boolean; modelLabel: string | null }>;
-  sessionInfo: () => Promise<{ partition: string; cookieCount: number }>;
+  investigadores: () => Promise<string[]>;
+  difundir: (prompt: string) => Promise<Resultado[]>;
+  leer: () => Promise<Lectura[]>;
+  sesiones: () => Promise<{ id: string; cookies: number }[]>;
 }
 declare global {
   interface Window {
@@ -19,53 +34,113 @@ declare global {
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const estado = $("estado");
+const paneles = $("paneles");
+const dialogo = $<HTMLDialogElement>("confirmacion");
+
+/**
+ * Estado por panel, DERIVADO de la lista de investigadores que da el proceso
+ * principal. No hay una lista paralela acá: pedirla es la única forma de que
+ * sumar un investigador no obligue a tocar dos lugares (BLUEPRINT §7.2).
+ */
+const estadoPanel = new Map<string, { texto: string; clase: "" | "ok" | "mal" }>();
+
+function pintarPaneles(): void {
+  paneles.textContent = "";
+  for (const [id, e] of estadoPanel) {
+    const chip = document.createElement("span");
+    chip.className = `chip ${e.clase}`.trim();
+    chip.textContent = `${id} · ${e.texto}`;
+    paneles.appendChild(chip);
+  }
+}
+
+function marcar(id: string, texto: string, clase: "" | "ok" | "mal" = ""): void {
+  estadoPanel.set(id, { texto, clase });
+}
+
+void window.cc.investigadores().then((ids) => {
+  for (const id of ids) marcar(id, "en espera");
+  pintarPaneles();
+});
+
+/** Vive sólo mientras la app está abierta: se vuelve a preguntar al reiniciar. */
+let noPreguntarMas = false;
 
 function decir(texto: string, clase?: "ok" | "mal"): void {
   estado.textContent = texto;
   estado.className = clase ?? "";
 }
 
+async function difundir(prompt: string): Promise<void> {
+  decir("Enviando al consejo…");
+  const rs = await window.cc.difundir(prompt);
+  const bien = rs.filter((r) => r.ok);
+  const mal = rs.filter((r) => !r.ok);
+  for (const r of rs) {
+    if (r.ok) marcar(r.id, `enviado${r.modelLabel ? ` · ${r.modelLabel}` : ""}`, "ok");
+    else marcar(r.id, r.error ?? "falló", "mal");
+  }
+  pintarPaneles();
+  const detalle = rs
+    .map((r) =>
+      r.ok
+        ? `  ${r.id}: enviado${r.modelLabel ? ` · ${r.modelLabel}` : ""}`
+        : `  ${r.id}: ${r.error ?? "falló"}`,
+    )
+    .join("\n");
+  decir(
+    `${bien.length} de ${rs.length} recibieron el prompt.\n${detalle}`,
+    mal.length === 0 ? "ok" : mal.length === rs.length ? "mal" : undefined,
+  );
+}
+
 $("enviar").addEventListener("click", () => {
   const prompt = $<HTMLTextAreaElement>("prompt").value.trim();
   if (!prompt) return;
-  decir("Enviando…");
-  void window.cc
-    .send(prompt)
-    .then((r) =>
-      r.ok
-        ? decir(`PRUEBA 2 OK — el prompt entró.\nModelo según la UI: ${r.modelLabel ?? "(no declarado)"}`, "ok")
-        : decir(`PRUEBA 2 FALLÓ — ${r.error ?? "sin detalle"}`, "mal"),
-    )
-    .catch((e: unknown) => {
-      decir(`Error: ${e instanceof Error ? e.message : String(e)}`, "mal");
-    });
+  if (noPreguntarMas) {
+    void difundir(prompt);
+    return;
+  }
+  dialogo.showModal();
+});
+
+$("cancelar").addEventListener("click", () => {
+  dialogo.close();
+});
+
+$("confirmar").addEventListener("click", () => {
+  noPreguntarMas = $<HTMLInputElement>("no-preguntar").checked;
+  dialogo.close();
+  const prompt = $<HTMLTextAreaElement>("prompt").value.trim();
+  if (prompt) void difundir(prompt);
 });
 
 $("leer").addEventListener("click", () => {
-  void window.cc
-    .read()
-    .then((r) => {
-      const estadoGen = r.generating ? "generando todavía" : "terminó";
-      decir(
-        r.text.length > 0
-          ? `PRUEBA 3 OK — ${r.text.length} caracteres leídos (${estadoGen}).\n\n${r.text.slice(0, 400)}`
-          : `PRUEBA 3 — sin texto todavía (${estadoGen}).`,
-        r.text.length > 0 ? "ok" : undefined,
-      );
-    })
-    .catch((e: unknown) => {
-      decir(`Error: ${e instanceof Error ? e.message : String(e)}`, "mal");
-    });
+  void window.cc.leer().then((ls) => {
+    for (const l of ls) {
+      if (l.error) marcar(l.id, l.error, "mal");
+      else marcar(l.id, `${l.text.length} car.${l.generating ? " (generando)" : ""}`, l.text.length > 0 ? "ok" : "");
+    }
+    pintarPaneles();
+    const detalle = ls
+      .map((l) =>
+        l.error
+          ? `  ${l.id}: ${l.error}`
+          : `  ${l.id}: ${l.text.length} caracteres${l.generating ? " (generando)" : ""}`,
+      )
+      .join("\n");
+    decir(`Lectura para análisis:\n${detalle}`);
+  });
 });
 
-$("sesion").addEventListener("click", () => {
-  void window.cc.sessionInfo().then((s) => {
-    decir(
-      s.cookieCount > 0
-        ? `PRUEBA 1 — la partición "${s.partition}" tiene ${s.cookieCount} cookies.\nCerrá y volvé a abrir la app: si el número se mantiene y seguís logueado, la sesión persiste.`
-        : `PRUEBA 1 — la partición "${s.partition}" está vacía. Logueate en el panel de abajo y volvé a consultar.`,
-      s.cookieCount > 0 ? "ok" : undefined,
-    );
+$("sesiones").addEventListener("click", () => {
+  void window.cc.sesiones().then((ss) => {
+    for (const s of ss) marcar(s.id, `${s.cookies} cookies`, s.cookies > 0 ? "ok" : "mal");
+    pintarPaneles();
+    const detalle = ss
+      .map((s) => `  ${s.id}: ${s.cookies} cookies${s.cookies === 0 ? "  ← sin sesión, logueate en su panel" : ""}`)
+      .join("\n");
+    decir(`Sesiones persistentes:\n${detalle}`, ss.every((s) => s.cookies > 0) ? "ok" : undefined);
   });
 });
 

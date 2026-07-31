@@ -2,37 +2,74 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <title>ChatCouncil — Fase 0</title>
+    <title>ChatCouncil</title>
     <style>
       :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
       body {
-        margin: 0; padding: 12px 16px; font: 14px/1.45 system-ui, sans-serif;
-        background: #1a1714; color: #e8e2d9;
+        margin: 0; padding: 10px 14px; font: 14px/1.4 system-ui, sans-serif;
+        background: #1a1714; color: #e8e2d9; overflow: hidden;
       }
-      h1 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; opacity: .6; margin: 0 0 10px; }
-      .fila { display: flex; gap: 8px; }
+      .fila { display: flex; gap: 8px; align-items: flex-start; }
       textarea {
-        flex: 1; min-height: 56px; resize: vertical; padding: 8px 10px;
-        background: #211d19; color: inherit; border: 1px solid #3a332c; border-radius: 6px; font: inherit;
+        flex: 1; height: 52px; resize: none; padding: 8px 10px;
+        background: #211d19; color: inherit; border: 1px solid #3a332c;
+        border-radius: 6px; font: inherit;
       }
       button {
         padding: 8px 14px; background: #3a332c; color: inherit;
         border: 1px solid #4a4238; border-radius: 6px; cursor: pointer; font: inherit;
       }
       button:disabled { opacity: .5; cursor: default; }
-      #estado { margin-top: 10px; font-size: 13px; white-space: pre-wrap; opacity: .85; }
+      button.primario { background: #5a4a33; border-color: #6d5a3e; }
+      .paneles { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+      .chip {
+        font-size: 12px; padding: 2px 9px; border: 1px solid #3a332c;
+        border-radius: 999px; opacity: .85; white-space: nowrap;
+      }
+      .chip.ok { border-color: #4c6b40; }
+      .chip.mal { border-color: #7a4438; }
+      #estado { margin-top: 8px; font-size: 12.5px; opacity: .85; white-space: pre-wrap; }
       .ok { color: #9bbf8a; } .mal { color: #d98c7a; }
+
+      dialog {
+        background: #211d19; color: #e8e2d9; border: 1px solid #4a4238;
+        border-radius: 10px; padding: 20px 22px; max-width: 460px; font: inherit;
+      }
+      dialog::backdrop { background: rgba(0,0,0,.55); }
+      dialog h2 { margin: 0 0 10px; font-size: 15px; }
+      dialog p { margin: 0 0 14px; opacity: .85; line-height: 1.5; }
+      .chk { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; font-size: 13px; opacity: .8; }
+      .acciones { display: flex; gap: 8px; justify-content: flex-end; }
     </style>
   </head>
   <body>
-    <h1>Fase 0 — prueba de viabilidad · GLM</h1>
     <div class="fila">
-      <textarea id="prompt" placeholder="Escribe un prompt corto…"></textarea>
-      <button id="enviar">Enviar</button>
+      <textarea id="prompt" placeholder="Escribe la pregunta para todo el consejo…"></textarea>
+      <button id="enviar" class="primario">Enviar a todos</button>
       <button id="leer">Leer</button>
-      <button id="sesion">Sesión</button>
+      <button id="sesiones">Sesiones</button>
     </div>
+    <div id="paneles"></div>
     <div id="estado">Listo.</div>
+
+    <dialog id="confirmacion">
+      <h2>Antes de enviar</h2>
+      <p>
+        ¿Activaste las capacidades nativas que quieras en cada proveedor?
+        Razonamiento, búsqueda en internet, pensamiento extendido — cada uno
+        tiene las suyas, y se activan en su propio panel.
+      </p>
+      <label class="chk">
+        <input type="checkbox" id="no-preguntar" />
+        No volver a preguntar en esta sesión
+      </label>
+      <div class="acciones">
+        <button id="cancelar">Cancelar</button>
+        <button id="confirmar" class="primario">Enviar</button>
+      </div>
+    </dialog>
+
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

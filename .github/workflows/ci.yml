@@ -21,3 +21,8 @@ jobs:
         run: pnpm typecheck
       - name: Guard - el prompt del evaluador no puede ver la identidad del proveedor
         run: pnpm guard:judge
+      # Compilar no es embarcar (BLUEPRINT 6): el gate mira el COMPILADO.
+      - name: Build
+        run: pnpm build
+      - name: Guard - el compilado contiene las capacidades declaradas
+        run: pnpm guard:artefacto

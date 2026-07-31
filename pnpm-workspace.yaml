@@ -4,4 +4,3 @@ packages:
 allowBuilds:
   electron: true
   esbuild: true
-  spawn-sync: set this to true or false

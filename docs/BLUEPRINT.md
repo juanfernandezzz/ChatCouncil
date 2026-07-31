@@ -117,7 +117,12 @@ Se conservan porque están fundadas y verificadas, no por inercia.
 - **El agente nunca resuelve challenges ni captchas**, nunca ejecuta cambios
   irreversibles de cuenta, y nunca captura cookies, tokens, headers de
   autenticación ni datos personales.
-- **Pruebas con Claude: sólo Haiku.**
+- **Pruebas con Claude: sólo Haiku.** Es una restricción del **arnés de
+  verificación**, no del producto: en uso normal el modelo lo elige Juan en el
+  panel nativo, que es justamente el motivo de mostrar la interfaz del
+  proveedor en vez de espejarla. Por eso la comprobación vive en el
+  test-runner y **nunca** en la spec del proveedor ni en el camino de
+  difusión.
 
 ### Estéticas (Fase final, no se adelanta)
 Profesional, sobria, académico-investigativa. **No** blanco como color
@@ -247,10 +252,108 @@ se ajusta la persistencia no toca ninguna cuenta paga.
   typecheck y la estructura; lo demás es de la máquina de Juan, y así se
   declara en vez de darlo por bueno.
 
-### Fase 1 — Armazón y los cuatro investigadores 🟡
-Ventana única con las cuatro vistas dispuestas, compositor con la
-confirmación previa, difusión a los cuatro, particiones de sesión, y el
-diálogo multi-turno de cada proveedor.
+### Fase 1 — Armazón y los investigadores 🟡
+
+Ventana única con las vistas dispuestas en grilla, compositor con la
+confirmación previa, difusión a todos, particiones de sesión por proveedor,
+y el diálogo multi-turno.
+
+**Nada se codifica por cantidad.** La grilla, la difusión y el estado se
+derivan de una sola lista de investigadores. Sumar uno es agregarlo ahí y
+nada más — el requisito que la v2 escribió y violó tres veces. El typecheck
+lo hace cumplir: un id que no esté en `specs.json` no compila.
+
+**El multi-turno sale gratis y conviene entender por qué:** cada vista
+conserva su página, así que escribir de nuevo en el compositor continúa la
+conversación del proveedor. Es la misma lección de la v2 —"la continuidad de
+hilo ES la persistencia de la ventana"— pero acá es directa, sin ventanas
+que orquestar ni señales que reportar.
+
+**La difusión usa `allSettled`:** el fallo de un proveedor no puede tumbar
+la ronda. El que falla se reporta como fallo y los demás siguen.
+
+#### Los tres modos scriptables
+
+Las herramientas de navegador del agente hablan con Chrome, no con una app de
+Electron: no hay forma de que "haga clic" en esta ventana. La salida no fue
+delegar el trabajo en una persona sino **volver scriptable la app**. Los
+modos se activan por ARGUMENTO de línea de comandos, no por variable de
+entorno: `CC_TEST=1 electron ...` es sintaxis de shell POSIX y **no funciona
+en el `cmd.exe` de Windows**, que es donde corre esto. La variable de entorno
+sigue aceptándose como alternativa.
+
+| Modo | Qué hace |
+|---|---|
+| `--cc-login` | Abre investigadores y candidatos y NO cierra. Es el único paso humano. |
+| `--cc-probe` | Emite el esqueleto estructural del DOM de cada panel y cierra. |
+| `--cc-test` | Corre la secuencia completa de verificación, emite el informe y cierra. |
+
+**Lo único humano que queda es el login inicial en cada proveedor**, y no
+por una limitación técnica sino por una regla: el agente nunca maneja
+credenciales. Como las particiones son `persist:`, ese login se hace UNA vez
+y todas las corridas siguientes lo reutilizan.
+
+#### El reconocimiento es del agente, no de Juan
+
+Derivar un selector exige leer el DOM real. La regla de autonomía dice que no
+se le pide a Juan trabajo manual —capturas de DevTools incluidas— que el
+agente pueda hacer solo, y hasta ahora el armazón no tenía con qué: faltaba
+el instrumento, no el permiso. `--cc-probe` lo aporta.
+
+Sus límites son duros y están verificados por gate sobre el compilado: sólo
+atributos de una lista blanca estructural, texto recortado a 80 caracteres,
+sin clics ni navegación, y **cero accesos** a `document.cookie`,
+`localStorage` o `sessionStorage`.
+
+Los candidatos a investigador viven en una lista **separada** de
+`INVESTIGADORES`: todavía no tienen spec, así que no pueden difundir ni leer,
+y meterlos con una spec de relleno ensuciaría la única fuente de verdad de
+los selectores. Cuando un candidato gana su spec, se muda; la partición
+`persist:` es la misma, así que el login del reconocimiento se reutiliza.
+
+**Sobre shadow DOM.** Un `querySelector` desde `document` no cruza un shadow
+root. El sondeo cuenta los roots ABIERTOS y busca dentro de ellos; un
+candidato que sólo viva ahí sale marcado con `via: "shadow"` y `matches: 0`.
+Si el compositor de un proveedor no aparece por ningún lado y hay roots
+cerrados, ESO sí es una decisión de diseño y se escala — pero con la
+evidencia adelante, no con una sospecha.
+
+#### El defecto que la verificación tenía que evitar
+
+La lectura devuelve siempre el último mensaje del asistente que haya en la
+página. Si el envío del turno 2 falla en silencio, esa lectura sigue trayendo
+la respuesta del turno 1 — y una comprobación de continuidad que sólo busque
+la palabra clave del turno 1 en el texto del turno 2 **se confirma a sí
+misma**. Por eso la continuidad exige tres cosas: que el envío haya dado ok,
+que el texto haya CAMBIADO respecto del turno anterior, y recién ahí que el
+contenido demuestre memoria. Sin las dos primeras el resultado es
+`indeterminada`, nunca `confirmada` (§2: nunca se simula un resultado; §7.9:
+un dato de procedencia desconocida no se usa).
+
+#### El gate de modelo, que es de pruebas y no de producto
+
+El arnés lee la etiqueta de modelo **antes** de mandar el primer prompt y
+aborta sin enviar nada si no coincide con lo exigido — hoy, Haiku para
+`claude`. Si la etiqueta no se puede LEER, tampoco se manda: no verificar y
+suponer que está bien es exactamente la forma en que se gastaron tokens de
+más. Frenar después de enviar no devuelve el token gastado.
+
+Vive en el test-runner y **no** en la spec del proveedor ni en el camino de
+difusión, porque en uso normal el modelo lo elige Juan en el panel nativo.
+
+#### Estado y lo que falta
+
+**Dos de cuatro investigadores.** ChatGPT y GLM tienen sus selectores
+derivados y validados. **Faltan `claude` y `gemini`**: hay que derivar sus
+specs del DOM real con `--cc-probe`. Es lo único que separa esta fase de
+estar completa, y no requiere tocar el armazón.
+
+**Trampa que la v2 no dejó registrada: los selectores por `aria-label` son
+LOCALIZADOS.** GLM pasó la Fase 0 con `[aria-label="Stop"]` porque la cuenta
+está en inglés. Si la de Claude o Gemini está en español, el selector obvio
+no matchea nada y el síntoma se parece a un fallo del armazón. Al derivar,
+preferir `id` y `data-testid` —que son estables— sobre `aria-label`, y si no
+hay más remedio que usarlo, dejar anotado el idioma de la cuenta.
 
 ### Fase 2 — Persistencia y procedencia ⏳
 Modelo de datos local, historial de conversaciones, y la procedencia por

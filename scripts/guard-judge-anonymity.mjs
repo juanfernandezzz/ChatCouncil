@@ -23,17 +23,18 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = process.cwd();
-const BUILDER_PATH = "apps/web/src/lib/judge/build-judge-prompt.ts";
-const NAMES_PATH = "apps/web/src/lib/judge/provider-names.ts";
+const BUILDER_PATH = "packages/analysis/src/build-judge-prompt.ts";
+const NAMES_PATH = "packages/analysis/src/provider-names.ts";
 
+// Importadores permitidos. La lista se mantiene MINIMA a proposito: cada
+// entrada nueva es una via mas por la que la identidad del proveedor podria
+// llegar al prompt del evaluador. `index.ts` re-exporta y por eso figura.
 const BUILDER_ALLOWED_IMPORTERS = new Set([
-  "apps/web/src/lib/judge/run-analysis.ts",
-  "apps/web/src/dev/fase5-harness.ts",
+  "packages/analysis/src/index.ts",
 ]);
 const NAMES_ALLOWED_IMPORTERS = new Set([
-  "apps/web/src/lib/judge/anonymize.ts",
-  "apps/web/src/lib/judge/run-analysis.ts",
-  "apps/web/src/dev/fase5-harness.ts",
+  "packages/analysis/src/anonymize.ts",
+  "packages/analysis/src/index.ts",
 ]);
 
 const SCAN_ROOTS = ["apps", "packages"];

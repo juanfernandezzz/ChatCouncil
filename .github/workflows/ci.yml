@@ -1,82 +1,23 @@
-name: CI
-
+# CI reducido al arbol que queda en pie tras la limpieza (BLUEPRINT v3 §9.4).
+# Crece de vuelta a medida que se construye: el arbol NUNCA queda roto, ni
+# siquiera en el commit que borra, porque el CI es la unica senal que avisa
+# cuando algo se descompone y es justo el momento de mayor movimiento.
+name: ci
 on:
-  push:
-    branches: [main]
+  push: { branches: [main] }
   pull_request:
-    branches: [main]
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Sin esto aplica el default de 6 HORAS por job: un paso colgado quema
-    # runner durante horas en vez de fallar rapido (hallazgo 2026-07-25,
-    # un run quedo ~17 min en el paso mas pesado sin concluir).
     timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.9.0
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.22.2"
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11.9.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22.22.2, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
       - name: Typecheck
         run: pnpm typecheck
-
-      - name: Guard key-vault isolation (Q10)
-        run: pnpm guard:keys
-
-      - name: Guard judge anonymity (Q30)
+      - name: Guard - el prompt del evaluador no puede ver la identidad del proveedor
         run: pnpm guard:judge
-
-      - name: Guard sync storage purity (Fase 6, E7)
-        run: pnpm guard:sync
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Test
-        run: pnpm test
-
-      - name: Harness offline Fase 5 (informe/juez — Fase 9, E5)
-        run: pnpm harness:fase5
-
-      - name: Harness offline Fase 6 (sync/mail — Fase 9, E5)
-        run: pnpm harness:fase6
-
-      - name: Harness Fase 11 (anonimizacion + barajado)
-        run: pnpm harness:fase11
-
-      - name: Build web
-        run: pnpm build:web
-
-      - name: Install Playwright Chromium
-        timeout-minutes: 8
-        run: pnpm --filter @chatcouncil/web exec playwright install --with-deps chromium
-
-      - name: E2E flujo crítico (Playwright, red mockeada — Fase 9, E1/E6)
-        run: pnpm test:e2e
-
-      - name: Build extension
-        run: pnpm build:ext
-
-      - name: Zip extension artifact
-        run: pnpm zip:ext
-
-      - name: Upload extension artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: chatcouncil-extension
-          path: apps/extension/.output/*.zip
-          if-no-files-found: warn

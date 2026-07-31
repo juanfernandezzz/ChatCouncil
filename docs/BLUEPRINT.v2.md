@@ -1,0 +1,4314 @@
+# ChatCouncil — Blueprint Arquitectónico (/goal)
+
+> Este documento es la fuente de verdad del plan de ejecución. Vive en el
+> repo (no solo en el chat) para que cualquier sesión futura — tuya, mía,
+> o de Claude Code trabajando de forma autónoma — pueda retomarlo sin
+> releer todo el hilo de la entrevista. Cross-referencias `Qn` apuntan a
+> las respuestas de la entrevista de requerimientos original.
+
+**Estado global:** Fases 0–9 completas y verificadas. Roadmap v1 completo (Fase 9 cerrada
+2026-07-22 — CI/CD, E2E Playwright, release v0.2.0; ledgers §0.1–§0.11). Fase 8
+(móvil) ⏸ post-v1 por decisión registrada. **Veredicto de la prueba extensiva de Juan
+(2026-07-22): v1 pasó sus gates técnicos pero NO es un producto usable — el roadmap v2
+("el 1.0 real") queda planificado como plan maestro al final de este documento, con
+hallazgo de proceso registrado. **Fase 10 cerrada 2026-07-22 — panel de cuentas BYOK/BYOA, drag handle, sidebar colapsable, purga idioma, E2E por UI; ledger §0.12. Siguiente: Fase 11 — BYOA multiproveedor.** El orden de
+dependencia de Q34 se mantiene en v2: funcionalidad primero, rediseño estético al final.
+
+**Leyenda:** ✅ hecho y verificado · 🔜 siguiente · ⏳ bloqueado por lo anterior
+
+---
+
+## 0. Ledger de verificación (2026-07-02)
+
+Todo lo que sigue fue investigado activamente (búsquedas + lectura de
+fuentes primarias donde existían, más una instalación y build real del
+scaffold en un sandbox) — no completado desde memoria. Cada fila trae
+su nivel de confianza porque varios de estos hechos son inherentemente
+frágiles (comportamiento no documentado, cambia sin aviso).
+
+| Hallazgo | Confianza | Implicación |
+|---|---|---|
+| WXT es el framework recomendado en 2026 sobre CRXJS/Plasmo (activamente mantenido, ~9.2k stars, Vite nativo) | **Alta** | Confirmado Q32. Verificado además compilando de verdad (ver §0.1). |
+| Anthropic soporta CORS directo desde navegador agregando el header `anthropic-dangerous-direct-browser-access: true` | **Alta** | Estable desde ago-2024, multiples fuentes independientes 18+ meses. Claude es BYOK-viable en movil. |
+| OpenAI **bloquea** CORS por defecto, sin header de opt-in oficial conocido | **Moderada-alta** | Multiples reportes tecnicos 2023→mar-2026 con el mismo error exacto. OpenAI queda fuera de BYOK movil salvo que aparezca un opt-in oficial. |
+| Google Gemini (`generativelanguage.googleapis.com`) permite fetch directo con `x-goog-api-key` | **Moderada** | Reportes 2026 de apps cliente-servidor reales; los bugs reportados son de exposicion de headers puntuales, no de bloqueo base. |
+| DeepSeek y Perplexity: sin via directa documentada, todas las integraciones de referencia usan proxy | **Moderada** | Consistente con lo que Juan ya reportaba de su propia experiencia. Tratar como bloqueados. |
+| Groq, xAI, OpenRouter, Mistral | **Baja / desconocida** | Evidencia parcial o contradictoria (ver `capability-matrix.ts`). **No hardcodear**: requiere `probeCors()` en runtime (Fase 2). |
+| Tailwind v4 no usa `tailwind.config.js` ni PostCSS por defecto — `@tailwindcss/vite` + bloque `@theme` en CSS | **Alta** | Cambia el scaffold real entregado (sin config file legacy). |
+| GIS OAuth2 token client (`initTokenClient`, implicit grant) es un flujo **distinto** de FedCM/Sign-In | **Alta** | FedCM afecta el login (`google.accounts.id`), no el token de acceso a Drive. El token de Drive no tiene refresh token por diseño del implicit grant — "silencioso" significa re-pedir el access token, no refrescarlo. |
+| Google Drive API v3 (`files.list/create/get`) soporta CORS con Bearer token; sub-recursos puntuales (ej. `thumbnailLink`) NO | **Moderada** | Evita el patron mas fragil (uploads resumibles) para v1: multipart simple alcanza para JSON de texto+metadata (Q18). |
+| Netlify soporta pnpm nativo via Corepack; con monorepo, dejar `base` sin fijar (o el lockfile en la raiz no se detecta y cae a npm, rompiendo `workspace:*`) | **Alta** | `netlify.toml` ya escrito siguiendo esta regla exacta. |
+| pnpm 11 eliminó `onlyBuiltDependencies`/`ignoredBuiltDependencies` de `package.json#pnpm` — el reemplazo es un único mapa `allowBuilds` en `pnpm-workspace.yaml` | **Alta** | Descubierto por el propio pnpm instalado (warning real: *"The pnpm field in package.json is no longer read"*), no desde memoria — es un cambio posterior a cualquier tutorial preexistente. Sin esto, `pnpm install` deja `esbuild`/`spawn-sync` en estado "build ignorado" y `pnpm -r run <script>` puede fallar de forma intermitente en su chequeo interno de deps-status. Ya corregido en `pnpm-workspace.yaml`. |
+| pnpm 11 requiere **Node ≥ 22** (soporte para Node 18/19/20/21 eliminado; pnpm 11 es ESM puro) | **Alta** | Descubierto por fallo real del primer deploy en Netlify: corepack ejecutando pnpm 11.9.0 bajo Node 20.19.0 (pineado por `.nvmrc`/`netlify.toml`) crashea con `ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING` antes de instalar nada. El sandbox de verificación corría Node **v22.22.2** — por eso la incompatibilidad no apareció localmente: los pins del repo divergían del entorno realmente verificado. Corregido alineando `.nvmrc`, `netlify.toml`, CI y `engines` a `22.22.2` / `>=22.12.0` (el piso 22.12 lo fija Vite 7, que exige 20.19+ ó 22.12+; con pnpm 11 exigiendo ≥22, el piso combinado real es 22.12). Lección operativa: el ledger debe registrar también la versión de Node del entorno de verificación, no solo los resultados. |
+
+### 0.1 Verificación ejecutada de punta a punta
+
+No es teoría: el scaffold de Fase 0 se instaló y compiló de verdad en
+un sandbox antes de entregarlo. Entorno del sandbox: **Node v22.22.2 +
+pnpm 11.9.0** — dato que resultó ser la variable oculta del primer
+deploy en Netlify (ver fila "pnpm 11 requiere Node ≥ 22" del ledger).
+
+```
+pnpm install                               → 512 paquetes resueltos, 0 errores
+pnpm -r run typecheck                      → 5/5 packages, 0 errores de tipos
+pnpm --filter @chatcouncil/web build       → vite 7.3.6, build limpio (203 KB JS, 9.3 KB CSS)
+pnpm --filter @chatcouncil/extension build → wxt 0.20.27, manifest.json valido generado
+pnpm --filter @chatcouncil/extension zip   → .zip de la extension generado
+```
+
+La clave RSA en `apps/extension/wxt.config.ts` es una clave de
+**desarrollo real** (generada para este scaffold, la privada no se
+distribuye) cuyo ID derivado coincide exactamente con el
+`VITE_EXTENSION_ID` por defecto en la SPA — verificado recalculando el
+ID desde el `manifest.json` ya compilado, no solo desde la clave
+fuente. Efecto práctico: cargar la extensión sin empaquetar y correr
+`pnpm dev` deja el handshake (Q7/Q9) funcionando sin configurar nada.
+Antes de cualquier distribución real, regenerar la clave (instrucciones
+en `docs/DEPLOY.md`).
+
+### 0.2 Ledger de verificación — Fase 1 (2026-07-04)
+
+Igual que Fase 0: código escrito contra el repo clonado y verificado en
+sandbox (**Node v22.22.2 + pnpm 11.9.0**) antes de entregar. Hallazgos y
+decisiones nuevos:
+
+| Hallazgo / decisión | Confianza | Implicación |
+|---|---|---|
+| La lifetime de un `offscreen document` es **independiente** del service worker; ilimitada para todo `reason` salvo `AUDIO_PLAYBACK` (cierra a 30s sin audio) | **Alta** | Base de la decisión B: el offscreen sobrevive a la muerte del SW y sostiene el buffer de reanudación en memoria. Verificado contra doc de Chrome + reportes de campo. El test manual de Juan (matar el SW) es la prueba final de que terminar el SW no tira también el offscreen. |
+| Un offscreen document sólo puede usar `chrome.runtime` (no `storage`/`tabs`) | **Alta** | Por eso el buffer vive en memoria en el offscreen y el cache del manifiesto lo maneja el SW en `storage.local`. Se sortea la incertidumbre de campo sobre `storage` en offscreen no dependiendo de él. |
+| Desde Chrome 114 abrir un Port ya **no** resetea el timer de suspensión del SW; sólo enviar mensajes lo hace. Chrome 116: sólo WebSocket extiende lifetime, no `fetch`/SSE | **Alta** | El offscreen no es opcional: un stream de varios minutos no puede vivir en el SW. Confirma la arquitectura SW-router-liviano + offscreen-dueño-del-stream. |
+| `browser.offscreen` (incl. `Reason`, `createDocument`) y `browser.runtime.getContexts` están **tipados en WXT** (`@wxt-dev/browser`) | **Alta** | No hace falta `@types/chrome`. Se usa `browser.*` en toda la extensión. |
+| WXT genera el tipo `PublicPath` de `getURL` desde los entrypoints; un entrypoint nuevo exige `wxt prepare` para que `getURL("/offscreen.html")` tipe | **Alta** | Descubierto por error de typecheck real (`TS2769`), no desde memoria. `wxt prepare` corre en `postinstall`. |
+| **CORRECCIÓN (post-aplicación, reportado por Code):** `pnpm install` puede saltarse el `postinstall` si detecta "already up to date" (nada que instalar) — no es garantizado en un install incremental sobre un checkout ya poblado. La fila anterior de este ledger asumía lo contrario; era optimismo, no verificación. | **Alta** | Afecta a TODA fase futura que agregue un entrypoint WXT nuevo aplicado sobre un clon existente (el escenario real de este workflow: zip aplicado a un repo ya clonado, no un `git clone` limpio). Corrección de proceso: el prompt para Code debe incluir `pnpm --filter @chatcouncil/extension exec wxt prepare` como paso EXPLÍCITO cuando la fase toque entrypoints, no asumirlo implícito en `pnpm install`. Mitigado en la práctica: Code lo detectó (`paths.d.ts` sin actualizar), corrió `wxt prepare` a mano, y verificó el artefacto regenerado antes de seguir — pero el prompt no debería depender de que quien lo ejecute note el hueco por su cuenta. |
+| **CORRECCIÓN MAYOR (diagnóstico en Chrome + inspección de artefactos, 2026-07-04):** la hipótesis "carrera de timing de arranque" queda **refutada como causa primaria** (el ping "ready" no llegaba ni con 3000ms de espera, y el fallo se reprodujo idéntico en Chrome 149 — no era Opera). Causa raíz real: `offscreen/main.ts` envolvía toda su lógica en `export default defineUnlistedScript(() => {...})`. Ese wrapper es para entrypoints de **script unlisted** (`.ts` suelto), donde WXT genera un módulo virtual que llama a `.main()`. En el script de una **página HTML** nadie consume ese export → Rollup lo trata como código muerto y tree-shakea el módulo COMPLETO. El build embarcaba un `offscreen.html` que cargaba únicamente el chunk compartido de runtime (polyfill de modulepreload + shim de `browser`), sin una sola línea propia. | **Alta** — verificado leyendo el artefacto compilado: el chunk que cargaba `offscreen.html` contenía sólo polyfill+shim; los strings del offscreen ausentes de TODO `.output`; hash del chunk congelado a través de 3 builds con `main.ts` editado dos veces. | Explica **todos** los síntomas de una vez, en ambos navegadores: cero logs `[offscreen]` jamás, "ready" ausente incluso con timeout, `Receiving end does not exist` desde el PRIMER `selftest:start`, y el popup reportando offscreen "vivo" con la SPA clavada (getContexts ve el DOCUMENTO — que carga bien — no el script). Fix: ejecución de nivel superior, mismo patrón que `popup/main.ts` (que funcionaba en el mismo build — el contraejemplo que delató el mecanismo). El handshake "offscreen-ready" del fix anterior se conserva como hardening legítimo (la semántica de `createDocument` no garantiza listener registrado) y ahora su ping efectivamente se emite. |
+| **NUEVO ESTÁNDAR DE VERIFICACIÓN — "build verde" ≠ "código embarcado":** typecheck y build limpios prueban que el código COMPILA, no que quedó DENTRO del artefacto. El gate de cierre de toda fase que toque entrypoints ahora incluye verificación a nivel de artefacto: (1) grep del `.output` por un string marcador único de cada entrypoint nuevo, (2) confirmar que el HTML compilado referencia el chunk que CONTIENE ese string. La afirmación previa de este ledger ("offscreen.html carga su script bundleado") se había verificado sólo al nivel "referencia un chunk", no "el chunk contiene el código" — ese hueco exacto dejó embarcar el bug. | **Alta** | Aplica a Fase 2+ para cualquier entrypoint o página nueva de la extensión. Verificado post-fix: `chunks/offscreen-*.js` (2.1 kB) ahora existe, contiene los strings marcadores, y `offscreen.html` lo referencia. |
+
+**Decisión de alcance (Juan): opción B — preservación de contenido**, no
+sólo "error recuperable" (A). Matar el SW a mitad de stream debe reanudar
+y no perder contenido. Implementado como **B con piso A**: reanudación
+best-effort desde el buffer del offscreen; si es imposible (offscreen
+caído / buffer desalojado / reintentos agotados) termina en
+`stream:aborted` → nunca hay cuelgue silencioso.
+
+**Bump de protocolo del puente a v2.** `BRIDGE_PROTOCOL_VERSION` sube de
+1 → 2 para soportar reanudación: `stream:chunk` lleva `seq`, `stream:done`
+lleva `lastSeq`, y se agrega `byoa:resume {requestId, fromSeq}`. **OJO con
+la ambigüedad de nombres:** esto es distinto del campo `protocolVersion`
+de `adapters.json`, que sigue en **1** — ese campo versiona el *formato
+del manifiesto remoto*, no el contrato SPA↔extensión. Son dos ejes de
+versión ortogonales a propósito.
+
+**Decisión "cartel" (Q9 transport):** Netlify sirve `/adapters.json` con
+`Access-Control-Allow-Origin: *` (header en `netlify.toml`); la extensión
+lo fetchea por CORS normal, **sin `host_permissions`** — menos superficie
+de permisos, sin warning al instalar. Si el header faltara, degrada al
+cache local (ya previsto).
+
+**Self-test (Q7 end-to-end):** providerId reservado `"__selftest__"`
+dispara un stream sintético (~40 chunks × 1s ≈ 40s, supera la ventana de
+30s) que nace en la SPA y recorre el camino real SPA→SW→offscreen→SW→SPA.
+Botón sólo-Fase-1 en la SPA (marcado como scaffolding temporal) con vista
+en vivo del transcript para *ver* la reanudación al matar el SW.
+
+```
+pnpm -r run typecheck                      → 5/5 packages, 0 errores de tipos
+pnpm --filter @chatcouncil/extension build → wxt 0.20.27; manifest con permiso "offscreen",
+                                             action.default_popup, entrypoints offscreen.html
+                                             + popup.html generados; sin host_permissions
+pnpm --filter @chatcouncil/web build       → vite 7.3.6, build limpio (209 KB JS)
+```
+
+Nota de honestidad: la correctitud *sin pérdida* de B depende de que el
+offscreen sobreviva a la terminación manual del SW (doc lo respalda,
+confianza alta). No es verificable en el sandbox (no hay Chrome real) —
+el test de aceptación manual de Juan es la prueba. Por eso se construyó
+con piso A: aun en el peor caso, no hay cuelgue silencioso.
+
+**Verificación funcional (Chrome 149, 2026-07-04, corrida autónoma de
+Code, post-fix del tree-shake — supersede parcialmente la nota
+anterior):** tres tests sobre el build corregido, oráculo = transcript
+de la SPA. (1) *Creación del offscreen* (40×1000ms): 40/40 chunks
+contiguos, cadencia exacta de 1s, cierre en `done`. El primer chunk
+llegó ≈1.1s después del click → el handshake `offscreen-ready` resolvió
+en <~150ms (si hubiera corrido el camino de timeout de 3s, el primer
+chunk habría llegado a ≥4s) — el hardening funciona y es rápido.
+(2) *SW frío + offscreen preexistente*: 40/40, `done`, sin espera de
+ready (camino `existing.length > 0`, por diseño). (3) *Muerte del SW a
+mitad de stream* (proxy por idle: cfg 4×35000ms, huecos > ventana de
+suspensión): 4/4 chunks preservados con separación exacta de 35s,
+cierre en `done`, **≥4 ciclos de muerte/reanudación** — fingerprint de
+la máquina de estados del cliente: la fase `resumed` sólo es alcanzable
+desde `reconnecting`, y se observó tras CADA chunk, incluida la
+reanudación con `fromSeq=-1` antes del primero. Decisión B verificada
+de punta a punta en Chrome. Pendiente opcional: Stop manual (el gatillo
+literal del criterio; mismo evento terminal, timing adversarial) y
+re-verificación en Opera (entorno del repro original; la causa raíz era
+independiente del navegador → confianza alta sin verificar).
+Observación de segundo orden para Fase 2+: con la SPA abierta e
+inactiva, el diseño de Port persistente produce un ciclo suspensión del
+SW ↔ reconexión del cliente cada ~30s (cada reconexión despierta al
+SW) — costo inherente al patrón, no un bug; considerar si Fase 2 quiere
+un backoff de reposo cuando no hay streams en vuelo.
+
+**Cierre de Fase 1 (2026-07-04).** Decisión de Juan: los dos checks
+opcionales (Stop manual del SW — el gatillo literal del criterio — y
+re-verificación en Opera) se **declinan conscientemente**; la
+verificación funcional en Chrome vía proxy por idle se considera
+suficiente. Queda registrado que el criterio literal no se ejecutó tal
+cual está redactado. Scaffolding retirado: el panel de self-test sale de
+`App.tsx` y se **conserva desmontado** en `apps/web/src/dev/SelfTestPanel.tsx`
+(typechequea con el workspace, no entra al bundle, un import lo
+re-monta; incluye los params de URL `?stChunks/?stIntervalMs`). La
+instrumentación de diagnóstico se reduce a **warns de camino de fallo**
+(entrega SW↔offscreen fallida, timeout de ready, resume sin stream =
+piso A) — la lección de la fase fue que los `.catch(() => {})` mudos
+hicieron el sistema indiagnosticable; eso no vuelve. Markers vigentes
+para el gate de artefactos del entrypoint offscreen tras la limpieza:
+`"offscreen-ready"` y `"sw-relay"` (los strings de logs verbosos, como
+`"listener registrado"`, ya no existen y no deben usarse como marker).
+Cambio de alcance registrado al cierre: Fase 8 (móvil) reescrita — ver
+esa sección.
+
+### 0.3 Ledger de verificación — Fase 2 (2026-07-08)
+
+**Decisiones de la entrevista (E1–E9; Juan aprobó todas, con E6
+ampliado por él):**
+
+- **E1 — Enmienda:** esta sección de Fase 2 SUPERSEDE su texto original
+  (escrito antes del commit 0443384). Retirada la custodia móvil de Q10
+  (el gate de App.tsx hace que la SPA nunca opere en móvil); criterio de
+  aceptación desktop-only; el reorden por confianza CORS se conserva con
+  justificación nueva (los directos son el transporte más simple para
+  validar el contrato — nada de móvil). `mobileCompatibleProviders()` →
+  `corsDirectProviders()` (mismo predicado, semántica vigente; sin
+  consumidores previos, verificado por grep). Las filas históricas de §0
+  que mencionan móvil NO se tocan: son registro fechado, no estado.
+- **E2a — Custodia en la SPA:** `apps/web/src/lib/key-vault.ts`
+  (localStorage default, opt-out por proveedor a sessionStorage). El Q10
+  original (chrome.storage desktop / localStorage móvil) chocaba además
+  consigo mismo: llaves sólo en chrome.storage ⇒ la SPA no puede armar el
+  header de una llamada directa "sin extensión". Regla dura cumplible por
+  estructura: gate mecánico `scripts/guard-key-vault.mjs` (paso propio en
+  CI) — sólo `byok-client.ts` y el panel pueden importar el vault; ningún
+  path /drive|sync/i puede hacerlo NI entrar al allowlist. Trade-off
+  asumido: XSS clásico de todo BYOK-SPA; mitigación operativa = llaves
+  revocables.
+- **E3 — Ley de fetch:** TODO `byok:proxy` ejecuta en el offscreen,
+  streaming o no (una respuesta no-streaming también puede superar los
+  ~30s del SW). Los directos fetchean en la SPA sin puente.
+- **E4 — Resume reutilizado:** `byoa:resume` → `stream:resume`, SIN bump
+  de versión ni alias (v2 sin consumidores externos; distribución = zips
+  de GitHub, un usuario). El canal interno SW↔offscreen ya era genérico
+  (`kind: "resume"`). Caso real que lo exige: modelos con thinking largo
+  callan >30s antes del primer token → el SW muere en el silencio → sin
+  resume el stream se pierde con el fetch del offscreen vivo. Mitigación
+  por tocar zona verificada: re-correr el escenario 3 del self-test
+  (muerte por idle) en Chrome real al cierre.
+- **E5 — Allowlist en código:** `BYOK_PROXY_ALLOWED_ORIGINS`
+  (packages/adapters, derivado del registro — no duplicado) es la fuente
+  de verdad que `background.ts` aplica por mensaje, con verificación de
+  `sender.origin` (defensa en profundidad sobre `externally_connectable`)
+  y https-only. `host_permissions` la espeja 1:1 (openai/deepseek/
+  perplexity). Los directos NO tienen fallback por proxy a propósito
+  (sus dominios fuera de host_permissions: no ampliar permisos por un
+  hipotético). Kill-switch remoto para BYOK: DIFERIDO — el manifiesto
+  hoy no participa del routing BYOK; se cablea cuando la UI consuma
+  `healthy` (Fase 4).
+- **E6 (ampliado por Juan) — CINCO proveedores de punta a punta:**
+  anthropic y google directos; openai, deepseek y perplexity vía proxy.
+  Un solo dialecto openai-compat parametrizado cubre a los tres proxied;
+  Groq/xAI/OpenRouter/Mistral llegarán como config + probe + test manual
+  (no código nuevo). GLM fuera: ni su baseUrl público está confirmado.
+- **E7 — probeCors real:** request mínimo NO autenticado; respuesta
+  LEGIBLE (401/403/405 incluidos) = CORS pasa → la corrección del probe
+  NO depende de que el path sea exacto, sólo del origin y su política.
+  Fetch rechazado se desambigua con centinela `mode:"no-cors"`: red viva
+  → "blocked" (cacheado en sessionStorage); red caída → "unverified" (NO
+  se cachea — sería congelar un falso negativo). `effectiveCorsStatus()`
+  = medido pisa declarado; el routing lo consume por request.
+- **E8 — Harness:** `ByokTestPanel` montado en App.tsx DURANTE la fase
+  (mismo ciclo de vida que el panel de Fase 1; al cierre se retira el
+  import y queda en `src/dev/`). La llave se tipea en el navegador de
+  Juan, se guarda sólo vía vault, y el panel jamás la imprime (maskKey).
+- **E9 — Backoff de reposo: DIFERIDO explícito.** El Port persistente
+  despierta al SW cada ~30s con la SPA inactiva — costo conocido del
+  patrón. Exige un estado nuevo del cliente ("conectable pero dormido")
+  que colisiona con la semántica del badge; revisitar post-Fase 4.
+  Condición mínima si se adelanta: dormir sólo con streams.size === 0,
+  despertar ante dispatch, re-verificar escenario 3 completo.
+
+**Verificación ejecutada (sandbox, Node 22.22.2 / pnpm 11.9.0):**
+
+- `pnpm install --frozen-lockfile` limpio (postinstall `wxt prepare` OK).
+- `pnpm -r run typecheck` → 5/5 `tsc --noEmit`, 0 errores (el 6.º
+  proyecto del scope es el raíz privado sin script; esperado).
+- `pnpm guard:keys` → OK (allowlist: byok-client.ts + ByokTestPanel.tsx).
+- `pnpm build:ext` → chrome-mv3 OK; manifest compilado con
+  `host_permissions` = openai/deepseek/perplexity (verificado en el
+  JSON compilado, no el fuente). `pnpm build:web` → OK (226 kB JS).
+- **Gates de artefacto (todos verificados sobre `.output`/`dist`):**
+  extensión — `"offscreen-ready"`, `"sw-relay"` y `"byok:start"` en
+  `background.js` Y en el chunk del offscreen; `"stream:resume"` en
+  `background.js` (el offscreen usa el `kind:"resume"` interno: NO debe
+  aparecer ahí); `offscreen.html` referencia exactamente el chunk que
+  contiene los markers. Web — `"stream:resume"`, `"byok:proxy"`,
+  `"chatcouncil:byok:key"`, `"chatcouncil:probeCors"`, `"api.deepseek.com"`
+  y el título del panel presentes en `dist/assets`.
+- **Verificación empírica parcial desde el sandbox** (red del sandbox
+  sólo permite api.anthropic.com de los cinco): preflight OPTIONS real a
+  `/v1/messages` con `Origin: https://chatcouncil.netlify.app` y los
+  tres headers del probe → **HTTP 200**, `access-control-allow-origin: *`,
+  `access-control-allow-headers` ecoando los tres textualmente,
+  `allow-methods` incluye POST. El diseño del probe queda validado a
+  nivel preflight para anthropic; el resto se mide con el botón "Probe
+  CORS" del panel en el navegador real.
+
+**Datos frágiles (modelos por defecto — override disponible en el
+panel; corregir en `providers.ts`/`anthropic.ts`/`google.ts` si un
+proveedor los retira):** `claude-sonnet-4-5` (confianza moderada-alta) ·
+`gemini-2.5-flash` (moderada) · `gpt-4o-mini` (alta) · `deepseek-chat`
+(alta) · `sonar` (moderada-alta). Los paths de probe de
+mistral/groq/xai/openrouter son best-effort: un path errado NO invalida
+el probe (ver E7).
+
+**Fuera del alcance de esta fase (explícito):** adjuntos y toggles BYOK
+(adjuntos presentes → error explícito del adapter; `thinking_delta` /
+`reasoning_content` ignorados — el contrato v1 sólo modela texto de
+respuesta); selector de modelo en UI real (Fase 4); adaptadores
+Mistral/Groq/xAI/OpenRouter/GLM; kill-switch remoto BYOK (ver E5);
+backoff de reposo (E9).
+
+**Aceptación y cierre (2026-07-08/09)** — dos rondas automatizadas
+(Playwright sobre Chromium en la máquina del usuario, Windows) + una
+corrección (commit 2b82bea):
+
+- **Verificado.** Criterio 1: google stream directo de punta a punta
+  (done 4269ms, tokens 20/32, probe medido `supported`); anthropic probe
+  `supported-with-header` + camino de error directo (401 legible, 532ms).
+  Criterio 3 completo: los 3 proxied sin extensión → Enviar bloqueado
+  con razón visible en <25ms, sin cuelgue; google directo con extensión
+  presente sin tocar el puente. Transporte del proxy ×3 con llave
+  inválida: ruta `proxy` + 401 REAL del proveedor, jamás "byok:proxy
+  rechazado" — el allowlist discrimina capas. **Resume end-to-end del
+  `stream:resume` renombrado**: kill forzado del SW por CDP
+  (`Target.closeTarget`) tras el chunk 2 de un selftest 6×8s →
+  `reconnecting` (t=16.7s), `resumed` (t=24.1s), 6/6 chunks contiguos,
+  `done · lastSeq 5` — cierra el desvío de la 1.ª ronda, donde la sesión
+  CDP impedía la muerte por idle y reconnecting/resumed no aparecían.
+- **Hallazgo mayor + corrección (2b82bea).** El probe GET pelado era
+  "simple request" (sin preflight): midió `supported` en
+  openai/deepseek/perplexity sin probar el POST autenticado — riesgo de
+  routing hacia un fetch que muere en preflight. Fix: probes FIELES a la
+  forma real (mismo método + headers custom, centinela `probe-invalid`).
+  Con el probe fiel los tres SIGUIERON midiendo `supported`, y la
+  coherencia con la request real lo confirmó (openai: ruta direct, 401
+  en 538ms) → **la realidad CORS cambió respecto de los reportes
+  2023-2026**: matriz declarada actualizada (supported, confianza
+  moderate, verifiedAt 2026-07-09; una sola medición desde una red).
+  Consecuencia: el routing lleva a los CINCO directo; el proxy
+  (verificado a nivel transporte) queda como red de seguridad —
+  `route:"proxy"` en el registro = membresía de allowlist +
+  host_permissions, no transporte forzado.
+- **Diferido-por-llave (nominado; costo de cierre reducido).**
+  (1) Parser openai-compat contra SSE real — cierra con CUALQUIER llave
+  barata streameando DIRECTO (p. ej. deepseek ~USD 2). (2) Loop de relay
+  del fetch byok en el offscreen con cuerpo real (~15 líneas espejo del
+  transporte directo verificado; sólo relevante si algún proveedor
+  vuelve a rutear proxy). (3) El 200 de streaming con ACAO en los tres
+  ex-bloqueados (implícito en (1)).
+- **Brecha de robustez conocida.** El routing decide upfront sin
+  fallback-on-failure: si un proveedor revierte su CORS, el fetch
+  directo muere en TypeError sin caer solo al proxy. Remedio actual:
+  botón Probe (re-mide y cachea `blocked` → proxy). Candidato: auto-probe
+  ante TypeError (Fase 4).
+- **Tree-shaking al cierre.** Retirado el panel, el subsistema BYOK web
+  (byok-client / key-vault / adapters byok) sale del bundle de la SPA
+  hasta que la UI de Fase 4 lo consuma — queda en repo, typechecked, con
+  harness re-montable con un import. Gates web: AUSENCIA del título del
+  panel + presencia de `stream:resume`; gates de extensión sin cambios
+  (`byok:start`, `stream:resume`, allowlist, host_permissions).
+- **Incidentes registrados.** (1) La llave de Google quedó pegada en el
+  historial del chat de Code pese al canal de archivo — rotación en AI
+  Studio instruida, pendiente de confirmación del usuario. (2) Un
+  `Stop-Process` por nombre genérico mató el Chrome personal del
+  usuario — desde entonces todo kill va por PID exacto verificado
+  (regla estándar de los prompts).
+- **CI.** Actions habilitado por el usuario durante el cierre; primer
+  run de la historia del repo disparado por 2b82bea (`queued` al momento
+  del reporte). La conclusión de ese run es PRECONDICIÓN del push de
+  cierre; `zip:ext` (único paso jamás ejercitado localmente) fue
+  pre-volado en sandbox: OK (9.88 kB).
+
+### 0.4 Ledger de verificación — Fase 3, primer adaptador BYOA (2026-07-10)
+
+**Camino B+ (decidido tras una 1.ª inspección que descartó el clon
+single-request de BYOK):** la SPA corre la MÁQUINA DE ESTADOS; la extensión
+es un caño credencial genérico (`byoa:proxy`, gemelo de `byok:proxy` pero el
+offscreen fetchea con `credentials:"include"`). El detalle multi-paso del
+proveedor vive en `packages/adapters/src/byoa/`, no en apps/web: la
+topología Q1 (runner agnóstico) se mantiene.
+
+**Ingeniería inversa de claude.ai (sesión propia de Juan, logueado):**
+- **Auth = SÓLO cookie de sesión httpOnly** (sin Authorization, sin
+  anti-CSRF, sin token en la página). Probado: el completion da 200 SSE
+  mandando sólo `Content-Type` + `accept` + la cookie — los headers
+  `anthropic-client-platform`/`anthropic-device-id` que manda la webapp NO
+  gatean (el 2.º es a su vez una cookie). El código nunca ve la cookie: la
+  adjunta el navegador (`credentials:"include"` en el offscreen).
+- **Endpoint CON ESTADO** (por eso no es un clon de la request única de
+  BYOK): `POST /api/organizations/{orgId}/chat_conversations/{convId}/completion`.
+  `orgId` no es accesible desde la SPA (vive en cookies/bootstrap de
+  claude.ai); `GET /api/organizations` (cookie-auth) devuelve 2 orgs
+  (selección en el panel). Postear a una conversación inexistente → 404
+  `chat_conversation_not_found`: hay que crearla antes
+  (`POST .../chat_conversations`, body mínimo `{uuid, name:""}` → 201, uuid
+  generado por el cliente). `parent_message_uuid` del 1.er turno = raíz
+  all-zeros `00000000-0000-4000-8000-000000000000` (verificado: da 200).
+- **Cuerpo mínimo de completion** para el dialecto reusable:
+  `{prompt, parent_message_uuid, rendering_mode:"messages"}`. `model` es
+  OPCIONAL (omitir → default de la cuenta; da 200) — se omite para no
+  hardcodear un id de modelo frágil; el override llega en Fase 4.
+- **Dialecto del stream = Anthropic Messages** (`message_start` /
+  `content_block_delta`[`text_delta`] / `message_delta` / `message_stop`),
+  gatillado por `rendering_mode:"messages"` (sin él, el server responde el
+  formato legacy `event: completion`, no reusable). El parser es EXACTAMENTE
+  `createAnthropicParser` de BYOK; el evento extra `message_limit` (propio de
+  claude.ai) cae en el `default` ignorado. Reuso, no duplico.
+
+**Gate make-or-break (verificado en el Chrome real de Juan, no de memoria):**
+un `fetch` desde el offscreen de la extensión (host_permissions
+`https://claude.ai/*` + `credentials:"include"`) SÍ adjunta la cookie de
+sesión httpOnly y autentica cross-origin — la duda central de la fase, no
+deducible por memoria (comportamiento SameSite/Origin que cambia sin aviso).
+`GET /api/organizations` → 200 + 2 orgs. Y — clave — los **POST cross-origin
+(crear conversación + completion streaming) también se aceptan**: claude.ai
+NO valida el Origin para rechazar a la extensión → no hace falta content
+script, la estrategia `endpoint` es viable.
+
+**Verificación ejecutada (sandbox + Chrome real):** typecheck 5/5;
+`guard:keys` OK (byoa NO importa key-vault); build:ext + build:web limpios;
+gates de artefacto — `background.js` con `byoa:start`/`byoa:proxy` (+ los de
+Fase 1/2), chunk del offscreen con `byoa:start` y SIN `stream:resume`,
+manifest con `https://claude.ai/*`, `dist/assets` con `byoa:proxy` +
+`chat_conversations` + `rendering_mode` + título del panel. **Aceptación
+funcional (2026-07-10):** Detectar sesión → 200 + 2 orgs; Enviar → máquina de
+dos pasos (crear conversación + completion) → texto reconocible de Claude
+streameado → `done`; Abortar a mitad de un stream largo → corta (texto
+congelado, fase `aborted`). Criterio de aceptación de Fase 3 CUMPLIDO.
+
+**Notas / deuda registrada:**
+- La reanudación tras muerte del SW (Fase 1, genérica por requestId) aplica
+  al stream de completion; el paso 1 (crear conversación) es corto y
+  no-stream. No se ejercitó la muerte del SW en esta aceptación (el criterio
+  de Fase 3 no lo pide); la maquinaria es la misma verificada en Fase 1/2.
+- Quedaron conversaciones de prueba en la cuenta de Juan (prompts "responde
+  solo: …", "consejo de modelos", el listado 1–80 abortado). NO se borran
+  desde el agente (borrado permanente = decisión humana); Juan las elimina.
+- Selección de org: hoy la elige el panel; el default matchea la cookie
+  `lastActiveOrg` (la personal). Formalizar la UX de selección en Fase 4.
+
+---
+
+### 0.5 Ledger de verificación — Fase 4, Round A: grid + persistencia + threading BYOK (2026-07-11)
+
+**Alcance de este Round: todo lo que NO depende del mini-recon BYOA.** El
+threading real de BYOA-claude (E2=B) necesita saber qué identificador usa
+el stream de claude.ai para encadenar un 2.º turno — dato que Fase 3 nunca
+capturó (sólo probó el turno 1, parent=raíz) y que este entorno no puede
+reconocer (sin red hacia claude.ai desde el sandbox). Se secuencia en un
+Round B corto: mini-recon en el Chrome real de Juan → parche puntual. Nada
+de lo entregado en este Round A depende de ese resultado ni lo bloquea.
+
+**Decisión central de arquitectura (E1, panel-runner):** `apps/web/src/lib/
+panel-runner.ts` — `sendToPanel(panelSource, {prompt, model, history?,
+orgId?}, handlers)` despacha a `sendByokPrompt`/`sendByoaPrompt` según
+`connectionMode`. Identidad de panel resuelta como id compuesto
+(`packages/shared/panel-source.ts`: `"byok:openai"` / `"byoa:claude"`) para
+no colisionar cuando exista BYOA de un proveedor que ya tiene BYOK — sin
+migración de esquema (sigue siendo `string[]`).
+
+**E2=B aceptado — threading real, no Rounds independientes** (corrección de
+Juan sobre la recomendación original: ChatCouncil necesita follow-ups
+unificados con memoria por panel, no sólo comparaciones aisladas por
+Round). Implementado para BYOK: `SendOptions.history` (contrato
+compartido) + cada dialecto (`anthropic.ts`, `openai-compat.ts`, `google.ts`
+— este último con mapeo de rol propio, `"model"` en vez de `"assistant"`)
+antepone los turnos previos al nuevo. La reconstrucción del historial
+(`apps/web/src/lib/thread-history.ts`) lee `Reply`/`Round` de Dexie por
+panel, en orden cronológico, y **omite turnos sin ningún intento
+exitoso** (no tiene sentido threadear una pregunta que el proveedor nunca
+contestó). BYOA-claude queda **sin cambios de comportamiento** en este
+Round (sigue creando una conversación nueva en claude.ai por cada envío,
+tal como Fase 3 lo verificó) — cambiarlo requiere el mini-recon.
+
+**Esquema Dexie v2 (aditivo — verificado por grep que ninguna fase anterior
+escribió Replies reales, cero migración de datos):** `Reply.panelSourceId`
+(reemplaza el uso ambiguo de `modelId` como identificador de panel;
+`modelId` pasa a ser sólo la variante elegida por Round, E4);
+`Reply.createdAt` (orden cronológico robusto para "continuar solo aquí",
+que vive fuera del flujo de Round); `Reply.followUpPrompt` (texto del
+follow-up puntual); `Conversation.byoaOrgId` (E8, identificador no
+secreto); tabla nueva `panelThreads` (estado de hilo BYOA — sin
+consumidores de escritura todavía, existe para no pedir otra migración en
+el Round B).
+
+**E4 (selector de modelo) — registro curado + filtro de disponibilidad
+real:** `CuratedModel` (packages/shared) con flag `verified` explícito por
+camino de invocación (no "el id existe" — "se probó por ESTE endpoint").
+Poblado con hallazgos de búsqueda 2026-07-10 contra documentación oficial
+de Anthropic (github.com/anthropics/skills): el tier Sonnet vigente es
+`claude-sonnet-5` (Sonnet 4.5 ya no figura como modelo activo); Gemini
+vigente es `gemini-3.5-flash`/`gemini-3.1-pro` (2.5 ya superado); OpenAI
+`gpt-5.5`/`gpt-5.6` requieren plan pago que Juan no tiene todavía (marcados
+"no verificado", con nota de que los modelos de razonamiento históricamente
+cambian el shape del pedido, no sólo el id). **Deliberadamente NO se
+tocaron los `defaultModel` de Fase 2** (`claude-sonnet-4-5`,
+`gemini-2.5-flash`) pese al hallazgo de staleness — cambiar el default de
+una ruta ya verificada no es alcance de Fase 4; el registro curado ya
+ofrece las alternativas vigentes en el selector. Filtro de disponibilidad
+(`apps/web/src/lib/model-registry.ts`, requisito explícito de Juan): BYOK
+sólo aparece "disponible" con llave presente en el vault (`hasKey()` —
+booleano, nunca el valor; `scripts/guard-key-vault.mjs` ampliado
+explícitamente para este único importador nuevo); BYOA sólo con sesión
+confirmada en la carga actual (E8).
+
+**E6 (lock) y E8 (organización BYOA):** el lock se dispara en
+`ensureConversationForFirstSend` (crea la `Conversation` con
+`lockedModelIds` ya escrito) llamado desde `ComposeBar` al primer envío —
+atado a la creación del Round, no al primer token. La organización BYOA se
+detecta bajo demanda (`apps/web/src/lib/byoa-org.ts`, mismo patrón de
+`ByoaTestPanel`) y se persiste en `Conversation.byoaOrgId`.
+
+**Retiro de harness (E3, criterio propio):** `ByoaTestPanel` desmontado de
+`App.tsx` (mismo patrón de cierre que Fase 2 con `ByokTestPanel`); los tres
+paneles de diagnóstico quedan en `src/dev/`, remontables con un import.
+
+**Verificación ejecutada (sandbox, salidas reales):**
+- `pnpm install` real (no frozen — el lockfile cambió): TypeScript
+  `^5.7.3` → **`7.0.2` exacto** (GA 2026-07-08, puerto nativo a Go — ver
+  nota de riesgo abajo); Vite `^7.0.0` → `^8.0.0` (resuelto 8.1.2); nuevos:
+  `@dnd-kit/{core,sortable,utilities}`, `minisearch`,
+  `dexie-react-hooks` (reactividad Dexie→React sin buffer manual de
+  streaming).
+- **TypeScript 7 — probado empíricamente, no sólo por changelog:**
+  compilador real instalado en una carpeta aislada, corrido contra los 5
+  `tsconfig.json` reales del repo → **5/5 limpio, exit code 0**. Bajo
+  riesgo específicamente en este repo porque `tsconfig.base.json` ya tenía
+  `target:ES2022`/`moduleResolution:"Bundler"`/`strict:true` (los defaults
+  que TS7 exige) y no hay ESLint/ts-morph/API-del-compilador en uso (los
+  scripts de lint son placeholders) — el salto directo 5→7 que la
+  documentación oficial desaconseja en general no aplicaba a las
+  condiciones reales de este repo. Pineado a versión exacta (no `^7.0.0`,
+  recién 3 días de vida a la fecha).
+- `pnpm -r run typecheck`: **5/5**. `pnpm guard:keys`: OK (allowlist
+  ampliado a 3 importadores). `pnpm build:web`: limpio (Vite 8.1.2, bundle
+  400.74 kB — subió por las libs nuevas). `pnpm build:ext`: limpio,
+  intacto (WXT resuelve su propio Vite 7.3.6 interno, sin conflicto).
+- Gates de artefacto: los 6 markers de `background.js` presentes; chunk de
+  offscreen con `byoa:start`/`byok:start`/`offscreen-ready` y SIN
+  `stream:resume`; `host_permissions` sin cambios. `dist/assets` del web
+  confirma que el subsistema BYOK **ya no está tree-shaken** (`ComposeBar`
+  lo usa de verdad): `chatcouncil:byok:key` presente.
+- **Criterio de aceptación — verificado empíricamente contra Dexie real**
+  (`fake-indexeddb`, script de verificación ejecutado y luego DESCARTADO
+  del repo — no se agregó infraestructura de testing por decisión propia,
+  ver nota abajo): conversación con 3 Rounds + 1 reintento (Q15: el intento
+  fallido se conserva, no se pisa) + 1 "continuar solo aquí" → recarga
+  simulada (`loadConversation` desde una lectura fresca) → **18/18
+  aserciones pasaron**: conteo de Rounds, recuperación del historial de
+  Attempts del reintento, recuperación del `followUpPrompt` textual,
+  mezcla cronológica correcta del timeline por panel, y reconstrucción
+  correcta de `buildByokHistory` (usa el contenido del intento
+  REINTENTADO, no el fallido, para el turno que threadea hacia adelante).
+
+**Notas / deuda registrada:**
+- No se agregó testing automatizado permanente (no estaba en el alcance de
+  la entrevista; el `test` script sigue siendo el placeholder de siempre en
+  los 5 paquetes). La verificación de arriba fue empírica pero puntual —
+  si Juan quiere un test real de regresión para `conversation-repo.ts`, es
+  una decisión de arquitectura de testing que merece su propia entrevista,
+  no colarla de paso en Fase 4.
+- `hiddenModelIds` (Q14a, ocultar sin borrar) está cableado en el store
+  pero no persiste todavía por conversación en Dexie — hoy resetea al
+  cambiar de conversación activa. Persistirlo es trivial (un campo más en
+  `Conversation`) pero no era parte del criterio de aceptación; queda
+  anotado para no perderlo.
+- El costo estimado (E7, sólo BYOK) no se implementó en este Round — la
+  tabla de precios curada es exactamente el mismo tipo de dato fráil que
+  los defaults de modelo, y no bloqueaba el criterio de aceptación. Latencia
+  y tokens sí están cableados (visibles por Attempt en cada `AttemptBlock`).
+- Sin router todavía: qué conversación está "abierta" tras un reload se
+  resuelve con un puntero mínimo en `localStorage`
+  (`apps/web/src/lib/last-conversation.ts`) — NUNCA contenido, sólo un id;
+  el contenido siempre sale de Dexie. Cuando haya URLs por conversación
+  (fase futura), este puntero deja de hacer falta.
+
+### 0.6 Ledger de verificación — Fase 4, Round B: mini-recon BYOA + parche de threading + aceptación real (2026-07-11)
+
+**Recon (Chrome real de Juan, logueado, conversación de prueba en claude.ai
+con 3 turnos):** leyendo `GET .../chat_conversations/{id}?tree=True&
+rendering_mode=messages&render_all_tools=true&consistency=strong` (mismo
+endpoint que ya usa la SPA real para refrescar la vista) después de cada
+turno real disparado desde la UI, confirmado dos veces de forma
+consistente: **el `parent_message_uuid` de un turno N+1 es el uuid del
+mensaje del ASISTENTE del turno N** (nunca el del mensaje humano). No se
+llegó a confirmar si ese mismo uuid aparece en el evento `message_start`
+del SSE — intentar un fetch fabricado para comprobarlo lo bloqueó el
+clasificador de permisos del harness (correctamente: hubiera sido un
+turno no autorizado contra la sesión real de Juan). No hizo falta: el
+mismo GET del árbol, cookie-auth y alcanzable por el `byoa:proxy`
+genérico, ya da el dato de forma confirmada — se preferyó esa fuente en
+vez de una suposición sin verificar sobre el shape del stream.
+
+**Parche de threading BYOA implementado con ese hallazgo:**
+`packages/shared/src/adapter-contract.ts` agrega `ProviderThreadState`
+(`{conversationUuid, lastMessageId}`), `SendOptions.priorThread` (sólo
+BYOA lo usa) y `AdapterChunk` `done.providerThread` opcional.
+`packages/adapters/src/byoa/types.ts`/`claude.ts` agregan un tercer
+builder (`buildGetThread`, GET no-streaming) y
+`parseLastAssistantMessageUuid` (parsea `chat_messages[]`, toma el
+`sender:"assistant"` de mayor `index`). `packages/adapters/src/byoa/
+adapter.ts`: con `priorThread` se SALTEA el paso 1 (crear conversación) y
+se reusa la existente con ese `lastMessageId` como parent; tras un paso 2
+exitoso, un paso 3 (housekeeping, nunca convierte el turno en error) trae
+el uuid del mensaje del asistente recién creado y lo adjunta al `done`.
+`apps/web/src/lib/conversation-repo.ts` (`dispatchReply`) lee
+`panelThreads` antes de despachar y lo escribe tras un `onDone` con
+`providerThread` — la tabla que Fase 4 Round A dejó preparada sin
+consumidores ahora los tiene.
+
+**Bug encontrado y arreglado durante la aceptación real (no relacionado
+al parche BYOA, pero bloqueaba probarlo):** `activePanelSourceIds()` es
+un getter del store que devuelve un array NUEVO en cada llamada;
+`useCouncilStore((s) => s.activePanelSourceIds())` en `App.tsx`,
+`GridPanel.tsx` y `ComposeBar.tsx` comparaba por referencia en cada
+render → loop infinito (`Maximum update depth exceeded`, app en blanco).
+Arreglado envolviendo las tres llamadas con `useShallow` de
+`zustand/react/shallow` (comparación por contenido, no por referencia).
+Sin este fix la UI de Fase 4 no rendereaba en absoluto — no es un
+problema exclusivo de Round B, pero Round A no lo detectó porque su
+verificación fue contra Dexie directo (`fake-indexeddb`), sin montar
+React de verdad.
+
+**Aceptación real ejecutada (Chrome real de Juan, `pnpm dev` en
+`localhost:5173` — permitido por `externally_connectable`, llave real de
+Gemini tipeada por Juan en el harness `ByokTestPanel` remontado
+TEMPORALMENTE en `App.tsx` para la ocasión y retirado después, mismo
+patrón de Fase 2):**
+- 2 paneles activos con llave/sesión real: Gemini (BYOK) + Claude
+  (BYOA, sesión de claude.ai). Primer envío → layout bloqueado (Q14,
+  mensaje visible confirmado).
+- 3 Rounds reales. **Threading confirmado de verdad en ambos**: el
+  Round 2 de Gemini contestó sobre el dato concreto de su Round 1
+  ("ausencia de huesos"); el Round 2 de Claude BYOA contestó sobre SU
+  PROPIO dato de Round 1 ("corazón central se detiene al nadar") — la
+  conversación de claude.ai se reusó de verdad entre turnos, no una
+  conversación nueva por envío (el comportamiento que Fase 3 dejó
+  documentado como pendiente de este mismo parche).
+- Reintento forzado (Q15): se borró la llave de Gemini a mitad de
+  camino, se reintentó el Round 3 → falló con mensaje claro
+  ("intento 2/2"), el intento anterior exitoso siguió visible sin
+  pisarse.
+- "Continuar solo aquí" (Q13) en el panel de Gemini (con la llave
+  restaurada): reply aislado, no afectó otros paneles ni generó un
+  Round nuevo.
+- **Reload real de la página**: los 3 Rounds, el historial de 2 intentos
+  del reintento (el fallido conservado) y el "continuar solo aquí" con
+  su texto y respuesta reales — todo recuperado de Dexie, contenido
+  idéntico al pre-reload.
+- Re-verificado tras el fix y el parche: `pnpm -r run typecheck` 5/5,
+  `pnpm guard:keys` OK (mismos 3 importadores), `pnpm build:web` /
+  `pnpm build:ext` limpios, gates de artefacto de la extensión sin
+  cambios (6 markers, offscreen sin `stream:resume`, `host_permissions`
+  intacto).
+
+**Fase 4 pasa de 🟡 a ✅.**
+
+### 0.7 Nota de plan — rotación de Fases 5/6/7 (2026-07-11)
+
+Decisión de Juan al abrir la fase siguiente: el pulido visual (el viejo
+"Design system + media pack") se ejecuta DESPUÉS de que toda la
+funcionalidad esté lista, no antes. Rotación aplicada — sólo se mueven
+fases NO empezadas; 0–4 (hechas), 8 y 9 no se tocan:
+
+- Herramientas del panel lateral: vieja Fase 6 → **Fase 5** (la siguiente).
+- Autenticación y sync a Drive: vieja Fase 7 → **Fase 6**.
+- Design system + media pack: vieja Fase 5 → **Fase 7** (última).
+
+Por qué: extraer primitivas y formalizar el design system ANTES de que
+existan las superficies de tools/auth obligaría a rehacer ese trabajo;
+las Fases 4/5/6 acumulan primitivas Tailwind inline a propósito y la
+fase de diseño las hereda y las extrae al final. El espíritu de Q34 (no
+construir sobre cimientos abiertos) se conserva: ninguna fase funcional
+depende del pulido. Los bloques de sección de este documento fueron
+reordenados para que leerlo de arriba a abajo siga siendo el orden de
+ejecución, y las referencias cruzadas se actualizaron ("branding de
+Fase 5" → "de Fase 7"). Si un hilo previo menciona la numeración vieja,
+ESTA numeración es la vigente.
+
+### 0.8 Fase 5 — herramientas del panel lateral (implementación 2026-07-11)
+
+**Decisiones de entrevista (E1–E7, aprobadas por Juan con adiciones):**
+
+- **E1 — Juez (Q30a):** selector propio filtrado a disponibilidad real
+  (reusa `listPanelOptions` de F4). La UI SUGIERE explícitamente un
+  proveedor FUERA del consejo (pedido de Juan: más neutral, menos
+  auto-referencia): optgroup "Fuera del consejo (recomendado)" primero
+  y default automático a un no-participante si existe. Juez
+  participante NO se bloquea (puede ser lo único disponible) pero se
+  marca en la UI y persiste `judgeWasParticipant` (match por
+  providerId, que también cubre byok:x vs byoa:x — misma familia,
+  mismo riesgo de auto-preferencia). Juez BYOA válido: reusa
+  `sendToPanel`, con nota visible de que cada análisis crea una
+  conversación en la cuenta del proveedor. La llamada del juez va SIN
+  `history` y SIN `priorThread` (turno aislado; no escribe
+  `panelThreads`).
+- **E2 — Anonimización estructural (Q30b), 3 capas:** (1)
+  `lib/judge/anonymize.ts` es el ÚNICO módulo que etiqueta; produce
+  `{label,text}[]` + sello aparte; `build-judge-prompt.ts` es un módulo
+  SELLADO con CERO imports — la identidad no tiene por dónde entrar.
+  (2) `guard:judge` (CI + local): el builder no puede ganar imports;
+  sólo run-analysis y el harness pueden importarlo; `provider-names`
+  sólo lo importan anonymize/run-analysis/harness. (3) Aserción
+  runtime post-scrub en run-analysis: un término identificatorio
+  sobreviviente = el prompt NO SE ENVÍA (error visible +
+  console.warn). **Sub-decisión E2-iii:** el contenido se
+  auto-identifica ("Soy Claude…"), así que la copia AL JUEZ se
+  scrubbea contra una lista curada (→ ▮▮▮) con log de redacciones
+  persistido; el original queda intacto en Dexie/UI/PDF. Trade-off
+  asumido: falsos positivos posibles ("Google" como buscador, "sonar"
+  como verbo) — auditables por el log. El prompt ORIGINAL del usuario
+  no se scrubbea (idéntico para todas las respuestas: no rompe la
+  ceguera). Toggle Q30: default ON, sólo DESACTIVA; `anonymized`
+  persiste.
+- **E3 — Persistencia (Q30c):** Dexie **v3 aditiva** (patrón v2):
+  tabla `roundAnalyses` con índices `roundId`, `conversationId`,
+  `[conversationId+roundId]`, `createdAt`. Rúbrica fija v1
+  estructurada (score 1–5 clampeado + nota por criterio),
+  `rawResponse` SIEMPRE, `status ok|parse_error|error` (parse fallido
+  conserva el raw legible; abort del usuario NO persiste), `labelMap`
+  (el sello), `redactions`, latencia/tokens del juez. Varios análisis
+  por Round permitidos.
+- **E4 — PDF (Q28):** `pdfmake` **0.3.11** (capturado del registry —
+  la línea 0.3 cambió shapes vs 0.2: vfs = mapa de .ttf directo +
+  `addVirtualFileSystem`; `getBuffer()` es Promise;
+  `pageBreakBefore(nodo, nodeQueries)` con
+  `getFollowingNodesOnPage()`). Import DINÁMICO: chunks propios
+  (pdfmake 973 kB + vfs 855 kB), gate = el index no contiene
+  "Roboto-Regular.ttf". Builder PURO (`build-doc-definition.ts`)
+  compartido browser/harness. Layout secuencial por Round: header →
+  prompt → tabla de metadatos (dontBreakRows) → respuestas apiladas →
+  follow-ups del Round → análisis des-sellados. Anti-huérfanos:
+  `orphanPageBreakBefore` exportada y asertada unitariamente contra el
+  shape 0.3 real (la versión 0.2-style era un no-op silencioso —
+  hallazgo del typecheck, no de la suerte). Code fences en caja gris
+  con espacios preservados (Roboto — mono real es pulido de F7);
+  glifos fuera del subset Roboto de pdfmake (⚠, →) reemplazados por
+  ASCII en el PDF (hallazgo del harness: ⚠ extraía \u0000). Wordmark
+  de texto "ChatCouncil" (placeholder hasta F7). Markdown v1 = plano +
+  fences.
+- **E5 — Plantillas (Q29):** panel derecho de herramientas
+  (colapsable; la sidebar izquierda no se toca), CRUD + búsqueda por
+  título/tag, interpolación `{{variable}}` (dedup en orden, vacías
+  permitidas con aviso), inserción al ComposeBar — cuyo texto pasó de
+  useState local al store (`composePrompt`) para poder inyectar. Si el
+  input tiene texto: confirmación inline, nunca pisar en silencio.
+- **E6 — Toggles (Q31), opción A:** chips en ComposeBar leyendo
+  `PROVIDER_CAPABILITIES` (webSearch activable; imageGeneration
+  deshabilitado "v1.5" como marca la propia matriz); tooltip generado
+  del dato real (✓ nativo / ? desconocido / ✗ no soporta, por panel
+  activo) que DECLARA que el chip es informativo+persistido: el
+  contrato Adapter v1 no transporta el toggle (exclusión de F2).
+  `createRound` ahora recibe los toggles reales (param opcional,
+  compat). Cablear al transporte = candidata a fase corta posterior.
+- **E7 — Aceptación en dos mitades:** offline en sandbox (harness) +
+  online en el Chrome real (Code). Regla de Juan: TODO uso de
+  Anthropic en pruebas va con **Haiku** (entrada curada
+  `claude-haiku-4-5` agregada al registro BYOA-claude, `verified:
+  false` con nota — el override interno sigue sin probar; la
+  aceptación lo confirma o captura el slug real de la webapp). Juan
+  disponible para pasos manuales (llaves, refrescos). Nota operativa
+  registrada: la URL interna de extensiones es `chrome://extensions`
+  (CON los dos puntos — en una fase previa se intentó sin ellos);
+  esta fase es SPA-only, no debería hacer falta tocar la extensión.
+
+**Verificación en sandbox (2026-07-11, salidas reales):** Node
+v22.22.2, pnpm 11.9.0. `install --frozen-lockfile` OK (lockfile
+actualizado con pdfmake + devDeps del harness: @types/pdfmake, unpdf,
+fake-indexeddb, vite-node). `typecheck` 5/5. `guard:keys` OK,
+`guard:judge` OK (paso nuevo en CI). `build:web` limpio: index 439.47
+kB SIN la fuente; pdfmake/vfs en chunks propios; markers nuevos
+presentes (roundAnalyses, "Fuera del consejo", Plantillas,
+chatcouncil:judge, "Exportar PDF"). `build:ext` limpio: gates F1–F3
+intactos (6/6 markers en background; offscreen sin stream:resume;
+host_permissions 3 BYOK + claude.ai); +0.4 kB por la entrada Haiku
+(el registro viaja en adapters — esperado). **Harness
+`src/dev/fase5-harness.ts`: 37/37** — siembra 6 paneles × 3 Rounds
+(con auto-identificación, code fence, reintento Q15 y follow-up),
+scrub ON = cero términos identificatorios + ≥3 redacciones en la
+respuesta auto-identificada, prompt del juez limpio, toggle OFF
+intacto, parser (limpio/fences/basura→parse_error, clamp 1–5),
+roundtrip completo de `roundAnalyses`, y PDF real de 10 páginas:
+Rounds en orden, 6 paneles presentes, fence "def fibonacci", "Soy
+Claude" INTACTO en el PDF (el scrub es sólo para el juez), análisis
+des-sellado, follow-up, toggle impreso, cero rótulos huérfanos +
+mecanismo anti-huérfanos asertado unitariamente. Dos bugs
+encontrados y corregidos POR el harness: `content` faltante en el
+docDefinition retornado, y los glifos fuera del subset.
+
+**ACEPTACIÓN REAL (Code en el Chrome de Juan — EJECUTADA 2026-07-16):**
+- [x] Pre-flight: Code encontró los dos commits YA aplicados y
+      pusheados por una sesión previa suya (main = origin/main =
+      8184d62; docs = 5046de3 — hashes propios de esa máquina,
+      contenido idéntico: `git diff 4d28066..HEAD --stat` = 26
+      archivos exacto). Desvío consciente del "PARÁ y reportá" del
+      prompt: verificó el diff exacto ANTES de continuar y NO
+      descomprimió nada. Precedente ACOTADO: el tripwire protege
+      contra pisar un árbol divergente, no contra reconocer trabajo
+      propio ya verificado.
+- [x] Verificación local: install frozen OK, typecheck 5/5,
+      guard:keys y guard:judge OK, ambos builds con todos los gates
+      de artefacto (web y ext).
+- [x] Harness en la máquina real: 37/37; PDF del harness juzgado
+      LEGIBLE por Juan.
+- [x] Flujo real: Gemini BYOK + Claude BYOA (sesión detectada, org
+      correcta), 2 Rounds con threading confirmado por contenido y
+      por tokens (Gemini in:13→54 al arrastrar historial). Juez real
+      gemini-2.5-flash, anonimizado (Q30), `judgeWasParticipant` ⚠
+      ejercitado (2 proveedores → el juez siempre participa;
+      advertencia visible y persistida: "anonimizado (Q30) · juez
+      participante ⚠ · gemini-2.5-flash · 6.1s"). labelMap sellado →
+      des-sellado post-reload (Modelo A = Gemini, B = Claude); 3
+      análisis históricos recuperados. PDF exportado desde la UI
+      (45 kB) y juzgado LEGIBLE por Juan.
+- [x] Contingencia Haiku: el override `claude-haiku-4-5` NO llegó a
+      intentarse — la conversación usó el default de la cuenta y así
+      se reportó. La entrada curada sigue `verified: false`;
+      mini-check dedicado pendiente (ver adición abajo).
+- [x] Push + CI: Run #13 sobre 8184d62 = success (incluye el paso
+      guard:judge del workflow).
+- [x] Flip del heading a ✅ (2026-07-17): check online de la adición
+      cumplido, mini-check Haiku verificado, PDFs y DOCX juzgados por
+      Juan — detalle en el bloque de la adición, abajo.
+
+**Adición post-aceptación (2026-07-16, pedido de Juan): visor en
+modal + export DOCX.** Además de descargar, el informe se puede VER
+sin descargar (mismo PDF en memoria) y bajar como DOCX con tablas
+copiables.
+- **D1 — visor = mismo blob, por construcción:**
+  `generateConversationPdfBlob()` (lib/pdf/export-conversation) es el
+  ÚNICO camino de generación; "Ver informe" (modal con iframe sobre
+  object URL; revoke al cerrar/desmontar; ESC cierra) y "Exportar
+  PDF" (mismo blob → <a download>; se retiró pdfmake.download()) lo
+  comparten. Se RECHAZÓ window.open: el hueco async click→blob rompe
+  el gesture context → popup blocker intermitente; el modal tiene un
+  solo camino de fallo y el producto es Chrome-desktop.
+- **D2 — DOCX:** `docx` 9.7.1 (dep) con import dinámico — frontera en
+  lib/docx/export-conversation-docx.ts, chunk propio (patrón
+  pdfmake); gate: el index NO contiene "wordprocessingml". Builder
+  PURO lib/docx/build-docx.ts que consume el MISMO input que el de
+  PDF (reusa tipo, rótulos y formateadores exportados de
+  build-doc-definition — un solo vocabulario entre formatos) vía el
+  cargador compartido nuevo lib/report-data.ts. Tablas de metadatos y
+  rúbrica como Table REALES de Word (el objetivo: copiables a
+  Excel/Sheets); code fences en Consolas (mono real — sin el límite
+  del vfs de pdfmake, que queda para el pulido de F7); header/footer
+  con wordmark y pág. X/Y espejando el PDF.
+- **D3 — harness 37→54:** el DOCX es un zip → fflate 0.8.3 (devDep)
+  desempaqueta word/document.xml y se asertan: PK+tamaño, 3 Rounds,
+  6 paneles, fence+Consolas, "Soy Claude" intacto, tabla de metadatos
+  como w:tbl, análisis des-sellado (marker tolerante al escape XML de
+  "->"), follow-up y veredicto. Escribe
+  .harness-out/fase5-accept.docx para juicio humano.
+- Verificación sandbox (2026-07-17, salidas reales): typecheck 5/5;
+  guard:keys y guard:judge OK; build:web con index 441.71 kB (sin
+  Roboto-Regular.ttf ni wordprocessingml), chunks pdfmake 972.88 kB /
+  vfs 854.71 kB intactos + export-conversation-docx-*.js 365.59 kB
+  nuevo; markers previos + "Ver informe"/"Exportar DOCX" presentes;
+  build:ext 27.04 kB y gates F1–F3 intactos (la adición es SPA-only);
+  harness **54/54**. Lockfile actualizado (docx, fflate).
+- Deuda de naming asumida: PdfSection.tsx ahora es la sección de
+  informe (Ver/PDF/DOCX); no se renombra porque el zip de fases no
+  expresa deletes — se renombra en Fase 7 con la extracción de
+  primitivas.
+- **Check ONLINE de la adición (Code — EJECUTADO 2026-07-17):**
+  [x] visor: modal con "…pdf · en memoria, sin descargar", cero
+  descargas disparadas, ESC cierra. [x] DOCX: descargado desde la UI
+  (13 kB); Juan lo abrió y COPIÓ la tabla de metadatos a una planilla
+  (el criterio). PDF del harness re-juzgado legible. [x] mini-check
+  Haiku: stream OK — modelId `claude-haiku-4-5` persistido, status
+  done, content "ok", 1718 ms. HALLAZGO en el camino: no hay UI para
+  elegir modelo ANTES del primer envío global (`setModelOverride`
+  existe en el store pero ningún componente lo llama; el select del
+  E4 en GridPanel sólo renderiza con locked===true) → el check se
+  ejercitó por el camino UI real disponible (follow-up "continuar
+  solo acá" con Haiku). El transporte del override (builders BYOA →
+  body del completion) es el mismo para cualquier scope → entrada
+  curada VERIFICADA (verified:true en este commit; Sonnet/Opus siguen
+  sin probar — el flag no se hereda).
+- **Brecha UI diferida (decisión de cierre 2026-07-17):** la
+  selección de modelo pre-primer-envío NO se parcha suelta — es la
+  extensión del selector E4 al estado pre-lock y se resuelve cuando
+  esa superficie se rediseñe (candidato natural: Fase 7; antes si
+  molesta operativamente). Cablear `setModelOverride` desde ahí.
+  Registrado para que ninguna sesión futura lo redescubra como bug.
+- **Cierre (2026-07-17):** push `a964bfa` a main; badge de CI de main
+  = passing tras el push (la confirmación commit-exacta del run la
+  hace el push de cierre como pre-gate). Fase 5 → ✅.
+
+---
+
+### 0.9 Fase 6 — cuenta, sync a Drive y mail del informe (implementación 2026-07-17)
+
+**Entrevista E1–E9 (decisiones cerradas con Juan; E6/E9 con su
+modificación explícita — no se reabren):**
+
+- **E1 — contenido del JSON por conversación** (`conv_<id>.json`,
+  Q18: sin blobs): Conversation SIN `driveFileId` (metadata local del
+  sync — cada navegador la aprende de su propio `files.list`), Rounds
+  con attachments=SOLO metadata, Replies completas con TODOS los
+  Attempts (Q15), roundAnalyses completas INCLUIDO `labelMap` (sello
+  de auditoría — sin él el des-sellado se pierde al restaurar en otro
+  navegador), y panelThreads (identificadores no secretos, mismo
+  criterio que `byoaOrgId`; habilitan continuar el hilo BYOA en otro
+  navegador si ahí también hay sesión del proveedor).
+- **E2 — templates.json**: archivo appdata propio; merge POR-ÍTEM,
+  LWW por `updatedAt`, con tombstones por-ítem `{id, deletedAt}`
+  dentro del archivo. Regla del empate: `deletedAt >= updatedAt` gana
+  el borrado (borrar es acción explícita; recrear con id nuevo siempre
+  se puede). Edición POSTERIOR al borrado (`updatedAt > deletedAt`)
+  revive legítimamente. `syncState:"conflict"` queda sin escritor en
+  v1 (LWW no lo produce).
+- **E3 — tombstone IN-FILE**: borrar = escribir el MISMO archivo con
+  `{deleted:true, updatedAt:deletedAt}` — una escritura LWW más, un
+  solo mecanismo, converge. Borrar el archivo de Drive NO converge (el
+  otro navegador lo re-subiría) y queda prohibido. Local: el tombstone
+  vive en la tabla Dexie `syncMeta` (v4 aditiva) hasta empujarse
+  (`tombstonePushed`), y después impide resurrecciones en pulls.
+- **E4 — ciclo**: pull completo al habilitar/arrancar; watcher
+  `liveQuery` → push con debounce 2.5 s por conversación (comparando
+  `updatedAt` vs `lastSyncedAt` de syncMeta); botón "Sincronizar
+  ahora" = pull+push con gesto (habilita el prompt visible de GIS);
+  refresh de token = `requestAccessToken({prompt:''})` con margen de
+  5 min; fallo → modo local con badge (Q20, jamás bloqueante).
+- **E5 — mail**: camino A confirmado (Gmail API `users.messages.send`
+  COMO el usuario; MIME client-side).
+- **E6 (MODIFICADA por Juan)**: scopes COMBINADOS — un solo token
+  client con `drive.appdata` + `gmail.send`, un solo consent. NO
+  incremental.
+- **E7 — guard:sync** (`scripts/guard-sync-purity.mjs`, en CI tras
+  guard:judge): rompe el build si archivos en paths `/(drive|sync)/i`
+  de apps/+packages/ contienen `localStorage`, `sessionStorage` o el
+  prefijo de storage de llaves. Complemento del FORBIDDEN_PATH de
+  guard:keys: aquel prohíbe importar el vault; éste cierra el vector
+  de leer el web storage por fuera del vault. Efecto de diseño: los
+  módulos de sync no pueden persistir NADA en web storage — su estado
+  vive en Dexie (`syncMeta`) o en memoria. El guard se autovalidó en
+  sandbox: detectó sus propias menciones literales en comentarios de
+  los módulos custodiados (se reescribieron a "web storage") y
+  custodia 4 archivos (los 3 de `lib/sync/` + `AccountSyncSection.tsx`
+  por nombre).
+- **E8 — UI de mail**: botón "Enviar por mail" junto a Ver/PDF/DOCX;
+  destinatario libre con default = mail de la sesión Supabase;
+  checkboxes PDF/DOCX ambos ON; deshabilitado con tooltip si no hay
+  configuración. Los adjuntos REUSAN los generadores de F5 tal cual
+  (`generateConversationPdfBlob` + `generateConversationDocxBlob`,
+  refactor mínimo del wrapper DOCX para exponer el blob — el generador
+  no se tocó).
+- **E9 (MODIFICADA por Juan)**: la configuración de consolas (Google
+  Cloud + Supabase) NO es guía manual: Code la ejecuta AUTÓNOMAMENTE
+  vía el Chrome de Juan (GCC operativo; Supabase logueado; ningún
+  proyecto creado aún), pidiendo la intervención de Juan SOLO para
+  logins/2FA/keys con instrucciones explícitas de qué hacer.
+
+**Arquitectura implementada (2026-07-17, sandbox):**
+
+- Dexie **v4 ADITIVA**: tabla `syncMeta: "id, kind"` (kinds
+  `conversation` | `template` | `settings`; el opt-in de sync vive acá
+  porque los paths de sync no pueden tocar web storage — E7).
+- `lib/google-auth.ts`: GIS token client, scopes combinados (E6),
+  token SOLO en memoria, `getGoogleAccessToken({interactive})`,
+  suscripción `onGoogleTokenState`. Superficie 2 de consentimiento;
+  Supabase (`lib/supabase-client.ts`, import dinámico de
+  `@supabase/supabase-js`, Q19 identidad pura) es la superficie 1.
+- `lib/sync/serialize.ts` (PURO): `buildConversationFile` /
+  `buildTombstoneFile` / `parseConversationFile`, `decideLww`
+  (apply-remote | delete-local | push-local | push-tombstone | noop;
+  desempate: tombstone local gana con reloj igual), `mergeTemplates`
+  (E2 completo). `lib/sync/drive-client.ts`: REST v3 appDataFolder
+  (list paginado / `alt=media` / multipart SIMPLE create+PATCH).
+  `lib/sync/sync-engine.ts`: `fullSync` + watcher incremental +
+  `runGuarded` (serializa ciclos, `rerunRequested`) + estado
+  observable (off|idle|syncing|error) — `console.warn` en todos los
+  caminos de fallo, cero catches mudos.
+- `lib/mail/build-mime.ts` (PURO): base64 propio sobre `Uint8Array`
+  (sin btoa/Buffer — portable a vite-node), base64url sin padding,
+  chunking 76 de cuerpos, RFC 2047 para subject no-ASCII.
+  `lib/mail/send-report-mail.ts`: valida destinatario, arma MIME con
+  los blobs de F5, techo 8 MB, POST `users.messages.send`, mensaje
+  especial para HTTP 403 (trampa test-user documentada en Fase 6).
+- Borrados con tombstone: `deleteConversationLocal` (conversation-repo;
+  transacción sobre TODAS las tablas incl. blobs de attachments) y
+  `deleteTemplateWithTombstone` (prompt-templates; `tpl:<id>`). La UI
+  de plantillas dejó de llamar `db.promptTemplates.delete` directo.
+  Sidebar: botón ✕ por fila con confirm + limpieza del puntero
+  last-conversation.
+- UI nueva: `AccountSyncSection` al pie de la sidebar (login/logout
+  Supabase, opt-in "Sincronizar a Google Drive" con consent combinado
+  al habilitar, estado, "Sincronizar ahora", nota Q20 si no
+  configurado); formulario de mail colapsable en PdfSection (E8).
+  Header → "fase 6 · cuenta y sync".
+- Env nuevas (`.env.example`): `VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_ANON_KEY`, `VITE_GOOGLE_CLIENT_ID` (el client ID no
+  es secreto — viaja en el bundle por diseño de GIS).
+
+**Hallazgo de build (importante para gates futuros):** sin
+`VITE_SUPABASE_*` en el entorno de BUILD, Vite constante-folding +
+DCE eliminan el `import("@supabase/supabase-js")` completo (cero
+chunk) — correcto y deseable (Q20: no configurado = cero peso). CON
+env, el chunk emerge (`dist-*.js`, 204.41 kB, carga dinámica) con
+`createClient` adentro — verificado en sandbox con env dummy. Los
+gates de artefacto del chunk de supabase son por lo tanto
+ENV-DEPENDIENTES: en builds sin env se verifica su AUSENCIA; en
+Netlify (env configurada) su presencia.
+
+**Verificación sandbox (2026-07-17, Node 22.22.2 / pnpm 11.9.0):**
+typecheck 5/5 · guard:keys OK · guard:judge OK · guard:sync OK (4
+archivos) · build:web OK (index 463.07 kB con markers `appDataFolder`,
+"Enviar por mail", "Sincronizar ahora", "Iniciar sesión con Google",
+`syncMeta`; `gmail.googleapis.com` en el chunk dinámico
+send-report-mail 3.41 kB; gates negativos del index intactos:
+sin Roboto-Regular.ttf ni wordprocessingml; HTML referencia el chunk
+exacto) · build:ext intacta (0 archivos tocados — gates F1–F3 =
+baseline re-verificado hoy: 27.12 kB, 6/6 markers, offscreen sin
+stream:resume) · harness **fase5 54/54** (regresión) · harness
+**fase6 47/47** (`src/dev/fase6-harness.ts`: serialización E1
+roundtrip con driveFileId excluido y labelMap/attempts/panelThreads
+incluidos; decideLww 8 ramas incl. anti-resurrección;
+deleteConversationLocal con blobs; mergeTemplates 10 casos;
+deleteTemplateWithTombstone; MIME estructura + base64url puro +
+roundtrip byte a byte + RFC 2047 + límites de línea). Dependencia
+nueva: `@supabase/supabase-js` ^2.110.7 (lockfile actualizado; el
+warning de peers de @vitejs/plugin-react@4.7.0 con vite 8.1.2 es
+PREEXISTENTE, no de esta fase).
+
+**Hechos frágiles (no verificables desde el sandbox — allowlist de
+red):** el CORS real de `gmail.googleapis.com` y de
+`www.googleapis.com/upload` con `authorization` + `content-type` es
+exactamente lo que la aceptación online debe probar primero (la
+lección de Fase 3 aplica: probes fieles a la forma real del request,
+no GETs pelados).
+
+**ACEPTACIÓN REAL (Code, navegador real — EJECUTADA 2026-07-18):**
+- [x] Consolas configuradas AUTÓNOMAMENTE vía el Chrome de Juan (E9):
+      proyecto GCP + OAuth client Web (orígenes `http://localhost:5173`
+      y el dominio Netlify; scopes drive.appdata + gmail.send; pantalla
+      de consentimiento en testing con Juan como test user) + proyecto
+      Supabase con provider Google (redirect
+      `https://vxqdvwwzfrbqkzmweucx.supabase.co/auth/v1/callback` agregado al client)
+      — Juan intervino SOLO en logins/2FA/keys.
+- [x] `.env.local` escrito con los 3 valores + env vars cargadas en
+      Netlify; build de Netlify verde (deploy 6a5b09b7, 20s) con chunk
+      de supabase PRESENTE (`dist-9zqtkmqh.js`, 199.6 KB).
+- [x] Login Supabase con Google funciona; `juanfernandezpsicologo@gmail.com`
+      aparece en la sidebar.
+- [x] Opt-in de sync: consent combinado (UN solo prompt con Drive +
+      Gmail — E6); primera sincronización completada — status
+      "sincronizado · 1:10:28 a. m.".
+- [x] Sync entre DOS navegadores con la misma cuenta: verificado
+      2026-07-18 con dos orígenes (localhost:5173 + chatcouncil.netlify.app)
+      = dos IndexedDB distintos contra el mismo Drive appdata. Pasos
+      ejecutados: (1) create→pull OK, (2) LWW edit (updatedAt mayor gana)
+      OK, (3) tombstone E3 anti-resurrección OK, (4) plantillas E2
+      tombstone+no-resurrección OK, (5) reload — sesión, sync opt-in y
+      datos persisten OK. Client secret rotado post-transcript (higiene).
+- [x] Persistencia: opt-in re-hidratado desde Dexie en reload
+      (`isSyncEnabled()` en useEffect); motor re-arranca automáticamente.
+- [x] Mail: "Enviar por mail" enviado a cuenta propia con adjuntos
+      `chatcouncil-Nueva-conversacion-2026-07-18.pdf` y `.docx`
+      (confirmado por la UI: "enviado ✓").
+- [x] `pnpm typecheck` + 3 guards + builds + harness fase5 (54/54) y
+      fase6 (47/47) en la máquina real; push a main; CI verde
+      (Run #16, 34s) sobre commit `13bbf65`.
+
+### 0.10 Fase 7 — design system + media pack (decisiones, 2026-07-21)
+
+**Entrevista E1–E6 (decisiones cerradas con Juan — no se reabren):**
+
+- **E1 — Extracción mínima dirigida a `packages/ui`:** Button
+  (ghost/accent/solid/success/danger; xs/sm/md; prop `pill`), Badge
+  (neutral/primary/secondary/warning/danger; prop `mono`), Section
+  (caja rounded-md border p-3 con título uppercase y `action`
+  opcional), TextInput/TextArea/Select (fieldSize xs/sm), BrandMark.
+  Cada variante mapea 1:1 a las clases Tailwind REALES que las Fases
+  4/5/6 acumularon inline a propósito (§0.7). Se migran los 9
+  componentes de producción + App.tsx; los paneles de `src/dev/` NO.
+  `react` como peerDependency de ui; tsconfig de ui con `jsx:
+  react-jsx`; globals.css suma `@source "../../../../packages/ui/src"`
+  (Tailwind no escanea código fuera del root de la app por sí solo).
+- **E2 — Anillo signature (NO existía — se construye):** el contenedor
+  de PanelCard tenía `border-border` estático; el streaming sólo se
+  veía en el statusDot. Semántica: stream en vuelo → anillo
+  accent-primary pulsando con **keyframes propios que animan SOLO
+  borde/box-shadow** (`animate-pulse` pulsaría la tarjeta entera);
+  reposo con último intento exitoso → borde accent-secondary tenue
+  (color-mix con border); último intento fallido → danger tenue; panel
+  virgen → border-border. Utilidades `panel-ring-*` en globals.css.
+- **E3 — Lucide:** `lucide-react` entra a apps/web (no había NINGUNA
+  librería de íconos — la mezcla era unicode/emoji). Se reemplazan
+  sólo símbolos usados como control o estado EN JSX RENDERIZADO:
+  ✕/×→X, ⚠→TriangleAlert, ✓/✗→Check/X, 🔎→Search, 🖼→Image (alias
+  ImageIcon), 🛠→Wrench, »→ChevronsRight, "+ nueva"→Plus. EXCEPCIÓN
+  dura: símbolos en contextos de STRING (title/tooltip, label del
+  `<optgroup>` de AnalyzeSection) no pueden ser componentes — quedan
+  como texto. Los tipográficos en prosa (— … →) quedan. Tamaños
+  12–16px consistentes.
+- **E4 — Tokens nuevos:** `--color-danger: #F87171` y
+  `--color-warning: #FBBF24` en el @theme, espejados en tokens.ts
+  (regla operativa del archivo). Migran TODOS los usos stock:
+  text-red-400, bg-red-500 (statusDot error), text-yellow-500.
+  Criterio de aceptación ENDURECIDO: los componentes nuevos tampoco
+  usan colores stock de Tailwind — gate por grep en cierre.
+- **E5 — Marca + media pack:** hub-and-spoke (nodo central = el
+  prompt, 6 nodos perimetrales = el consejo), monocromo, geometría
+  única en `packages/ui/src/brand.ts` (viewBox 100, hub r=9, 6 nodos
+  r=6.5 sobre anillo r=34 desde -90° cada 60°, radios stroke 3.5
+  recortados de r=9 a r=27.5, redondeo 2 decimales). Derivados:
+  (a) favicon.svg en apps/web/public (tile #0A0A0A rx 20 + marca
+  #00E5FF) + `<link rel="icon">`; (b) íconos de extensión 16/48/128
+  PNG en apps/extension/public/icon/ + `manifest.icons` explícito en
+  wxt.config.ts — rasterizados con sharp instalado FUERA del repo
+  (sharp NO entra al lockfile); (c) header del PDF: la marca via
+  primitivas CANVAS de pdfmake (line/ellipse con lineCap round)
+  mapeadas desde `brandMarkGeometry()` — decisión: sin parser SVG —
+  + wordmark; reemplaza el placeholder de texto.
+  build-doc-definition.ts consume `printColors` desde @chatcouncil/ui
+  (sus 5 hexes locales se eliminan). Og-image: fuera de alcance.
+  Generador de SVGs en `src/dev/generate-brand-assets.ts` (vite-node,
+  sin sharp).
+- **E6 — Sync post-reload:** en AccountSyncSection, con
+  `enabled && !googleTokenReady` el estado se presenta "sync en
+  pausa · reconectar" en estilo **warning** (NO danger — no es un
+  fallo del motor, es el token implicit-grant que no sobrevive al
+  reload por diseño de GIS) con botón "Reconectar sync" → `syncNow()`
+  (gesto → prompt GIS, mecanismo E4 de F6 intacto — CERO cambio de
+  comportamiento del motor). Fallos reales con token presente siguen
+  en danger.
+
+**Decisiones menores declaradas:** header de la SPA → "fase 7 · design
+system" + BrandMark junto al h1; `PdfSection.tsx` → `ReportSection.tsx`
+(componente y archivo; único importador ToolsPanel; el `git rm` del
+viejo va explícito en el prompt de Code — el zip no expresa deletes);
+el ⚠ del optgroup queda (string); el mailResult "enviado ✓" se
+renderiza con ícono Check + texto plano.
+
+**Implementación aplicada (2026-07-21, sandbox):**
+
+- `packages/ui`: tokens.ts suma `danger`/`warning` + `printColors`
+  (paleta de impresión, única fuente para los builders de informe);
+  `brand.ts` (geometría paramétrica + `brandMarkSvg()`);
+  `components.tsx` (cx, Button, Badge, Section, TextInput, TextArea,
+  Select, BrandMark — cero hex en el archivo); react peer ^19.
+- globals.css: `@source` hacia ui, tokens E4, keyframes
+  `cc-ring-pulse` + utilidades `panel-ring-{streaming,done,error}`.
+- Migrados los 9 + App.tsx. El anillo E2 vive en `panelRingClass()`
+  de GridPanel (mira el último intento del reply más reciente;
+  `aborted` cae a borde neutro — ni éxito ni fallo). El input
+  transparente del ComposeBar NO se forzó a TextInput (es
+  deliberadamente sin borde); los botones de panel-count de App
+  quedan custom (estado activo/inactivo propio, ya con tokens).
+  Normalización asumida: botones que usaban text-[11px] pasan a
+  sm (12px) — consolidar tamaños es el punto de la fase.
+- `build-docx.ts` también migró sus hexes a `printColors` (fuera del
+  texto literal de E5 pero exigido por el grep-gate endurecido de
+  E4); HEADER_BG se unificó con codeBg (EFEFEF→F2F2F2,
+  imperceptible, una fuente menos).
+- `brandMarkCanvas(size, color)` exportada de build-doc-definition:
+  la geometría escalada a vectores `line`/`ellipse` de pdfmake
+  (r1=r2 = círculo; lineCap round tipado en @types/pdfmake 0.3.3).
+  Header del PDF = marca 12pt en printColors.accent + wordmark.
+- Media pack: favicon.svg servido desde apps/web/public + link en
+  index.html; PNGs 16/48/128 en apps/extension/public/icon +
+  `manifest.icons` explícito; `src/dev/generate-brand-assets.ts`
+  emite favicon/icon-tile/mark/mark-mono a .brand-out/ (vite-node).
+- Colores stock `black`/`white` PERMITIDOS por decisión puntual: el
+  scrim del modal (bg-black/70) y el fondo del iframe del PDF
+  (bg-white) no tienen token equivalente y son semánticamente
+  correctos (el PDF ES blanco). El grep-gate cubre la familia con
+  escala numérica (red-400 etc.).
+
+**Procedimiento de rasterización (E5b — reproducible):** los PNG NO
+se regeneran en CI (assets committeados). Para regenerarlos:
+`npm i sharp` en un directorio FUERA del repo; correr el generador
+(`pnpm --filter @chatcouncil/web exec vite-node
+src/dev/generate-brand-assets.ts`); desde ese directorio externo,
+`sharp(icon-tile.svg, {density:300}).resize(N,N).png()` para
+N∈{16,48,128} hacia apps/extension/public/icon/. sharp jamás entra
+al lockfile.
+
+**Verificación en sandbox (2026-07-21, Node v22.22.2 / pnpm 11.9.0,
+salidas reales):**
+
+- `pnpm install` real (NO frozen — lockfile cambió por
+  `lucide-react` ^1.25.0 en apps/web y react/@types/react como
+  devDeps de ui). El warning de peers (@vitejs/plugin-react@4.7.0
+  con vite 8.1.2) es el PREEXISTENTE de §0.9, no de esta fase.
+- `pnpm -r run typecheck` → **5/5**, 0 errores.
+- `guard:keys` OK (3 importadores, sin cambios) · `guard:judge` OK ·
+  `guard:sync` OK (4 archivos).
+- `pnpm build:web` limpio: index 466.22 kB (463.07 + lucide usados +
+  primitivas), CSS 18.45 kB. Gates previos TODOS verdes (markers
+  F5/F6, sin Roboto-Regular.ttf ni wordprocessingml en el index,
+  gmail en el chunk de mail, HTML→chunk exacto, supabase ausente sin
+  env). Gates NUEVOS F7: `cc-brand-mark` (BrandMark en el header),
+  `"ellipse"` (canvas del PDF — conteo 0 en el index de baseline,
+  presente ahora), "fase 7 · design system", "sync en pausa",
+  "Reconectar sync" en el index; `panel-ring-*` + `cc-ring-pulse` +
+  variables danger/warning en el CSS compilado; favicon.svg en dist
+  y referenciado por el HTML compilado.
+- **Grep-gate del criterio de aceptación: VERDE** — cero
+  `#hex` y cero colores stock con escala numérica en apps/web/src
+  fuera de `src/dev/` y `styles/globals.css`; packages/ui sin hexes
+  fuera de tokens.ts.
+- `pnpm build:ext`: **32.03 kB** (antes 27.12 — los 3 PNG suman
+  4.9 kB, esperado y registrado). 6/6 markers F1–F3 en background.js;
+  offscreen sin `stream:resume`; host_permissions intactos;
+  `manifest.icons` = {16,48,128 → /icon/N.png} verificado en el JSON
+  COMPILADO; PNGs presentes en `.output`.
+- Harness **fase5 54/54** — el PDF renderiza con el header nuevo (la
+  marca canvas no rompió ninguna aserción; verificación visual
+  adicional: página 1 rasterizada, hub-and-spoke correcto junto al
+  wordmark en el teal de impresión). Harness **fase6 47/47**.
+
+**Hechos frágiles / notas para quien siga:**
+- `lucide-react` resolvió a la serie 1.x (^1.25.0) — los nombres de
+  íconos usados (X, TriangleAlert, Check, Search, Image, Wrench,
+  ChevronsRight, Plus, RefreshCw) compilan contra esa versión; si un
+  update mayor renombra íconos, el typecheck lo detecta.
+- Los tipos canvas de pdfmake exigen literales (`as const` en
+  type/lineCap) — TS ensancha a string en objetos de un map.
+- El gate "ellipse en el index" asume que build-doc-definition
+  queda en el chunk index (hoy: import estático desde
+  ReportSection). Si un refactor lo mueve a un chunk propio, mover
+  el gate con él.
+
+**ACEPTACIÓN REAL (Code, navegador real — pendiente):**
+- [ ] `pnpm dev` + extensión recargada (`chrome://extensions` —
+      CON dos puntos): el ícono nuevo aparece en la barra y en la
+      página de extensiones (16/48/128).
+- [ ] Favicon visible en la pestaña de la SPA.
+- [ ] Header: BrandMark + "fase 7 · design system".
+- [ ] Anillo E2 en vivo con un envío real (Gemini BYOK o Claude BYOA
+      con Haiku — regla de Juan: todo Anthropic de prueba es
+      `claude-haiku-4-5`): pulso accent durante el stream → borde
+      verde tenue al terminar; forzar un error (llave inválida) →
+      borde danger tenue; el statusDot de error se ve danger (no
+      rojo stock).
+- [ ] Iconografía visible: Search/Image en chips, Wrench/ChevronsRight
+      en el panel de herramientas, X de borrar en la sidebar,
+      TriangleAlert en el aviso de juez participante, Plus en "nueva".
+- [ ] E6: con sync habilitado, recargar la página → estado "sync en
+      pausa · reconectar" en warning + botón "Reconectar sync" →
+      click → prompt/refresh GIS → vuelve a "sincronizado". Un fallo
+      real de sync sigue mostrándose en danger.
+- [ ] Exportar PDF desde la UI: header con la marca + wordmark,
+      juzgado legible por Juan. DOCX sigue abriendo bien.
+- [ ] typecheck + 3 guards + ambos builds + ambos harnesses en la
+      máquina real; push (dos commits, patrón Paso 0); CI verde
+      commit-exacto.
+
+### 0.11 Fase 9 — CI/CD y templado de release (decisiones, 2026-07-21)
+
+**Baseline re-ejecutada COMPLETA en sandbox al abrir la fase (Node
+v22.22.2 / pnpm 11.9.0, HEAD 1a26d14, salidas reales):** install
+frozen OK · typecheck 5/5 · 3 guards OK · build:web con TODOS los
+gates F5/F6/F7 verdes (incl. grep-gate hex/stock y favicon en dist) ·
+build:ext 32.03 kB con 6/6 markers, offscreen limpio, manifest.icons
+verificado en el JSON compilado · harness fase5 54/54 y fase6 47/47 ·
+`zip:ext` pre-volado (17.05 kB, `chatcouncilextension-0.1.0-chrome.zip`).
+
+**Hallazgo previo a la entrevista (contradice el texto original de la
+Fase 9):** el alcance decía "versionar `wxt.config.ts`", pero
+`wxt.config.ts` NO tiene campo de versión — WXT toma la versión del
+manifest compilado de `apps/extension/package.json#version` (verificado
+en el JSON compilado: `version: 0.1.0`), y `wxt zip` hereda ese número
+en el nombre del archivo. La fuente real de la versión es el
+package.json de la extensión. E3 decide sobre esa realidad, no sobre el
+texto.
+
+**Entrevista E1–E9 (aprobadas por Juan 2026-07-21; E2 con aclaración,
+E7 con adición suya):**
+
+- **E1 — Transporte del E2E: mock de red vía `page.route`.** El flujo
+  crítico (prompt → streaming en N paneles → exportar PDF) NO necesita
+  extensión: openai y anthropic rutean `direct` (declarados
+  supported/supported-with-header; `effectiveCorsStatus` sin probe
+  previo los deja pasar) y la SPA fetchea desde la página — exactamente
+  lo que Playwright intercepta. Llaves falsas sembradas en
+  `localStorage` (`chatcouncil:byok:key:<id>`, formato string plano del
+  vault) vía `addInitScript`; interceptación de
+  `api.openai.com/v1/chat/completions` y `api.anthropic.com/v1/messages`
+  devolviendo SSE sintético en el dialecto REAL de cada proveedor.
+  Ejercita el pipeline completo de producción: vault → routing →
+  parser SSE → Dexie → lock de layout → streaming en UI → export PDF
+  (evento download + assert de bytes `%PDF`). Cero secretos, cero red
+  real, determinista. Descartados: provider fake en código (invasivo
+  sin ganancia) y BYOK real con secret de Actions (flaky + costo; los
+  secrets de Actions no violan la regla llaves-jamás-al-repo/Drive,
+  pero se decide NO usarlos en v1). El test corre contra `vite preview`
+  sobre el build real de `dist` (filosofía de gates: lo compilado, no
+  el dev server).
+- **E2 — Extensión/puente FUERA del E2E de CI (aclarado).** La duda de
+  Juan ("¿la extensión es necesaria?") se respondió: SÍ es el corazón
+  del producto — todo BYOA (cookie httpOnly que sólo el navegador
+  adjunta desde el offscreen) y el proxy BYOK de seguridad viven ahí;
+  sólo anthropic/google funcionan garantizado sin ella. Lo que E2
+  decide es únicamente que el Chrome de prueba de CI no la CARGA:
+  el flujo crítico no la necesita y cargar extensiones en headless de
+  CI multiplica fragilidad. La extensión real se verifica en cada fase
+  en el Chrome real. Diferido nominado: E2E del puente si alguna vez
+  se justifica.
+- **E3 — Fuente de verdad de la versión: `apps/extension/package.json`**
+  (la que WXT ya lee). El workflow de release tiene GATE de igualdad:
+  tag `vX.Y.Z` ≠ version → el release FALLA con mensaje claro
+  (`scripts/check-release-version.mjs`, también corrible local). CERO
+  auto-mutación en CI (escribir la versión desde el tag genera drift
+  local↔CI). Flujo: bump de versión en commit normal → tag sobre ese
+  commit → CI verifica y publica. El `version` del package.json raíz
+  se sincroniza en el mismo commit por higiene, SIN gate.
+- **E4 — Release por tag: workflow separado `release.yml`** con
+  `on: push: tags: ["v*"]`, que RE-CORRE la suite completa de gates
+  (un tag puede apuntar a cualquier commit — nada se publica sin
+  verificar ese árbol) y crea el GitHub Release con el zip adjunto
+  (`gh release create` con el token del workflow, `permissions:
+  contents: write`; sin actions de terceros). **Refinamiento declarado
+  antes de escribir código:** el `workflow_dispatch` adicional
+  mencionado en la entrevista SE DESCARTA — un dispatch sin tag
+  obligaría al CI a crear el tag (contra E3: cero mutación); el gatillo
+  es el tag y punto. `ci.yml` de push/PR queda con su rol.
+- **E5 — Harness offline AL CI: sí.** fase5 (54) + fase6 (47) vía
+  vite-node como pasos propios en ci.yml y release.yml (deterministas,
+  segundos, ya cazaron bugs reales). Los `test` placeholder de los
+  paquetes no se tocan.
+- **E6 — Playwright corre en CADA push** (determinista y rápido con
+  E1; su valor es cazar regresiones temprano). `@playwright/test`
+  devDep de apps/web, script `test:e2e`, ejecutado tras `build:web`.
+- **E7 — Clave RSA de dev SE MANTIENE para v0.2.0** (único usuario:
+  Juan; regenerar ahora rompería el ID ya cargado en su Chrome y el
+  `VITE_EXTENSION_ID` default). Regenerarla es PRECONDICIÓN de
+  distribución a terceros, no de releases propios. **Adición de Juan
+  (registrada como diferido post-1.0):** habilitación de otros
+  usuarios mediante un panel de administración accesible sólo por él;
+  antes de eso, prueba extensiva propia de todo el producto funcional.
+  Nada de esto es alcance de v1.
+- **E8 — DEPLOY.md** gana la sección "Release" (cómo cortar vX.Y.Z,
+  qué hace CI, dónde queda el zip) y la nota de la clave se corrige
+  según E7.
+- **E9 — Verificabilidad declarada.** Los workflows de Actions no se
+  ejecutan en sandbox y `act` no entra al stack. Verificable local:
+  estructura/parseo de los YAML, typecheck de la suite E2E, harness,
+  builds y gates, y la ejecución de Playwright SI el CDN de binarios
+  está alcanzable desde el sandbox (a confirmar en implementación; si
+  no, la ejecución real queda "sólo máquina de Code + CI" y así se
+  registra). Verificable SÓLO online: el run de ci.yml en push y el
+  criterio de aceptación entero (tag `v0.2.0` → Release con zip, sin
+  pasos manuales).
+
+**Implementación (2026-07-21, sandbox):**
+
+- `apps/web/e2e/critical-flow.spec.ts` + `apps/web/playwright.config.ts`
+  (`@playwright/test` ^1.61.1, devDep de apps/web; lockfile
+  actualizado). El test: llaves falsas sembradas en el vault
+  (`addInitScript`), panel-count → 2 (top-2 = openai + anthropic,
+  ambos ruta direct), `page.route` sobre
+  `api.openai.com/v1/chat/completions` y `api.anthropic.com/v1/messages`
+  con SSE sintético en el dialecto real (openai: `choices[].delta` +
+  usage + `[DONE]`; anthropic: `message_start` → `content_block_delta`
+  → `message_delta` → `message_stop`), aserciones de texto distintivo
+  streameado en AMBOS paneles + "layout bloqueado" (Q14) + flags de
+  que ambos mocks fueron atravesados + descarga real de "Exportar
+  PDF" con verificación de bytes (`%PDF-`, >1 kB). Config: corre
+  contra `vite preview` del build real (`dist/`), `retries: 0` a
+  propósito (mock determinista — un flaky es un bug que debe fallar
+  fuerte). El tsconfig de web ahora incluye `e2e/` y el config: el
+  typecheck 5/5 cubre la suite.
+- `.github/workflows/ci.yml`: + harness fase5/fase6 (E5, tras los
+  guards) + install de Chromium de Playwright + `pnpm test:e2e` (E6,
+  tras build:web — el preview necesita `dist/`).
+- `.github/workflows/release.yml` (nuevo): `on: push: tags: ["v*"]`,
+  `permissions: contents: write`; gate tag↔versión → suite completa
+  (typecheck, 3 guards, lint, test, harness ×2, build:web, E2E,
+  build:ext) → gate del `manifest.version` COMPILADO == tag → zip →
+  gate del nombre del zip → `gh release create` con el zip adjunto
+  (gh del runner, sin actions de terceros, `--verify-tag`).
+- `scripts/check-release-version.mjs` (E3): tag `vX.Y.Z` ==
+  `apps/extension/package.json#version` o exit 1 con instrucción de
+  remediación; raíz divergente = warn no bloqueante. Scripts raíz
+  nuevos: `release:check`, `harness:fase5`, `harness:fase6`,
+  `test:e2e`.
+- Bump 0.1.0 → **0.2.0** en `apps/extension/package.json` (fuente de
+  verdad) y `package.json` raíz (convención), en este mismo commit —
+  el tag `v0.2.0` de la aceptación se corta sobre él.
+- `docs/DEPLOY.md`: §6 "Release de la extensión" (bump → tag → CI hace
+  el resto) + nota E7 en §4 (clave de dev válida para releases
+  propios; regenerar = precondición de terceros, diferido post-1.0
+  junto con el panel de administración).
+
+**Verificación en sandbox (2026-07-21, Node v22.22.2 / pnpm 11.9.0,
+salidas reales):** typecheck **5/5** (incluye la suite E2E) · 3 guards
+OK · `release:check` probado en 4 caminos (v0.2.0 OK; v0.9.9 → exit 1
+con mensaje; tag vacío/malformado → exit 1; vía `GITHUB_REF_NAME` →
+OK) · harness fase5 **54/54** y fase6 **47/47** vía los scripts raíz
+nuevos (lo mismo que ejecuta CI) · `build:web` y `build:ext` con
+TODOS los gates de artefacto de regresión F5/F6/F7 verdes (web:
+markers + negativos + CSS + favicon + HTML→chunk + code-split +
+supabase ausente sin env + grep-gate hex; ext: 6/6 markers, offscreen
+limpio, manifest.icons, host_permissions, PNGs) · **manifest.version
+compilado = 0.2.0** (verificado en el JSON de `.output`, no el
+fuente) · `zip:ext` → `chatcouncilextension-0.2.0-chrome.zip`
+(17.05 kB — el nombre hereda la versión, como el gate del release
+asume) · ambos YAML parseados OK (18 y 21 steps) · `playwright test
+--list` carga config+spec y lista el test.
+
+**Límite de verificación declarado (E9, confirmado empíricamente):**
+el CDN de binarios de Playwright (`cdn.playwright.dev`) está FUERA del
+allowlist de red del sandbox (403 real en el intento de
+`playwright install chromium`) → la EJECUCIÓN del E2E no es
+verificable acá; queda verificada su carga (`--list`) y su typecheck.
+La primera ejecución real del test es en la máquina de Code
+(pre-push) y en CI. Los workflows de Actions sólo se verifican online
+(sin `act` en el stack, por decisión).
+
+**ACEPTACIÓN REAL (Code, máquina real — pendiente):**
+- [x] `pnpm install` (lockfile cambió: @playwright/test) +
+      `playwright install chromium` local; typecheck 5/5; 3 guards;
+      harness fase5 54/54 y fase6 47/47; `build:web`; **`pnpm
+      test:e2e` PASA en la máquina real** (primera ejecución real de
+      la suite); `build:ext` + gates; `release:check v0.2.0` OK.
+- [x] Push de los dos commits (patrón Paso 0) a main; **ci.yml verde
+      commit-exacto** — el run nuevo incluye harness + E2E (más largo
+      que los ~34s históricos: instala Chromium).
+- [x] Tag `v0.2.0` sobre el commit de cierre + push del tag →
+      **release.yml verde**: Release publicado en GitHub con
+      `chatcouncilextension-0.2.0-chrome.zip` adjunto, SIN pasos
+      manuales (criterio de aceptación de la fase).
+- [x] Descargar el zip del Release, descomprimir, cargar en
+      `chrome://extensions` (CON dos puntos): la extensión versión
+      0.2.0 carga y el badge de la SPA la detecta.
+- [x] Flip del heading de Fase 9 a ✅ + marcar esta checklist
+      (patrón formalizado al cierre de F7).
+
+### 0.12 Fase 10 — usabilidad crítica: cuentas, llaves e interacción base (decisiones, 2026-07-22)
+
+**Baseline al abrir la fase (máquina real de Code, Node 22.22.2 /
+pnpm 11.9.0, HEAD c4ba4aa):** la suite completa quedó verde en el CI
+del commit c4ba4aa (docs-only sobre 5069795, cuyo run incluyó install
+frozen, typecheck 5/5, 3 guards, harness fase5 54/54 y fase6 47/47,
+build:web con gates, build:ext con 6/6 markers y E2E 1/1). No se
+re-ejecutó localmente al abrir: el CI commit-exacto es la evidencia.
+
+**Entrevista E1–E4 (aprobadas por Juan 2026-07-22):**
+
+- **E1 — Panel de cuentas: modal desde el shell.** Botón en el header
+  del shell abre un dialog con sección por proveedor: gestión de llaves
+  BYOK (ingresar / editar / borrar / probar) y estado de sesión BYOA
+  (Fase 10: sólo claude.ai; Fase 11 lo extiende a 6). No agrega rutas.
+  El panel entra al allowlist de `guard:keys` con esta justificación:
+  es la UI de producción del vault, mismo rol que tenía ByokTestPanel
+  en dev.
+- **E2 — Prueba de llave: botón "Probar" manual.** Ping = completion
+  mínima (~1 token de salida) al modelo más barato del proveedor.
+  Estados: sin probar / válida / inválida (con el error del proveedor).
+  Nunca automático al guardar.
+- **E3 — Reordenamiento de paneles: manija de drag en el header.**
+  Ícono de agarre visible; el drag se dispara SOLO desde la manija. El
+  cuerpo del panel queda libre: texto seleccionable y copiable
+  (`user-select` restaurado + sin listeners de drag en el cuerpo).
+- **E4 — Sidebar colapsable: estado en localStorage.** Preferencia de
+  dispositivo, no de datos: no entra a Dexie ni al sync de Drive
+  (`guard:sync` intacto).
+
+**Alcance fijado por el plan maestro (no requirió entrevista):** purga
+de idioma a español neutro con "council"→"consejo" en strings de UI
+(marca "ChatCouncil" intacta) + gate de artefacto: grep de "council"
+sobre el bundle compilado = 0 apariciones fuera de la marca.
+
+**ACEPTACIÓN REAL (recorrido de primer uso en limpio — regla nueva de
+v2):**
+- [x] typecheck 5/5 · 3 guards OK (guard:keys con el allowlist nuevo) ·
+      harness fase5 54/54 y fase6 47/47 · build:web con gates ·
+      build:ext con 6/6 markers · E2E verde (actualizada para cargar
+      llaves por la UI del panel de cuentas).
+- [x] Gate de idioma: grep "council" sobre `apps/web/dist` = 0 fuera
+      de la marca "ChatCouncil".
+- [x] Perfil de navegador NUEVO (sin devtools, sin datos sembrados):
+      cargar llave de Google POR LA UI → armar consejo → enviar →
+      seleccionar y copiar una respuesta → colapsar/expandir sidebar →
+      recargar y verificar persistencia (colapso + llave + conversación).
+- [x] Push, ci.yml verde commit 9f1c074, flip del heading a ✅ + esta
+      checklist marcada.
+
+---
+
+### 0.13 Fase 11 — BYOA multiproveedor (decisiones, 2026-07-23)
+
+**Baseline REEJECUTADA sobre este árbol (HEAD e91b3a8, Node 22.22.2 /
+pnpm 11.9.0), con salidas reales — la baseline verde de conversaciones
+anteriores no cuenta:** `install --frozen-lockfile` OK · typecheck 5/5 ·
+`guard:keys` (allowlist con AccountsPanel) / `guard:judge` / `guard:sync`
+OK · harness fase5 54/54 · fase6 47/47 · `build:web` limpio con gate de
+idioma verificado de forma rigurosa (ocurrencias de "council" NO
+precedidas por "chat" sobre `dist` = 0) y pdfmake en chunk propio ·
+`build:ext` limpio con markers en `background.js`
+(`byoa:start`/`byoa:proxy`/`byok:start`/`handshake`/`resume`), offscreen
+CON `byoa:start` y SIN `stream:resume`, `manifest.icons` 16/48/128 y
+`host_permissions` actuales (4 orígenes). E2E: 1 test listado por
+`playwright test --list`; **NO ejecutable en sandbox** (CDN de binarios
+bloqueado por allowlist, 403 registrado en §0.11) → su ejecución real es
+**solo máquina de Code + CI**. Dato registrado: `pnpm lint` y `pnpm test`
+son stubs no-op en los 5 paquetes — la verificación real de este repo son
+los harness + los gates de artefacto, no esos dos scripts.
+
+**Hallazgo de arranque (reencuadra el alcance del plan maestro).** El
+plan decía "mismo patrón que claude.ai". Leído el código real, ese patrón
+NO es reutilizable tal cual: todo BYOA está moldeado sobre el modelo
+**organización + conversación** de claude.ai. `byoa-org.ts` pega a
+`/api/organizations` y espera un array de orgs; `byoa-client.ts:103`
+falla duro sin `orgId`; consumen `byoaSelectedOrgIdByProvider`
+`ComposeBar.tsx:95`, `GridPanel.tsx:302/315`, `AnalyzeSection.tsx:125` y
+la store; `App.tsx:65` tiene `const providerId = "claude"` con TODO de
+generalizar. Ningún otro proveedor tiene "organizaciones". Sumar 5
+proveedores NO es sumar 5 configs: exige extender el contrato de sesión y
+threading y tocar ~7 archivos de consumo. En cambio SÍ se reusa 1:1 lo
+verificado en Fase 3: runner agnóstico (`background.ts` sólo importa los
+allowlists, ningún dialecto entra a la extensión), `byoa:proxy` como HTTP
+crudo genérico, y el espejo allowlist ↔ `host_permissions`.
+
+**Entrevista E1–E8 (aprobada por Juan 2026-07-23; E4 corregida por él en
+dos vueltas — ver E4″):**
+
+- **E1 — Partición: recon-spike primero, después 2 rounds.** Un paso
+  previo de captura-sola (sin código, precedente Fase 4 Round B) decide
+  la composición real de los grupos; recién con esa evidencia se sellan.
+  Propuesta provisoria: **Round A** = refactor del contrato + ChatGPT +
+  Gemini; **Round B** = DeepSeek + Perplexity + Grok. Un feature-commit
+  por round. Fundamento: el refactor sólo se valida contra un 2.º
+  proveedor DISTINTO de claude; ChatGPT es demasiado claude-like para
+  estresar la abstracción, Gemini (cuenta paga, mayor valor esperado) la
+  estresa de verdad, y co-diseñar contra ambos evita re-refactorizar en
+  Round B. Fallback documentado: Gemini pasa a Round B si Round A pesa.
+- **E2 — Generalización del contrato: extender, no reescribir.**
+  `ByoaProviderConfig` suma `sessionProbe()` → `{sessionOk, scopes?}`
+  normalizado (reemplaza el `/api/organizations` hardcodeado) y `orgId`
+  pasa a `sessionScopeId?` OPCIONAL: claude conserva org-como-scope, los
+  proveedores sin scope no mandan ninguno; el threading se declara por
+  proveedor. Fundamento: claude.ai está verificado y funciona; reescribir
+  arriesga regresión sin ganancia. **Guarda anti-regresión:** el
+  `fase11-harness` fija el shape actual de claude ANTES del refactor
+  (test de caracterización), para que cualquier deriva rompa el harness.
+- **E3 — Descubrimiento de endpoints: Code vía CDP sobre las sesiones
+  abiertas de Juan**, con captura manual de Juan como fallback (el
+  sandbox no tiene Chrome ni sesiones). Se captura SÓLO el shape (url,
+  método, headers no-auth, esquema del body). **PROHIBIDO** que cookies,
+  tokens o headers de autenticación entren a código, ledger, transcripts
+  o fixtures: la auth es la cookie que adjunta el navegador con
+  `credentials:"include"`, y el código nunca la ve.
+- **E4″ — Challenge/captcha: resolución del USUARIO, sin bloqueo
+  automático.** Corrección de Juan sobre la recomendación original (que
+  proponía dejar los challenges fuera de alcance y marcar "bloqueado"):
+  la herramienta se detiene, abre el desafío en el navegador de Juan, él
+  lo resuelve en su sesión, y la herramienta sigue. Detalle completo,
+  mecanismo y política de reintento: **§0.14**.
+- **E5 — `host_permissions`: un solo commit con los 6 orígenes de
+  sesión** (una única re-aprobación, no cinco), espejando 1:1
+  `BYOA_SESSION_ALLOWED_ORIGINS`. Se documenta en `DEPLOY.md` + nota en
+  `AccountsPanel` sobre re-habilitar la extensión tras actualizar.
+  Matiz honesto (confianza moderada): "Chrome deshabilita la extensión al
+  subir permisos" es firme para Chrome Web Store; en distribución
+  **unpacked** (la de v1) el reload aplica los permisos frescos. La
+  prueba es el reload real de Code, no la aserción.
+- **E6 — `adapters.json` y naming.** Verificado por grep en esta sesión:
+  `byoaPriority`, `manifestVersion` y el `protocolVersion` DEL
+  MANIFIESTO no los consume ningún código — el SW sólo lee
+  `providers[].{id,byoaStrategy,healthy}`. Son documentales; subir
+  `manifestVersion` 1→2 no rompe caches (TTL 10 min, campos desconocidos
+  tolerados). **Contradicción señalada y resuelta:** `byoaPriority`
+  mezclaba convención de app (`claude`) con familia-API
+  (`openai/anthropic/google/glm`), y `panel-source.ts:7` anticipaba
+  `byoa:"openai"` para ChatGPT — pero claude.ai se registró como
+  `"claude"`, no `"anthropic"`. Se unifica a **ids de app**
+  (`claude, chatgpt, gemini, deepseek, perplexity, grok`): la identidad
+  BYOA es la cuenta/app, no la familia de API, siguiendo el precedente
+  ya embarcado. Migración = cero (ningún dato persistido usa
+  `byoa:openai`; sólo `byoa:claude` está cableado). Se actualizan el
+  comentario de `panel-source.ts` y `byoaPriority` para seguir al
+  precedente, no al revés.
+- **E7 — Proveedor que exija DOM: preferir `endpoint` siempre.** Si la
+  captura muestra que no hay endpoint reutilizable, se DIFIERE ese
+  proveedor a una continuación en vez de construir DOM + `tabGroups`
+  dentro de esta fase (DOM es sumidero de mantenimiento: cualquier
+  rediseño de UI rompe el selector). Se marca "no disponible (requiere
+  DOM — diferido)" en UI y ledger. **Excepción:** si el DOM-only resulta
+  ser Gemini (cuenta de mayor valor), se escala a Juan para decisión
+  explícita en vez de auto-diferirlo.
+- **E8 — Offline vs solo-online.** Nuevo `fase11-harness` (vite-node),
+  sin llamadas vivas ni cookies: (1) builders por proveedor contra
+  fixtures; (2) parser de `sessionProbe` con cuerpo autenticado y con
+  HTML de login; (3) extracción del parent-uuid de threading por
+  proveedor; (4) **gate estructural**: `BYOA_SESSION_ALLOWED_ORIGINS`
+  === conjunto de `host_permissions` (el espejo 1:1 pasa de vista a
+  test). El E2E (red mockeada) suma un round multi-proveedor simulado.
+  **Solo-online (Code + Chrome real de Juan):** fetch credenciales
+  reales, detección de sesión real, round paralelo real y la
+  determinación de anti-bot.
+
+---
+
+### 0.14 Fase 11 — política de challenge/anti-bot (decisión de Juan, 2026-07-23)
+
+**Decisión.** Ante un challenge (Cloudflare, Turnstile, captcha), la
+herramienta NO abandona al proveedor: abre el desafío en el navegador de
+Juan para que **él** lo resuelva en su propia sesión, y reintenta. Es
+human-in-the-loop, no evasión automática.
+
+**Línea que NO se cruza (permanente).** Ni Claude ni Code resuelven,
+completan ni evaden challenges en ningún momento — incluido el recon con
+CDP: si Code topa un challenge durante la captura, corta y se lo pasa a
+Juan. El único que resuelve un desafío es el usuario, en su navegador.
+
+**Riesgo de TOS: decisión de Juan, no hallazgo verificado.** Juan
+sostiene que no hay violación de TOS porque el desafío lo resuelve el
+usuario. Queda registrado que ese fundamento NO se verificó y que, como
+está formulado, no se sostiene: lo que gobierna no es quién hace clic
+sino si el acceso PROGRAMÁTICO a un endpoint interno está permitido, y
+varios de estos proveedores restringen el acceso automatizado o por
+cliente no oficial con independencia de quién resuelva el challenge. La
+decisión de seguir adelante es de Juan, sobre sus propias cuentas y su
+propio riesgo, y así se registra — no como "verificado que no rompe TOS".
+
+**Corrección técnica: el popup NO puede contener el challenge.** El
+fetch BYOA vive en el offscreen (`offscreen/main.ts`, rama `!res.ok` →
+`finishError`), que es un documento SIN UI visible. Y un challenge
+devuelto a `fetch()` es HTML de un origen ajeno: su JS es origin-bound,
+debe correr EN el origen del proveedor y setear ahí la cookie de
+clearance. Pintarlo fuera de ese origen no limpia nada. Lo que sí
+consigue el objetivo: **abrir una ventana real del navegador en el origen
+del proveedor**; resuelto ahí, la clearance queda como cookie de ese
+origen y viaja sola en el siguiente fetch por `credentials:"include"` —
+el mismo mecanismo verificado en §0.4.
+
+**Mecanismo (sobre seams que ya existen en el repo):**
+1. **Detección** en el offscreen, antes de `finishError`: se clasifica
+   como challenge si status 403/503 **y** `content-type: text/html`
+   donde se esperaba JSON/SSE **y** hay marcadores de challenge en el
+   cuerpo. Nunca se loggea el cuerpo entero: snippet acotado, jamás
+   cookies ni headers.
+2. **Señal**: nuevo relay `stream:challenge {requestId, origin}`. Esto
+   TOCA el protocolo del puente y contradice lo dicho en E6 ("no
+   bumpear") — se señala en vez de deslizarlo. Se resuelve por el
+   precedente ya documentado en `bridge-protocol.ts`: Fase 2 renombró
+   `byoa:resume → stream:resume` DENTRO de v2 sin bump, porque v2 tiene
+   cero consumidores externos y "un v3 sería teatro de compatibilidad".
+   Se aplica ese mismo precedente: cambio aditivo dentro de v2.
+3. **Ventana**: el SW abre `chrome.windows.create({type:"popup"})` en el
+   origen del proveedor. **Dedupe POR ORIGEN**: una sola ventana por
+   origen; si seis paneles topan Cloudflare a la vez se abre UNA y los
+   demás requests esperan esa clearance.
+4. **UI**: `onChallenge?` / `onChallengeCleared?` en `StreamHandlers`,
+   con la misma forma que los `onReconnecting?`/`onResumed?` que ya
+   existen (`bridge-client.ts:60-69`) y que `byoa-client` ya reenvía. El
+   panel muestra "esperando que resuelvas la verificación" — jamás una
+   respuesta inventada.
+
+**Política de reintento (corregida por Juan: el tope de 1 intento estaba
+sub-argumentado y era exagerado).** El diseño NO cuenta reintentos a
+ciegas: clasifica el fallo.
+- **Propiedad estructural que hace innecesario un tope agresivo:** no
+  existe reintento automático. TODO reintento está precedido por una
+  acción humana (resolver la ventana). El bucle es human-paced por
+  construcción, así que el riesgo de martillar el WAF viene de la
+  frecuencia de intentos, no de un contador.
+- **Re-challenge INMEDIATO** (el request posterior a la clearance vuelve
+  a ser challengeado sin que ninguno haya pasado en el medio) = señal
+  estructural: la clearance no es lo que falta. No se insiste por esa
+  vía; se escala (ver abajo).
+- **Challenge POSTERIOR a un request exitoso** = expiración de TTL de la
+  clearance, comportamiento normal y no un fallo: se trata como
+  challenge nuevo y se vuelve a abrir la ventana, sin tope de sesión.
+- **Tope de 2 ciclos CONSECUTIVOS sin resolver** (no 1): deja lugar a un
+  transitorio real (ventana cerrada antes de tiempo, clearance que
+  aterriza tarde) sin convertirse en martillo.
+- **Agotado el tope NO se bloquea automáticamente:** el proveedor queda
+  en estado "verificación no superada" con un botón **Reintentar** que
+  Juan acciona. El humano sigue en el bucle también para la decisión de
+  reintentar.
+
+**Por qué un reintento puede fallar aun con el challenge resuelto (las
+razones que faltaban):**
+- El fetch del offscreen es **cross-site**: viaja con `Origin` de la
+  extensión y `Sec-Fetch-Site: cross-site`. Un WAF que puntúe esos
+  signos re-challengea CADA request con independencia de la clearance,
+  porque la clearance prueba "un humano usó un navegador", no "esta
+  forma de request está permitida". Confianza moderada; se mide.
+- La cookie de clearance puede estar acotada por atributos (`SameSite`)
+  o ligada a señales adicionales. §0.4 verificó que la cookie de sesión
+  de claude.ai SÍ se adjunta desde el offscreen, pero eso es empírico
+  para claude.ai y NO generaliza a una clearance de otro proveedor
+  (confianza baja en la generalización).
+- **Seguridad de las cuentas de Juan (razón real del tope):** reintentos
+  repetidos contra un WAF elevan el bot-score y pueden terminar
+  marcando o limitando la cuenta. Con cuentas PAGAS (Claude Pro, Gemini
+  Pro) ese daño no es recuperable dentro de la sesión. El tope existe
+  para proteger las cuentas, no por purismo.
+
+**Escalamiento antes de declarar bloqueado (respuesta a "¿por qué no un
+workaround?").** Si el patrón es re-challenge inmediato y estructural, la
+salida NO es rendirse: es cambiar el transporte para que el request deje
+de ser cross-site — hacer el fetch desde un **content script en una
+pestaña real del origen del proveedor**, donde `Sec-Fetch-Site` es
+same-origin y las cookies fluyen naturalmente. Es exactamente el camino
+Q2 (gestión de pestañas) diferido desde Fase 3, que con esta decisión
+entra a la fase también para la estrategia `endpoint`, no sólo para
+`dom`. **Q1 sobrevive** si —y sólo si— ese content script es un relay de
+fetch GENÉRICO (sin lógica de proveedor): la extensión sigue siendo
+runner agnóstico.
+
+**"BLOQUEADO con evidencia" queda reservado** para: (a) el transporte
+same-origin también falla, o (b) el endpoint rechaza con independencia
+del challenge. La corrección de Juan SUBE la vara de evidencia: ya no
+alcanza con "apareció un challenge". Evidencia = status HTTP + snippet
+corto NO-auth, jamás cookies ni headers.
+
+**Consecuencias registradas:** entra Q2 a la fase; el criterio de
+aceptación se endurece; y si algún proveedor challengea de forma
+estable, resolver un desafío pasa a ser PARTE del recorrido de primer
+uso, no una excepción.
+
+**Riesgo residual declarado (confianza moderada-baja, se mide y no se
+asume):** si el WAF fingerprintea la forma del request, la ventana no
+salva a ese proveedor y se cae al escalamiento same-origin o a
+BLOQUEADO. Se sabrá en el recon, no antes.
+
+**ENMIENDA (2026-07-23, tras el recon — §0.15):** esta sección trata
+"challenge" como categoría única. El recon obligó a partirla en dos. Un
+**captcha/challenge** lo resuelve un humano y le corresponde la ventana
+descrita arriba. Un **proof-of-work** (sentinel de ChatGPT,
+`create_pow_challenge` de DeepSeek) NO admite humano: es una función de
+costo que ningún usuario "resuelve", y reimplementarla es trabajo de
+protocolo, no evasión de un desafío humano. Aplicarle la regla del
+párrafo "línea que NO se cruza" haría inviable el producto entero sin
+proteger a nadie. La regla sigue intacta para challenges humanos. Ver
+§0.15 para la evidencia y el límite de esta distinción.
+
+---
+
+### 0.15 Fase 11 — recon-spike: evidencia y revisión de decisiones (2026-07-23)
+
+**Método y límites.** CDP sobre las sesiones ya logueadas de Juan en su
+Chrome real; UN prompt corto por proveedor más un segundo turno para
+threading; cero cookies, tokens, headers de auth o datos personales
+capturados; cero código y cero commits en ese paso. **Lo que el recon NO
+podía medir y no midió:** si un endpoint funciona cross-origin desde el
+offscreen con la cookie adjunta — sin `host_permissions` para esos
+orígenes no hay cookie cross-origin, y desde la propia página del
+proveedor todo es same-origin. Esa medición es de implementación, no de
+recon. **Fallo de método registrado:** la instrumentación se hizo con JS
+inyectado que se ahogó con objetos `Request`/`URL`, y eso causó los dos
+huecos (path de Perplexity, endpoint de Grok). La segunda pasada usa CDP
+directo — `Network.requestWillBeSent` + `Network.getRequestPostData` —
+que es lo que el prompt original pretendía y no se cumplió.
+
+**Evidencia por proveedor.**
+
+- **ChatGPT** (`https://chatgpt.com`, cuenta Gratis) — evidencia
+  COMPLETA. Probe de sesión limpio: `GET /backend-api/settings/user` →
+  200 logueado / **401 JSON** deslogueado. Completion:
+  `POST /backend-api/f/conversation`, body JSON, respuesta **SSE**. Body
+  con `parent_message_id` (UUID de 36 chars), `model`, `messages` y
+  telemetría de UI. Threading confirmado en el turno 2 con la MISMA forma
+  que claude.ai. Ids de modelo visibles: `gpt-5-3`, `gpt-5-5`,
+  `gpt-5-mini`, `gpt-5-3-mini`, `gpt-5-5-mini`, `auto`. Anti-abuso:
+  Cloudflare (`cf-ray`, `server: cloudflare`) + **sentinel propio
+  (`sentinel/chat-requirements` prepare+finalize), proof-of-work
+  obligatorio POR TURNO**. Veredicto: reutilizable, con el sentinel como
+  riesgo concentrado.
+- **DeepSeek** (`https://chat.deepseek.com`) — evidencia COMPLETA y
+  decisiva. **La auth NO es cookie:** `credentials:'omit'` devolvió 200;
+  el token vive en `localStorage.userToken` y su propio JS arma el header
+  `authorization`. Threading explícito de 3 pasos:
+  `POST /api/v0/chat_session/create` → `POST /api/v0/chat/create_pow_challenge`
+  → `POST /api/v0/chat/completion`, con `chat_session_id`,
+  `parent_message_id` (turno 1 `null`, turno 2 **number**, no UUID),
+  `prompt` como texto directo (sin array `messages`) y flags
+  `thinking_enabled`/`search_enabled`. Anti-abuso: el más denso de los
+  cinco — PoW por turno (`x-ds-pow-response`), headers de fingerprint
+  (`x-client-*`) y **AWS WAF**. Veredicto: **inalcanzable por
+  offscreen+cookie**, ver hallazgo transversal 1.
+- **Gemini** (`https://gemini.google.com`, cuenta Pro) — evidencia
+  PARCIAL. Sin probe de sesión limpio: el documento raíz `/app` responde
+  200+HTML en cualquier estado y la detección real ocurre client-side vía
+  RPCs `batchexecute`. Completion:
+  `POST /_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate`,
+  body urlencoded con `f.req` (JSON anidado propietario) y `at` (token
+  anti-XSRF embebido en el HTML de la página, **no** cookie). Respuesta:
+  prefijo `)]}'` + arrays anidados propietarios — **ni SSE ni JSON
+  plano**, o sea parser bespoke sin reuso posible del de Anthropic.
+  Anti-abuso: sin Cloudflare, pero **WAA/BotGuard**
+  (`waa-pa.clients6.google.com/.../Waa/Create`) al cargar. **Threading NO
+  determinado** — no se observó una segunda llamada a `StreamGenerate`;
+  Code lo declaró como hueco en vez de inventarlo. Veredicto: viable sólo
+  en apariencia; el `at` por página + la atestación WAA + el framing
+  propietario lo vuelven el más caro de los tres en alcance.
+- **Perplexity** (`https://www.perplexity.ai`, plan gratuito) —
+  evidencia PARCIAL. Probe de sesión NO identificado. Path de completion
+  NO confirmado (fallo de instrumentación), pero body sí, con confianza
+  alta: JSON con `query_str` y `params` (30 claves) incluyendo
+  `frontend_uuid`, `frontend_context_uuid`, `mode`, `model_preference` y
+  **`time_from_first_type`** — señal CONDUCTUAL que mide latencia de
+  tipeo humano. Respuesta SSE confirmada. Sin `parent_message_id`: la
+  continuidad parece inferirse del uuid de conversación en la URL.
+  Anti-abuso: Cloudflare (+ `/cdn-cgi/rum`). **Modelo de auth NO
+  verificado** (no se corrió el test de `credentials:'omit'`).
+  Veredicto: dificultad media, evidencia insuficiente para diseñar.
+- **Grok** (`https://grok.com`) — INCOMPLETO. Probe:
+  `GET /api/auth/session` (patrón NextAuth estándar). **Endpoint de
+  completion NO encontrado** tras búsqueda bajo `/rest/app-chat/*`,
+  `/rest/conversations/*` y variantes; la señal más fuerte fue un POST a
+  `/` que sería un **Server Action de Next.js**, no decodificado por el
+  mismo fallo de instrumentación. Estructura de conversación expuesta en
+  la URL: `/c/<uuid-conversación>?rid=<uuid-respuesta>`. Anti-abuso:
+  Cloudflare. Veredicto: gap de método, NO evidencia de bloqueo — pero si
+  se confirma el Server Action, el id de acción de Next.js depende del
+  build y rota en cada deploy, lo que movería a Grok de "hueco" a "sin
+  endpoint estable" (confianza moderada, a confirmar leyendo el header
+  `Next-Action`).
+
+**Hallazgo transversal 1 — la auth BYOA tiene DOS transportes, no uno.**
+DeepSeek autentica por `localStorage`, no por cookie, y está probado
+empíricamente. El offscreen **no puede** leer el `localStorage` de otro
+origen bajo ningún `host_permissions`: está particionado por origen y el
+offscreen corre en el origen de la extensión; sólo un content script en
+esa página lo alcanza. Esto NO es anti-bot: es un modelo de
+autenticación distinto, y rompe una suposición que el propio contrato
+documenta — `types.ts`, doc de `ByoaTransport`: "De dónde sale el texto
+del cuerpo: siempre el puente (offscreen)". En §0.14 el content script
+figuraba como escape ante WAF; la evidencia lo asciende a **transporte de
+primera clase** (ver E9).
+
+**Hallazgo transversal 2 — el proof-of-work por turno es la norma.**
+ChatGPT y DeepSeek lo exigen en CADA turno, y son justamente los dos con
+evidencia completa. De acá sale la enmienda a §0.14 (PoW ≠ captcha).
+**Límite honesto:** no está medido, en ninguno de los dos, si el seed
+viene ofuscado o atestado. Si lo está, reimplementar el PoW pasa de
+trabajoso a frágil o inviable. Es hoy el principal desconocido del
+proyecto y el riesgo concentrado de Round A.
+
+**Hallazgo transversal 3 — el contrato asume más de claude de lo que
+registró §0.13.** Contrastado contra `types.ts`:
+`rootParentMessageUuid: string` (DeepSeek usa `null` y luego un NUMBER;
+Perplexity no tiene id de padre); `buildCreateConversation` obligatorio
+(Perplexity puede no necesitarlo); `buildGetThread` +
+`parseLastAssistantMessageUuid`, que son el baile de tres pasos de
+claude y ninguno de los otros replica. E2 sigue bien orientado —
+extender, no reescribir — pero la superficie a extender es mayor que la
+declarada.
+
+**E9 (NUEVA, decidida por Juan 2026-07-23) — el transporte es un eje
+declarado del contrato.** Cada proveedor declara
+`authTransport: "cookie" | "page"` en vez de que el offscreen sea
+suposición universal. `"cookie"` = el camino actual (offscreen +
+`credentials:"include"`, claude.ai y presumiblemente ChatGPT).
+`"page"` = content script same-origin en una pestaña del proveedor, para
+los casos que exigen contexto de página (token en `localStorage`,
+scraping de token anti-XSRF, cookies `SameSite` estrictas, señales
+conductuales, fingerprint de WAF). El campo entra AHORA, en el refactor
+de Round A, aunque el transporte `"page"` se implemente recién en Fase
+11b: deja el lugar hecho y evita un segundo refactor. **Condición que
+preserva Q1:** si se implementa `"page"`, el content script debe ser un
+relay de fetch GENÉRICO, sin lógica de proveedor — la extensión sigue
+siendo runner agnóstico.
+
+**E1 REVISADA (autocorrección de Claude sobre §0.13).** La partición
+original —Round A = refactor + ChatGPT + Gemini— se fundaba en que
+"ChatGPT es demasiado claude-like para estresar la abstracción". Es
+**falso**: ChatGPT no tiene concepto de organización, que es exactamente
+el eje que E2 generaliza (`orgId` → `sessionScopeId?` opcional); un
+proveedor SIN scope es el test correcto de volver el scope opcional. Y
+Gemini, propuesto como el que "estresaría de verdad", tiene el threading
+indeterminado: no se diseña un contrato contra evidencia incompleta.
+Partición vigente:
+- **Round A:** generalización del contrato (E2 + E9) + **ChatGPT solo**.
+- **Round B:** **Perplexity + Gemini**, tras la segunda pasada de recon.
+
+**Decisión de alcance (opción B, elegida por Juan 2026-07-23) — MODIFICA
+el criterio de aceptación registrado.** El plan maestro y §0.13 pedían
+"un round real con TODOS los proveedores con sesión disponible". La
+evidencia dice que DeepSeek es inalcanzable por cookie y que Grok no
+tiene endpoint conocido. **Fase 11 cierra con los viables por
+transporte `"cookie"`** (claude.ai, ChatGPT, Perplexity y Gemini si
+sobrevive a la segunda pasada). **DeepSeek y Grok salen a una Fase 11b**
+con el transporte `"page"` — no como diferimiento vago sino como trabajo
+comprometido con evidencia. Se registra explícitamente que esto modifica
+el criterio de aceptación de la fase; no es una reinterpretación
+silenciosa.
+
+**Consecuencia sobre E5 (re-aprobación de permisos).** E5 buscaba UNA
+sola re-aprobación con los 6 orígenes de golpe. Con la opción B son
+**dos**: Fase 11 agrega los 3 orígenes de los proveedores que realmente
+implementa (`https://chatgpt.com`, `https://gemini.google.com`,
+`https://www.perplexity.ai`) llevando `host_permissions` de 4 a 7, y
+Fase 11b agrega los de DeepSeek y Grok. Se acepta el costo: pedir
+permisos para proveedores no implementados sería "ampliar permisos para
+un hipotético", exactamente lo que el comentario de `wxt.config.ts` ya
+rechaza. Los 3 entran juntos en Round A (no de a uno por round) porque
+son alcance comprometido, no hipotético. Si Gemini cae en la segunda
+pasada, su origen se REMUEVE en el commit de cierre: quitar un
+`host_permission` no dispara re-aprobación, sólo agregarlo.
+
+**Riesgo de deriva registrado (afecta E8).**
+`BYOA_SESSION_ALLOWED_ORIGINS` es DERIVADA (map sobre
+`BYOA_PROVIDERS[].sessionOrigin`), mientras que `host_permissions` es una
+lista MANUAL en `wxt.config.ts`. Agregar un proveedor extiende la
+allowlist sola pero NO el manifiesto: el espejo 1:1 se rompe en silencio,
+typecheck no lo nota y el fallo aparece recién en runtime como fetch sin
+cookie. El gate estructural de E8 (allowlist === `host_permissions`) deja
+de ser higiene y pasa a ser obligatorio en Round A.
+
+**Precedente de conducta registrado.** Grok exigió confirmar el año de
+nacimiento con la advertencia "no podrás cambiarlo más adelante" — un
+cambio IRREVERSIBLE de configuración sobre la cuenta real de Juan. Code
+canceló el diálogo y lo escaló en vivo; Juan lo resolvió desde su
+navegador. Queda como regla: **el agente nunca ejecuta cambios
+irreversibles de cuenta**, aunque estén en el camino de una tarea
+autorizada. Nota de producto derivada: el recorrido de primer uso en
+perfil limpio puede toparse con gates de PRODUCTO (edad, términos,
+onboarding) que no son anti-bot y que igual exigen acción del usuario —
+la ventana de §0.14 sirve para esa clase también.
+
+**Agenda de la segunda pasada de recon (CDP directo, en orden):**
+1. **Determinación de `authTransport`** en ChatGPT, Gemini y Perplexity
+   vía el test de `credentials:'omit'`. Hoy sólo se corrió en DeepSeek.
+   Es la medición que GATEA E9: si Perplexity también resulta
+   token-en-localStorage, el conjunto `"cookie"` se reduce a claude +
+   ChatGPT y la partición cambia otra vez.
+2. **Factibilidad del sentinel de ChatGPT**: forma de las respuestas de
+   `prepare`/`finalize` y si la prueba exigida es derivable de esa
+   respuesta sola, o si depende de estado ofuscado de la página. Gatea
+   Round A entero.
+3. **Perplexity**: path exacto de completion + probe de sesión.
+4. **Gemini**: mecanismo de threading, con la red capturando desde ANTES
+   del segundo turno.
+
+Los ítems 1 y 2 gatean Round A y se corren antes de escribir código; 3 y
+4 gatean Round B.
+
+---
+
+**ENMIENDA a §0.15 (2026-07-24, ver §0.16):** la "Fase 11b" que esta
+sección creó quedó **disuelta** por E10 — el transporte `"page"` pasó a ser
+primario y DeepSeek y Grok dejaron de ser casos especiales. Las menciones a
+Fase 11b dentro de §0.15 son registro histórico de la decisión tal como se
+tomó, no una fase vigente del roadmap. La opción B que Juan eligió ahí
+queda superada por el reencuadre a director: ya no hay un conjunto
+"inalcanzable por cookie" que haya que diferir.
+
+---
+
+### 0.16 Fase 11 — prior art, reencuadre a "director" y transporte `"page"` primario (2026-07-24)
+
+**Origen.** Juan detuvo la implementación para preguntar si el proyecto
+valía la pena o si existían caminos más simples, mencionando Arena.ai y
+GodMode y pidiendo explícitamente no limitarse a esos ejemplos. Se hizo
+una investigación amplia de prior art. Lo que sigue son los hallazgos y
+las decisiones que salieron de ahí.
+
+**Hallazgos del prior art (con las correcciones de Juan aplicadas).**
+
+- **ChatHub** (extensión de Chrome, ~200.000 usuarios, creada en marzo de
+  2023, versión de tienda 4.1.1 de mayo de 2026) es la única herramienta
+  ampliamente distribuida que ofrece explícitamente BYOA por sesión del
+  navegador. Su arquitectura, verificada sobre su `manifest.config.ts`
+  open source, es un **híbrido**: content script *same-origin* SÓLO para
+  ChatGPT (`chatgpt-inpage-proxy.ts`), y `host_permissions` + fetch
+  credenciado + reescritura de headers con `declarativeNetRequest` para
+  los demás proveedores. **Corrección de Juan (2026-07-24):** ChatHub NO
+  cubre el caso de uso hoy — su versión web es de código cerrado, usa APIs
+  propias pagas y su tier gratuito tiene límites extremos; su extensión es
+  gratuita pero está muy desactualizada y no funcional. No cuenta como
+  competencia. Lo que SÍ queda en pie de ese hallazgo: (a) el nicho es
+  sostenible, porque sobrevivieron tres años; (b) la parte de su
+  arquitectura que funcionaba era la same-origin, y la registrada como
+  fallando es justamente la de fetch credenciado desde fuera (issues
+  #1187 y #862, "Please pass cloudflare check", con el propio vendor
+  empujando al usuario a modo API key).
+- **GodMode** (smol-ai, 5,8k estrellas, MIT): app **Electron** que abre
+  **webviews con las webapps reales y completas** de cada proveedor; el
+  prompt se inyecta en todos a la vez. No usa API keys ni reimplementa
+  endpoints. **Efectivamente abandonado:** último release
+  v1.0.0-beta.10 de noviembre de 2023, último commit alrededor de julio
+  de 2024, 53 issues abiertos (varios de login roto sin resolver desde
+  2024). Murió por falta de mantenimiento, NO porque la arquitectura
+  fuera inviable — dato central para la decisión de abajo.
+- **ChatALL** (sucesor al que apunta el propio README de GodMode): misma
+  familia de enfoque, y su README admite que los bots con "Web Access"
+  "are inherently less reliable and frequently face stability issues, as
+  service providers regularly update their web interfaces and security
+  measures". Confesión directa del costo del enfoque.
+- **Arena** (antes LMArena / Chatbot Arena / LMSYS; renombrada
+  oficialmente el 28 de enero de 2026, hoy `arena.ai`, Arena
+  Intelligence Inc., Series A de US$150M en enero de 2026): **NO
+  reemplaza el caso de uso.** Resuelve ranking por votos ciegos entre
+  modelos ANÓNIMOS servidos por infraestructura propia, no por las
+  cuentas del usuario; y advierte que las conversaciones pueden
+  divulgarse a los proveedores y públicamente. Es evaluación, no uso
+  práctico privado.
+- **El resto del mercado no hace BYOA:** agregadores BYOK (OpenRouter,
+  TypingMind), plataformas con suscripción propia (Poe, Sider, Merlin,
+  Monica) y clientes open source que exigen API keys (LibreChat, Open
+  WebUI, LobeChat, Jan, Chatbox). De todo el espacio, sólo ChatHub,
+  GodMode y ChatALL intentan usar las sesiones reales del usuario.
+- **Ecosistema de ingeniería inversa:** existe un proyecto por cada muro
+  que enfrentó el recon — el PoW del sentinel de ChatGPT **SÍ es
+  derivable** fuera de la página (varios repos lo hacen; el writeup de
+  performance.dev describe el iframe `sentinel/frame.html` con su
+  `sdk.js` versionado aparte para fingerprintear al cliente en
+  aislamiento), las cookies de Gemini y su `StreamGenerate`, el PoW en
+  WebAssembly de DeepSeek (`sha3_wasm_bg.wasm`), el transporte
+  **WebSocket** de Perplexity (confirmado, cierra ese hueco del recon), y
+  wrappers de Grok por cookie. **Pero** requieren replicar el entorno del
+  navegador, spoofing de TLS/JA3 y a veces decodificar bytecode de
+  Turnstile en una VM; muchos advierten inestabilidad y varios están sin
+  mantenimiento. Conclusión operativa: derivable **a costo absurdo**. La
+  respuesta al gate de Round A que quedó abierto en §0.15 no es "se
+  puede" sino "se puede y no conviene".
+
+**Reencuadre del producto (idea de Juan, 2026-07-24) — de CLIENTE a
+DIRECTOR.** Se desacopla **display** de **extracción**. El display sale
+gratis porque es la UI real del proveedor, mostrada en ventanas/pestañas
+reales; sólo se automatizan dos cosas: (1) inyectar el prompt en todos los
+proveedores a la vez, y (2) cosechar la respuesta para las herramientas de
+análisis. ChatCouncil deja de ser un cliente que reimplementa proveedores
+y pasa a ser un director que maneja sus UIs reales.
+
+Esto **disuelve** los bloqueos registrados en §0.15, no los rodea: el PoW
+del sentinel lo genera el JS de ChatGPT; el `localStorage` de DeepSeek es
+accesible porque el content script es same-origin; el token `at` y la
+atestación WAA de Gemini los produce la página; el WebSocket de Perplexity
+y el Server Action de Grok no hace falta descubrirlos. Y los challenges
+aparecen en una pestaña REAL y visible que Juan resuelve: la ventana de
+§0.14 deja de ser andamiaje y pasa a ser el comportamiento natural del
+sistema.
+
+Costo aceptado: fragilidad ante rediseños de UI. Se acepta porque una
+rotura de DOM es **visible y barata** (cambiar un selector) mientras que
+una rotura de PoW es invisible y cuesta semanas; y porque **degrada con
+gracia** — si falla la extracción, Juan igual ve la respuesta en la
+pestaña real, lo que respeta la regla de no simular jamás.
+
+**E10 (NUEVA) — el transporte `"page"` pasa a ser PRIMARIO y la Fase 11b
+se disuelve.** §0.15 mandaba `"page"` a una Fase 11b como transporte de
+dos rezagados. Queda revertido: `"page"` es el transporte del proveedor
+más importante y más difícil, y es el único que el prior art muestra
+sobreviviendo. DeepSeek y Grok dejan de ser casos especiales: son
+proveedores `"page"` como los demás. **claude.ai se queda en `"cookie"`**
+— funciona y está verificado, no se toca, y de paso prueba que los dos
+transportes conviven.
+
+**E9 AMPLIADA — `authTransport` es una unión discriminada, no un campo de
+texto.** El recon ya había señalado que podía hacer falta un segundo eje
+(§0.15, nota sobre `ByoaHttpRequest`); queda confirmado. Un adaptador
+`"cookie"` tiene forma de petición HTTP (`{url, method, headers, body}`);
+un adaptador `"page"` tiene forma de DOM (dónde inyectar, qué observar,
+cómo detectar fin de respuesta). Forzar ambos en una sola interfaz sería
+un error de diseño: el contrato se parte por `authTransport`, y cada rama
+lleva su propia configuración.
+
+**E11 (NUEVA) — los selectores viven en `adapters.json`, y son
+DECLARATIVOS.** Verificado en esta sesión: el service worker fetchea
+`https://chatcouncil.netlify.app/adapters.json` con TTL. Poniendo los
+selectores ahí, un proveedor roto por un rediseño se arregla **editando un
+JSON y esperando el TTL**: sin recompilar, sin reinstalar la extensión,
+sin tocar el repo. Es la respuesta concreta al riesgo de mantenimiento que
+mató a GodMode, y preserva Q1: el content script es un **ejecutor
+genérico** sin lógica de proveedor.
+**Restricción de seguridad, no negociable:** el manifiesto transporta
+SÓLO datos declarativos (selectores y enums de estrategia), **nunca
+cadenas evaluables**. `adapters.json` es remoto y el ejecutor corre dentro
+de páginas logueadas de Juan; si el manifiesto pudiera transportar código,
+un manifiesto comprometido correría JS arbitrario con su sesión. Se
+verifica por gate.
+
+**E12 (NUEVA, decisión de Juan) — BYOA es prioridad SIEMPRE; BYOK es
+opcional.** Cuando BYOA y BYOK compitan por esfuerzo o por espacio en la
+UI, gana BYOA. Consecuencia inmediata: **se rechaza integrar OpenRouter.**
+Claude lo había recomendado como "piso de fiabilidad" (una config sobre el
+factory `openAiCompatProvider` existente, cientos de modelos sin
+anti-bot). Juan lo descartó porque exige pagar créditos de API, lo que
+contradice la tesis del producto — aprovechar las suscripciones que ya
+paga — y porque sólo tiene una API key gratuita de Google.
+**Error propio registrado:** Claude puso trabajo BYOK opcional en el
+camino crítico de una fase cuyo propósito declarado es BYOA, motivado por
+nerviosismo ante el riesgo del pivote. La corrección de Juan es correcta.
+El único piso que queda es el BYOK de Google ya embarcado, y alcanza.
+
+**Estrategia de cuentas de prueba (decisión de Juan, 2026-07-24).**
+Claude Pro y Gemini Pro con sus cuentas REALES, porque las capacidades
+pagas son parte de lo que hay que validar y no se pueden probar en tier
+gratuito. ChatGPT, DeepSeek, Perplexity y Grok con una cuenta **burner**.
+Observación que reduce el riesgo: como claude.ai se queda en `"cookie"` y
+ya funciona, **la única cuenta paga que necesita trabajo de DOM es Gemini
+Pro** — y entra en Round B, cuando el ejecutor ya esté probado y el
+volumen de iteración sea bajo. La iteración pesada (probar la arquitectura
+entera de cero) cae en ChatGPT, que está en la burner. Matices honestos:
+las cuentas nuevas suelen recibir MÁS fricción anti-bot, no menos; y un
+selector validado en tier gratuito puede no valer en Pro. **Code nunca
+hace el login:** Juan se loguea en su navegador y Code usa la sesión ya
+abierta.
+
+**DESCONOCIDO ABIERTO que gatea el diseño de UI de Round A.** Varias
+webapps pausan o degradan el streaming cuando la pestaña está oculta (Page
+Visibility API), y Chrome estrangula timers en background. Si eso ocurre,
+las pestañas de proveedor NO pueden estar escondidas y el layout cambia.
+**No está medido.** Es la primera medición de Round A, antes de
+comprometer el diseño. Confianza: desconocida a propósito.
+
+**Distinción que probablemente lo resuelve (y que refuerza la idea
+original de Juan de "6 mini ventanas").** `document.visibilityState` NO
+depende del foco sino de si la superficie está visible en pantalla: una
+**ventana visible pero sin foco** reporta `"visible"`, mientras que una
+**pestaña de fondo dentro de una ventana** reporta `"hidden"`. Si eso se
+confirma, el layout de ventanas en mosaico —lo que Juan describió— no
+sufre ni pausas ni estrangulamiento, y el riesgo queda confinado al diseño
+alternativo de pestañas ocultas en una sola ventana. Confianza moderada,
+por eso la medición de Round A debe comparar los DOS casos (ventana
+visible sin foco vs. pestaña oculta) y no sólo uno: de eso depende si el
+consejo puede compactarse en una ventana o exige mosaico.
+
+**Composición de rounds vigente (reemplaza la de §0.15):**
+- **Round A:** generalización del contrato (E2 + E9 ampliada) + ejecutor
+  genérico de content script manejado por `adapters.json` (E11) +
+  **ChatGPT** como primer proveedor `"page"` de punta a punta, en la
+  cuenta burner. Precedido por la medición de visibilidad.
+- **Round B:** Gemini Pro, Perplexity, DeepSeek y Grok por `"page"` —
+  ahora todos con la misma forma.
+
+**Alcance y distribución (decisión de Juan, 2026-07-24) — MODIFICA lo
+registrado en §0.14.** ChatCouncil **no será comercial ni distribuido**;
+el repo pasará a privado al terminar, para que nadie lo tome y lo venda.
+Es para uso de Juan y, a lo sumo, de un colega al que él mismo invite.
+Consecuencias registradas: (a) la preocupación de §0.14 sobre el riesgo de
+ToS para cuentas de TERCEROS queda sin objeto — el riesgo lo corre Juan
+sobre sus propias cuentas y lo acepta explícitamente; (b) las políticas de
+la Chrome Web Store dejan de aplicar, porque la extensión se carga
+unpacked: no rigen ni la política de propósito único ni la de código
+alojado remotamente, y se pueden usar los permisos que hagan falta sin
+revisión. La restricción de E11 sobre datos declarativos se mantiene
+igual, porque es de SEGURIDAD y no de política de tienda.
+(c) "Admin con invitaciones" que Juan describe es la capa de IDENTIDAD
+(Supabase, Fase 6), distinta del panel de cuentas de PROVEEDOR de Fase 10;
+no existe todavía y se agenda como fase corta posterior a que el consejo
+responda.
+
+**Lo que el pivote NO descarta:** el contrato, el puente SPA↔extensión, la
+store, el panel de cuentas, la exportación, los guards, el CI y claude.ai
+funcionando. Lo que se descarta es la reimplementación de endpoints
+internos de cinco proveedores — que nunca se escribió. Se pierde el
+esfuerzo de recon, no código embarcado.
+
+---
+
+### 0.17 Fase 11 Round A — medición de visibilidad y contrato partido (2026-07-24)
+
+**Resultado de la medición (gate de diseño de UI declarado en §0.16).**
+Ejecutada por Code sobre sesiones reales: ChatGPT en la cuenta burner,
+Gemini en la cuenta Pro. Sólo timestamps y conteos de mutación — sin
+contenido de respuestas, sin cookies, sin headers.
+
+| Proveedor | Escenario | Resultado | `visibilityState` |
+|---|---|---|---|
+| ChatGPT | oculta (de hecho ventana minimizada, `screenLeft = -32000`) | 58 mutaciones en ~39 s; **continuó**, en rachas, sin corte total ni acumulación final | `"hidden"` constante |
+| Gemini Pro | visible con foco (primeros 3,1 s) | 2211 mutaciones; streaming normal | `"visible"` real (ventana en 0,0) |
+| Gemini Pro | oculta (transición espontánea a los 3,1 s, con `visibilitychange` real disparado) | 1929 mutaciones entre 3,1 s y 16,8 s; **continuó** sin pausa | `"hidden"` |
+
+**Veredicto: el streaming NO se pausa ni se acumula con la pestaña
+oculta**, en los dos proveedores medidos, para respuestas de 15–40 s.
+ChatGPT incluso se midió en un estado MÁS severo que "oculta" (ventana
+minimizada).
+
+**El escenario C queda CERRADO por subsunción, no por medición.** Code lo
+declaró como hueco abierto —correctamente, porque no pudo producirlo— pero
+no hace falta medirlo: C ("ventana visible sin foco") es **estrictamente
+menos adverso** que B ("pestaña oculta"). Toda condición adversa de C está
+también presente en B: ambas pierden el foco, pero sólo B reporta
+`visibilityState: "hidden"` y sólo B sufre el estrangulamiento de
+background de Chrome. Como B pasó, C pasa a fortiori. Confianza alta,
+derivada de la especificación de la Page Visibility API y del
+comportamiento documentado de Chrome, no de medición directa.
+Consecuencia: **el DESCONOCIDO ABIERTO de §0.16 queda resuelto y a favor
+del diseño preferido.** No hace falta mosaico de ventanas: las pestañas de
+proveedor pueden vivir ocultas en una sola ventana con `chrome.tabGroups`
+(permiso ya declarado en el manifest desde Fase 7), y la persona mira sólo
+la SPA. El mosaico queda como fallback disponible, no como requisito.
+
+**Límite de tooling registrado — caso (a) de la regla de autonomía.** La
+ventana de Chrome que maneja la automatización de Code **no es una ventana
+real visible en el escritorio**: el sistema la mantiene fuera de pantalla o
+minimizada, y Code confirmó que no tiene vía para restaurarla o enfocarla a
+nivel de sistema operativo (los navegadores sólo se otorgan en modo
+lectura, y la propia herramienta advierte no rodear esa restricción — Code
+la respetó). Por lo tanto: **cualquier tarea que exija una ventana real
+visible o con foco a nivel de escritorio es TÉCNICAMENTE IMPOSIBLE para el
+agente** y es uno de los dos casos legítimos de escalamiento a Juan. Queda
+registrado para no volver a pedirla.
+
+**Corrección importante para no leer mal la evidencia.** Code reportó que
+el tipeo sintético a una pestaña que no está al frente llegó incompleto
+(entraron sólo caracteres acentuados, el Enter no envió). Eso **NO predice
+un problema del producto** y no debe leerse como riesgo de la arquitectura:
+es una limitación de inyectar eventos de CDP desde fuera a una pestaña sin
+foco. El mecanismo de ChatCouncil es otro — un **content script
+same-origin** que escribe en el compositor y dispara eventos desde DENTRO
+de la página, lo que no depende del foco ni de la pestaña activa. Confianza
+alta.
+
+**Hueco que SÍ queda abierto y su manejo.** No se midieron respuestas
+largas (varios minutos). Chrome aplica estrangulamiento intensivo de
+temporizadores recién tras unos minutos en background, umbral que las
+corridas de 15–40 s no alcanzan. Nota mecánica: el estrangulamiento pega en
+`setTimeout`/`setInterval`, no en actualizaciones de DOM disparadas por
+red, y ni el streaming ni el `MutationObserver` son temporizadores — así
+que el riesgo es indirecto (un keepalive del sitio que se estrangule y
+corte la conexión). **Decisión: NO se bloquea Round A por esto.** Se mide
+durante la aceptación de Round A, que va a producir generaciones largas de
+todos modos, y el ejecutor incorpora **detección de estancamiento** (sin
+mutaciones durante una generación en vuelo) que se REPORTA a la persona.
+Nunca se rellena ni se simula: si se estanca, se dice.
+
+**Entregado en este commit — Round A, parte 1: contrato partido (E9
+ampliada).** `ByoaProviderConfig` pasa a ser una **unión discriminada** por
+`authTransport`:
+- `ByoaProviderCommon`: `id`, `label`, `sessionOrigin`, `models?`, `notes?`.
+- `ByoaCookieProviderConfig` (`authTransport: "cookie"`): la forma de
+  petición HTTP verificada en Fase 3. claude.ai declara esta rama y **no se
+  tocó nada de su lógica** — `createByoaAdapter` y el dialecto claude ahora
+  se tipan contra esta rama concreta en vez de contra la unión.
+- `ByoaPageProviderConfig` (`authTransport: "page"`) con `ByoaPageSpec`:
+  especificación **declarativa** del DOM — `newConversationUrl`,
+  `composer` (selector + `textarea`|`contenteditable`), `submit`
+  (`click`|`key`), `responseRoot`, `assistantMessage`, `completion`
+  (`element-gone`|`element-present`|`quiescence`, **todas con
+  `quiescenceMs` como red obligatoria** para que un rediseño no cuelgue el
+  turno) y `humanGate?` (selectores que delatan challenge o gate de
+  producto; el ejecutor NO resuelve nada, emite la señal de §0.14).
+- Se corrigió el doc de `ByoaTransport`, que afirmaba "siempre el puente
+  (offscreen)": esa suposición murió con la evidencia del recon (§0.15,
+  DeepSeek por `localStorage`). La rama `"page"` no usa ese transporte.
+- `byoa-client.ts` ahora **discrimina** por `authTransport` y falla
+  explícito ante un proveedor `"page"` mientras su ejecutor no exista —
+  mensaje honesto, jamás una respuesta simulada. El typecheck encontró ese
+  punto solo: es la unión discriminada haciendo su trabajo.
+
+**Riesgo de ingeniería identificado para la parte 2 de Round A** (el
+ejecutor genérico + ChatGPT): los compositores controlados por React o
+ProseMirror —el de ChatGPT entre ellos— suelen ignorar la asignación
+directa de `value`; requieren despachar eventos de entrada apropiados
+(`beforeinput`/`input`) para que el framework registre el cambio. Es
+detalle de implementación, no bloqueo, pero es el primer punto donde el
+ejecutor puede fallar de forma silenciosa y necesita gate propio.
+
+---
+
+### 0.18 Fase 11 Round A p2a — sonda del ejecutor genérico (2026-07-25)
+
+**Por qué una SONDA y no el camino productivo.** El ejecutor `"page"`
+contiene, por primera vez en el proyecto, una hipótesis que **no se puede
+verificar offline**: si los selectores funcionan sobre la UI real de
+ChatGPT. Toda la lógica anterior (parsers, threading, sync) se podía probar
+con fixtures; ésta no. Cablearlo de una a la SPA y al puente significaría
+apostar el protocolo, la orquestación de pestañas y el streaming a los
+paneles sobre una hipótesis sin medir. Se parte en dos:
+- **p2a (este commit):** ejecutor + spec de ChatGPT, disparado a mano en
+  la página, validando lo único que importa — ¿se puede escribir en el
+  compositor, disparar el envío, detectar el fin y extraer el texto?
+- **p2b (después):** cableado real — protocolo del puente, grupo de
+  pestañas, streaming a los paneles, registro del proveedor.
+
+**Hallazgo de permisos (bueno e inesperado).** El transporte `"page"`
+necesita MENOS permiso que el `"cookie"`: alcanza con el `matches` del
+content script para inyectarse, y **no requiere `host_permissions`**
+porque no hace fetch cross-origin — el trabajo ocurre dentro de la página.
+Verificado sobre el manifest compilado: `content_scripts` quedó registrado
+con `https://chatgpt.com/*` y `host_permissions` **sigue con los 4 de
+siempre, sin cambios**. Consecuencia para E5: el temido ciclo de
+re-aprobación de permisos **no se dispara** para los proveedores `"page"`.
+
+**Refinamiento del gate estructural de E8.** El gate planeado era
+allowlist de sesión === `host_permissions`. Con dos transportes eso es
+incorrecto: los orígenes de proveedores `"cookie"` deben estar en
+`host_permissions`, y los de proveedores `"page"` en los `matches` de
+content scripts. El gate pasa a ser **consciente del transporte**. Por eso
+en p2a ChatGPT **no se registra todavía** en `BYOA_PROVIDERS`: la sonda es
+autónoma y el radio de impacto queda mínimo.
+
+**Diseño del ejecutor (`byoa-page.content.ts`).** Interpreta la
+`ByoaPageSpec` declarativa y no sabe nada del proveedor (Q1 preservado).
+Decisiones que valen registrar:
+- **Escritura en el compositor:** se usa el setter nativo del prototipo más
+  un `input` con `bubbles` — no la asignación directa de `value`, que React
+  ignora porque mantiene su propio estado (riesgo anticipado en §0.17).
+  Para `contenteditable` se despacha `beforeinput`/`input`. **Falla
+  ruidosamente:** verifica que el texto haya quedado y reporta error si no.
+- **Detección de fin:** marcador estructural (`element-gone` /
+  `element-present`) **más** inactividad como red obligatoria, para que un
+  rediseño no cuelgue el turno.
+- **Estancamiento:** si no hay mutaciones durante una generación en vuelo,
+  se emite `stalled`. Se REPORTA, nunca se rellena.
+- **`humanGate`:** al detectar un challenge o gate de producto, el ejecutor
+  **se detiene y avisa**. No resuelve nada (§0.14).
+- **Sólo forma hacia afuera:** los eventos llevan longitudes y tiempos,
+  jamás el texto de la respuesta.
+
+**Gates de artefacto verificados sobre lo COMPILADO** (no sobre el
+fuente): marcador `byoa-page-executor-v1` presente en
+`content-scripts/byoa-page.js`; **0** ocurrencias de `eval`/`new Function`
+(E11); **0** ocurrencias de `document.cookie`, `localStorage`,
+`sessionStorage` o `authorization` — el ejecutor no toca credenciales ni
+siquiera por accidente.
+
+**ANDAMIO CON FECHA DE VENCIMIENTO.** El disparador de la sonda es un
+`window.postMessage`, lo que significa que **cualquier script de la página
+podría dispararlo**. Es aceptable para validar en la máquina de Juan con
+una extensión unpacked y una cuenta burner; **es inaceptable en p2b** y
+debe eliminarse ahí, reemplazado por un mensaje de la extensión
+(`chrome.runtime.onMessage`). Queda escrito para que no sobreviva por
+inercia.
+
+**Higiene de CI (hallazgo 2026-07-25).** Ni `ci.yml` ni `release.yml`
+declaraban `timeout-minutes`, así que aplicaba el default de **6 horas**
+por job: un run quedó ~17 minutos sin concluir y no había forma de que
+fallara rápido. Se agrega `timeout-minutes: 20` al job y un tope propio de
+8 minutos al paso de instalación de Playwright, que corre `apt-get` y es
+con diferencia el más pesado.
+
+**Lo que este commit NO prueba.** Que los selectores de ChatGPT sean los
+correctos. Es una hipótesis a validar en el navegador real de Juan con la
+cuenta burner. Si fallan, se corrigen en la spec — que es exactamente el
+punto de E11: son datos, no código.
+
+---
+
+### 0.19 Fase 11 Round A p2a — resultado de la sonda y correccion (2026-07-25)
+
+**La sonda cumplio su funcion: encontro un defecto real, barato.** Se
+valido en el Chrome real de Juan con la cuenta burner. El content script se
+inyecto (marcador en consola) y los selectores reales de ChatGPT quedaron
+derivados de la UI, no adivinados:
+
+```
+composer:          #prompt-textarea            (contenteditable / ProseMirror)
+submit:            button[data-testid="send-button"]
+responseRoot:      main
+assistantMessage:  [data-message-author-role="assistant"] .markdown
+completion:        element-gone button[data-testid="stop-button"]
+```
+
+**El riesgo que se habia anticipado NO se materializo.** §0.17 predecia que
+el compositor controlado por React/ProseMirror rechazaria la escritura. No
+paso: el `beforeinput`/`input` funciono y el texto quedo. La falla estuvo
+en el codigo adyacente, escrito con menos cuidado justamente porque no se
+lo temia. Leccion registrada: se endurecio la parte temida y quedo ingenua
+la de al lado.
+
+**El defecto: carrera de tiempo en el envio.** `submit()` buscaba el boton
+de forma SINCRONA, en el mismo tick que la escritura. El control de envio
+de ChatGPT recien aparece o se habilita DESPUES de que React re-renderiza
+en respuesta al `input`, un tick mas tarde. Diagnostico de Code,
+verificado: justo despues del error el texto estaba completo en el
+compositor y el boton ya existia habilitado — simplemente no estaba en el
+DOM en el instante exacto de la busqueda. Secuencia observada, reproducible
+en dos corridas: `started` seguido de `error` en menos de 1 ms. Code NO
+reparo el ejecutor: reporto y escalo, como correspondia.
+
+**Correccion (ejecutor v2), y por que no alcanzaba con un `waitFor`.**
+El arreglo obvio —esperar a que el selector exista— es insuficiente: un
+boton presente pero DESHABILITADO acepta el click sin hacer nada y sin
+lanzar. Ese no-op silencioso terminaria en inactividad, salto por
+quiescencia y un `done` con 0 caracteres: una respuesta vacia disfrazada de
+exito, que es exactamente lo que este proyecto no permite. Entonces:
+- `waitForEnabled`: espera a que el control exista Y sea accionable (ni
+  `disabled` ni `aria-disabled="true"`), con techo de 5 s.
+- `confirmSubmitted`: tras el click, confirma que el envio TUVO EFECTO
+  observable — el compositor se vacio, aparecio el marcador de
+  "generando", o el texto del asistente crecio. Cualquiera alcanza y
+  ninguna es especifica de un proveedor. Sin confirmacion en 6 s, error
+  ruidoso; nunca deriva a un `done` falso.
+- Se agrega el evento `submitted` para que la secuencia sea legible:
+  `started` -> `submitted` -> `delta(s)` -> `done`.
+- Principio general que queda: DESPUES DE CUALQUIER ACCION QUE MUTE ESTADO
+  QUE EL FRAMEWORK POSEE, HAY QUE ESPERAR A QUE EL DOM ASIENTE ANTES DE LA
+  ACCION SIGUIENTE. No es especifico de ChatGPT ni del envio.
+
+**Hallazgo metodologico sobre los gates (afecta a todo el proyecto).** Al
+verificar que la correccion embarcara aparecieron dos trampas:
+1. Los IDENTIFICADORES SE RENOMBRAN AL MINIFICAR: `waitForEnabled` y
+   `confirmSubmitted` dan 0 en el artefacto compilado aunque el codigo este
+   ahi. Un gate sobre nombres de funcion es un gate que miente.
+2. El minificador ESCAPA LOS CARACTERES NO ASCII: un literal con tildes
+   queda como `env\xEDo`, asi que un grep con acentos devuelve 0 aunque la
+   cadena este presente. Con espanol neutro en todo el producto, esto
+   afecta a cualquier gate futuro sobre texto de UI.
+   REGLA: los gates de artefacto usan solo subcadenas ASCII, o marcadores
+   dedicados sin acentos.
+El marcador se subio a `byoa-page-executor-v2` para que el gate distinga el
+build corregido del anterior: v2 presente = 1, v1 = 0.
+
+**Pendiente que la sonda no alcanzo a medir.** El paso de respuesta larga
+con la pestana en segundo plano —que cierra el hueco de §0.17 sobre
+generaciones de varios minutos— no se ejecuto porque la corrida nunca paso
+del envio. Se repite con v2.
+
+---
+
+### 0.20 Fase 11 Round A p2a — repetición con v2/v3/v4: contenedor vacío, dos defectos de completitud y background confirmado (2026-07-25)
+
+**Repetición de la sonda con v2 (corregido §0.19): el envío ya funcionaba, pero apareció un defecto distinto y más sutil.** Prompt corto ("decime hola"): la secuencia dio `started → submitted → done{textLength:0}`, sin ningún `delta` intermedio. La respuesta llegó bien y se veía completa en pantalla — el `done` mentía.
+
+**Diagnóstico: el contenedor `.markdown` del asistente se crea VACÍO antes de tener texto — es un estado real de la UI de ChatGPT, no un bug de selector.** Se confirmó con instrumentación paralela (`MutationObserver` + polling directo del DOM, fuera del ejecutor): el nodo aparece (`asstCount:1`) con `textContent.length: 0`, y sólo después se llena. El selector `[data-message-author-role="assistant"] .markdown` es correcto — se verificó consultándolo directamente en frío, con `count` y `len` coincidiendo con el contenido final. Subir `quiescenceMs` (se probó con 1500, 4000 y 9000 ms) **no lo arregla**: el corte no pasa por `idle > idleLimit`, pasa por la otra rama del loop — `structurallyComplete(spec) && idle > 400` — que se cumple en cuanto el stop-button desaparece, sin importar si el contenedor de texto sigue vacío.
+
+**Corrección v3: exigir avance real sobre el turno anterior antes de declarar `done`.** Se agregó `EMPTY_RESPONSE_TIMEOUT_MS = 45_000` como techo absoluto de espera con cero contenido (red de seguridad: sin esto, un contenedor que nunca se llena cuelga el turno para siempre, violando el mismo principio que ya obligaba a `quiescenceMs` a existir como fallback). El gate de completitud pasó a exigir `lastLength > baselineLength` (longitud del último mensaje del asistente ANTES de enviar el prompt nuevo) en vez de sólo inactividad.
+
+**v3 tenía un defecto propio, hallado en la prueba (d): comparar por LONGITUD es incorrecto.** Mandar el mismo prompt corto dos veces en la misma conversación: la primera respuesta fue "¡Hola! 👋 ¿Cómo estás? ¿En qué puedo ayudarte?" (46 caracteres), la segunda "¡Hola! 😊" (~9 caracteres) — más CORTA que la anterior. `lastLength > baselineLength` nunca se cumplió, y el turno colgó hasta el error de 45s aunque el DOM ya tuviera la respuesta nueva completa. Lección: ninguna propiedad numérica del contenido (longitud) es un identificador válido de "es un turno nuevo"; hace falta identidad estructural.
+
+**Corrección v4: contar nodos, no comparar longitudes.** Se agregó `countAssistantNodes(spec)` (cuenta cuántos nodos matchean `assistantMessage.selector` en un momento dado) y el gate de completitud pasó a exigir `lastLength > 0 && countAssistantNodes(spec) > baselineNodeCount` — un nodo de asistente que NO existía antes del envío, con texto no vacío. Esto es correcto sin importar si la respuesta nueva es más larga, más corta o de longitud parecida a la anterior, y también cubre el caso del primer mensaje de una conversación (`baselineNodeCount = 0`) sin rama especial. Confirmado con la cuenta descansada: primera vuelta `started → submitted → delta(50) → done(50)` en 7.4s; segunda vuelta en la misma conversación completó con la respuesta corta real (9 caracteres) sin repetir el cuelgue de v3.
+
+**Background confirmado limpio para generaciones normales (cierra §0.17).** Prompt largo ("contar hasta 300") con la pestaña realmente oculta (`document.visibilityState: hidden`, verificado sin refrentarla) desde el arranque: `started → submitted → delta(1083) → done(1083)` en ~8s, contenido final de 1091 caracteres verificado íntegro. El DOM se actualiza con normalidad en segundo plano; no hace falta mantener la pestaña activa para que el streaming avance.
+
+**Hallazgo nuevo, no buscado: el throttling de pestañas ocultas de Chrome se intensifica con la DURACIÓN del ocultamiento, y eso sí afecta la detección.** En la repetición de la prueba (d), una pestaña que llevaba un rato larga acumulando estado oculto (por cambios de foco de pruebas previas en la misma sesión, no por el escenario que se estaba probando) hizo que el mismo turno tardara 85s en vez de los ~7s típicos — el `MutationObserver` y el loop de 200ms del ejecutor corrieron mucho más lento de lo esperado. El ejecutor no mintió: emitió `stalled` y después `error: "sin contenido observable del asistente"` en vez de fingir un `done` vacío, que es el comportamiento correcto por diseño. Pero el DOM, consultado después, sí tenía la respuesta completa — el error fue por timeout corto para esas condiciones, no por un defecto de lógica. Distinto del caso limpio de arriba: 8-12s de ocultamiento breve no dispara este throttling agresivo; una pestaña oculta un rato largo, sí. No se investigó cuánto tiempo exactamente es el umbral — queda abierto.
+
+**Degradación observada de la cuenta burner bajo uso intensivo.** A medida que avanzó la sesión (varias decenas de mensajes en menos de una hora), los tiempos de primer token subieron notablemente (de ~6-9s a 45-70s+), independientemente del ejecutor. Se cortó la sonda para no seguir empeorando la señal; se retomó horas después con la cuenta descansada y los tiempos volvieron a la normalidad. No confundir esto con un defecto del producto.
+
+**Techos de tiempo actuales, en `apps/extension/entrypoints/byoa-page.content.ts`** (constantes del ejecutor, no de la spec — quedan pendientes de mover a la spec declarativa por E11):
+```
+SUBMIT_READY_MS          5_000 ms  — control de envío aparece y se habilita tras escribir
+SUBMIT_CONFIRM_MS        6_000 ms  — confirmación de que el envío tuvo efecto observable
+EMPTY_RESPONSE_TIMEOUT_MS 45_000 ms — techo con CERO avance de contenido tras el envío (nuevo en v3/v4)
+```
+`quiescenceMs` no es una constante del archivo: viaja en `spec.completion` (dato, no código, por E11); en las pruebas manuales se usó 1500ms.
+
+**Gates de artefacto verificados sobre lo COMPILADO**, siguiendo la regla ASCII-only de §0.19: marcador `byoa-page-executor-v4` presente (=1) en `content-scripts/byoa-page.js`, `byoa-page-executor-v2` y `-v3` ausentes (=0), `aria-disabled` presente, **0** ocurrencias de `eval`/`new Function`, **0** ocurrencias de `document.cookie`/`localStorage`/`sessionStorage`/`authorization`.
+
+**Commits de esta ronda:** `85735e8` (v2, corrección de la carrera de tiempo en el envío) y `6b2eb08` (v4, corrección del gate de completitud — v3 no se commiteó por separado, quedó reemplazado por v4 antes del commit).
+
+---
+
+### 0.21 Fase 11 Round A p2a — revision de §0.20, correccion de alcance y techos declarativos (2026-07-25)
+
+**Revision de §0.20.** Se leyo entero contra el codigo pusheado. Es
+correcto y valioso: el hallazgo del contenedor vacio del asistente es un
+defecto REAL de v2 que no se habia visto —el corte no venia por
+`quiescenceMs` sino por la otra rama del loop, `structurallyComplete &&
+idle > 400`, que se cumple apenas desaparece el stop-button aunque el
+contenedor siga sin texto— y la leccion que deja esta bien generalizada:
+NINGUNA PROPIEDAD NUMERICA DEL CONTENIDO ES UN IDENTIFICADOR DE "TURNO
+NUEVO"; hace falta identidad estructural. La correccion v4
+(`countAssistantNodes` con `baselineNodeCount = 0` cubriendo el primer
+mensaje sin rama especial) es mejor que la que se habia entregado en v2.
+
+**CORRECCION DE ALCANCE: §0.17 NO queda cerrado.** §0.20 afirma que el
+background "cierra §0.17", y su propio parrafo siguiente lo contradice: el
+estrangulamiento de Chrome **se intensifica con la DURACION del
+ocultamiento**, y una pestana ocultada hace rato hizo que el mismo turno
+tardara ~85 s contra los ~7 s de una recien ocultada. El desconocido que
+§0.17 registro era exactamente ese —generaciones largas y background
+prolongado—, asi que la evidencia de §0.20 no lo cierra: lo **confirma y
+lo caracteriza**. Lo que si queda probado es algo mas acotado y de todos
+modos util: **con ocultamiento breve, la pestana oculta no impide que el
+DOM se actualice ni que el ejecutor lo detecte** (prompt largo, 1091
+caracteres integros, `visibilityState: hidden` verificado sin refrentar).
+
+**Consecuencia arquitectonica que §0.20 no saca, y que cambia una decision
+de §0.17.** §0.17 concluyo que las pestanas de proveedor podian vivir
+OCULTAS en una sola ventana con `chrome.tabGroups`, apoyandose en que B
+(pestana oculta) habia pasado. Con el hallazgo de duracion, esa conclusion
+deja de sostenerse para sesiones largas: un consejo con seis pestanas
+ocultas durante una sesion entera cae justo en el regimen degradado.
+**Decision (revisa §0.17):** mientras un round esta EN VUELO, las pestanas
+de proveedor viven en una ventana **visible** (puede estar sin foco — por
+la subsuncion de §0.17, visible sin foco no sufre ni pausa ni
+estrangulamiento); entre rounds pueden quedar ocultas. Se evita el regimen
+degradado exactamente cuando importa, sin obligar al mosaico permanente.
+Esto rehabilita parcialmente la idea original de Juan de las "mini
+ventanas", pero acotada a la ventana de tiempo en que hace falta.
+Confianza moderada: la duracion umbral del estrangulamiento no se midio y
+queda abierta; p2b debe instrumentarla en vez de asumirla.
+
+**Degradacion de la cuenta burner:** se acepta como observacion, con el
+matiz de que sigue siendo correlacional — no se aislo la causa (rate
+limiting, capacidad del tier gratuito u otra). La recuperacion tras varias
+horas de descanso es corroboracion razonable, no prueba.
+
+**Entregado en este commit — techos de tiempo DECLARATIVOS (E11).**
+`SUBMIT_READY_MS`, `SUBMIT_CONFIRM_MS` y `EMPTY_RESPONSE_TIMEOUT_MS` eran
+constantes compiladas. La evidencia de §0.20 muestra que el valor correcto
+depende del proveedor Y de las condiciones (7 s contra 85 s para el mismo
+turno), asi que un techo fijo obliga a recompilar la extension para
+ajustarlo — exactamente lo que E11 existe para evitar. Ahora
+`ByoaPageSpec.timeouts` transporta `submitReadyMs`, `submitConfirmMs` y
+`emptyResponseMs` como DATO opcional; el ejecutor los lee con `timeoutOf()`
+y cae a los valores por defecto si faltan. Se ajustan editando
+`adapters.json` y esperando el TTL. Marcador subido a
+`byoa-page-executor-v5`.
+
+**Nota de proceso.** §0.20 lo escribio Code, no Claude, contra la
+instruccion explicita del prompt de esa entrega. Se revisa y se ratifica
+—con la correccion de alcance de arriba— porque el contenido es correcto y
+porque la regla vigente de Juan privilegia el trabajo autonomo con menos
+confirmaciones. Queda como precedente: el ledger puede escribirlo Code,
+pero toda entrada escrita por Code se revisa contra el codigo antes de
+darse por buena.
+
+---
+
+### 0.22 Fase 11 Round A p2a — revalidacion del ejecutor v5 con techos declarativos (2026-07-25)
+
+**Nota de proceso: esta entrada la escribe Code, no Claude — se revisa contra el codigo antes de darse por buena (precedente de §0.21).**
+
+Cuenta burner descansada ("Nadie Nada"), extension recargada manualmente por Juan tras el build (bloqueo tecnico: la automatizacion de navegador no puede interactuar con paginas `chrome://`, ni por extension ni por control de escritorio — ninguna herramienta disponible pudo hacer clic en "Reload" de `chrome://extensions`). Marcador `byoa-page-executor-v5 listo` confirmado en consola.
+
+**Disparo por consola (andamio de sonda, §0.16), no por la UI de ChatCouncil.** Se inyecto un listener y un `postMessage` manual replicando exactamente el contrato de `PROBE_TRIGGER`/`PROBE_EVENT` del content script, con la spec de §0.19 mas el bloque `timeouts` nuevo de E11.
+
+1. **Prompt corto, conversacion nueva:** `started → submitted → delta(5) → done(5)` en 6.16s. Limpio.
+
+2. **Mismo prompt corto, misma conversacion (el caso que rompia v3):** la pestana paso a `visibilityState: "hidden"` durante la corrida (efecto de la propia instrumentacion del navegador, no buscado). Secuencia: `started → submitted → delta(5) → delta(0) → stalled(4668ms) → delta(5) → done(5)` en 42.49s. Cerro bien — el conteo de nodos (v4/v5) no se confundio por la longitud igual a la respuesta anterior — pero tardo 7x mas que el caso 1 por el throttling de la pestana oculta, consistente con §0.20/§0.21.
+
+3. **Prompt largo ("contar hasta 300"), pestana oculta desde el arranque: FALLO REAL, no del ejecutor.** Secuencia: `started → submitted → delta(5) → delta(0) → stalled(4668ms) → error("sin contenido observable del asistente")` a los 45.4s (el techo `emptyResponseMs` por defecto). Verificado en el DOM en frio en ese momento: `nodeCount:3, lastLen:0` — CERO contenido real, no era un falso negativo del selector. Recien tras devolverle foco/click a la pestana el contenido broto de golpe: `lastLen:1091` (mismo largo que el run limpio de §0.20), generacion completa y correcta. **El ejecutor reporto correctamente lo que via: no minitio un `done`.** Pero el resultado practico es que un techo de 45s NO alcanza para una pestana oculta desde el inicio bajo throttling agresivo — mas severo que el caso de 85s de §0.20 (aca ni siquiera arranco el contenido en 45s). Esto **confirma con mas fuerza la decision de §0.21** (pestanas visibles mientras el round esta en vuelo) y dice que la sonda todavia no midio el umbral real de throttling — sigue abierto, ahora con evidencia de que puede superar los 45s partiendo de cero. No se ajusto el default: es una decision de diseno (que techo por defecto usar, o si directamente no hay techo fijo seguro sin la ventana visible) fuera del alcance de implementacion de esta corrida.
+
+4. **Validacion de E11 (techos por spec via el bloque nuevo):** para aislar el mecanismo de la variabilidad de red, se uso un `assistantMessage.selector` que deliberadamente no matchea nada (contenido real = 0 garantizado) con `timeouts.emptyResponseMs: 3000`. Resultado: `started → submitted → error("sin contenido observable del asistente")` a ~3.6s desde `submitted`, contra los ~45s del default. Confirma que `ByoaPageSpec.timeouts` viaja como dato y `timeoutOf()` lo lee y lo antepone al valor compilado — el mecanismo de E11 funciona de punta a punta.
+
+**Gates de artefacto:** los 6 verificados sobre `content-scripts/byoa-page.js` compilado (regla ASCII de §0.19) dieron el resultado esperado — `byoa-page-executor-v5`=1, `-v4`=0, `submitReadyMs`=1, `emptyResponseMs`=1, `aria-disabled`=1, `eval`/`new Function`=0, `document.cookie`/`localStorage`/`sessionStorage`/`authorization`=0.
+
+**Pendiente que esta corrida no midio:** el umbral real de throttling de Chrome para pestanas ocultas desde el arranque (caso 3 mostro que supera comodamente los 45s). p2b sigue debiendo instrumentarlo en vez de asumirlo, ahora con mas urgencia dado que el caso 3 es peor que el de §0.20.
+
+---
+
+### 0.23 Fase 11 — §0.20 y §0.22 se CONTRADICEN, y eso decide la orquestacion de p2b (2026-07-25)
+
+**Revision de §0.22 (escrita por Code).** Se leyo contra el codigo
+pusheado: es exacta y esta bien hecha. En particular hizo lo correcto en
+tres puntos — verifico el DOM EN FRIO en el caso del fallo
+(`nodeCount:3, lastLen:0`) para descartar un falso negativo del selector;
+aislo la validacion de E11 usando un selector que deliberadamente no
+matchea, sacando la variabilidad de red del experimento; y NO parcheo el
+techo por defecto, porque reconocio que "que numero poner" es decision de
+diseno y no implementacion. Se ratifica.
+
+**LA CONTRADICCION, que ninguna de las dos entradas nombra.** §0.20 caso
+(c) y §0.22 caso 3 son EL MISMO experimento — prompt largo, pestana oculta
+desde el arranque — y dieron resultados opuestos:
+
+| Corrida | Resultado | Contenido a los 45 s |
+|---|---|---|
+| §0.20 (c) | `done(1083)` en ~8 s, DOM verificado en oculto | completo mucho antes |
+| §0.22 (3) | `error` a los 45,4 s | **cero**, verificado en frio |
+
+Ninguna de las dos esta mal medida: las dos se verificaron consultando el
+DOM sin refrentar. La variable de control **no se identifico**. Puede ser
+estado de throttling acumulado a nivel navegador, presion de memoria,
+cantidad de pestanas, si la pestana estuvo alguna vez en primer plano, u
+otra cosa. No se sabe, y no se va a afirmar lo que no se midio.
+
+**Conclusion epistemica, que es mas fuerte que cualquiera de los dos
+resultados sueltos: el comportamiento de una pestana oculta es NO
+DETERMINISTA entre corridas.** Eso es peor que "es lento": un
+comportamiento lento se compensa con techos generosos, uno no determinista
+no se compensa con nada. §0.21 ya habia decidido usar ventana visible
+mientras el round esta en vuelo por prudencia; con esta evidencia deja de
+ser prudencia y pasa a ser **requisito**.
+
+**Consecuencia forzada sobre la orquestacion de p2b.** Si cada pestana de
+proveedor debe estar VISIBLE mientras genera, no pueden ser pestanas de una
+misma ventana: en una ventana solo una pestana es visible por vez. Tienen
+que ser **ventanas separadas, visibles simultaneamente** — es decir el
+mosaico que Juan propuso desde el principio, y que §0.17 habia descartado
+apoyandose en el resultado de §0.20 que ahora resulta no reproducible.
+Diseno de p2b, entonces:
+- Durante un round: una ventana chica por proveedor, creada con
+  `chrome.windows.create({ focused: false })`. Visible sin foco NO sufre ni
+  pausa ni estrangulamiento (subsuncion de §0.17, que sigue en pie), asi que
+  Juan puede trabajar en la SPA con el foco puesto ahi.
+- Entre rounds: se pueden ocultar o cerrar; el regimen malo solo importa
+  mientras se genera.
+- El tamano puede ser chico: el ejecutor no necesita que la ventana sea
+  grande, solo que no este oculta.
+
+**RIESGO NUEVO que p2b debe medir antes de fijar la geometria: la
+OCLUSION.** En algunas plataformas Chrome reporta `visibilityState:
+"hidden"` para una ventana completamente tapada por otra, no solo para una
+minimizada. Si eso aplica, maximizar la SPA encima del mosaico devolveria
+todos los proveedores al regimen degradado — el mismo problema con otra
+cara. No esta medido. p2b lo instrumenta antes de decidir la disposicion.
+
+**Entregado en este commit — el ejecutor deja de adivinar (v6).** La causa
+de fondo de esta contradiccion es que las corridas no registraban su propio
+contexto de visibilidad, asi que las anomalias quedaban sin atribuir. Ahora
+cada evento sale con `visibility` (el `visibilityState` en ese instante) y
+`hiddenMs` (milisegundos acumulados en oculto desde que cargo el ejecutor),
+mediante un contador alimentado por `visibilitychange`. Toda corrida futura
+queda autoexplicativa: si un turno tarda 45 s, el evento dice si la pestana
+estuvo oculta y cuanto. Es el instrumento que faltaba para medir el umbral
+de throttling en vez de seguir estimandolo. Sigue sin capturar contenido:
+solo estado, longitudes y tiempos.
+
+**Restriccion de flujo de trabajo registrada (caso (a) de la regla de
+autonomia).** La automatizacion de navegador NO puede interactuar con
+paginas `chrome://`, asi que **recargar la extension siempre requiere a
+Juan**. Consecuencia practica para todas las entregas siguientes: hay que
+AGRUPAR los cambios de extension y disenar cada corrida de validacion para
+cubrir muchos casos por recarga, en vez de iterar de a un cambio por vez.
+
+**Pendiente de p2b, con instrumento ya disponible:** medir el umbral real
+de throttling usando `hiddenMs`, y medir si la oclusion cuenta como oculto.
+
+---
+
+### 0.24 Fase 11 p2b — medicion de visibilidad en la maquina de Juan y apertura del cableado (2026-07-25)
+
+**Como se midio.** Claude habia vuelto a pedir mediciones que exigen una
+ventana real visible, algo que §0.20 ya habia registrado como
+TECNICAMENTE IMPOSIBLE para el agente con la frase "queda registrado para
+no volver a pedirla" — error de Claude por no consultar su propia entrada.
+Code escalo correctamente (caso (a) de la regla de autonomia) y ofrecio
+investigar si el control de escritorio podia manejar el Chrome real; se
+DESCARTO esa via: §0.20 ya la habia cerrado y la herramienta advierte
+explicitamente no rodear esa restriccion. Se recorto el pedido a lo minimo
+—un snippet de consola y cuatro movimientos de ventana, ~45 segundos de
+Juan— porque la pregunta de fondo no necesitaba generar nada: alcanza con
+leer `document.visibilityState` en cada disposicion, y si dice "visible"
+el estrangulamiento de background no aplica por definicion.
+
+**Resultado, y un accidente afortunado.** `document.hasFocus()` dio
+`false` en TODAS las muestras, porque el foco lo tenia DevTools y no la
+pagina. Eso convirtio la corrida entera en la medicion del escenario que
+mas importaba:
+
+| Tramo | Duracion | visibility | foco | cadencia de muestreo |
+|---|---|---|---|---|
+| 8:04:38 – 8:05:23 | 45 s | `visible` | `false` | 3 s exactos |
+| 8:05:24 – 8:05:34 | 10 s | `hidden` | `false` | 3 s exactos |
+| 8:05:34 en adelante | — | `visible` | `false` | 3 s exactos |
+
+**Queda CONFIRMADO el supuesto que sostiene todo el mosaico: una ventana
+VISIBLE SIN FOCO reporta `visible` y no se estrangula** — 45 segundos
+sostenidos con la cadencia intacta. La subsuncion de §0.17 (visible sin
+foco es menos adverso que oculto) deja de ser inferencia y pasa a tener
+medicion directa.
+
+**Oclusion: un solo episodio oculto, de 10 segundos.** Las instrucciones
+pedian cuatro disposiciones con ~10 s cada una; si tapar la ventana por
+completo hubiera contado como oculto, tendrian que haber aparecido DOS
+episodios (tapada y minimizada) o uno mucho mas largo. Aparecio uno solo y
+de exactamente 10 s, lo que corresponde al paso de minimizar. Lectura: **la
+oclusion NO cuenta como oculto en la maquina de Juan**, y por lo tanto
+puede maximizar la SPA encima del mosaico sin degradar a los proveedores.
+Confianza moderada-alta, pendiente de una confirmacion de una linea de
+Juan sobre cual paso produjo el tramo oculto.
+Nota de alcance: la deteccion de oclusion de Chrome varia por plataforma,
+pero ChatCouncil no se distribuye (§0.16) — la medicion en la maquina de
+Juan ES la autoridad para este producto.
+
+**Lo que esta corrida NO mide, y no necesita medir.** La cadencia se
+mantuvo en 3 s exactos incluso durante los 10 s ocultos, o sea que el
+estrangulamiento intensivo no se activo — necesita minutos, no segundos.
+Asi que este dato NO contradice §0.20 ni §0.22 y tampoco cierra el umbral
+de ocultamiento prolongado. Deja de importar: la decision de §0.23 es no
+apoyarse en pestanas ocultas, y esta medicion confirma que la alternativa
+elegida es solida.
+
+**Entregado en este commit — `apps/extension/lib/provider-windows.ts`.**
+Primera pieza del cableado de p2b: abre y cierra una ventana por
+proveedor con `chrome.windows.create({ focused: false })`, con geometria
+en grilla (`tileGeometries`), apertura idempotente —reutiliza la ventana
+si ya existe, para no acumular huerfanas—, cierre tolerante a que la
+persona la haya cerrado a mano, y olvido por `windowId`. No sabe nada de
+ningun proveedor: recibe origenes y devuelve identificadores (Q1
+preservado). No lee cookies, no toca sesiones, no inyecta nada.
+
+**Pendiente de p2b:** protocolo del puente para el transporte `page`,
+streaming de los eventos del ejecutor a los paneles de la SPA, registro de
+ChatGPT en `BYOA_PROVIDERS` con el gate de E8 consciente del transporte
+(los `"cookie"` van a `host_permissions`, los `"page"` a los `matches`), y
+la baja del andamio del `postMessage`, que vence en p2b por §0.18.
+
+---
+
+### 0.25 Fase 11 p2b — cableado del transporte "page" (2026-07-25)
+
+**Decision de diseno que hace barato el cableado: el transporte "page"
+REUTILIZA el protocolo de stream existente.** La respuesta no estrena
+tipos propios — los eventos del ejecutor se traducen en el service worker
+a `stream:chunk` / `stream:done` / `stream:error`, que la SPA ya consume
+desde Fase 1. Consecuencia: **los paneles funcionan sin un solo cambio en
+la SPA**. El unico tipo nuevo del lado respuesta es `stream:challenge`,
+que §0.14 ya habia disenado y que hasta ahora no tenia emisor.
+`stream:challenge` es cambio ADITIVO dentro de v2, sin bump, por el mismo
+precedente del renombre `byoa:resume` -> `stream:resume` de Fase 2.
+
+**Peticion nueva `byoa:page { requestId, providerId, prompt, spec }`.** La
+SPA manda la ESPECIFICACION del DOM y la extension la ejecuta sin
+interpretarla, igual que `byoa:proxy` es HTTP crudo generico: la
+estrategia sigue viviendo en el dialecto y **Q1 (runner agnostico) queda
+intacto**. El SW abre o reutiliza la ventana del proveedor
+(`provider-windows.ts`, §0.24) y entrega la orden al content script.
+
+**El ANDAMIO DEL `postMessage` QUEDA DADO DE BAJA, como vencia desde
+§0.18.** El ejecutor ya no escucha ni emite por `window.postMessage`
+—canal en el que cualquier script de la pagina podia dispararlo y
+escucharlo— sino por `browser.runtime` contra la extension. Verificado
+sobre el compilado: 0 ocurrencias de `chatcouncil:byoa-page` en
+`content-scripts/byoa-page.js`.
+
+**El ejecutor ahora emite TEXTO, y por que eso no viola ninguna regla.**
+Hasta v6 emitia solo longitudes, que era lo correcto para una sonda de
+diagnostico. En produccion el texto ES el producto: tiene que llegar al
+panel. La regla vigente prohibe volcar contenido a LOGS, LEDGER,
+TRANSCRIPTS o FIXTURES — no prohibe que la respuesta del modelo viaje por
+el camino de datos hacia el panel de la propia persona, en su propia
+maquina. Se deja escrito para que una sesion futura no lea la regla al
+reves y rompa el producto por prudencia mal aplicada. Lo que sigue
+prohibido y verificado en 0: cookies, tokens, `localStorage`,
+`sessionStorage` y headers de autenticacion.
+
+**Robustez del arranque.** Una ventana recien creada puede no tener el
+ejecutor listo, asi que `sendToPageExecutor` reintenta con techo de 15 s
+en vez de fallar en el primer intento. El SW mantiene `pageRequests`
+(puerto de la SPA por `requestId`) y `pageSeq` (secuencia de chunks) para
+respetar el contrato de stream que ya existia.
+
+**Leccion de gates aplicada de nuevo (§0.19).** El marcador
+`PROVIDER_WINDOWS_MARKER` da 0 en el compilado aunque el modulo SI
+embarco: nadie importa la constante, solo las funciones, asi que el
+bundler la elimina. El gate util para ese modulo es `windows.create`
+(=1), y los mensajes de error propios (=1 cada uno). **Un marcador
+exportado que nadie usa no sirve como gate** — hay que grepear algo que
+el codigo vivo realmente contenga.
+
+**Gates verificados sobre lo compilado:** ejecutor
+`byoa-page-executor-v7`=1 y `-v6`=0 · `byoa:page:run`=1 ·
+`byoa:page:event`=1 · andamio `chatcouncil:byoa-page`=**0** ·
+`eval`/`new Function`=0 · credenciales=0. Background: `byoa:page`=1 ·
+`stream:challenge`=1 · `windows.create`=1.
+
+**Pendiente de p2b:** registrar ChatGPT en `BYOA_PROVIDERS` como proveedor
+`"page"` y hacer el gate de E8 CONSCIENTE DEL TRANSPORTE — los `"cookie"`
+deben espejar `host_permissions`, los `"page"` deben espejar los `matches`
+de content scripts, porque §0.18 mostro que el transporte `"page"` NO
+necesita `host_permissions`. Ese es el proximo commit, y es el que hace
+aparecer a ChatGPT en el panel de cuentas.
+
+---
+
+### 0.26 Fase 11 p2b — ChatGPT registrado y gate E8 consciente del transporte (2026-07-25)
+
+**ChatGPT entra como primer proveedor `"page"`.** `chatgpt.ts` no tiene
+dialecto: es una ESPECIFICACION DECLARATIVA del DOM, con los selectores
+derivados de la UI real en el Chrome de Juan (§0.19) y validados de punta a
+punta en §0.20 y §0.22 — prompt corto, prompt repetido en la misma
+conversacion, y respuesta larga. Los techos van generosos a proposito
+(`emptyResponseMs: 90 s`) porque §0.20 midio el mismo turno en ~7 s y en
+~85 s segun el estado de la pestana, y §0.22 vio la cuenta degradarse bajo
+uso intensivo. Se ajustan desde `adapters.json` sin recompilar (E11): este
+archivo es el valor por defecto embarcado, no la unica fuente.
+
+**E8 pasa a ser CONSCIENTE DEL TRANSPORTE, y el espejo se vuelve
+ESTRUCTURAL en vez de verificado.** La derivacion se partio en dos:
+- `BYOA_SESSION_ALLOWED_ORIGINS` filtra por `authTransport === "cookie"`.
+  Son los unicos que hacen fetch cross-origin desde el offscreen y por lo
+  tanto los unicos que necesitan `host_permissions`. Meter ahi un proveedor
+  `"page"` le daria acceso de proxy que no usa.
+- `BYOA_PAGE_ORIGINS` y `BYOA_PAGE_MATCH_PATTERNS` filtran por
+  `authTransport === "page"`.
+
+Y el paso que elimina la clase de bug entera: **el content script IMPORTA
+`BYOA_PAGE_MATCH_PATTERNS` en vez de repetir la lista**. §0.15 habia
+registrado el riesgo de deriva silenciosa porque la allowlist era derivada
+y `host_permissions` era manual; para el transporte `"page"` esa deriva ya
+no es posible, porque agregar un proveedor extiende el `matches` solo. No
+hay gate que mantener: no hay dos listas.
+
+**Verificado sobre el MANIFEST COMPILADO** (no sobre el fuente):
+`content_scripts.matches` = `["https://chatgpt.com/*"]`,
+`host_permissions` = los 4 de siempre SIN chatgpt.com, y los dos conjuntos
+DISJUNTOS. Es decir: **registrar ChatGPT no disparo ninguna re-aprobacion
+de permisos**, confirmando en la practica el hallazgo de §0.18.
+
+**Higiene de `.gitignore`.** Se agregaron `_fase*/` —el staging de
+entregas, que quedaba untracked en cada corrida y aparecia en cada
+`git status`— y `package-lock.json`/`yarn.lock`, despues de que una corrida
+generara un lockfile espurio al ejecutar `npm install` en un repo pnpm
+(detectado y borrado a tiempo, pero es exactamente la clase de archivo que
+un `git add -A` distraido habria commiteado).
+
+**Estado: ChatGPT ya es disparable desde la SPA.** El circuito esta
+completo — la SPA manda `byoa:page` con la spec, el SW abre la ventana, el
+ejecutor la maneja, y los eventos vuelven traducidos al protocolo de
+stream que los paneles ya consumen. **Falta la validacion en el navegador
+real**, que es lo unico que este commit no puede probar: recargar la
+extension y disparar un round desde la UI.
+
+---
+
+### 0.27 Fase 11 p2b — el lado SPA del transporte "page" (2026-07-25)
+
+**Correccion de un reclamo FALSO de §0.25.** Ahi se escribio "el circuito
+esta completo" y "ChatGPT ya es disparable desde la SPA". Era falso: se
+habia construido el lado RECEPTOR (extension) y nunca el EMISOR (SPA).
+`bridge-client.ts` no tenia forma de mandar `byoa:page`, y
+`byoa-client.ts` seguia rechazando todo proveedor con
+`authTransport !== "cookie"`. Se verifico el lado extension y se afirmo la
+completitud sin recorrer el camino de vuelta — exactamente el tipo de
+reclamo no verificado que la disciplina del proyecto existe para evitar.
+Lo encontro Code al intentar el round real.
+
+**La guarda era TEMPORAL y su condicion habia vencido.** §0.17 la habia
+escrito con una condicion explicita — "mientras su ejecutor no exista" — y
+el ejecutor existe y esta validado desde §0.22. Code la interpreto como una
+frontera de alcance diferida a una ronda futura; no lo era. Era deuda con
+fecha de vencimiento y se paso de fecha sin que nadie la mirara. Leccion:
+una guarda temporal necesita su condicion de baja escrita EN EL LEDGER, no
+solo en el comentario del codigo, porque el comentario no se lee cuando se
+cierra la condicion.
+
+**Lo que se cableo.**
+- `bridgeClient.byoaPage({ providerId, prompt, spec }, handlers)`, con la
+  misma forma que `byoaProxy`: la spec viaja desde el dialecto y la
+  extension no la interpreta (Q1).
+- `StreamHandlers.onChallenge?` y `ByoaPromptHandlers.onChallenge?`, mas el
+  caso `stream:challenge` en el despachador. **NO es terminal**: la persona
+  resuelve el desafio en la ventana real y el mismo stream sigue
+  entregando, como manda §0.14.
+- `byoa-client.ts` rutea los proveedores `"page"` en vez de rechazarlos,
+  adaptando al contrato real de la SPA (`onDelta` por chunk, `onDone` con
+  meta).
+
+**Traduccion snapshot -> incremento, con su limitacion declarada.** El
+ejecutor emite el texto COMPLETO en cada delta, que es lo robusto ante
+reescrituras del DOM; pero `stream:chunk` es un contrato de INCREMENTOS
+acumulables. La traduccion se hace en el service worker por prefijo comun
+mas largo: en el caso normal —crecimiento monotono— el incremento es el
+sufijo y es exacto. **LIMITACION: si el proveedor reescribe texto ya
+emitido (por ejemplo un reflow de markdown al cerrarse un bloque de
+codigo), el panel conserva lo viejo y solo recibe lo nuevo desde el punto
+de divergencia.** Es una aproximacion append-only y se declara en vez de
+disimularse. Si aparece en la practica, la salida es un campo de reemplazo
+en el protocolo, no un parche silencioso.
+
+**Arreglo de Code que corresponde reconocer.** `DEFAULT_PRIORITY` en
+`useCouncilStore.ts` tenia seis entradas fijas de antes de que existiera el
+proveedor `chatgpt`, asi que el panel no aparecia en el tablero por mas que
+`listPanelOptions()` ya lo devolviera. Lo agrego al final para no reordenar
+los defaults ni romper el e2e, lo verifico entero y lo commiteo aparte
+(`cbf13f1`). Es exactamente la clase de arreglo que la regla de autonomia
+le asigna, y la escalada del bloqueo de protocolo tambien fue correcta.
+
+**Gates sobre lo compilado:** bundle web con `byoa:page`=1 y
+`stream:challenge`=1, y la guarda vieja ("todavia no disponible en esta
+version")=**0**. Background con `byoa:page`=1, `stream:challenge`=1,
+`windows.create`=1.
+
+**Lo que este commit sigue sin probar:** que el round real funcione en el
+navegador. Ahora si hay algo que disparar desde la UI, asi que es lo
+siguiente y es lo unico que falta para cerrar p2b.
+
+---
+
+### 0.28 REDISENO DEL PRODUCTO — consejo de tres roles (2026-07-26)
+
+**Origen.** Juan replanteo para que ChatCouncil sea una herramienta
+PERSONAL de investigacion en ciencias sociales (cuanti, cuali y mixta), de
+uso amplio, sin fines academicos ni de lucro. Se hizo una investigacion de
+prior art metodologico y una entrevista de diseno. Lo que sigue reemplaza
+la nocion previa de "comparar respuestas en paneles" por una arquitectura
+de TRES ROLES DISJUNTOS.
+
+**Aclaracion que fija el proposito (y corrige a Claude).** Juan NO estudia
+a los LLM: los usa como INSTRUMENTOS. Por lo tanto el fluff conversacional
+(saludos, preguntas de cierre) es irrelevante incluso como dato y se
+elimina. Claude habia argumentado lo contrario en §0.26 apoyandose en
+literatura sobre investigacion SOBRE modelos; no aplica a este proyecto.
+Claude tambien propuso separar el producto en dos segun si los modelos
+generan contenido o procesan datos del usuario: **Juan refuto esa
+distincion y tenia razon** — los modelos siempre producen el contenido, y
+bajo la decision de "divergencia como producto" la distincion no ramifica
+nada. Es UN producto. Sobrevive solo como atributo de ronda: si hay fuente
+adjunta, el error es verificable contra ella.
+
+**COMPOSICION FINAL (decision de Juan, 2026-07-26). Tres conjuntos
+DISJUNTOS, 7 turnos por ronda:**
+
+| Rol | Modelos | Que hace |
+|---|---|---|
+| **Investigadores** (etapa 1) | Claude, Gemini, ChatGPT, **GLM** | Reciben la misma pregunta en paralelo. Dialogo centralizado multi-turno: cada uno mantiene su propia conversacion. |
+| **Analistas** (etapa 2) | **Qwen** (extraccion), **Kimi** (analisis comparativo) | Dos llamadas batcheadas que producen UN output unificado. |
+| **Operador final** (etapa 3) | **DeepSeek** | Ejecuta las herramientas que el usuario escribe sobre el output unificado. |
+
+Perplexity SALE del consejo inicial y queda como investigador futuro, junto
+con Grok (postergado por limites del plan gratuito, §0.15). **La puerta
+queda abierta por diseno**: el numero de investigadores NO se codifica en
+ningun lado — ni en la lista de prioridad de paneles, ni en los prompts de
+los analistas, ni en la disposicion de ventanas. Es configuracion, no
+codigo. Precedente que lo prueba necesario: `DEFAULT_PRIORITY` tenia seis
+entradas fijas y por eso ChatGPT no aparecia en el tablero aunque el
+registro ya lo devolvia (arreglado en cbf13f1).
+
+**Consecuencia epistemica de sacar a Perplexity, que conviene registrar.**
+Los cuatro investigadores quedan siendo modelos parametricos, sin
+recuperacion. Eso ELIMINA el confundidor que Claude habia senalado —
+mezclar un modelo que cita fuentes con tres que responden de memoria hace
+que cualquier acuerdo o desacuerdo mezcle dos causas—. A cambio se pierde
+el anclaje en fuentes. **Decision pendiente derivada:** si se activa el
+modo de busqueda en Claude, Gemini o ChatGPT, debe activarse en TODOS por
+igual; dejarlo al default de cada proveedor reintroduce exactamente el
+confundidor que se acaba de eliminar. Esto le da contenido concreto a la
+Fase 12 (capacidades por proveedor).
+
+**LO QUE LA ENTREVISTA ELIMINO del plan.** Estas capas se habian propuesto
+y NO van, cada una con su motivo:
+- Acuerdo entre codificadores (alfa de Krippendorff): requiere ~80-140
+  unidades codificadas y el uso es pregunta por pregunta — serian 20 a 35
+  rondas antes de que el numero signifique algo. No es metrica por ronda.
+- Codificacion deductiva con libro de codigos: las categorias EMERGEN.
+- Fijado de versiones y prompts citables: sin fines academicos.
+- Medidas de estabilidad por k corridas: complejidad no pedida.
+- Normalizacion estilistica destructiva (reescribir respuestas): destruye
+  el dato primario. El crudo es canonico SIEMPRE.
+
+**HALLAZGOS QUE SOSTIENEN EL DISENO** (de la investigacion de prior art):
+- Los LLM **no se autocorrigen sin criterio externo nuevo**; tras
+  "auto-corregir" el desempeno suele empeorar (Huang et al., ICLR 2024).
+  Por eso la etapa 2 no puede ser "volver a analizar": tiene que aportar
+  una operacion que antes no existia.
+- **Errores correlacionados**: un panel de nueve jueces de siete familias
+  aporto el equivalente a ~2 votos independientes; se pierde ~3/4 de la
+  independencia nominal (Apple ML Research, arXiv 2605.29800). Sumar
+  modelos NO suma independencia en proporcion.
+- Los LLM anotan bien texto corto y **mal prosa larga y ambigua**, con
+  sobre-etiquetado severo. La salida de etapa 1 es exactamente eso.
+
+**POR QUE LA ETAPA 2 SE JUSTIFICA IGUAL.** Porque cambia de funcion: deja
+de analizar y pasa a **hacer comparable**. La divergencia es el PRODUCTO
+(decision de Juan), y toda operacion sobre divergencia es COMPARATIVA —
+no se puede hacer mirando una respuesta aislada. De ahi las dos llamadas:
+- **2a Extraccion (Qwen).** Convierte las N respuestas en afirmaciones
+  separadas y atribuidas por origen. No juzga, no puntua, no reescribe.
+  Qwen por tener la tasa de alucinacion mas baja entre modelos frontera:
+  la extraccion es donde inventar es el peor error.
+- **2b Analisis comparativo (Kimi).** Opera sobre las afirmaciones: que se
+  comparte, que dice cada uno que nadie mas dice, donde se contradicen, y
+  **de que tipo es cada desacuerdo** (definicion, evidencia, enfasis,
+  valores). Ese ultimo punto es donde vive el matiz que Juan busca.
+- **Los conteos salen del CODIGO, no de un modelo.** "3 de 4 afirman X" se
+  calcula sobre las afirmaciones extraidas: exacto y gratis. Pedirle a un
+  modelo un "analisis cuantitativo" de prosa produce numeros
+  impresionistas con apariencia de dato.
+
+**POR QUE LA ETAPA 3 NO ES "UNIFICAR".** Si la etapa 2 ya entrega un output
+unificado con su analisis comparativo, "unificar" seria sintetizar lo ya
+sintetizado. Su rol real es otro y es solido: **es la capa del USUARIO**.
+La etapa 2 es infraestructura fija que siempre corre igual; la etapa 3
+ejecuta los prompts que Juan escribe, agrega y modifica. Por eso merece
+modelo propio y es el unico punto configurable del pipeline.
+
+**Herramientas: convergencia Y divergencia.** La herramienta por defecto
+deja de ser "resumen" y pasa a ser **analisis de convergencia y
+divergencia**. Las herramientas por defecto son inmutables (linea base) y
+el usuario puede agregar, modificar y eliminar las suyas. Motivo de fondo:
+el objetivo declarado de Juan es "no buscamos union ni caos, buscamos
+matiz" — una sintesis que promedia destruye lo que se quiere conservar.
+
+**Contexto de los analistas: solo el turno actual.** No ven el historial.
+Comparan las respuestas A ESTA pregunta. Ver como cada modelo se movio a lo
+largo del dialogo es una herramienta de la etapa 3 que lee el historial, no
+una responsabilidad de la etapa 2.
+
+**Riesgo aceptado y su mitigacion.** DeepSeek como unico operador final es
+un punto unico de sesgo interpretativo, en una herramienta cuya premisa es
+no depender del sesgo de un modelo. Se acepta porque los paneles siguen
+mostrando el crudo: la etapa 3 es LENTE, nunca reemplazo. Cuanto mas
+mecanica sea la etapa 2 —extraer, comparar, listar— menos margen
+interpretativo queda aguas abajo.
+
+**Disjuncion de roles como GATE, no como convencion.** Existe el precedente
+exacto: `guard-judge-anonymity.mjs` hace cumplir por topologia de imports
+que el juez nunca vea la identidad del proveedor. El mismo patron debe
+hacer cumplir que investigadores, analistas y operador sean conjuntos
+disjuntos, para que nadie pueda configurar por accidente a un modelo como
+su propio evaluador.
+
+**Lo que NO se descarta del trabajo hecho.** El transporte `"page"`, el
+ejecutor generico, la orquestacion de ventanas, la anonimizacion con gate,
+las plantillas editables en Dexie y claude.ai por `"cookie"` siguen enteros
+y son la base de las tres etapas: los siete modelos se conectan por el
+mismo mecanismo.
+
+---
+
+### 0.29 Etapa 2 — preparacion en codigo, analistas en paralelo (2026-07-26)
+
+**CORRECCION DE JUAN que reencuadra un hallazgo.** Claude venia usando el
+marco de VOTOS —mayoria, minoria, errores correlacionados que degradan la
+agregacion— importado de la literatura de LLM como evaluador. Juan lo
+rechazo: "no me importa tener mayoria y minoria, me interesa enriquecer la
+investigacion, esto no se trata de votos". Tiene razon y la distincion
+importa:
+- En un marco de AGREGACION, mas evaluadores sirven para estimar mejor una
+  etiqueta verdadera, y los errores correlacionados destruyen ese beneficio.
+- En un marco de ENRIQUECIMIENTO, los modelos no se promedian: se leen. La
+  correlacion de errores NO argumenta contra tener cuatro investigadores.
+**Lo que SI sobrevive de ese hallazgo, y es lo unico:** la convergencia
+entre modelos que comparten linaje de entrenamiento es evidencia DEBIL. El
+analisis de convergencia y divergencia no debe presentar el acuerdo como
+validacion — puede significar que comparten el mismo sesgo. Queda como
+requisito de redaccion de esa herramienta, no como limite al numero de
+investigadores.
+
+**Composicion confirmada: CUATRO investigadores** — Claude, Gemini, ChatGPT
+y GLM. Juan solo iba a bajar a tres para liberar GLM hacia la etapa 2; no
+hace falta, porque la etapa 2 no necesita un tercer modelo (ver abajo).
+
+**DEFECTO REAL encontrado en el codigo existente.** Juan intuyo que hacia
+falta anonimizar y barajar ANTES de que los analistas vean las respuestas.
+Verificado: `anonymize.ts` anonimizaba pero **NO barajaba** — cero
+ocurrencias de shuffle o random. Las etiquetas seguian el orden de panel,
+que es ESTABLE entre rondas, asi que "Modelo A" era siempre el mismo
+proveedor y la posicion filtraba identidad. El sesgo de posicion en
+modelos evaluadores esta documentado. El defecto existia hoy.
+
+**Por que la preparacion va en CODIGO y no en un modelo.** Juan habia
+propuesto un tercer modelo (etapa 2.1) que anonimizara, limpiara el fluff
+y barajara. Se descarta, y la razon es la que hace la diferencia:
+`guard-judge-anonymity.mjs` demuestra por TOPOLOGIA DE IMPORTS que
+`build-judge-prompt.ts` no puede recibir identidad de proveedor — no tiene
+ningun import. Eso es IMPOSIBILIDAD, no procedimiento. Un modelo que
+anonimiza es un paso que se CONFIA que se hizo bien: no es determinista,
+podria parafrasear al limpiar, cuesta llamadas de un presupuesto ajustado,
+y ningun guard puede demostrar nada sobre lo que decidio hacer. La
+preparacion determinista es estrictamente superior acá.
+
+**Entregado — barajado con semilla en `anonymize.ts`.** PRNG determinista
+(mulberry32) + Fisher-Yates, con la semilla como parametro OPCIONAL: sin
+semilla se conserva el comportamiento anterior, para no alterar en silencio
+lo ya verificado. No hace falta aleatoriedad criptografica; lo unico que
+importa es que la POSICION no quede correlacionada de forma estable con la
+IDENTIDAD. Al ser determinista, la ronda es reproducible: se puede volver a
+ver el orden exacto que vio el analista guardando la semilla.
+Sobre "aleatoriedad real imposible" (Juan): no era necesaria. Una semilla
+resuelve el problema mejor que un modelo, y encima deja trazabilidad.
+
+**Harness nuevo (`harness:fase11`, 8 verificaciones, en CI):** sin semilla
+conserva el orden de panel · misma semilla produce el mismo orden ·
+semillas distintas producen ordenes distintos · conserva las N respuestas ·
+sin duplicados · **el sello sigue mapeando etiqueta→panel correctamente
+tras barajar** (la verificacion que importa: si el sello se desalineara, la
+UI atribuiria respuestas al proveedor equivocado) · las etiquetas no
+filtran identidad · sin anonimizar no baraja.
+
+**ETAPA 2, forma final — dos llamadas, no cuatro:**
+1. **Codigo prepara:** limpieza de fluff por reglas (determinista) →
+   anonimizacion (modulo existente) → barajado con semilla.
+2. **Qwen y Kimi EN PARALELO** sobre el mismo material preparado. Qwen
+   extrae afirmaciones atribuidas por etiqueta; Kimi hace el analisis
+   comparativo.
+3. **Codigo reensambla** las respuestas limpias + los conteos exactos
+   (calculados sobre la extraccion) + los dos analisis, en el output
+   unificado que consume la etapa 3.
+
+**PARALELO, no secuencial — correccion de Claude.** Claude habia propuesto
+que Kimi comparara SOBRE la extraccion de Qwen. El instinto de Juan era
+mejor: asi Kimi heredaria los errores de Qwen, y si la extraccion se comio
+un matiz el analisis comparativo nunca lo recupera. En paralelo son dos
+vistas INDEPENDIENTES sobre el mismo material, y ninguna contamina a la
+otra.
+
+**Asimetria de cuotas que decide la asignacion de modelos.** Si un
+investigador se queda sin cuota, la ronda sigue con los demas y DEGRADA. Si
+un analista se queda sin cuota, la ronda MUERE — estan en el camino
+critico. Por lo tanto las cuotas generosas deben estar del lado de los
+analistas y el operador, no de los investigadores. Las unicas cuentas
+confiables por definicion son las dos pagas (Claude Pro, Gemini Pro).
+Perplexity y Grok quedan fuera del consejo inicial por cuotas gratuitas
+demasiado ajustadas (§0.28).
+
+**Correccion tecnica sobre multiples cuentas (Juan la acepto).** Dos
+sesiones del MISMO proveedor no conviven en un mismo perfil de Chrome: las
+cookies son por origen y por perfil, asi que loguear la segunda cierra la
+primera. Circunvenir limites horarios con varias cuentas exigiria PERFILES
+de Chrome separados, lo que complica la orquestacion de ventanas. No es una
+salida disponible sin trabajo extra considerable.
+
+**CABLEADO DE VERDAD, no solo agregado.** Al verificar aparecio la trampa
+de siempre: el barajado existia y el harness lo probaba, pero **ningun
+caller pasaba semilla**, asi que en el producto corriendo no cambiaba nada
+— capacidad agregada sin efecto, justo el patron que "green build != codigo
+embarcado" existe para atrapar. Se cablo: `run-analysis.ts` genera la
+semilla por ronda y la pasa, y `RoundAnalysis.shuffleSeed` la PERSISTE en
+Dexie para que el orden que vio el analista sea reconstruible. Gate sobre
+el bundle compilado: `shuffleSeed` presente y la constante del PRNG
+(`0x6d2b79f5`) presente — el identificador se minifica pero la constante
+numerica sobrevive, que es el marcador util segun §0.19/§0.25.
+
+**TERCER MODO DE GATE MENTIROSO (2026-07-26).** Code encontro que el gate
+`grep -c '6d2b79f5'` daba 0 aunque el barajado SI habia embarcado: el
+minificador convierte el literal hexadecimal `0x6d2b79f5` a su equivalente
+DECIMAL `1831565813`. Verificado: hex = 0, decimal = 1. Code diagnostico
+bien, no toco el codigo fuente (que estaba correcto) y lo reporto — la
+conducta correcta.
+Con esto van TRES formas en que un gate de artefacto puede mentir, todas
+descubiertas en esta fase:
+  1. §0.19 — los IDENTIFICADORES se renombran al minificar.
+  2. §0.19 — los caracteres NO ASCII se escapan (`env\xEDo`).
+  3. §0.25 — un marcador EXPORTADO que nadie importa se elimina por
+     tree-shaking.
+  4. §0.29 — los LITERALES NUMERICOS se reformatean (hex → decimal).
+**Regla consolidada:** un gate de artefacto solo es confiable sobre
+CADENAS DE TEXTO ASCII que el codigo vivo contenga literalmente. Nada de
+nombres de funcion, nada de acentos, nada de constantes numericas, nada de
+marcadores sin uso.
+**Correccion del gate, no del codigo:** el chequeo del PRNG se ELIMINA por
+redundante — `shuffleSeed` (=1) ya prueba que el barajado embarco, y es una
+cadena de texto. Buscar la forma decimal seria tratar el sintoma.
+
+**Pendiente inmediato:** extender el guard de anonimato a los prompts de
+los analistas, de modo que la garantia estructural que hoy protege al juez
+cubra tambien a Qwen y Kimi. Se hace cuando esos prompts se escriban
+(Fase 13), no antes: un guard sobre una ruta que no existe pasa
+trivialmente y da una falsa sensacion de cobertura.
+
+---
+
+### 0.30 Bloqueo que impedia el round real, encontrado antes de correrlo (2026-07-26)
+
+**El defecto.** `model-registry.ts` decidia la disponibilidad de un panel
+BYOA con `ctx.byoaSessionConfirmed.has(cfg.id)`, y esa confirmacion solo se
+consigue apretando "Detectar sesion", que llama a
+`detectByoaOrganizations` — una funcion **claude-shaped**: pega a
+`/api/organizations`, endpoint que solo claude.ai tiene. Consecuencia:
+**ChatGPT no podia quedar disponible NUNCA**, porque la unica via para
+habilitarlo era un endpoint inexistente en su origen. El circuito completo
+estaba construido y pusheado (§0.25, §0.26, §0.27) y el round real habria
+fallado en el primer paso, antes de ejercitar nada de lo que se construyo.
+
+**Como se encontro.** Rastreando el camino de la UI hacia el despacho
+ANTES de pedir la validacion en el navegador, en vez de descubrirlo con
+Juan y Code delante de la pantalla. Vale registrarlo como metodo: cuando
+una entrega termina en "falta probarlo en el navegador", conviene recorrer
+el camino completo en el codigo primero — el bloqueo estaba a dos saltos de
+lectura.
+
+**La correccion, y su fundamento.** La disponibilidad ahora depende del
+TRANSPORTE:
+- `"cookie"` sigue exigiendo deteccion previa: el offscreen hace fetch
+  credenciado y sin sesion confirmada no hay a que apuntar.
+- `"page"` NO la exige. El ejecutor abre la ventana REAL del proveedor y
+  descubre el estado de sesion ahi mismo: si no hay sesion, el compositor
+  no matchea o salta un `humanGate`, y eso se reporta. Pedir una deteccion
+  previa duplicaria —peor, y con codigo especifico de claude— lo que la
+  propia pagina ya dice. Es la misma leccion de §0.29 en otra forma:
+  preferir que la realidad lo diga a mantener un procedimiento paralelo que
+  hay que recordar ejecutar.
+- En el panel de cuentas, los proveedores `"page"` ya no ofrecen "Detectar
+  sesion" (llamaria a un endpoint que no existe) sino la leyenda "se
+  verifica al abrir la ventana del proveedor" y el enlace al origen.
+
+**Harness ampliado a 11 verificaciones:** un proveedor `"page"` esta
+disponible SIN deteccion previa · un proveedor `"cookie"` NO esta
+disponible sin deteccion · un proveedor `"cookie"` se habilita al detectar.
+Las tres fijan la regla por transporte, asi que un cambio futuro que
+vuelva a acoplar la disponibilidad a la deteccion rompe el harness.
+
+**Ahora si no queda nada entre el codigo y el round real.** Lo unico
+pendiente es la validacion en el Chrome de Juan, que exige que el recargue
+la extension (caso (a) de la regla de autonomia, §0.23).
+
+---
+
+### 0.31 EL ROUND REAL FUNCIONA — y tres bugs con una sola causa raiz (2026-07-26)
+
+**Hito: el transporte `"page"` funciona de punta a punta en el navegador
+real.** Verificado por Code con la cuenta burner: el panel de ChatGPT
+aparece SIN apretar "Detectar sesion", la ventana real se abre, recibe el
+prompt, responde, y el texto llega en streaming al panel hasta cerrar en
+estado terminal. Prompt largo con la ventana visible sin foco: streameo
+completo en 26 s. Es la primera vez que el consejo responde de verdad por
+este camino.
+
+**Los tres bugs que hubo que arreglar, y por que son EL MISMO error.**
+1. `panel-runner.ts` exigia `orgId` a TODO panel BYOA sin mirar el
+   transporte. Es el mismo defecto que §0.30 corrigio en
+   `model-registry.ts` — Claude recorrio UN camino, lo declaro despejado, y
+   habia otro sitio de llamada con la misma suposicion claude-shaped.
+2. **El bug que colgaba todos los turnos:** el relay en `background.ts`
+   numeraba `seq` desde 1, pero el protocolo de stream que ya usaban BYOK y
+   el offscreen es **0-indexado** (`offscreen/main.ts` usa
+   `state.chunks.length`) y el cliente arranca en `lastSeq: -1` esperando
+   el chunk 0. Como el primer chunk real era `seq:1`, el cliente nunca
+   drenaba ni marcaba `done`: el panel quedaba en "..." para siempre aunque
+   la ventana real ya hubiera respondido.
+3. El service worker MV3 se suspende a los ~30 s sin actividad y un turno
+   `"page"` puede tardar 90 s, perdiendo los `Map` en memoria que atan
+   `requestId` al puerto. Hubo que agregar keepalive. **El repo ya
+   documentaba ese riesgo para BYOK** — por eso ese streaming vive en el
+   offscreen.
+
+**Causa raiz unica:** Claude construyo el transporte `"page"` como un mundo
+paralelo en vez de heredar lo que los transportes existentes ya habian
+aprendido. Reutilizo el TIPO de mensaje (`stream:chunk`) sin reutilizar sus
+INVARIANTES (indice base 0), y estreno un camino de larga duracion sin
+revisar por que el camino anterior vivia en el offscreen.
+**Regla que queda:** reusar un protocolo obliga a leer su implementacion de
+referencia, no solo su tipo. Los invariantes no viajan en el tipo.
+
+**CONTINUIDAD DE HILO — decision de protocolo (escalada correctamente por
+Code).** Code observo que cada envio abria conversacion nueva y NO lo
+parcheo: identifico que era decision de diseno. Lo es, y se decide asi:
+**en el transporte `"page"` la continuidad de hilo NO es un uuid que se
+pase entre turnos — ES LA PERSISTENCIA DE LA VENTANA.** La conversacion
+vive en la UI real del proveedor: si la ventana sigue abierta, escribir en
+su compositor continua el hilo; si se cerro, el turno arranca conversacion
+nueva. Es coherente con el reencuadre a "director" (§0.16): el estado vive
+en la pagina, no en nuestro modelo de datos.
+`openProviderWindow` ya reutilizaba la ventana y NO re-navega a
+`newConversationUrl` al reutilizarla — re-navegar destruiria la
+conversacion. Lo que faltaba era que la ruptura fuera VISIBLE: ahora
+`ProviderWindowRef.created` distingue crear de reutilizar, y el turno
+reporta `threadContinued` en el meta del `stream:done`. Si la ventana se
+cerro entre turnos, el usuario se entera en vez de creer que continuo.
+Pendiente derivado, chico: una accion explicita de "nueva conversacion"
+para cuando SI se quiera arrancar de cero.
+
+**Sesion de claude.ai no confirmada (paso 5).** El round en paralelo con
+los dos transportes no se pudo validar porque el boton de deteccion de
+Claude no cambio de estado. Precondicion no verificada: hace falta saber si
+hay login activo de claude.ai en ESE Chrome. No es diagnosticable sin ese
+dato.
+
+---
+
+### 0.32 E11 pasa de promesa a mecanismo (2026-07-29)
+
+**Lo que el round real destapo.** ChatGPT dejo de envolver sus respuestas
+en la clase `.markdown`. El extractor no encontraba nodos y el turno
+expiraba a los 90 s reportando "sin contenido observable" — con la
+respuesta ya en pantalla. Es el PRIMER caso real de la fragilidad para la
+que E11 fue disenada. Y el arreglo tuvo que hacerse en
+`packages/adapters/src/byoa/chatgpt.ts` (commit `942bc92`): recompilar,
+pushear, esperar CI y recargar la extension. **Exactamente el ciclo que E11
+existia para evitar.**
+
+**Diagnostico: E11 estaba ESCRITA pero no IMPLEMENTADA.** §0.16 declaraba
+que "los selectores viven en adapters.json" y que un proveedor roto se
+arregla editando un JSON. Verificado ahora: la SPA **no consumia
+`adapters.json` en absoluto** — solo el service worker, y solo para
+`{id, byoaStrategy, healthy}`. Los selectores vivian unicamente en el
+codigo compilado. La promesa no tenia plumeria.
+
+**Entregado: el override remoto, con caida segura al valor compilado.**
+- `adapters.json` sube a `manifestVersion: 2` y puede transportar
+  `pageSpec` por proveedor. Se publica la spec vigente de ChatGPT, ya con
+  el selector corregido.
+- `page-spec-source.ts` valida la forma COMPLETA de la spec remota y, ante
+  cualquier desvio —campo faltante, enum invalido, timeout con tipo
+  incorrecto, basura— **rechaza el override entero** y usa el compilado. No
+  se hace merge parcial: dejaria specs a medio armar guiando a un ejecutor
+  que corre dentro de paginas logueadas.
+- La resolucion es SINCRONA para no meter latencia de red en el despacho;
+  la cache se calienta al arrancar la app y se refresca en segundo plano en
+  cada turno, con el mismo TTL de 10 minutos que ya usa el SW.
+- **El override es una MEJORA, nunca una dependencia:** si el manifiesto no
+  esta, esta caido o viene roto, el producto sigue funcionando con lo
+  compilado.
+
+**Trampa evitada, la misma de §0.29.** Al cablear aparecio que
+`primePageSpecs` no se llamaba desde ningun lado: la cache no se llenaba
+nunca y `resolvePageSpec` devolvia siempre el compilado — capacidad
+agregada sin efecto. Van tres veces que el mismo patron aparece (barajado
+en §0.29, y aca). **Regla:** agregar una capacidad y verificar que compila
+no prueba nada; hay que buscar al LLAMADOR.
+
+**Harness a 21 verificaciones** (de 11): spec bien formada aceptada ·
+rechazo por campo obligatorio faltante · por enum invalido · por
+`quiescenceMs` no positivo · por timeout con tipo incorrecto · por basura ·
+sin manifiesto cae al compilado · con manifiesto valido usa el override ·
+un proveedor sin override sigue en compilado.
+
+**Bugs del round que corrigio Code, ambos con la misma firma que §0.31.**
+1. `threadContinued` se calculaba en `background.ts` pero `byoa-client.ts`
+   descartaba el meta entero (`onDone: () => handlers.onDone({})`) — la
+   senal nunca salia de la extension. **Ese descarte lo escribio Claude en
+   §0.27** para satisfacer el tipo, y en §0.31 agrego una senal a un canal
+   que el mismo habia cortado cuatro entradas antes. Leccion: cuando se
+   tira informacion para satisfacer un tipo, hay que dejarlo anotado donde
+   se tira, no donde se produce.
+2. El log de ruptura de hilo dependia de `panelThreads`, que solo se llena
+   para BYOA cookie — para transporte page nunca iba a disparar.
+
+**VERIFICACION MAS FUERTE DEL PROYECTO HASTA AHORA.** Los tres valores de
+`threadContinued` se contrastaron contra la VENTANA REAL, no contra la
+consola: en el paso 2 ChatGPT recordo textualmente el primer mensaje; en el
+paso 3, tras cerrar la ventana, no lo recordaba. La senal es fiel al hecho
+que pretende describir, comprobado por el comportamiento del proveedor y no
+por nuestra propia telemetria.
+
+**Round mixto confirmado:** Claude (cookie) y ChatGPT (page) respondieron
+en paralelo en el mismo round, sin interferencia entre transportes.
+
+**Anotado sin resolver:** entradas duplicadas en el log de
+`threadContinued` con timestamps identicos, lo que sugiere que `onDone`
+podria dispararse mas de una vez en algunos casos. No invalida lo
+verificado —el criterio de verdad fue la ventana real— pero conviene
+descartarlo antes de confiar en telemetria basada en ese log. Hipotesis
+mas probable: HMR de Vite reejecutando closures en dev.
+
+---
+
+### 0.33 E11 VALIDADA en el navegador — y la URL del manifiesto (2026-07-29)
+
+**E11 dejo de ser papel: probado de punta a punta.** Code rompio a
+proposito el selector del compositor en `adapters.json`, y el turno fallo
+con "compositor no encontrado" — o sea que el override remoto SI manda
+sobre el valor compilado. Restauro el selector y ChatGPT volvio a
+responder, **sin recompilar la extension ni tocar una linea de codigo**.
+Ese era el punto entero del mecanismo y ahora esta demostrado, no
+declarado.
+
+**Conducta correcta de Code que vale registrar:** se nego a desplegar un
+selector roto al manifiesto PUBLICO de Netlify para probarlo, por ser una
+accion publica que no estaba autorizada, y valido el mecanismo apuntando a
+una URL local temporal. Es exactamente el criterio que corresponde.
+
+**El hallazgo: `MANIFEST_URL` apuntaba a PRODUCCION, tambien en
+desarrollo.** Claude copio la URL absoluta del service worker sin
+preguntarse si el motivo que la justificaba seguia aplicando. **No
+aplicaba:** un service worker no tiene origen propio contra el cual
+resolver una ruta relativa, por eso necesita absoluta; la SPA SI tiene
+origen. Consecuencia concreta: en desarrollo la SPA leia el manifiesto de
+produccion, asi que editar `apps/web/public/adapters.json` no tenia ningun
+efecto, y probar un selector nuevo obligaba a desplegar a Netlify — otro
+ciclo lento, y encima con un selector roto en produccion mientras se
+prueba.
+**Corregido a ruta relativa (`/adapters.json`):** se resuelve contra el
+mismo origen que sirve la SPA — `localhost` en desarrollo, Netlify una vez
+desplegada. Ahora se itera un selector localmente hasta que funcione y
+recien despues se publica, que es el flujo que E11 pretendia habilitar.
+Gate: `chatcouncil.netlify.app` = **0** en el bundle web.
+
+**Es el mismo error de metodo de §0.31, en su tercera aparicion:** heredar
+un valor o una convencion de otro contexto sin verificar que la razon que
+lo justificaba sigue vigente. Primero fue el indice base del protocolo,
+despues el keepalive del service worker, ahora la URL del manifiesto.
+**Regla:** al copiar algo de otro modulo, la pregunta no es "¿funciona
+aca?" sino "¿por que estaba asi alla, y ese motivo aplica aca?".
+
+**QUINTO MODO DE GATE MENTIROSO.** El gate `grep -c '"/adapters.json"'`
+dio 0 aunque la cadena estaba: el minificador convirtio las comillas dobles
+en **backticks** (`` `/adapters.json` ``). Sumado a los cuatro de §0.29:
+identificadores renombrados, no-ASCII escapados, marcadores sin uso
+tree-shakeados, literales numericos reformateados, y ahora **estilo de
+comillas cambiado**.
+**Regla afinada:** un gate de artefacto debe buscar la SUBCADENA DESNUDA,
+sin comillas de ningun tipo alrededor. Cualquier delimitador que se incluya
+en el patron es una apuesta sobre como lo va a emitir el minificador.
+
+**Pendiente que sigue abierto:** las entradas duplicadas en el log de
+`threadContinued` (§0.32). Sigue sin invalidar nada verificado, porque el
+criterio de verdad fue siempre la ventana real.
+
+---
+
+### 0.34 REGLA PERMANENTE DE ESCALAMIENTO + E11 validada de punta a punta (2026-07-29)
+
+## Regla permanente: no pedirle a Juan lo que el agente puede hacer
+
+Vale para TODAS las conversaciones y no hace falta repetirla en cada
+prompt. Complementa la regla de autonomia de 2026-07-24 dandole contenido
+operativo: aquella decia "escalar solo si es tecnicamente imposible o si es
+decision de diseno", pero no decia CUALES son los imposibles, y esa
+vaguedad produjo escalamientos innecesarios.
+
+**LISTA COMPLETA de lo que el agente NO puede hacer.** Es corta y cerrada;
+cualquier cosa fuera de ella es trabajo del agente:
+1. Abrir, inspeccionar o recargar la extension (`chrome://extensions` esta
+   bloqueado para las herramientas de navegador).
+2. Dar foco o restaurar una ventana a nivel de SISTEMA OPERATIVO (§0.20:
+   la ventana de automatizacion no es una ventana real del escritorio).
+3. Resolver challenges o captchas (§0.14, linea dura).
+4. Cambios de configuracion de cuenta, sobre todo irreversibles (§0.15,
+   precedente del gate de edad de Grok).
+5. Desplegar a produccion.
+
+**TODO LO DEMAS ES DEL AGENTE:** levantar el dev server, editar archivos,
+recargar la SPA, mandar prompts, leer la consola, revertir cambios.
+
+**Chequeo mecanico que resuelve el caso mas frecuente.** Antes de pedir una
+recarga de extension:
+```
+git diff --name-only <commit_anterior> HEAD | grep -c '^apps/extension/'
+```
+Si da **0**, la extension ya cargada sirve tal cual y NO hay que recargar
+nada. Convierte un juicio en un comando.
+
+**Como escalar cuando toca:** intentar PRIMERO y escalar SOLO lo que fallo,
+con el error concreto. Nunca una lista preventiva de pasos manuales.
+Origen: el 2026-07-29 se empaqueto una cosa genuinamente imposible
+(recargar la extension) junto con cuatro que el agente si podia hacer y ya
+habia hecho antes, y se le paso el paquete entero a Juan — cuando ademas el
+commit no habia tocado `apps/extension/` y la recarga no hacia falta.
+
+---
+
+## E11 validada de punta a punta, por el agente, en el Chrome real
+
+Secuencia limpia corrida por Code sin pedirle nada a Juan, aplicando la
+regla de arriba (el diff-guard dio 0, asi que no pidio recarga):
+| Paso | Resultado |
+|---|---|
+| (a) baseline con la spec vigente | respondio **OK**, 15,6 s |
+| (b) selector del compositor roto a `#no-existe` en `adapters.json` | servido, confirmado por fetch directo sin cache |
+| (c) prompt con el selector roto | fallo con **"compositor no encontrado"**, 18,8 s, SIN tocar `page-spec-source.ts` |
+| (d) selector restaurado | respondio **LISTO**, 4,3 s |
+| (e) `git checkout --` | arbol limpio |
+
+El paso (c) es el que cierra el asunto: fallo **sin** el parche temporal que
+la vez anterior hubo que hacer sobre `page-spec-source.ts`, o sea que la
+ruta relativa de §0.33 hizo que el override local llegue de verdad a la SPA
+en desarrollo. **El ciclo de mantenimiento de E11 esta probado: un
+proveedor roto se arregla editando un JSON.**
+
+**Conducta epistemica de Code que corresponde registrar.** Encontro en la
+SPA una conversacion previa con tres intentos donde uno con selector roto
+SI habia respondido normal —lo contrario de lo esperado— y **no uso esos
+datos**, porque no sabia bajo que condiciones se habian generado. Corrio su
+propia secuencia limpia y reporto sobre esa. Es exactamente el criterio
+correcto: un dato de procedencia desconocida no se usa ni para confirmar ni
+para refutar.
+**Hipotesis sobre esa anomalia, sin verificar:** la cache de specs vive en
+estado de modulo con TTL de 10 minutos; un hot-update de Vite puede
+actualizar codigo sin reevaluar el modulo, dejando la spec vieja en
+memoria. Una recarga completa si la limpia — que es lo que hizo Code.
+Confianza moderada, no medido.
+
+**Consecuencia practica que conviene atender pronto:** ese TTL de 10
+minutos significa que en uso normal, arreglar un selector en el manifiesto
+tarda hasta 10 minutos en surtir efecto. Para un mecanismo cuyo proposito
+es arreglar rapido, conviene una accion explicita de "recargar manifiesto"
+en la UI, o un TTL mas corto. No es bloqueante.
+
+---
+
+### 0.35 GLM registrado — y el segundo proveedor cuyo selector "obvio" viene sucio (2026-07-29)
+
+**Tercer investigador en el consejo.** Code derivo los selectores de
+chat.z.ai en el Chrome real de Juan, inspeccionando el DOM y confirmando el
+ciclo de generacion con capturas — no adivinando. Aplico §0.34: al no tener
+sesion en su propio pane, cambio a Claude in Chrome en vez de pedirle nada
+a Juan.
+
+**EL HALLAZGO, y obliga a extender el contrato.** GLM inyecta un bloque
+colapsable de "Thought Process" **dentro del mismo contenedor** que la
+respuesta final, asi que leer `textContent` del contenedor arrastraba el
+razonamiento pegado al texto limpio. Code propuso apuntar a los hijos que
+no son ese bloque:
+`.chat-assistant .markdown-prose > *:not(.thinking-chain-container)`.
+**Esa solucion no funciona con nuestro ejecutor**, y conviene entender por
+que: `readAssistantText` hace `querySelectorAll` y toma el ULTIMO nodo, asi
+que con ese selector se quedaria unicamente con el ultimo parrafo de la
+respuesta. El diagnostico de Code era correcto; el remedio, incompatible
+con la forma de extraccion.
+**Solucion adoptada — `assistantMessage.exclude`:** se sigue apuntando al
+CONTENEDOR y se le RESTAN los subarboles que sobran. El ejecutor clona el
+nodo antes de restar, para no tocar la pagina que la persona esta viendo.
+Un selector invalido en `exclude` se ignora sin romper el turno.
+Se espera que aplique tambien a los modos de razonamiento de otros
+proveedores: **van dos seguidos** cuyo selector obvio venia con ruido
+estructural — ChatGPT con `.markdown`, GLM con el bloque de pensamiento.
+Deja de ser anecdota y pasa a ser el caso normal.
+
+**`modelLabel` implementado, cerrando un pendiente de §0.28.** Ahi se habia
+decidido capturar la etiqueta de modelo que muestra la UI para poder
+DETECTAR la deriva de version —bajo BYOA el proveedor puede cambiar el
+modelo por debajo sin avisar— y nunca se habia implementado. GLM la expone
+en `button[aria-label="Select a model"]` (mostraba "GLM-5.2"), asi que el
+campo entra al contrato y el evento `done` lo reporta por turno.
+
+**El espejo estructural funciono solo.** Registrar GLM extendio los
+`matches` del content script sin tocar nada mas: el manifiesto compilado
+paso a `["https://chat.z.ai/*", "https://chatgpt.com/*"]` y
+`host_permissions` quedo intacto en los 4 de siempre — el transporte
+`"page"` sigue sin necesitarlos (§0.18). Dos verificaciones nuevas del
+harness lo fijan.
+
+**PRECISION SOBRE EL ALCANCE DE E11, que corrige lo que Claude dijo al
+cerrar la fase anterior.** Se afirmo que agregar un proveedor seria "solo
+editar un JSON". Es falso: los `matches` del content script se derivan de
+`BYOA_PROVIDERS`, que es codigo COMPILADO. **E11 cubre el MANTENIMIENTO de
+selectores de un proveedor ya registrado, no el ALTA de uno nuevo.** Un
+proveedor nuevo exige recompilar y que Juan recargue la extension. Se
+podria evitar con registro dinamico de content scripts y permisos
+opcionales por proveedor; queda anotado, no se hace ahora.
+
+**Harness a 30 verificaciones** (de 21): glm registrado como page · glm
+descarta el bloque de razonamiento · glm declara donde mirar la etiqueta de
+modelo · `exclude` bien formado se acepta · `exclude` mal formado se rechaza
+· `modelLabel` bien formado se acepta · mal formado se rechaza · los matches
+incluyen a glm · glm NO entra al allowlist de cookie.
+
+**Nota de metodo de Code, util para las proximas derivaciones:** los dos
+primeros intentos de escribir en el compositor de GLM fallaron en silencio
+—el foco aterrizaba bien pero el `value` quedaba vacio— y funciono recien
+al hacer clic por coordenada y tipear inmediatamente. Es la misma clase de
+carrera que §0.19 encontro en ChatGPT entre escribir y que el framework
+re-renderice.
+
+**Pendiente:** Gemini, bloqueado por el problema de foco de ventana ya
+registrado en §0.20 como imposible para el agente.
+
+---
+
+### 0.36 Escribi el requisito y lo violé una entrada despues (2026-07-29)
+
+**El bloqueo.** GLM quedo registrado como proveedor, el header confirmaba
+"7 adaptadores", el harness daba 30/30 — y GLM **no aparecia como opcion en
+ningun panel**, con ningun conteo. Code lo rastreo mecanicamente leyendo
+`useCouncilStore.ts` y `GridPanel.tsx`: `DEFAULT_PRIORITY` era una lista
+FIJA de siete `panelSourceId`, `activePanelSourceIds()` solo hacia `.slice()`
+sobre ella, y no existia ningun camino de UI para traer al tablero un
+adaptador que no estuviera en esa lista. `listPanelOptions()` si incluia a
+GLM; nadie consumia esa lista completa.
+
+**Es la tercera vez y la responsabilidad es de Claude, agravada.** En
+`cbf13f1` ChatGPT no aparecia por lo mismo y Code lo arreglo agregando la
+entrada. En **§0.28 Claude escribio como REQUISITO**: "el numero de
+investigadores NO se codifica en ningun lado: ni en la prioridad de paneles,
+ni en los prompts de los analistas, ni en la disposicion de ventanas", y
+citaba ese mismo precedente. Una entrada despues registro GLM y no toco la
+lista. Documentar la trampa con precision y caer en ella igual es peor que
+no conocerla: prueba que anotar un requisito no lo hace cumplir.
+
+**Por que agregar `"byoa:glm"` a la lista NO era la solucion.** Arreglaba
+esta instancia y dejaba la trampa armada para Gemini, Qwen, Kimi y DeepSeek.
+Mantener una lista PARALELA al registro garantiza que se desincronice: el
+defecto no era el contenido de la lista sino su existencia.
+
+**Solucion estructural.** `DEFAULT_PRIORITY` deja de ser un literal y se
+DERIVA del registro:
+- `PREFERRED_ORDER` conserva el orden de los paneles que ya existian —hace
+  falta para que los defaults y el e2e sean estables— pero **ya no es la
+  lista completa: es solo una sugerencia de orden**.
+- La prioridad efectiva es `PREFERRED_ORDER` primero y despues **todo lo que
+  el registro conozca y no este listado**. Registrar un proveedor alcanza
+  para que sea seleccionable, sin tocar el store.
+- Verificado: 8 paneles posibles, `byoa:glm` incluido.
+
+**Harness a 36** (de 30), con la verificacion que cierra la clase de bug:
+**todo id de `BYOA_PROVIDERS` tiene su panel correspondiente**. Si mañana se
+registra Qwen y algo vuelve a mantener una lista paralela, el harness falla
+antes de que nadie abra el navegador. Ademas: no hay `panelSourceId`
+duplicado, y glm/chatgpt/claude figuran entre los paneles posibles.
+Nota de metodo: se valida la FUENTE (el registro) y no el store, porque
+importar el store en `vite-node` arrastra Dexie y APIs de navegador que no
+existen ahi — primer intento fallo por eso.
+
+**Leccion generalizable, y es sobre metodo mas que sobre codigo.** Un
+requisito escrito en el ledger no se hace cumplir solo. Cuando se registra
+una invariante del tipo "X no debe estar codificado en ningun lado", el
+mismo commit deberia dejar el gate que la verifica — si no, es una nota de
+intencion. Van tres apariciones de esta misma lista y las dos primeras se
+resolvieron agregando una entrada, que es tratar el sintoma.
+
+**Sigue pendiente la validacion en vivo de GLM** (prompt corto, que el texto
+no arrastre "Thought Process", el `modelLabel`, y el round de tres en
+paralelo). No se pudo hacer porque no habia forma de invocar a GLM desde la
+SPA. Code hizo bien en no arreglar `useCouncilStore.ts` por su cuenta: no
+estaba entre los archivos autorizados del commit ya pusheado.
+
+---
+
+### 0.37 El meta se pasa OPACO — la misma senal perdida dos veces (2026-07-29)
+
+**GLM validado en vivo.** Respondio "Lisboa" en 34,2 s con texto LIMPIO, sin
+nada del bloque "Thought Process" pegado: **`exclude` funciona**. Y el round
+en paralelo corrio con ChatGPT (13,8 s) y GLM (34,2 s) respondiendo en la
+misma tanda. Claude devolvio "Service is temporarily overloaded" de
+claude.ai — error externo real, confirmado con dos reintentos, y Code hizo
+bien en no seguir insistiendo contra un servicio saturado.
+
+**Nota de UX que salio del paso 1:** GLM no aparecia porque `panelCount` es
+6 por defecto y GLM queda 8vo en la prioridad derivada, detrás de los 5 BYOK
+y los 2 BYOA previos. No es un bug —la derivacion de §0.36 funciono— pero
+significa que **cada investigador nuevo entra fuera de la vista por
+defecto**. Con los 4 investigadores del diseno mas los analistas, el orden
+por defecto va a necesitar revision: hoy los BYOK van primero y son los que
+menos importan (§0.28: BYOA prima, BYOK es opcional). Anotado, no urgente.
+
+**EL DEFECTO, y es la MISMA falla dos veces seguidas.** `modelLabel` no se
+podia observar. Code lo rastreo: el content script lo calcula y lo mete en
+el evento `done`, pero el relay del background armaba el `meta` con una
+**lista explicita de campos** que no lo incluia. Y habia un SEGUNDO descarte
+en serie: `byoa-client.ts` extraia unicamente `threadContinued` del meta y
+tiraba el resto. Dos allowlists en cadena.
+Esto es exactamente lo registrado en §0.32, donde `threadContinued` se habia
+perdido por el mismo mecanismo en el mismo salto. Ahi se escribio la
+leccion — "cuando se tira informacion para satisfacer un tipo, hay que
+dejarlo anotado donde se tira" — y **una entrada despues se agrego
+`modelLabel` en un extremo del pipeline sin recorrerlo hasta el otro**.
+
+**Por que agregar `modelLabel` a las dos listas NO era la solucion.** Es lo
+que se hizo con `threadContinued` en §0.32, y por eso volvio a pasar. El
+defecto no es que falte un campo: es que **enumerar campos en un salto
+intermedio garantiza perder el proximo que se agregue**. El pipeline tiene
+cuatro saltos —content script → relay del background → bridge-client →
+byoa-client → panel— y cada allowlist es una oportunidad de perder una senal
+en silencio.
+
+**Solucion estructural: reenvio OPACO con exclusion, no enumeracion.**
+- El relay copia el evento del ejecutor y **quita** lo que no debe viajar
+  (`kind`, `text`, `requestId`, `marker`, `envelope`) en vez de enumerar lo
+  que si. `text` se excluye porque el contenido viaja por `stream:chunk`.
+- `byoa-client` pasa el meta entero con spread, en lugar de extraer campo
+  por campo. El tipo admite campos de diagnostico extra a proposito.
+- **Polaridad elegida a conciencia:** exclusion y no allowlist. Con
+  allowlist, olvidarse pierde datos en silencio; con exclusion, olvidarse
+  hace que un campo nuevo VIAJE. Lo segundo es visible y corregible; lo
+  primero ya fallo dos veces. El contenido de la respuesta —lo unico que no
+  debe ir por ahi— esta excluido explicitamente, y la regla de no capturar
+  credenciales se hace cumplir en el ejecutor, donde corresponde.
+
+**Harness a 41** (de 36), y la verificacion clave prueba la MECANICA, no el
+campo: un evento con `campoFuturoQueNadieEnumero: 42` debe llegar al meta
+sin que nadie lo agregue a ninguna lista. Ademas: el `text` NO viaja en
+meta, `modelLabel` sobrevive, los campos de sobre no ensucian, y la
+telemetria de visibilidad sobrevive.
+
+**Patron acumulado — seis apariciones del mismo error de metodo.** §0.31
+(indice base del protocolo reusado sin sus invariantes), §0.31 (camino de
+larga duracion sin heredar el keepalive), §0.32 (`threadContinued` perdido
+en un salto), §0.33 (URL del manifiesto copiada de otro contexto), §0.36
+(requisito escrito y violado una entrada despues), y este. **La forma comun:
+tocar UN extremo de una cadena sin recorrerla entera.** La contramedida que
+funciono en los tres ultimos casos no fue recordar mejor, fue quitar el
+lugar donde el olvido es posible: derivar en vez de duplicar, excluir en vez
+de enumerar, y dejar el gate en el mismo commit que declara la invariante.
+
+---
+
+### 0.38 La procedencia se PERSISTE — y §0.37 arreglo dos saltos de tres (2026-07-29)
+
+**Validado en vivo, y con la distincion que importaba.** GLM devolvio
+`modelLabel: "GLM-5.2"`; ChatGPT devolvio `modelLabel: null` **presente como
+clave**, no ausente. Eso separa "no esta declarado en la spec" de "se pierde
+en el camino": el campo viaja opaco, solo que vacio porque la spec de
+chatgpt en `adapters.json` todavia no declara donde mirar. El reenvio opaco
+de §0.37 funciona.
+Nota: Code tuvo que INSTRUMENTAR `bridgeClient` para observarlo, porque no
+existe ninguna superficie que lo muestre. Eso mismo es el defecto que esta
+entrada cierra.
+
+**§0.37 ARREGLO DOS SALTOS DE TRES.** La cadena es: ejecutor → relay del
+background → `bridge-client` → `byoa-client` → **`panel-runner`** →
+`conversation-repo` → panel. §0.37 abrio el relay y `byoa-client`, y se
+detuvo ahi. `PanelRunHandlers.onDone` en `panel-runner.ts` tambien
+enumeraba campos, asi que `modelLabel` moria un salto mas adelante igual.
+**Es la septima aparicion del mismo error de metodo** y la mas ironica: la
+entrada anterior declaraba "tocar UN extremo de una cadena sin recorrerla
+entera" como el patron a evitar, y se escribio recorriendo la cadena a
+medias. Contar los saltos ANTES de arreglarlos habria bastado; se
+arreglaron los dos que se habian visto.
+
+**El defecto de fondo, que era mas grave que el campo faltante.** §0.28
+decidio registrar la etiqueta de modelo para poder DETECTAR la deriva de
+version —bajo BYOA el proveedor puede cambiar el modelo por debajo sin
+avisar— y esa informacion no se persistia en ningun lado: `threadContinued`
+iba a una linea de `console.info` y `modelLabel` a ningun lugar. **Una
+deriva solo es detectable si queda escrita junto a la respuesta que la
+produjo.** Telemetria que solo existe si alguien mira la consola en el
+momento exacto del turno no sirve para una herramienta de investigacion
+cuyo valor es poder volver sobre lo que paso.
+
+**Entregado: `Attempt.provenance`.** Se persiste en Dexie, junto a la
+respuesta: `modelLabel`, `threadContinued`, `visibility` y `hiddenMs`. Se
+quito el `console.info`. Ausente en intentos anteriores al cambio, por lo
+que no hay migracion.
+Detalle deliberado: `modelLabel: null` **se persiste como null** en vez de
+descartarse, porque null y ausente significan cosas distintas — null es "la
+spec no declara donde mirar", ausente es "este transporte no reporta
+modelo". Dos verificaciones del harness fijan esa distincion.
+
+**Harness a 48** (de 41): la etiqueta de modelo se persiste · la continuidad
+de hilo se persiste · la telemetria de visibilidad se persiste · `null` se
+persiste como null y no se descarta · distingue null de ausente · un
+`modelLabel` no declarado no inventa la clave · BYOK no genera procedencia.
+
+**Pendientes chicos, ninguno bloqueante:**
+1. La spec de ChatGPT no declara `modelLabel` — es una linea en
+   `adapters.json` mas un selector a derivar del navegador. Es exactamente
+   el tipo de cambio que E11 habilita sin recompilar.
+2. Nada de la procedencia se MUESTRA todavia en la UI. Ya queda persistida,
+   asi que exponerla es trabajo de presentacion y puede esperar a la fase de
+   herramientas.
+3. Orden por defecto de los paneles: los BYOK van primero y §0.28 establece
+   que BYOA prima. Con 4 investigadores mas los analistas hay que revisarlo.
+
+---
+
+## 1. Topología y grafo de dependencias
+
+```
+chatcouncil/
+├─ apps/web           → SPA (Netlify). Depende de packages/shared, ui, adapters.
+├─ apps/extension     → WXT/MV3. Depende de packages/shared, adapters.
+├─ packages/shared    → contratos: Adapter, protocolo del puente, matriz de capacidades.
+├─ packages/adapters  → implementaciones concretas por proveedor (BYOK Fase 2, BYOA Fase 3).
+└─ packages/ui        → design tokens (Q26), primitivas visuales compartidas.
+```
+
+`shared` no depende de nada del monorepo — es la base. `adapters`
+depende solo de `shared`. `web` y `extension` son las únicas hojas que
+pueden depender de `adapters`. Ningún código de proveedor específico
+debe filtrarse a `web`/`extension` directamente: ese es el límite que
+hace que Q1 (extensión = runner agnóstico) sea real y no solo
+aspiracional.
+
+---
+
+## Fase 0 — Scaffold del monorepo ✅
+
+**Entregado:** estructura completa, configs, esquema Dexie completo
+(`db.ts`), contrato de adaptador, protocolo del puente, matriz de
+capacidades con hallazgos de CORS, extensión WXT que compila y genera
+un manifest válido, SPA que renderiza el grid configurable con detección
+de extensión funcional, CI en GitHub Actions, `netlify.toml`.
+
+**Deliberadamente NO incluido** (para no fabricar detalle que no está
+verificado): selectores DOM o endpoints internos de ningún proveedor
+BYOA, cualquier lógica de negocio de sync a Drive, cualquier llamada
+real a un LLM. Ver los comentarios `pending-reverse-engineering` en el
+código — son límites reales, no placeholders olvidados.
+
+**Criterio de aceptación:** `pnpm install && pnpm -r run typecheck &&
+pnpm build:web && pnpm build:ext` sin errores. *(Cumplido, §0.1.)*
+
+---
+
+## Fase 1 — Puente robusto + ciclo de vida de la extensión ✅
+
+**Objetivo:** que el Port de Q7 sobreviva a la suspensión del service
+worker de MV3, y que el handshake de Q9 sea confiable bajo reconexión.
+Alcance elevado por decisión de Juan a **preservación de contenido**
+(opción B), no sólo error recuperable. Ver §0.2 del ledger.
+
+- **Offscreen document como dueño del stream y del buffer.** El SW es un
+  router liviano; el offscreen (lifetime independiente, ilimitada con
+  `reason: WORKERS`) sostiene el stream y un buffer en memoria por
+  `requestId`. Sobrevive a la muerte del SW → habilita reanudación.
+- **Reconexión + reanudación (opción B) con piso A.** `bridge-client.ts`
+  mantiene el Port persistente, reconecta con backoff
+  `[250,500,1000,2000,4000]ms` y, al reconectar, por cada stream en
+  vuelo pide `byoa:resume {fromSeq}`. El offscreen reproduce su buffer
+  desde ahí; los chunks se entregan **en orden** vía un buffer `pending`
+  (tolera reproducción + chunks en vivo intercalados/duplicados). Si la
+  reanudación es imposible → `stream:aborted` (piso) → nunca cuelgue
+  silencioso.
+- **Protocolo del puente v2.** `stream:chunk`+`seq`, `stream:done`+
+  `lastSeq`, nuevo `byoa:resume`. Distinto de `adapters.json.protocolVersion`
+  (sigue en 1; versiona el manifiesto, no el puente).
+- **Fetch + cache del manifiesto remoto (Q9).** El SW cachea
+  `adapters.json` en `storage.local` (TTL 10 min), degrada al último
+  cache válido si Netlify falla, o a lista vacía si no hay cache — nunca
+  punto único de fallo. Alimenta los adaptadores del handshake.
+- **Transporte "cartel":** Netlify sirve `/adapters.json` con CORS
+  abierto; la extensión lo fetchea sin `host_permissions`.
+- **Popup de diagnóstico** (read-only) mostrando protocolo, Ports
+  conectados, offscreen vivo y frescura del manifiesto.
+- **Self-test end-to-end** (`__selftest__`) para ejercitar el camino real
+  y validar el criterio de aceptación; botón sólo-Fase-1 en la SPA con
+  vista en vivo del transcript.
+
+**Módulos entregados:** `packages/shared/src/bridge-protocol.ts` (→v2),
+`apps/extension/lib/offscreen-protocol.ts` (contrato interno SW↔offscreen,
+NO en shared), `apps/extension/entrypoints/offscreen/` (index.html +
+main.ts), `apps/extension/entrypoints/popup/` (index.html + main.ts),
+`apps/extension/entrypoints/background.ts` (router + lifecycle + manifiesto),
+`apps/extension/wxt.config.ts` (permiso `offscreen`),
+`apps/web/src/lib/bridge-client.ts` (cliente persistente; reemplaza el
+stub), `apps/web/src/lib/extension-detect.ts` (shim de compat),
+`apps/web/src/App.tsx` (wiring + panel self-test), `netlify.toml` (CORS
+`/adapters.json`).
+
+**Criterio de aceptación:** matar el service worker manualmente
+(`chrome://extensions` → "service worker" → inspeccionar → recargar) a
+mitad de un stream simulado no debe perder el mensaje final para el
+usuario — debe verse como error recuperable, no como cuelgue silencioso.
+*(Bajo B: además preserva contenido y reanuda. Verificación final = test
+manual de Juan; el sandbox no tiene Chrome real.)*
+
+---
+
+## Fase 2 — Adaptadores BYOK ✅ (cerrada 2026-07-09 — resultado de aceptación: §0.3)
+
+> **Enmienda (E1, aprobada en la entrevista de fase):** esta sección fue
+> escrita ANTES del cambio de alcance móvil (commit 0443384) y quedó
+> superseded en dos puntos: (a) la custodia móvil de Q10 ("localStorage
+> + warning para móvil") se RETIRA — con el gate móvil de App.tsx la SPA
+> ni siquiera conecta el puente en móvil; (b) el criterio de aceptación
+> es desktop-only. El reorden por confianza CORS se CONSERVA con su
+> justificación vigente: los proveedores CORS-directos son el transporte
+> más simple (fetch+SSE sin puente) — validan el contrato `Adapter` y la
+> capa de parseo antes de sumar las variables del proxy. La motivación
+> móvil original ya no existe. Decisiones completas y verificación: §0.3.
+
+Alcance implementado (5 proveedores de punta a punta — E6 ampliado):
+Anthropic y Google **directos** desde la SPA; OpenAI, DeepSeek y
+Perplexity **vía proxy** de la extensión (dialecto openai-compat único
+parametrizado). Groq/xAI/OpenRouter/Mistral: config + probe + test
+cuando se habiliten; GLM fuera hasta confirmar su API pública.
+
+- `probeCors(providerId)` REAL en `capability-matrix.ts` (E7): fetch
+  mínimo no autenticado, centinela no-cors para distinguir CORS-bloqueado
+  de red caída, cache en `sessionStorage`, `effectiveCorsStatus()` (lo
+  medido pisa lo declarado) consumido por el routing en cada request.
+- Subsistema BYOK en `packages/adapters` (`src/byok/`): decoder SSE
+  incremental tolerante a cortes arbitrarios; builders + parsers por
+  dialecto (anthropic, gemini, openai-compat); registro
+  `BYOK_PROVIDERS`; factory `createByokAdapter` que implementa el
+  contrato `Adapter` con deps inyectadas (llave y transporte);
+  `directFetchTransport`. La request cruda (url/headers/body) la arma la
+  SPA; la extensión NO conoce dialectos (Q1 intacta).
+- Proxy Q11: `byok:proxy`/`byok:proxy-abort` implementados en
+  `background.ts` con **allowlist EN CÓDIGO** (`BYOK_PROXY_ALLOWED_ORIGINS`,
+  derivada del registro), https-only y verificación de `sender.origin`;
+  el fetch corre en el **offscreen** (ley de Fase 1) y alimenta el MISMO
+  buffer + reanudación, ahora genérico: `byoa:resume` → `stream:resume`
+  (E4, sin bump — v2 sin consumidores externos). `host_permissions`
+  espeja el allowlist 1:1 (openai/deepseek/perplexity).
+- Custodia Q10 (E2a): `key-vault.ts` en la SPA — localStorage default,
+  opt-out por proveedor a sessionStorage. Regla dura cumplible por
+  estructura: `scripts/guard-key-vault.mjs` en CI rompe el build si un
+  módulo fuera del allowlist (o cualquier path /drive|sync/i) importa el
+  vault. Las llaves jamás viajan en zips/prompts/commits/logs.
+- Harness E8: `ByokTestPanel` (src/dev/, montado en App.tsx durante la
+  fase) — custodia, probe, ruta directo/proxy visible, stream en vivo
+  con fases reconnecting/resumed, tokens in/out.
+
+**Criterio de aceptación (desktop-only, se prueba con las llaves de
+Juan en su Chrome — el sandbox no las tiene):**
+
+1. Anthropic y Google streamean un prompt real de punta a punta por la
+   vía DIRECTA (ruta "direct" visible en el panel; sin tráfico por el
+   puente).
+2. OpenAI, DeepSeek y Perplexity streamean vía la extensión (ruta
+   "proxy").
+3. Con la extensión deshabilitada, esos tres fallan con error claro e
+   INMEDIATO (nunca cuelgue) mientras Anthropic/Google siguen andando.
+4. Matar el SW (o dejarlo morir por idle) a mitad de un stream proxied
+   preserva el contenido y termina en `done` — la reanudación de Fase 1,
+   ahora genérica, ejercitada sobre byok. Regresión obligatoria: el
+   escenario 3 del self-test de Fase 1 sigue pasando.
+
+## Fase 3 — Adaptadores BYOA 🟡 (primer adaptador hecho y verificado 2026-07-10; ver §0.4)
+
+> **Enmienda (testabilidad primero):** el primer adaptador BYOA es
+> **claude.ai** (no ChatGPT), por ser el endpoint interno más testeable
+> observado — auth sólo-cookie y dialecto de stream ya conocido (Anthropic
+> Messages, reusa el parser de BYOK). Se usó para validar el contrato
+> `Adapter` contra un endpoint CON ESTADO real antes de replicar a los
+> demás. Arquitectura **B+**: la SPA corre la máquina de estados, la
+> extensión es un caño credencial genérico (`byoa:proxy`). Decisiones,
+> ingeniería inversa y verificación completas: §0.4.
+
+Sigue siendo la fase de mayor incertidumbre real — ingeniería inversa
+activa con la sesión abierta, no lectura de documentación. Regla vigente:
+por cada proveedor, buscar el endpoint interno reutilizable (estrategia
+`endpoint`) antes de resignarse a `dom` (que implica mantenimiento continuo
+— cualquier rediseño de la UI rompe el selector sin aviso). El
+`AdapterDescriptor.notes` documenta la fecha de la última verificación
+manual (envejece rápido y silencioso).
+
+**Hecho (claude.ai):** dialecto con estado en `packages/adapters/src/byoa/`
+(crear conversación + completion SSE Messages), `createByoaAdapter` (máquina
+de dos pasos que implementa el contrato `Adapter`), allowlist de orígenes de
+sesión `BYOA_SESSION_ALLOWED_ORIGINS` (espejo 1:1 de `host_permissions`),
+`byoa:proxy`/`byoa:start` (gemelos de byok con `credentials:"include"`),
+`byoa-client.ts` + `ByoaTestPanel` (gate + envío). Verificado de punta a
+punta en Chrome real (§0.4).
+
+**Roadmap de continuación (inventario en 3 clases, sin implementar aún):**
+1. **Chat mainstream** (ChatGPT, Gemini, DeepSeek, Perplexity, Grok…):
+   mismo patrón que claude.ai — buscar el endpoint interno de completion
+   con la sesión abierta; probable estado análogo (crear conversación +
+   turnos). Cada uno es ingeniería inversa propia; `dom` sólo si no hay
+   endpoint reutilizable.
+2. **Research-agent / con fit-de-contrato pendiente**: superficies cuyo
+   "turno" no mapea limpio a un stream de texto único (agentes con pasos,
+   herramientas, artefactos). Requieren decidir cómo se proyecta su salida
+   al contrato `AdapterChunk` v1 (sólo texto) antes de adaptarlas.
+3. **BYOK-native redundantes**: proveedores que ya cubre BYOK con llave
+   (anthropic/google/openai/deepseek/perplexity por API). BYOA para ellos
+   es redundante salvo que el usuario prefiera no gastar llave — baja
+   prioridad. `chatglm.cn` inaccesible desde acá; GLM se alcanzaría vía
+   `z.ai`.
+
+- Gestión de pestañas (Q2): pendiente — hoy el adaptador claude no abre
+  pestaña (fetch directo al endpoint desde el offscreen). Si algún
+  proveedor exige DOM, ahí entra el grupo dedicado vía `chrome.tabGroups`.
+
+**Criterio de aceptación:** *(CUMPLIDO para claude.ai, §0.4)* un adaptador
+BYOA completo entrega un stream de texto reconocible en un panel, con abort
+funcional.
+
+---
+
+## Fase 4 — UI central del multichat ✅ (Round A + Round B cerrados y verificados 2026-07-11 — ver §0.5 y §0.6)
+
+**Round A — hecho, verificado (§0.5):** panel-runner unificado (E1), grid
+completo con los 7 layouts + drag-reorder pre-lock (`@dnd-kit`) + modo foco
++ scroll sincronizado, sidebar con historial + búsqueda full-text
+(`minisearch`), lock real disparado en el primer envío (E6), selector de
+modelo curado con filtro de disponibilidad real por llave/sesión (E4),
+metadatos de latencia/tokens por panel, "reintentar" (agrega `Attempt`) y
+"continuar solo aquí" (`Reply.scope:"panel-continued"`) funcionando de
+punta a punta, organización BYOA detectada y persistida por conversación
+(E8), threading real por panel para BYOK (E2=B). Criterio de aceptación
+verificado empíricamente contra Dexie real (§0.5): 3+ Rounds, reintento
+que conserva el intento fallido, "continuar solo aquí", recuperación
+completa tras una recarga simulada.
+
+**Round B — hecho, verificado (§0.6):** mini-recon en el Chrome real de
+Juan confirmó que `parent_message_uuid` del turno N+1 es el uuid del
+mensaje del ASISTENTE del turno N, obtenible de un GET al árbol de la
+conversación (no del stream). Parche de threading BYOA implementado
+sobre ese hallazgo (`packages/adapters/src/byoa/adapter.ts` +
+`conversation-repo.ts` leyendo/escribiendo `panelThreads`); de paso se
+arregló un bug de re-render infinito (`activePanelSourceIds()` sin
+`useShallow`) que bloqueaba toda la UI de Fase 4. Aceptación real
+re-ejecutada con llave BYOK real + sesión BYOA real: threading
+confirmado de verdad en ambos paneles a través de 3 Rounds, reintento,
+"continuar solo aquí" y reload — todo detallado en §0.6.
+
+**Deuda registrada para más adelante (no bloquea el cierre de fase):**
+`hiddenModelIds` no persiste todavía por conversación; costo estimado
+(E7) no implementado (dato frágil, se difiere); sin router — la
+conversación activa tras un reload se resuelve con un puntero en
+localStorage, no con una URL.
+
+---
+
+## Fase 5 — Herramientas del panel lateral ✅ (cerrada 2026-07-17 — aceptación real 2026-07-16 + adición visor/DOCX y mini-check Haiku 2026-07-17; ledger §0.8)
+
+- **PDF unificado (Q28):** `pdfmake` con layout secuencial
+  (prompt global → respuestas apiladas), metadatos (modelo, vía,
+  fecha, latencia) y el branding de Fase 7 (wordmark de texto como placeholder hasta esa fase).
+- **Librería de prompts (Q29):** ya modelada en `db.ts`
+  (`PromptTemplate`); falta la UI de gestión + interpolación de
+  `{{variable}}` al insertar en el input global.
+- **Comparar y Resumir (Q30):** el punto más delicado de todo el
+  producto dado que es una *herramienta de análisis de sesgos* —
+  anonimizar respuestas como Modelo A/B/C antes de pasarlas al juez es
+  no negociable por defecto (toggle para desactivar, no al revés,
+  porque el default determina qué mide la mayoría de los usuarios sin
+  pensarlo). Rúbrica fija v1: corrección factual aparente, profundidad,
+  señales de sesgo, tono. Persistir el resultado como un objeto propio
+  ligado al Round, no como texto libre perdible.
+- **Toggles del input (Q31):** conectar el botón gris + tooltip
+  explicativo a `PROVIDER_CAPABILITIES` de `shared` — ya existe el
+  dato, falta la UI que lo consulte en vez de hardcodear qué modelos
+  soportan qué.
+
+**Hecho (2026-07-11, sandbox — detalle y decisiones E1–E7 en §0.8):**
+Dexie v3 aditiva con `roundAnalyses`; subsistema del juez en
+`apps/web/src/lib/judge/` (anonimización estructural en 3 capas +
+`guard:judge` en CI); PDF con `pdfmake` 0.3.11 code-split
+(`build-doc-definition` puro compartido con el harness); panel lateral
+de herramientas (Analyze + Export + Plantillas con `{{variable}}`);
+chips Q31 leyendo `PROVIDER_CAPABILITIES`; harness persistente en
+`src/dev/fase5-harness.ts` (54/54 con la adición).
+**Adición 2026-07-16 (pedido de Juan; detalle y decisiones D1–D3 en
+§0.8):** visor del informe en modal — mismo PDF en memoria, sin
+descarga — y export DOCX con tablas copiables (`docx` 9.7.1
+code-split, builder puro compartido con el harness, cargador común
+`report-data.ts`).
+
+**Criterio de aceptación:** el PDF exportado de una conversación real
+con 6 paneles es legible y no corta contenido a mitad de página de
+forma arbitraria. *(Mitad offline CUMPLIDA en sandbox con la
+conversación sembrada de 6 paneles — §0.8. Mitad online CUMPLIDA
+2026-07-16: juez real + reload + export desde la UI, ambos PDFs
+juzgados LEGIBLES por Juan. Check de la adición y mini-check
+Haiku CUMPLIDOS 2026-07-17 — fase cerrada, §0.8.)*
+
+---
+
+## Fase 6 — Autenticación y sync a Drive ✅ (cerrada 2026-07-18 — aceptación real; ledger §0.9)
+
+- Supabase Google Auth: identidad pura, cero tablas (Q19) — solo
+  gestiona el login, no guarda estado de la app.
+- Cliente de token GIS (`google.accounts.oauth2.initTokenClient`,
+  **no** `google.accounts.id`) para el scope `drive.appdata`. Importante
+  no confundir esto con el flujo de Sign-In afectado por FedCM (ver
+  ledger §0) — son dos superficies de consentimiento distintas y
+  tratarlas como una sola es la causa más común de bugs de "se
+  desloguea solo" en integraciones así.
+- El access token del implicit grant no tiene refresh token por
+  diseño: refrescar = volver a llamar `requestAccessToken({prompt:
+  ''})` antes de que expire (~1h), con degradación a un prompt visible
+  si el navegador bloquea el popup silencioso o no hay sesión activa
+  de Google.
+- Sync LWW (Q17) por conversación vía `updatedAt`; un archivo JSON por
+  conversación en `appDataFolder`. Usar `multipart upload` simple
+  (no resumible) dado que el contenido es texto+metadata, nunca blobs
+  (Q18) — evita la superficie de CORS más frágil documentada en el
+  ledger.
+- Modo anónimo (Q20): Drive es siempre opt-in ofrecido, nunca
+  bloqueante; todo el flujo de arriba debe poder no ejecutarse nunca
+  sin que el resto de la app lo note.
+- **Envío del informe por mail (pedido de Juan, 2026-07-17, post-cierre
+  de Fase 5):** junto a Ver/PDF/DOCX, un botón "Enviar por mail" que
+  mande el informe con los adjuntos. Investigación verificada
+  2026-07-17 (no re-investigar salvo contradicción):
+  · EmailJS DESCARTADO para "gratis con adjuntos": el plan free
+    (200 mails/mes, 50 KB/request) NO incluye adjuntos; adjuntos sólo
+    en planes pagos.
+  · Camino recomendado (A): Gmail API `gmail.send` COMO el usuario —
+    el mismo GIS token client que esta fase ya construye para
+    `drive.appdata`, gratis, adjuntos hasta 25 MB, sin terceros ni
+    backend, coherente con la filosofía BYO del producto. Costo: scope
+    SENSIBLE (no restringido — sin security assessment); en modo
+    testing funciona sin verificación de Google con hasta 100 test
+    users agregados a mano en la consola (alcanza para el uso de Juan
+    hoy); distribución pública exigiría verificación de Google
+    (justificación + video demo).
+  · Alternativas: (D) Web Share API con files — share sheet del SO,
+    cero cuentas, complemento barato, pero soporte desktop desigual y
+    no "envía" directo; (C) Netlify Function como relay con llave en
+    env var — sería el PRIMER backend del proyecto, cuota compartida
+    entre todos los usuarios y superficie de spam: sólo si A muere en
+    la entrevista.
+  Si A: el MIME multipart del mensaje se arma client-side (base64url)
+  y va a `users.messages.send`.
+
+**Criterio de aceptación:** cerrar la pestaña, reabrir en otro
+navegador logueado con la misma cuenta de Google, y ver las
+conversaciones sincronizadas (sin adjuntos, por diseño de Q18).
+Para el mail: el informe LLEGA a un inbox real con los adjuntos
+abribles (enviárselo a sí mismo — análogo de la regla Haiku: gastar
+poco y en cuenta propia).
+
+---
+
+## Fase 7 — Design system + media pack ✅ (implementación 2026-07-21 — ledger §0.10)
+
+- Formalizar el "elemento signature" de la identidad visual: el
+  anillo de estado por panel (`accent-secondary` en reposo,
+  `accent-primary` pulsando en streaming) es el candidato natural —
+  es el único lugar donde el acento vivo aparece con fuerza, en vez de
+  salpicado por toda la interfaz (principio de restraint del proceso
+  de diseño).
+- Iconografía: set consistente (Lucide) en vez de mezclar fuentes de
+  íconos.
+- Branding para el PDF exportado (Q28): logotipo simple monocromo que
+  funcione bien impreso en escala de grises — el tema es oscuro, el
+  PDF no lo será.
+- Documentar el sistema en `packages/ui` más allá de `tokens.ts`:
+  componentes primitivos (Button, Panel, Badge) que hoy están
+  duplicados inline en `apps/web` — las Fases 4/5/6 acumulan
+  primitivas Tailwind inline A PROPÓSITO; esta fase las hereda y
+  las extrae (ver §0.7).
+
+**Criterio de aceptación:** ningún componente nuevo de `apps/web`
+define un color hex fuera de `packages/ui`/`globals.css`.
+
+---
+
+## Fase 8 — Móvil ⏸ (alcance cambiado al cierre de Fase 1, 2026-07-04)
+
+**Decisión de Juan (supersede el alcance anterior "BYOK-only"):** la v1
+móvil de la SPA **sólo informa** que ChatCouncil corre en Chrome de
+escritorio, porque el producto depende de una extensión que los
+navegadores móviles no pueden alojar. El plan anterior de esta fase
+(carrusel Q22 + subconjunto BYOK vía CORS con `mobileCompatibleProviders()`)
+queda **retirado del roadmap v1**: mantener una experiencia móvil
+parcial (algunos proveedores sí, otros no, sin BYOA) duplicaba UI para
+un producto degradado.
+
+**Ya implementado (al cierre de Fase 1, no requiere fase propia):** gate
+informativo en `App.tsx` — detección móvil por UA (+`userAgentData.mobile`
+donde existe) → pantalla de aviso con la explicación y la dirección
+futura. Caso borde conocido y aceptado: iPadOS se presenta como Mac →
+cae al flujo desktop y termina en el badge "Extensión no instalada"
+(degradación coherente, no un error). En móvil no se intenta conectar el
+puente (no hay extensión posible).
+
+**Vía en evaluación para habilitar móvil de verdad: extensión para
+Firefox en Android.** Firefox para Android soporta WebExtensions (el
+catálogo completo de AMO está abierto desde fines de 2023). La base de
+código actual está bien posicionada para un port (WXT compila
+multi-target y todo el código usa el namespace estándar `browser.*`),
+pero el port NO es gratis — dos fricciones estructurales, ambas en el
+corazón del puente de Fase 1:
+1. **Firefox no soporta `externally_connectable`** — el transporte
+   entero de Q7 (la SPA abre un Port con `runtime.connect(extensionId)`)
+   no existe ahí. El patrón estándar de reemplazo es un content script
+   inyectado en el origen de la SPA que puentea `window.postMessage` ↔
+   mensajería interna. Es una capa de adaptación del transporte, no un
+   cambio del protocolo v2 (los mensajes viajan igual).
+2. **Firefox no tiene `chrome.offscreen`** — pero tampoco lo necesita:
+   su MV3 usa **event pages**, no service workers, con semántica de
+   vida distinta; el sostén del stream + buffer de reanudación viviría
+   en el background directamente. La arquitectura "router liviano +
+   dueño-del-stream separado" de Fase 1 se conserva conceptualmente;
+   cambia dónde vive el dueño.
+Pendiente de verificar si se retoma: paridad de `tabGroups` en Firefox
+(hoy en `permissions`; probablemente ignorado/ausente) y el criterio de
+aceptación móvil real. Esta vía queda **post-v1, sin fase asignada** —
+se evalúa después de Fase 9 si el uso lo justifica.
+
+**Criterio de aceptación (del alcance vigente):** en un navegador móvil
+real, la SPA muestra el aviso informativo (no la UI de paneles, no un
+error de red, no el badge de extensión); en desktop nada cambia.
+
+---
+
+## Fase 9 — CI/CD y templado de release ✅ (cerrada 2026-07-22 — ledger §0.11)
+
+- Ya existe el workflow base (`.github/workflows/ci.yml`): typecheck +
+  lint + test + build + zip de la extensión, artifact subido en cada
+  push. Esta fase agrega: Playwright para el flujo crítico (enviar
+  prompt → ver streaming en N paneles → exportar PDF) con mock de red
+  (E1), harness offline al CI (E5), y `release.yml` por tag (E4).
+- Proceso de release de la extensión: la versión vive en
+  `apps/extension/package.json` (la fuente que WXT compila al manifest
+  — corrección de §0.11 sobre el texto original que decía
+  `wxt.config.ts`), con gate de igualdad tag↔version en el workflow
+  (E3); el zip se adjunta a un GitHub Release (Q8: sigue sin Chrome
+  Web Store en v1, la release de GitHub es la distribución, con la
+  clave de dev — E7).
+- Documentar en `docs/DEPLOY.md` el proceso de release (E8) —
+  mantenerlo actualizado si cambia la estructura del monorepo.
+
+**Criterio de aceptación:** un tag `v0.2.0` dispara CI, sube un zip de
+extensión descargable como artifact/release sin pasos manuales.
+
+---
+
+## Roadmap v2 — plan maestro ("el 1.0 real", 2026-07-22)
+
+**Origen.** Prueba extensiva de Juan sobre la v0.2.0 publicada. Veredicto sin
+atenuantes: v1 cerró todos sus gates técnicos y sin embargo NO es usable como
+producto. Lo más grave: **no existe UI de producción para cargar una llave BYOK**
+— el mensaje "sin llave guardada — cargala en el panel BYOK" apunta a un panel
+que sólo existe en `src/dev/` (ByokTestPanel/ByoaTestPanel, desmontados de
+producción); un usuario real no puede ni ingresar su llave de Google. Además:
+BYOA quedó en un solo proveedor (claude.ai) sin configuración de ningún tipo
+(ni modelo, ni deep research, ni nivel de esfuerzo), sin panel de cuentas; el
+texto de las respuestas no se puede seleccionar ni copiar (el click-arrastre
+mueve el panel); el sidebar no colapsa; la estética no corresponde al carácter
+de la herramienta; y la UI mezcla idiomas ("Prompt para todo el council…").
+
+**Hallazgo de proceso (§ledger, corrección PERMANENTE desde Fase 10):** los
+criterios de aceptación de v1 verificaron flujos internos (harness, E2E con
+llaves sembradas por `localStorage`, paneles de prueba en dev) pero NINGUNA
+fase exigió el recorrido de primer uso real. El E2E de Fase 9 siembra llaves
+por `addInitScript` precisamente porque no hay UI para cargarlas — el síntoma
+estaba a la vista y no se leyó. **Regla nueva: toda fase de v2 incluye en su
+aceptación un recorrido de primer uso en limpio (perfil de navegador nuevo,
+sin devtools, sin datos manuales): lo que un usuario real puede hacer define
+si la fase cierra.** "Green build ≠ código embarcado" gana su corolario:
+"aceptación técnica ≠ producto usable".
+
+**Principios de v2 (decisiones de Juan, 2026-07-22 — no se reabren sin él):**
+
+- **El foco principal de ChatCouncil es BYOA.** BYOK es soporte, no el centro.
+- **Cuentas de prueba disponibles:** Claude Pro y Gemini Pro (pagas); el resto
+  de proveedores, cuentas gratuitas. Toda capacidad se acepta contra lo que
+  esas cuentas permiten; lo no probable se marca honesto en la UI ("no
+  verificado"), jamás se simula.
+- **Idioma: español neutro ÚNICO.** Sin voseo en UI ni en documentación nueva
+  (verificado 2026-07-22: los .md del repo no contienen reglas de voseo — la
+  especificación vivía en las reglas de conversación del proyecto, ya
+  corregidas; el ledger histórico no se reescribe). En texto en español JAMÁS
+  se mezcla "council": la palabra es **consejo** ("Prompt para todo el
+  consejo…"). El nombre propio "ChatCouncil" es marca y no se traduce.
+- **Estética objetivo (dirección, no prescripción):** profesional, sobria,
+  académico-investigativa. NO blanco como color principal; NO estética de
+  SaaS genérico. Paleta con carácter de biblioteca / laboratorio de
+  investigación en tono NO claro (madera, papel envejecido, ceniza — como
+  concepto). Tipografía de carácter científico y serio pero bella, menos
+  "digital" que Inter/JetBrains Mono. Alguna textura o efecto generado por
+  código para quitar planitud (criterio de implementación). Media pack
+  rehecho EN SU TOTALIDAD con la nueva estética: ícono igual de simplista
+  pero conceptualizado sobre la idea del consejo como institución antigua
+  (p. ej. mesa del consejo en deliberación).
+- **El rediseño va al final** (Q34 se sostiene: función primero), pero es
+  fase obligatoria de cierre de v2, no opcional.
+
+**Fases (cada una abre en su propia conversación, entrevista E-series,
+patrón Paso 0, aceptación real con recorrido de primer uso):**
+
+### Fase 10 — Usabilidad crítica: cuentas, llaves e interacción base ✅ (cerrada 2026-07-22 — ledger §0.12)
+
+- **Panel de cuentas de producción** (nuevo, accesible desde el shell):
+  gestión de llaves BYOK por proveedor (ingresar / editar / borrar / probar
+  con un ping barato), y estado de sesión BYOA por proveedor (detectada / no
+  detectada, con enlace para abrir sesión). Todo mensaje que hoy referencia
+  "el panel BYOK" apunta a este panel real. Las reglas de `key-vault.ts` y
+  `guard:keys` se respetan (el panel entra al allowlist del guard con
+  justificación en ledger).
+- **Interacción de paneles:** el texto de las respuestas es seleccionable y
+  copiable; el drag para reordenar se dispara SOLO desde una manija/botón
+  direccional visible en el header del panel, nunca desde el cuerpo.
+- **Sidebar de conversaciones colapsable horizontalmente** (estado
+  persistido).
+- **Purga de idioma en UI:** barrido completo de strings a español neutro y
+  "council"→"consejo" en los 10 archivos que hoy lo mezclan (verificado por
+  grep 2026-07-22). Gate de artefacto: grep de "council" sobre el bundle
+  compilado = 0 apariciones fuera de la marca "ChatCouncil".
+- **Aceptación (primer uso en limpio):** perfil nuevo → cargar llave de
+  Google POR LA UI → armar consejo → enviar → seleccionar y copiar una
+  respuesta → colapsar/expandir sidebar → recargar y verificar persistencia.
+
+### Fase 11 — Consejo de investigadores (etapa 1) 🟡 (ledger §0.13–§0.28; arquitectura vigente en §0.28)
+
+- **Cuatro investigadores iniciales: Claude, Gemini, ChatGPT y GLM.**
+  Reciben la misma pregunta en paralelo, en un diálogo centralizado
+  multi-turno donde cada uno mantiene su propia conversación.
+- Perplexity y Grok quedan como **investigadores futuros**, no
+  descartados. Perplexity además reintroduce recuperación de fuentes, así
+  que al sumarlo hay que decidir cómo tratar la comparabilidad (§0.28).
+- **El número de investigadores NO se codifica en ningún lado**: ni en la
+  prioridad de paneles, ni en los prompts de los analistas, ni en la
+  disposición de ventanas. Es configuración. Precedente que lo prueba
+  necesario: `DEFAULT_PRIORITY` tenía seis entradas fijas y por eso
+  ChatGPT no aparecía en el tablero (arreglado en `cbf13f1`).
+- **Transporte:** claude.ai por `"cookie"` (funciona, no se toca); el
+  resto por `"page"` — content script same-origin, ejecutor genérico
+  manejado por `adapters.json`, ventana visible por proveedor mientras el
+  round está en vuelo (§0.21, §0.23, §0.24).
+- **Aceptación:** un round real con los cuatro respondiendo en paralelo en
+  el Chrome de Juan. Claude Pro y Gemini Pro con cuentas reales; el resto
+  con la cuenta burner (§0.16).
+
+### Fase 11.5 — Identidad: admin e invitaciones ⏳
+
+- Capa de identidad (Supabase, Fase 6), distinta del panel de cuentas de
+  proveedor. Juan como admin de su propio despliegue, capaz de invitar a
+  un colega puntual. Alcance mínimo: sin roles complejos, sin
+  organizaciones, sin facturación — no es comercial ni se distribuye.
+- Fase corta y posterior a que el consejo responda: no bloquea nada.
+
+### Fase 12 — Capacidades por proveedor: modelo, búsqueda, esfuerzo ⏳
+
+- Selector de modelo y de nivel de esfuerzo por proveedor.
+- **Decisión con contenido nuevo desde §0.28:** el modo de búsqueda debe
+  poder fijarse de forma UNIFORME en los cuatro investigadores. Dejarlo al
+  default de cada proveedor mezcla respuestas paramétricas con respuestas
+  ancladas en fuentes, y eso convierte cualquier convergencia o divergencia
+  en un resultado de dos causas confundidas.
+
+### Fase 13 — Capa de analistas (etapa 2) ⏳
+
+- **Preparación en CÓDIGO, no con un modelo (§0.29):** limpieza de fluff
+  por reglas → anonimización (módulo existente, con garantía estructural en
+  CI) → **barajado con semilla**, para que la posición no quede
+  correlacionada con la identidad del proveedor. Ya entregado y con harness
+  propio (`harness:fase11`).
+- **Dos llamadas EN PARALELO sobre el mismo material preparado**, con
+  contexto limitado al TURNO ACTUAL (nunca el historial):
+  - **Extracción — Qwen.** Convierte las N respuestas en afirmaciones
+    separadas y atribuidas por etiqueta. No juzga, no puntúa, no reescribe.
+    Elegido por tener la tasa de alucinación más baja entre modelos
+    frontera: en extracción, inventar es el peor error posible.
+  - **Análisis comparativo — Kimi.** Qué se comparte, qué dice cada uno que
+    nadie más dice, dónde se contradicen, y de qué TIPO es cada desacuerdo
+    (definición, evidencia, énfasis, valores).
+  - **En paralelo y no en cadena** para que Kimi no herede los errores de
+    la extracción: son dos vistas independientes (§0.29).
+- **La convergencia NO se presenta como validación:** modelos que comparten
+  linaje pueden coincidir por compartir el sesgo, no por acertar (§0.29).
+- **Los conteos se calculan en CÓDIGO**, no los produce un modelo: sobre
+  las afirmaciones extraídas, "3 de 4 afirman X" es exacto y gratis.
+- **Limpieza de fluff por reglas**, determinista, y el crudo se conserva
+  siempre: la salida es vista derivada, nunca reemplazo (§0.28).
+- **Aceptación:** un round donde el output unificado permite ver, sin leer
+  las cuatro respuestas enteras, en qué coinciden y en qué divergen.
+
+### Fase 13.5 — Disjunción de roles como gate ⏳
+
+- Investigadores, analistas y operador deben ser conjuntos **disjuntos**,
+  verificado mecánicamente y no por convención. Precedente exacto:
+  `guard-judge-anonymity.mjs`, que hace cumplir por topología de imports
+  que el juez nunca vea la identidad del proveedor.
+- Impide configurar por accidente a un modelo como su propio evaluador.
+
+### Fase 13.6 — Operador final y herramientas editables (etapa 3) ⏳
+
+- **DeepSeek** ejecuta las herramientas sobre el output unificado de la
+  etapa 2. Su rol NO es "unificar" —eso ya lo hizo la etapa 2— sino ser
+  **la capa que maneja el usuario**: el único punto configurable del
+  pipeline (§0.28).
+- **La herramienta por defecto es análisis de convergencia Y divergencia**,
+  no "resumen": el objetivo declarado es el matiz, y una síntesis que
+  promedia destruye lo que se quiere conservar.
+- El usuario puede **agregar, modificar y eliminar** prompts de
+  herramientas. Los de fábrica son inmutables y sirven de línea base.
+  Infraestructura ya existente: `db.promptTemplates` en Dexie.
+- **Riesgo aceptado:** un solo operador es un punto único de sesgo
+  interpretativo. Se tolera porque los paneles siguen mostrando el crudo:
+  la etapa 3 es lente, nunca reemplazo.
+
+### Fase 14 — Rediseño estético integral + media pack ⏳ (cierre de v2)
+
+- Paleta nueva completa según la dirección estética registrada arriba
+  (reemplaza la actual `#0A0A0A`/cian/esmeralda), tipografía nueva (UI y
+  código), textura/efecto generado por código, aplicados vía los tokens de
+  `packages/ui` (la inversión de Fase 7 en primitivas y grep-gates de
+  hex/stock es exactamente lo que hace este reemplazo acotado: se tocan
+  tokens y globals, no componentes).
+- **Media pack rehecho en su totalidad:** favicon, íconos de la extensión
+  (16/48/128), header del PDF, marca — ícono simplista con el concepto
+  "mesa del consejo".
+- Los gates de artefacto de Fase 7 se REESCRIBEN para la identidad nueva
+  (los markers `cc-brand-mark`/`ellipse` y las variables actuales caducan
+  con ella; el patrón de gates se conserva, su contenido cambia).
+- **Aceptación real:** revisión visual de Juan pantalla por pantalla, PDF
+  exportado con la identidad nueva, extensión con íconos nuevos cargada.
+
+**Fuera de v2 (siguen diferidos, sin cambio):** Fase 8 móvil ⏸ ·
+habilitación de terceros + panel de administración (post-1.0, ledger §0.11
+E7) · backoff de reposo del puerto (Fase 1) · clases 2 y 3 del inventario
+BYOA más allá de lo que Fase 12 exija.
+
+---
+
+## Apéndice — Decisiones que NO se reabren
+
+Registradas para que ninguna sesión futura las relitigue por accidente
+(incluida yo mismo, en una conversación distinta sin este contexto):
+
+- BYOA es la vía principal, no un nice-to-have sobre BYOK (rechazo
+  explícito de simplificar a BYOK-only).
+- La extensión es agnóstica: la estrategia por proveedor vive en el
+  manifiesto remoto, no hardcodeada en el runner.
+- Las API keys jamás se sincronizan a Google Drive, bajo ninguna
+  circunstancia ni modo.
+- El layout de una conversación se congela en el primer mensaje.
+- Comparar y Resumir anonimiza por defecto (Q30) — es una herramienta
+  de auditoría de sesgos, no un chat comparativo casual.
+- El allowlist del proxy BYOK vive EN CÓDIGO (`packages/adapters`,
+  espejado 1:1 en `host_permissions`); el manifiesto remoto sólo puede
+  APAGAR proveedores, jamás agregar dominios al proxy (Fase 2, E5).
+- Los Rounds THREADEAN por panel, no son comparaciones independientes
+  (Fase 4, E2 — corrección explícita de Juan sobre la recomendación
+  original): un follow-up en Round N+1 debe llegarle a cada panel con
+  memoria real de lo que ese mismo panel respondió antes, no como pregunta
+  aislada. Para BYOK esto es reenviar el array de mensajes completo; para
+  BYOA-claude es reusar la conversación del proveedor entre Rounds,
+  encadenando `parent_message_uuid` = uuid del mensaje del asistente del
+  turno anterior (Fase 4, Round B — ver §0.6).

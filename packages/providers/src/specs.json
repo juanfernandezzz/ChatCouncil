@@ -1,0 +1,67 @@
+{
+  "_nota": "Selectores DERIVADOS del DOM real de cada proveedor y validados en el navegador de Juan (v2, secciones 0.19 y 0.35). Es conocimiento del DOM ajeno, no del armazon que los usaba: sobrevive intacto a la reconstruccion. SOLO datos declarativos, nunca codigo.",
+  "specs": {
+    "chatgpt": {
+      "newConversationUrl": "https://chatgpt.com/",
+      "composer": {
+        "selector": "#prompt-textarea",
+        "kind": "contenteditable"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "button[data-testid=\"send-button\"]"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "[data-message-author-role=\"assistant\"]",
+        "pick": "last"
+      },
+      "completion": {
+        "kind": "element-gone",
+        "selector": "button[data-testid=\"stop-button\"]",
+        "quiescenceMs": 1500
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 10000,
+        "emptyResponseMs": 90000
+      }
+    },
+    "glm": {
+      "newConversationUrl": "https://chat.z.ai/",
+      "composer": {
+        "selector": "#chat-input",
+        "kind": "textarea"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "#send-message-button"
+      },
+      "responseRoot": {
+        "selector": "#messages-container"
+      },
+      "assistantMessage": {
+        "selector": ".chat-assistant .markdown-prose",
+        "pick": "last",
+        "exclude": [
+          ".thinking-chain-container"
+        ]
+      },
+      "completion": {
+        "kind": "element-gone",
+        "selector": "[aria-label=\"Stop\"]",
+        "quiescenceMs": 1200
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 12000,
+        "emptyResponseMs": 120000
+      },
+      "modelLabel": {
+        "selector": "button[aria-label=\"Select a model\"]"
+      }
+    }
+  }
+}

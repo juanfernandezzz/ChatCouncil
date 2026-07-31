@@ -212,7 +212,7 @@ burner para ChatGPT, las pagas para Claude y Gemini.
 
 ## 5. Roadmap
 
-### Fase 0 — Prueba de viabilidad 🟡
+### Fase 0 — Prueba de viabilidad ✅ (cerrada 2026-07-31 — ver §10)
 **Un solo proveedor**, antes de portar nada. Tres cosas y sólo tres:
 1. La sesión persiste entre reinicios de la app.
 2. Se puede inyectar el prompt en la vista embebida.
@@ -247,7 +247,7 @@ se ajusta la persistencia no toca ninguna cuenta paga.
   typecheck y la estructura; lo demás es de la máquina de Juan, y así se
   declara en vez de darlo por bueno.
 
-### Fase 1 — Armazón y los cuatro investigadores ⏳
+### Fase 1 — Armazón y los cuatro investigadores 🟡
 Ventana única con las cuatro vistas dispuestas, compositor con la
 confirmación previa, difusión a los cuatro, particiones de sesión, y el
 diálogo multi-turno de cada proveedor.
@@ -410,3 +410,53 @@ construye.
 
 Se verifica además que no quede ninguna referencia a lo borrado dentro de lo
 rescatado, con un grep por los nombres de los módulos eliminados.
+
+---
+
+## 10. Registro de verificación
+
+Sólo resultados MEDIDOS, una entrada por fase. No es el ledger de la v2: ahí
+se registraba cada decisión y creció a cuarenta entradas. Acá entra lo que se
+comprobó y lo que costó comprobarlo.
+
+### Fase 0 — verificada en la máquina de Juan (2026-07-31)
+
+**Las tres pruebas pasaron. La arquitectura de escritorio queda validada.**
+
+| Prueba | Resultado |
+|---|---|
+| 1 — persistencia de sesión | **72 cookies** en la partición `persist:glm`. Tras cerrar la app POR COMPLETO y reabrirla, la sesión seguía activa y el conteo se mantuvo. |
+| 2 — inyección | El prompt entró en el compositor de GLM (tras un arreglo, ver abajo). |
+| 3 — lectura | 34 caracteres leídos, **sin nada del bloque "Thought Process" pegado**: el `exclude` sobre `.thinking-chain-container` funciona. |
+
+La prueba 1 era la que decidía todo: es exactamente lo que una webapp no
+podía hacer, y es la razón entera de la reconstrucción.
+
+**El defecto que apareció, y por qué importa registrarlo.** El primer
+intento de la prueba 2 falló con "Script failed to execute". Causa,
+diagnosticada por Code: el preload exponía la interfaz con
+`Object.defineProperty(window, ...)`, pero con `contextIsolation: true` eso
+sólo alcanza al **mundo aislado** del preload, mientras que
+`executeJavaScript` corre en el **mundo principal** de la página. Corregido
+con `contextBridge.exposeInMainWorld`, que es el puente hecho para cruzar esa
+frontera.
+
+Es la misma clase de error del §7.5 —copiar una forma de otro contexto sin
+verificar que el mecanismo que la hacía funcionar allá aplique acá— y
+apareció incluso en código nuevo. **Lo que cambió es el costo:** lo atrapó
+la primera prueba diseñada para atraparlo, a una iteración de distancia. En
+la v2 esta clase de error sobrevivía varias entregas porque no había una
+prueba barata que lo delatara. La disciplina de Fase 0 se pagó sola en su
+primer uso.
+
+Otros ajustes menores: faltaba declarar `@chatcouncil/providers` como
+dependencia de workspace; y en Windows hubo que aprobar el postinstall de
+Electron y extraer su binario a mano, porque el extractor de pnpm fallaba en
+silencio sobre una ruta anidada. Nada de eso tocó el diseño.
+
+**Lecciones que se suman a §7 desde esta fase**
+13. **En Electron, un preload con `contextIsolation` no puede exponer nada
+    escribiendo en `window`.** Sólo `contextBridge.exposeInMainWorld` cruza al
+    mundo principal, que es donde corre `executeJavaScript`.
+14. **Declarar la dependencia de workspace, aunque el monorepo "encuentre" el
+    paquete igual.** Sin la declaración, el typecheck no resuelve el import.

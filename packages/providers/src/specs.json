@@ -62,6 +62,68 @@
       "modelLabel": {
         "selector": "button[aria-label=\"Select a model\"]"
       }
+    },
+    "claude": {
+      "newConversationUrl": "https://claude.ai/new",
+      "composer": {
+        "selector": "div[data-testid=\"chat-input\"]",
+        "kind": "contenteditable"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "button[aria-label=\"Send message\"], button[aria-label=\"Enviar mensaje\"]"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "div.font-claude-response",
+        "pick": "last"
+      },
+      "completion": {
+        "kind": "sin-indicador-conocido",
+        "quiescenceMs": 1500
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 10000,
+        "emptyResponseMs": 90000
+      },
+      "modelLabel": {
+        "selector": "button[data-testid=\"model-selector-dropdown\"]"
+      },
+      "_notaIdioma": "el boton de envio de Claude cambia de aria-label segun su propio estado, no solo por idioma de cuenta: 'Send message' (ingles) mientras esta deshabilitado, 'Enviar mensaje' (espanol, cuenta de Juan) una vez habilitado. El selector combina ambas variantes con una lista separada por comas. model-selector-dropdown es data-testid, no localizado."
+    },
+    "gemini": {
+      "newConversationUrl": "https://gemini.google.com/app",
+      "composer": {
+        "selector": "div[aria-label=\"Ingresa una instrucción para Gemini\"]",
+        "kind": "contenteditable"
+      },
+      "submit": {
+        "kind": "key",
+        "key": "Enter"
+      },
+      "responseRoot": {
+        "selector": "infinite-scroller[data-test-id=\"chat-history-container\"]"
+      },
+      "assistantMessage": {
+        "selector": "structured-content-container.model-response-text",
+        "pick": "last",
+        "exclude": [
+          "[class*=\"thought\"]"
+        ]
+      },
+      "completion": {
+        "kind": "sin-indicador-conocido",
+        "quiescenceMs": 1500
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 10000,
+        "emptyResponseMs": 90000
+      },
+      "_notaIdioma": "compositor derivado con la cuenta de Juan en espanol (aria-label localizado): 'Ingresa una instruccion para Gemini'. Si la cuenta cambia de idioma, este selector deja de matchear."
     }
   }
 }

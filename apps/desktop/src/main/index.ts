@@ -25,12 +25,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * Investigadores activos. **El número no se codifica en ningún lado** —fue un
  * requisito que la v2 escribió y violó tres veces— así que todo lo que sigue
  * se deriva de esta lista: la grilla, la difusión y el estado.
- *
- * Faltan `claude` y `gemini`: sus selectores todavía no se derivaron del DOM
- * real. Se agregan acá cuando existan, y no hay nada más que tocar. El
- * typecheck lo hace cumplir: un id que no esté en `specs.json` no compila.
  */
-const INVESTIGADORES = ["chatgpt", "glm"] as const;
+const INVESTIGADORES = ["chatgpt", "glm", "claude", "gemini"] as const;
 type ProviderId = (typeof INVESTIGADORES)[number];
 
 /**
@@ -43,10 +39,7 @@ type ProviderId = (typeof INVESTIGADORES)[number];
  * sale de acá. La partición `persist:` es la misma en ambos casos, así que el
  * login hecho durante el reconocimiento se reutiliza intacto.
  */
-const CANDIDATOS_SONDEO = [
-  { id: "claude", url: "https://claude.ai/new" },
-  { id: "gemini", url: "https://gemini.google.com/app" },
-] as const;
+const CANDIDATOS_SONDEO: { id: string; url: string }[] = [];
 
 /**
  * Modo de arranque. Se lee de `process.argv` Y de `process.env`, y el
@@ -246,7 +239,10 @@ async function modoPrueba(): Promise<void> {
  */
 async function modoSondeo(): Promise<void> {
   try {
-    await new Promise((r) => setTimeout(r, 12_000));
+    // 20s en vez de 12s: la etiqueta de modelo de Claude carga async DESPUÉS
+    // del render inicial (compositor y envío ya estaban listos a los 12s,
+    // pero la etiqueta con el nombre del modelo todavía no existía en el DOM).
+    await new Promise((r) => setTimeout(r, 20_000));
     emitir("CC_PROBE_JSON", {
       sesiones: await sesiones(),
       paneles: await sondear(

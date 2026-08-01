@@ -17,7 +17,12 @@
  *    headers de autenticación, `localStorage` ni `sessionStorage`.
  *  · El texto se recorta a 80 caracteres y existe sólo para reconocer un
  *    nodo, no para llevarse contenido.
- *  · No hace clic, no escribe, no navega. Sólo lee estructura.
+ *  · No escribe, no navega, no envía nada. La ÚNICA excepción —decisión de
+ *    Juan, no supuesta— es abrir el propio desplegable del selector de
+ *    modelo cuando ningún atributo ni texto en reposo lo delata (pasa en
+ *    Claude): un clic en el disparador, lectura del ítem resaltado, y cierre
+ *    con Escape antes de devolver el control. Nunca hace clic en nada que no
+ *    sea ese disparador puntual.
  *
  * SOBRE SHADOW DOM. Un `querySelector` desde `document` no cruza un shadow
  * root. El sondeo cuenta los roots ABIERTOS y busca dentro de ellos; si un
@@ -39,6 +44,13 @@ export interface Candidato {
   muestra: string;
 }
 
+export interface ExperimentoModelo {
+  disparador: Candidato;
+  itemMenu: Candidato;
+  disparadorTextoAntes: string;
+  disparadorTextoDespues: string;
+}
+
 export interface SondeoProveedor {
   id: string;
   url: string;
@@ -48,6 +60,12 @@ export interface SondeoProveedor {
   envio: Candidato[];
   asistente: Candidato[];
   etiquetaModelo: Candidato[];
+  /**
+   * Sólo presente cuando `etiquetaModelo` quedó vacío por los dos métodos de
+   * sólo-lectura: registra qué encontró el experimento de abrir el
+   * desplegable (ver LÍMITES arriba). `null` si tampoco eso encontró nada.
+   */
+  experimentoModelo?: ExperimentoModelo | null;
   error?: string;
 }
 
@@ -57,7 +75,7 @@ export interface SondeoProveedor {
  * contrato del proveedor, y no tiene por qué vivir en el preload que corre en
  * cada turno real.
  */
-const FUENTE_SONDEO = `(() => {
+const FUENTE_SONDEO = `(async () => {
   const ATTRS_OK = ["id","class","data-testid","data-test-id","data-message-author-role","aria-label","role","contenteditable","placeholder","name","type","enterkeyhint"];
   const CAP_TEXTO = 80;
   const CAP_CANDIDATOS = 6;
@@ -81,8 +99,10 @@ const FUENTE_SONDEO = `(() => {
   const selectorDe = (el) => {
     const id = el.getAttribute("id");
     if (id && /^[A-Za-z][\\w-]*$/.test(id)) return "#" + id;
-    const dt = el.getAttribute("data-testid") || el.getAttribute("data-test-id");
+    const dt = el.getAttribute("data-testid");
     if (dt) return el.tagName.toLowerCase() + '[data-testid="' + dt + '"]';
+    const dti = el.getAttribute("data-test-id");
+    if (dti) return el.tagName.toLowerCase() + '[data-test-id="' + dti + '"]';
     const rol = el.getAttribute("data-message-author-role");
     if (rol) return '[data-message-author-role="' + rol + '"]';
     const al = el.getAttribute("aria-label");
@@ -124,6 +144,79 @@ const FUENTE_SONDEO = `(() => {
     return out;
   };
 
+  /**
+   * Respaldo para etiquetaModelo cuando ningún atributo delata al selector de
+   * modelo: busca por el NOMBRE del modelo en el texto de CUALQUIER elemento
+   * (no sólo botones, porque el trigger puede ser un div o span), y se queda
+   * con el más profundo de cada rama para no reportar el contenedor entero.
+   * Claude.ai no expone "model" en ningún atributo de su selector.
+   */
+  const porNombreDeModelo = () => {
+    const patron = /\\b(haiku|sonnet|opus|gemini|gpt|glm)\\b/i;
+    const out = [];
+    for (const raiz of raices) {
+      const via = raiz === document ? "document" : "shadow";
+      const candidatosEl = Array.from(raiz.querySelectorAll("*")).filter((el) => {
+        const t = (el.textContent || "").trim();
+        return t.length > 0 && t.length < 60 && patron.test(t);
+      });
+      for (const el of candidatosEl) {
+        if (out.length >= CAP_CANDIDATOS) break;
+        const tieneHijoMatch = candidatosEl.some((otro) => otro !== el && el.contains(otro));
+        if (!tieneHijoMatch) out.push(candidato(el, via));
+      }
+    }
+    return out;
+  };
+
+  /**
+   * ÚLTIMO RECURSO, sólo si los dos métodos de sólo-lectura no encontraron
+   * nada: abre el desplegable de un disparador candidato, lee el ítem
+   * resaltado y cierra con Escape. Acotado a disparadores con aria-haspopup
+   * "menu"/"listbox" —nunca botones de envío ni toggles— y se detiene en el
+   * primero que revele un ítem con nombre de modelo.
+   */
+  const explorarMenuModelo = async () => {
+    const patron = /\\b(haiku|sonnet|opus)\\b/i;
+    const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+    const disparadores = Array.from(
+      document.querySelectorAll('button[aria-haspopup="menu"], button[aria-haspopup="listbox"]'),
+    ).slice(0, 5);
+    for (const btn of disparadores) {
+      const textoAntes = (btn.textContent || "").trim().slice(0, CAP_TEXTO);
+      try { btn.click(); } catch (e) { continue; }
+      await espera(350);
+      const menu = document.querySelector('[role="menu"], [role="listbox"]');
+      let resultado = null;
+      if (menu) {
+        const nodosMenu = Array.from(menu.querySelectorAll("*"));
+        const item = nodosMenu.find((el) => {
+          const t = (el.textContent || "").trim();
+          if (t.length === 0 || t.length >= CAP_TEXTO || !patron.test(t)) return false;
+          return !nodosMenu.some((otro) => otro !== el && el.contains(otro) && patron.test((otro.textContent || "").trim()));
+        });
+        if (item) {
+          resultado = {
+            disparador: candidato(btn, "document"),
+            itemMenu: candidato(item, "document"),
+            disparadorTextoAntes: textoAntes,
+            disparadorTextoDespues: (btn.textContent || "").trim().slice(0, CAP_TEXTO),
+          };
+        }
+      }
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      btn.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await espera(150);
+      if (resultado) return resultado;
+    }
+    return null;
+  };
+
+  const etiquetaModeloBase = juntar(['button[aria-label*="odel"]', '[class*="model-selector"]', '[data-testid*="model"]']);
+  const etiquetaModeloTexto = etiquetaModeloBase.length > 0 ? [] : porNombreDeModelo();
+  const sinNada = etiquetaModeloBase.length === 0 && etiquetaModeloTexto.length === 0;
+  const experimentoModelo = sinNada ? await explorarMenuModelo() : undefined;
+
   return {
     url: location.origin + location.pathname,
     titulo: document.title.slice(0, 120),
@@ -131,7 +224,8 @@ const FUENTE_SONDEO = `(() => {
     compositor: juntar(['textarea', 'div[contenteditable="true"]', '[role="textbox"]']),
     envio: juntar(['button[data-testid*="send"]', 'button[aria-label*="end"]', 'button[type="submit"]', 'button:has(svg)']),
     asistente: juntar(['[data-message-author-role="assistant"]', '[class*="assistant"]', '[class*="model-response"]', '[class*="markdown"]']),
-    etiquetaModelo: juntar(['button[aria-label*="odel"]', '[class*="model-selector"]', '[data-testid*="model"]']),
+    etiquetaModelo: etiquetaModeloBase.length > 0 ? etiquetaModeloBase : etiquetaModeloTexto,
+    experimentoModelo: experimentoModelo,
   };
 })()`;
 

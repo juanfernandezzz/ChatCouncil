@@ -159,7 +159,16 @@ export async function correrPruebaFase1(deps: {
   // GATE DE MODELO, antes de mandar nada. Es lo unico que corre antes del
   // primer prompt, y a proposito: frenar despues de enviar no devuelve el
   // token gastado.
-  const frenos = frenosDeModelo(await deps.leer());
+  //
+  // La etiqueta de modelo de algunos proveedores (Claude) carga async DESPUES
+  // del resto de la pagina, asi que una sola lectura a los 8s puede encontrar
+  // el selector vacio sin que el selector este mal. Se reintenta unos
+  // segundos antes de abortar en firme.
+  let frenos = frenosDeModelo(await deps.leer());
+  for (let intento = 0; intento < 4 && frenos.length > 0; intento++) {
+    await sleep(3000);
+    frenos = frenosDeModelo(await deps.leer());
+  }
   if (frenos.length > 0) {
     informe.veredicto.push("ABORTADO por el gate de modelo de pruebas — no se envio ningun prompt:");
     for (const f of frenos) informe.veredicto.push(`  · ${f}`);

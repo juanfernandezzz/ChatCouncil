@@ -431,6 +431,11 @@ Modelo de datos local, historial de conversaciones, y la procedencia por
 turno (etiqueta de modelo, continuidad de hilo) para hacer detectable la
 deriva de versión.
 
+**Segundo requisito que sale de la Fase 1: el arnés se corre VARIAS VECES y
+reporta la tasa.** Los fallos de la Fase 1 fueron intermitentes y rotaron de
+proveedor entre corridas. Un arnés que informa el último resultado no puede
+distinguir un arreglo de una casualidad.
+
 **Requisito de verificación que sale de la Fase 1: el arnés pasa a un prompt
 LARGO.** Los dos prompts de la Fase 1 pedían una palabra, y una respuesta de
 una palabra no tiene pausa donde caerse: por eso el truncado de `quiescence`
@@ -637,6 +642,50 @@ dependencia de workspace; y en Windows hubo que aprobar el postinstall de
 Electron y extraer su binario a mano, porque el extractor de pnpm fallaba en
 silencio sobre una ruta anidada. Nada de eso tocó el diseño.
 
+#### Cómo terminó de cerrarse, y qué quedó sin explicar
+
+Este bloque se escribió ANTES de la ronda que efectivamente cerró la fase, así
+que lo de arriba describe un estado intermedio. Lo que siguió:
+
+**Resuelto y demostrado.**
+
+| Hallazgo | Evidencia |
+|---|---|
+| El envío de Claude fallaba por el selector compuesto: conviven dos botones y `querySelector` devolvía siempre el primero, deshabilitado. | `waitForEnabled` recorre todos los matches → verde en solitario y en grupo, tres corridas. |
+| Gemini no enviaba porque era el único con `submit.kind: "key"`, y el `KeyboardEvent` sintético no dispara su envío. | Pasó a `click` con el botón derivado del DOM → verde en solitario. |
+| El sondeo no podía ver ese botón: sus patrones suponían `data-testid`, inglés y `<svg>`, y Gemini es Angular con `<mat-icon>` y UI en español. | Patrones neutralizados; el botón apareció con `matches: 1`. |
+| El sondeo tampoco podía observar el estado en que ocurren los fallos, porque miraba siempre la página en reposo. | Modo de escritura opt-in, con limpieza medida en `compositorLimpio`. |
+
+**NO demostrado, y conviene no confundirlo con lo anterior.** La última corrida
+dio los cuatro en verde en la configuración que antes fallaba, y eso es real.
+Pero la causa del fallo intermitente **no quedó establecida**, por una razón
+concreta: el árbol de decisión que se usó para diagnosticarlo suponía que la
+corrida de control reprodujera el fallo, y **no lo reprodujo** — esa corrida
+salió verde para Gemini. Con el control también en verde, que las dos corridas
+de contraste dieran verde no distingue "es tiempo" de "es intermitente".
+
+`composerMs: 45000` en Gemini es un timeout más paciente y no hace daño, pero
+registrarlo como "la causa era el tiempo" sería afirmar más de lo que se midió.
+
+**Dos cosas abiertas que pasan a la Fase 2:**
+
+1. En esa misma corrida de control, **Claude falló el turno 2** con
+   `el control de envío NUNCA aparecio en el DOM (0 nodos): mirar la ESCRITURA`.
+   Eso es del lado de la escritura, no del envío, y `composerMs` no puede
+   explicarlo. `writePrompt` escribe `textContent` y confirma leyendo
+   `textContent`, o sea que se confirma a sí mismo (§7.22); es el sospechoso
+   principal y sigue sin medirse.
+2. Los fallos intermitentes **rotaron de proveedor** entre corridas. Eso es
+   forma de contención o de carrera, no de selector caduco. Una sola corrida
+   verde no cierra un fallo intermitente: la Fase 2 tiene que correr el arnés
+   varias veces y reportar la tasa, no el último resultado.
+
+**Y una duda honesta sobre el verde original.** El informe que abrió este
+registro daba continuidad confirmada en Gemini, pero poco después Gemini no
+lograba enviar nada, y en una corrida su lectura devolvió un bloque en inglés
+ajeno a los prompts. Es compatible con que ese panel arrastrara contenido de
+una conversación previa. No está resuelto y no se da por bueno.
+
 **Lecciones que se suman a §7 desde esta fase**
 13. **En Electron, un preload con `contextIsolation` no puede exponer nada
     escribiendo en `window`.** Sólo `contextBridge.exposeInMainWorld` cruza al
@@ -770,7 +819,14 @@ entrega, no al estado que se quería restaurar.
     tiene que decir cual de los dos es. Es la tercera vez que aparece la misma
     forma de defecto en esta fase: un valor por defecto que colapsa "no paso"
     con "no pude ver".
-31. **El commit que cierra una fase incluye el BLUEPRINT.** Si el ledger
+31. **Un arbol de diagnostico sólo discrimina si la corrida de control
+    reproduce el fallo.** Si el control sale verde, las ramas de contraste
+    dejan de significar lo que decian: todas en verde prueban que el fallo es
+    intermitente, no cual era su causa. Antes de leer el arbol hay que
+    verificar que el sintoma estaba presente.
+32. **Una sola corrida verde no cierra un fallo intermitente.** Lo que hay que
+    reportar es la tasa sobre varias corridas, no el ultimo resultado.
+33. **El commit que cierra una fase incluye el BLUEPRINT.** Si el ledger
     sigue diciendo que falta lo que ya está hecho, la próxima sesión arranca
     sobre una premisa falsa — que es exactamente lo que el ledger existe para
     evitar.

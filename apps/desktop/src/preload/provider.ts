@@ -22,13 +22,43 @@
 
 import { contextBridge } from "electron";
 
+/**
+ * Fin de la generación. **Es una unión discriminada de verdad**, y eso es una
+ * corrección, no un adorno: antes `kind` era `string` y NADIE lo ramificaba.
+ * El código miraba únicamente `completion.selector`, así que un proveedor sin
+ * selector caía en `generating: false` — que se lee como "terminó" cuando en
+ * realidad significa "no sé". Medido: con esa forma, una respuesta que hace
+ * una pausa de 7 s en el medio se daba por terminada y se leía truncada.
+ *
+ *  · `element-gone`: hay un control observable (el botón de detener) que
+ *    existe mientras genera y desaparece al terminar. Es OBSERVACIÓN.
+ *  · `quiescence`: no se conoce ningún indicador en ese DOM. El fin sólo se
+ *    puede INFERIR de que el texto dejó de crecer durante `quiescenceMs`.
+ */
+type CompletionSpec =
+  | { kind: "element-gone"; selector: string; quiescenceMs: number }
+  | { kind: "quiescence"; quiescenceMs: number };
+
 interface PageSpec {
   composer: { selector: string; kind: "textarea" | "contenteditable" };
   submit: { kind: "click"; selector: string } | { kind: "key"; key: "Enter" };
   assistantMessage: { selector: string; pick: "last"; exclude?: string[] };
-  completion: { kind: string; selector?: string; quiescenceMs: number };
-  timeouts?: { submitReadyMs?: number; submitConfirmMs?: number };
+  completion: CompletionSpec;
+  timeouts?: { composerMs?: number; submitReadyMs?: number; submitConfirmMs?: number };
   modelLabel?: { selector: string };
+}
+
+/**
+ * `true` generando, `false` terminado, **`null` no observable**.
+ *
+ * El `null` es el punto entero de esta corrección. Devolver `false` cuando no
+ * hay indicador es afirmar algo que no se midió, y quien lo consume no tiene
+ * cómo distinguirlo de un fin real (§2: nunca se simula un resultado; §7.9:
+ * un dato de procedencia desconocida no se usa como si fuera conocido).
+ */
+function estaGenerando(spec: PageSpec): boolean | null {
+  if (spec.completion.kind === "element-gone") return findOne(spec.completion.selector) !== null;
+  return null;
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -57,12 +87,39 @@ function isEnabled(el: Element): boolean {
   return el.getAttribute("aria-disabled") !== "true";
 }
 
-async function waitForEnabled(sel: string, timeoutMs: number): Promise<Element | null> {
+/**
+ * Espera a que el control exista Y este habilitado.
+ *
+ * Devuelve POR QUE fallo, no sólo que fallo. La version anterior devolvia
+ * `null` a secas, y ese `null` tapaba dos causas que piden arreglos opuestos:
+ *
+ *  · "nunca aparecio" → el editor no registro el texto, asi que el boton no
+ *    llego a existir. El problema esta ARRIBA, en la escritura.
+ *  · "aparecio pero siguio deshabilitado" → el editor si tiene el texto y hay
+ *    otra cosa bloqueando. El problema esta ACA.
+ *
+ * Un mensaje de error que no distingue esas dos manda a arreglar el lado
+ * equivocado. Es la misma leccion que la del veredicto de continuidad: el
+ * valor por defecto no puede colapsar "no paso" con "no pude ver".
+ */
+type EsperaControl =
+  | { ok: true; el: Element }
+  | { ok: false; motivo: "ausente" | "deshabilitado"; vistos: number };
+
+async function waitForEnabled(sel: string, timeoutMs: number): Promise<EsperaControl> {
   const until = Date.now() + timeoutMs;
+  // Cuantos nodos llegaron a matchear alguna vez, aunque nunca se habilitaran.
+  let vistos = 0;
   for (;;) {
-    const el = findOne(sel);
-    if (el && isEnabled(el)) return el;
-    if (Date.now() > until) return null;
+    const todos = document.querySelectorAll(sel);
+    if (todos.length > vistos) vistos = todos.length;
+    // Recorre TODOS los matches, no sólo el primero: con un selector compuesto
+    // —como las dos variantes de aria-label de Claude— `querySelector` devuelve
+    // el primero en orden de documento, habilitado o no.
+    for (const el of todos) if (isEnabled(el)) return { ok: true, el };
+    if (Date.now() > until) {
+      return { ok: false, motivo: vistos === 0 ? "ausente" : "deshabilitado", vistos };
+    }
     await sleep(80);
   }
 }
@@ -132,9 +189,37 @@ export interface RunResult {
   modelLabel?: string | null;
 }
 
+/**
+ * Cuenta cuadros de texto GENERICOS en la pagina, sin usar la spec.
+ *
+ * Sirve para una sola pregunta, y es la que separa dos causas opuestas cuando
+ * el compositor no aparece:
+ *  · 0 candidatos → la pagina todavia no monto su interfaz. Es TIEMPO: falta
+ *    esperar, o hay contencion entre varias apps cargando a la vez.
+ *  · N candidatos pero el selector de la spec no matchea → la pagina SI cargo
+ *    y esta mostrando otra cosa: otro layout (paneles angostos), otro idioma,
+ *    o el selector caduco.
+ * Sin este numero, "compositor no encontrado" son dos diagnosticos con el
+ * mismo nombre, y llevan a arreglos contrarios.
+ */
+function contarCompositoresGenericos(): number {
+  return document.querySelectorAll('textarea, div[contenteditable="true"], [role="textbox"]').length;
+}
+
 async function run(spec: PageSpec, prompt: string): Promise<RunResult> {
-  const composer = await waitFor(spec.composer.selector, 15_000);
-  if (!composer) return { ok: false, error: "compositor no encontrado" };
+  const esperaCompositor = spec.timeouts?.composerMs ?? 15_000;
+  const t0 = Date.now();
+  const composer = await waitFor(spec.composer.selector, esperaCompositor);
+  if (!composer) {
+    const genericos = contarCompositoresGenericos();
+    return {
+      ok: false,
+      error:
+        genericos === 0
+          ? `compositor no encontrado tras ${Date.now() - t0} ms, y la pagina NO tiene ningun cuadro de texto: no llego a montar su interfaz (tiempo o contencion)`
+          : `compositor no encontrado tras ${Date.now() - t0} ms, pero la pagina SI tiene ${genericos} cuadro/s de texto: cargo y muestra otra cosa (otro layout, otro idioma, o el selector caduco)`,
+    };
+  }
   if (!writePrompt(composer, spec.composer.kind, prompt)) {
     return { ok: false, error: "el compositor no aceptó el texto" };
   }
@@ -142,12 +227,34 @@ async function run(spec: PageSpec, prompt: string): Promise<RunResult> {
   const before = readAssistant(spec).length;
 
   if (spec.submit.kind === "click") {
-    const btn = await waitForEnabled(spec.submit.selector, spec.timeouts?.submitReadyMs ?? 8_000);
-    if (!btn) return { ok: false, error: "el control de envío no apareció habilitado a tiempo" };
-    (btn as HTMLElement).click();
+    const r = await waitForEnabled(spec.submit.selector, spec.timeouts?.submitReadyMs ?? 8_000);
+    if (!r.ok) {
+      return {
+        ok: false,
+        error:
+          r.motivo === "ausente"
+            ? `el control de envío NUNCA aparecio en el DOM (0 nodos para "${spec.submit.selector}"): mirar la ESCRITURA, no el envio`
+            : `el control de envío aparecio (${r.vistos} nodo/s) pero siguio deshabilitado`,
+      };
+    }
+    (r.el as HTMLElement).click();
   } else {
-    const o = { bubbles: true, cancelable: true, key: "Enter", code: "Enter" } as const;
+    // `keyCode`/`which` van a proposito aunque esten deprecados: mucho editor
+    // rico todavia decide por `e.keyCode === 13`, y un KeyboardEvent
+    // construido sólo con `key` los deja en 0. `composed` hace falta para que
+    // el evento cruce un shadow root. Sin esto el evento es sintacticamente
+    // valido y semanticamente invisible para el editor.
+    const o = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      key: "Enter",
+      code: "Enter",
+      keyCode: 13,
+      which: 13,
+    } as const;
     composer.dispatchEvent(new KeyboardEvent("keydown", o));
+    composer.dispatchEvent(new KeyboardEvent("keypress", o));
     composer.dispatchEvent(new KeyboardEvent("keyup", o));
   }
 
@@ -156,7 +263,9 @@ async function run(spec: PageSpec, prompt: string): Promise<RunResult> {
   const until = Date.now() + (spec.timeouts?.submitConfirmMs ?? 12_000);
   for (;;) {
     const vacio = (composer.textContent ?? "").trim() === "" && (composer as HTMLTextAreaElement).value !== prompt;
-    const generando = spec.completion.selector ? findOne(spec.completion.selector) !== null : false;
+    // `=== true` a propósito: `null` significa "no observable" y no puede
+    // contar como evidencia de que el envío tuvo efecto.
+    const generando = estaGenerando(spec) === true;
     if (vacio || generando || readAssistant(spec).length > before) break;
     if (Date.now() > until) return { ok: false, error: "el envío no produjo ningún cambio observable" };
     await sleep(100);
@@ -179,7 +288,11 @@ contextBridge.exposeInMainWorld("__ccProvider", {
   run: (spec: PageSpec, prompt: string) => run(spec, prompt),
   read: (spec: PageSpec) => ({
     text: readAssistant(spec),
-    generating: spec.completion.selector ? findOne(spec.completion.selector) !== null : false,
+    generating: estaGenerando(spec),
+    // Viaja con la lectura para que quien la consuma sepa si el fin se OBSERVA
+    // o se INFIERE, sin tener que volver a mirar la spec.
+    completionKind: spec.completion.kind,
+    quiescenceMs: spec.completion.quiescenceMs,
     modelLabel: readModelLabel(spec),
   }),
 });

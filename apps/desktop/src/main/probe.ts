@@ -17,12 +17,35 @@
  *    headers de autenticación, `localStorage` ni `sessionStorage`.
  *  · El texto se recorta a 80 caracteres y existe sólo para reconocer un
  *    nodo, no para llevarse contenido.
- *  · No escribe, no navega, no envía nada. La ÚNICA excepción —decisión de
- *    Juan, no supuesta— es abrir el propio desplegable del selector de
- *    modelo cuando ningún atributo ni texto en reposo lo delata (pasa en
- *    Claude): un clic en el disparador, lectura del ítem resaltado, y cierre
- *    con Escape antes de devolver el control. Nunca hace clic en nada que no
- *    sea ese disparador puntual.
+ *  · **NUNCA envía.** Ni un clic en un control de envío, ni una tecla, ni
+ *    navegación. Esa es la línea dura, y está puesta donde importa: enviar
+ *    consume cuota, deja un mensaje en la conversación de Juan y no se
+ *    deshace. Escribir en un cuadro de texto no hace nada de eso.
+ *
+ *    El límite original decía "no escribe", y esa formulación resultó
+ *    DEMASIADO GRUESA. El sondeo miraba la página siempre EN REPOSO, con el
+ *    compositor vacío, y varios controles no existen en ese estado: Gemini
+ *    muestra el micrófono en lugar del botón de enviar mientras no hay texto.
+ *    O sea que el instrumento no podía observar el momento exacto en que
+ *    ocurren los fallos que tiene que diagnosticar. Una lista vacía en `envio`
+ *    nunca probó ausencia; probaba que en reposo no estaba.
+ *
+ *    Por eso hay un modo `--cc-probe-escribe`, OPT-IN y nunca por defecto,
+ *    que escribe un marcador neutro, observa, y **limpia el compositor antes
+ *    de devolver**. El modo por defecto sigue siendo de sólo lectura: la
+ *    garantía no se debilita en silencio, se elige en la línea de comandos.
+ *
+ *    Hubo una excepción y se revirtió, porque el motivo por el que se aprobó
+ *    resultó falso. Se había agregado un experimento que abría el desplegable
+ *    del selector de modelo, justificado en que Claude no exponía "model" en
+ *    ningún atributo. No era cierto: el selector que terminó derivándose es
+ *    `button[data-testid="model-selector-dropdown"]`, que el patrón de
+ *    sólo-lectura `[data-testid*="model"]` ya matcheaba. Lo que pasaba en
+ *    realidad era de TIEMPO —a los 12 s ese botón todavía no existía en el
+ *    DOM— y se arregló esperando 20 s. Quedaba entonces código que hacía clic
+ *    sobre la sesión real de Juan, disparado por una carrera y no por una
+ *    ausencia. Lección: cuando el disparador de una excepción es "no encontré
+ *    nada", primero hay que descartar que sea "todavía no cargó".
  *
  * SOBRE SHADOW DOM. Un `querySelector` desde `document` no cruza un shadow
  * root. El sondeo cuenta los roots ABIERTOS y busca dentro de ellos; si un
@@ -44,13 +67,6 @@ export interface Candidato {
   muestra: string;
 }
 
-export interface ExperimentoModelo {
-  disparador: Candidato;
-  itemMenu: Candidato;
-  disparadorTextoAntes: string;
-  disparadorTextoDespues: string;
-}
-
 export interface SondeoProveedor {
   id: string;
   url: string;
@@ -61,11 +77,20 @@ export interface SondeoProveedor {
   asistente: Candidato[];
   etiquetaModelo: Candidato[];
   /**
-   * Sólo presente cuando `etiquetaModelo` quedó vacío por los dos métodos de
-   * sólo-lectura: registra qué encontró el experimento de abrir el
-   * desplegable (ver LÍMITES arriba). `null` si tampoco eso encontró nada.
+   * Con qué estado del compositor se tomó la muestra. Sin esto, un `envio`
+   * vacío es ambiguo entre "no existe" y "todavía no aparece", que fue
+   * exactamente la confusión que costó una ronda.
    */
-  experimentoModelo?: ExperimentoModelo | null;
+  estadoCompositor: "reposo" | "con-texto";
+  /** Sólo en modo escritura: si el marcador llegó a entrar en el editor. */
+  escrituraAceptada?: boolean;
+  /**
+   * Sólo en modo escritura: el compositor quedó SIN el marcador después de
+   * limpiar. Se mide y se reporta en vez de prometerse en un comentario — si
+   * alguna vez sale `false`, el sondeo dejó basura en la sesión de Juan y hay
+   * que saberlo en la misma corrida, no después.
+   */
+  compositorLimpio?: boolean;
   error?: string;
 }
 
@@ -75,10 +100,44 @@ export interface SondeoProveedor {
  * contrato del proveedor, y no tiene por qué vivir en el preload que corre en
  * cada turno real.
  */
-const FUENTE_SONDEO = `(async () => {
+const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, MARCADOR) => {
   const ATTRS_OK = ["id","class","data-testid","data-test-id","data-message-author-role","aria-label","role","contenteditable","placeholder","name","type","enterkeyhint"];
   const CAP_TEXTO = 80;
   const CAP_CANDIDATOS = 6;
+
+  const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  /**
+   * Escritura de sondeo. Pone un marcador neutro para que aparezcan los
+   * controles que sólo existen con texto, y LIMPIA al final. No envia: no
+   * hace clic en ningun control y no despacha ninguna tecla.
+   */
+  let escrituraAceptada;
+  const limpiar = [];
+  if (SELECTOR_COMPOSITOR && MARCADOR) {
+    const c = document.querySelector(SELECTOR_COMPOSITOR);
+    if (c) {
+      c.focus();
+      if (c.tagName === "TEXTAREA" || c.tagName === "INPUT") {
+        const previo = c.value;
+        c.value = MARCADOR;
+        c.dispatchEvent(new Event("input", { bubbles: true }));
+        escrituraAceptada = c.value === MARCADOR;
+        limpiar.push(() => { c.value = previo; c.dispatchEvent(new Event("input", { bubbles: true })); });
+      } else {
+        const previo = c.innerHTML;
+        c.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType: "insertText", data: MARCADOR }));
+        if (!(c.textContent || "").includes(MARCADOR)) {
+          c.textContent = MARCADOR;
+          c.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: MARCADOR }));
+        }
+        escrituraAceptada = (c.textContent || "").includes(MARCADOR);
+        limpiar.push(() => { c.innerHTML = previo; c.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" })); });
+      }
+      // Dar tiempo a que el framework reaccione y monte los controles.
+      await dormir(1500);
+    }
+  }
 
   const raices = [document];
   let shadowAbiertos = 0;
@@ -125,6 +184,12 @@ const FUENTE_SONDEO = `(async () => {
     };
   };
 
+  // Los patrones de arriba son deliberadamente REDUNDANTES y neutrales en
+  // idioma y en framework. Los originales fallaban con Gemini por tres cosas
+  // a la vez: no usa data-testid con "send", su aria-label esta en espanol
+  // ("Enviar" no contiene "end"), y sus iconos son <mat-icon> con ligadura,
+  // no <svg>. Tres suposiciones inglesas y de React en un archivo que existe
+  // justamente para no suponer.
   const juntar = (selectores) => {
     const vistos = new Set();
     const out = [];
@@ -149,7 +214,13 @@ const FUENTE_SONDEO = `(async () => {
    * modelo: busca por el NOMBRE del modelo en el texto de CUALQUIER elemento
    * (no sólo botones, porque el trigger puede ser un div o span), y se queda
    * con el más profundo de cada rama para no reportar el contenedor entero.
-   * Claude.ai no expone "model" en ningún atributo de su selector.
+   * Cubre el caso en que el disparador es un div o un span sin ningún
+   * atributo que lo delate. OJO: no es el caso de Claude, aunque durante la
+   * derivación lo pareció — ahí el botón sí tiene data-testid, sólo que
+   * aparece tarde. Ver el bloque de LÍMITES arriba.
+   *
+   * (Sin comillas invertidas acá: este bloque vive DENTRO del template
+   * literal de FUENTE_SONDEO y una comilla invertida lo cortaría en dos.)
    */
   const porNombreDeModelo = () => {
     const patron = /\\b(haiku|sonnet|opus|gemini|gpt|glm)\\b/i;
@@ -169,70 +240,73 @@ const FUENTE_SONDEO = `(async () => {
     return out;
   };
 
-  /**
-   * ÚLTIMO RECURSO, sólo si los dos métodos de sólo-lectura no encontraron
-   * nada: abre el desplegable de un disparador candidato, lee el ítem
-   * resaltado y cierra con Escape. Acotado a disparadores con aria-haspopup
-   * "menu"/"listbox" —nunca botones de envío ni toggles— y se detiene en el
-   * primero que revele un ítem con nombre de modelo.
-   */
-  const explorarMenuModelo = async () => {
-    const patron = /\\b(haiku|sonnet|opus)\\b/i;
-    const espera = (ms) => new Promise((r) => setTimeout(r, ms));
-    const disparadores = Array.from(
-      document.querySelectorAll('button[aria-haspopup="menu"], button[aria-haspopup="listbox"]'),
-    ).slice(0, 5);
-    for (const btn of disparadores) {
-      const textoAntes = (btn.textContent || "").trim().slice(0, CAP_TEXTO);
-      try { btn.click(); } catch (e) { continue; }
-      await espera(350);
-      const menu = document.querySelector('[role="menu"], [role="listbox"]');
-      let resultado = null;
-      if (menu) {
-        const nodosMenu = Array.from(menu.querySelectorAll("*"));
-        const item = nodosMenu.find((el) => {
-          const t = (el.textContent || "").trim();
-          if (t.length === 0 || t.length >= CAP_TEXTO || !patron.test(t)) return false;
-          return !nodosMenu.some((otro) => otro !== el && el.contains(otro) && patron.test((otro.textContent || "").trim()));
-        });
-        if (item) {
-          resultado = {
-            disparador: candidato(btn, "document"),
-            itemMenu: candidato(item, "document"),
-            disparadorTextoAntes: textoAntes,
-            disparadorTextoDespues: (btn.textContent || "").trim().slice(0, CAP_TEXTO),
-          };
-        }
-      }
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-      btn.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-      await espera(150);
-      if (resultado) return resultado;
-    }
-    return null;
-  };
-
+  // Dos vías, ambas de SÓLO LECTURA: primero por atributo, y si eso no da
+  // nada, por el nombre del modelo en el texto. No hay una tercera.
   const etiquetaModeloBase = juntar(['button[aria-label*="odel"]', '[class*="model-selector"]', '[data-testid*="model"]']);
   const etiquetaModeloTexto = etiquetaModeloBase.length > 0 ? [] : porNombreDeModelo();
-  const sinNada = etiquetaModeloBase.length === 0 && etiquetaModeloTexto.length === 0;
-  const experimentoModelo = sinNada ? await explorarMenuModelo() : undefined;
 
-  return {
+  const salida = {
+    estadoCompositor: SELECTOR_COMPOSITOR && MARCADOR ? "con-texto" : "reposo",
+    escrituraAceptada: escrituraAceptada,
     url: location.origin + location.pathname,
     titulo: document.title.slice(0, 120),
     shadowRootsAbiertos: shadowAbiertos,
     compositor: juntar(['textarea', 'div[contenteditable="true"]', '[role="textbox"]']),
-    envio: juntar(['button[data-testid*="send"]', 'button[aria-label*="end"]', 'button[type="submit"]', 'button:has(svg)']),
+    envio: juntar([
+      'button[data-testid*="send"]',
+      'button[class*="send"]',
+      'button[aria-label*="end"]',
+      'button[aria-label*="nvia"]',
+      'button[aria-label*="nviar"]',
+      'button[type="submit"]',
+      'button:has(svg)',
+      'button:has(mat-icon)',
+      'button:has(i)',
+      '[role="button"][aria-label*="nvia"]',
+    ]),
     asistente: juntar(['[data-message-author-role="assistant"]', '[class*="assistant"]', '[class*="model-response"]', '[class*="markdown"]']),
     etiquetaModelo: etiquetaModeloBase.length > 0 ? etiquetaModeloBase : etiquetaModeloTexto,
-    experimentoModelo: experimentoModelo,
   };
-})()`;
+
+  // Devolver el compositor como estaba. Se limpia SIEMPRE, incluso si algo de
+  // arriba fallo, para no dejar un borrador colgado en la sesion de Juan.
+  for (const f of limpiar) { try { f(); } catch (e) { /* no hay nada mejor que hacer */ } }
+
+  // Y se COMPRUEBA que quedo limpio. Una garantia que no se mide no es una
+  // garantia: es una intencion.
+  if (SELECTOR_COMPOSITOR && MARCADOR) {
+    await dormir(200);
+    const c2 = document.querySelector(SELECTOR_COMPOSITOR);
+    const resto = c2 ? (c2.value !== undefined ? c2.value : c2.textContent) || "" : "";
+    salida.compositorLimpio = !resto.includes(MARCADOR);
+  }
+
+  return salida;
+}`;
+
+/** Marcador neutro. No es una instruccion: es texto para que aparezcan los controles. */
+const MARCADOR = "sondeo";
 
 export async function sondear(
-  vistas: { id: string; ejecutar: (fuente: string) => Promise<unknown> }[],
+  vistas: {
+    id: string;
+    ejecutar: (fuente: string) => Promise<unknown>;
+    /**
+     * Sólo se pasa en modo escritura, y sólo para proveedores que YA tienen
+     * spec: se escribe en el selector derivado, no en uno adivinado. Sin esto,
+     * el sondeo no escribe nada.
+     */
+    composerSelector?: string;
+  }[],
 ): Promise<SondeoProveedor[]> {
-  const crudos = await Promise.allSettled(vistas.map((v) => v.ejecutar(FUENTE_SONDEO)));
+  const crudos = await Promise.allSettled(
+    vistas.map((v) => {
+      const args = v.composerSelector
+        ? `${JSON.stringify(v.composerSelector)}, ${JSON.stringify(MARCADOR)}`
+        : "null, null";
+      return v.ejecutar(`(${FUENTE_SONDEO})(${args})`);
+    }),
+  );
   return vistas.map((v, i) => {
     const r = crudos[i]!;
     if (r.status !== "fulfilled") {
@@ -245,6 +319,7 @@ export async function sondear(
         envio: [],
         asistente: [],
         etiquetaModelo: [],
+        estadoCompositor: v.composerSelector ? "con-texto" : "reposo",
         error: r.reason instanceof Error ? r.reason.message : String(r.reason),
       };
     }

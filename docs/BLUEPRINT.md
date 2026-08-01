@@ -252,7 +252,7 @@ se ajusta la persistencia no toca ninguna cuenta paga.
   typecheck y la estructura; lo demás es de la máquina de Juan, y así se
   declara en vez de darlo por bueno.
 
-### Fase 1 — Armazón y los investigadores 🟡
+### Fase 1 — Armazón y los investigadores ✅ (cerrada 2026-07-31 — ver §10)
 
 Ventana única con las vistas dispuestas en grilla, compositor con la
 confirmación previa, difusión a todos, particiones de sesión por proveedor,
@@ -341,24 +341,104 @@ más. Frenar después de enviar no devuelve el token gastado.
 Vive en el test-runner y **no** en la spec del proveedor ni en el camino de
 difusión, porque en uso normal el modelo lo elige Juan en el panel nativo.
 
-#### Estado y lo que falta
+#### Fin de respuesta: OBSERVADO o INFERIDO
 
-**Dos de cuatro investigadores.** ChatGPT y GLM tienen sus selectores
-derivados y validados. **Faltan `claude` y `gemini`**: hay que derivar sus
-specs del DOM real con `--cc-probe`. Es lo único que separa esta fase de
-estar completa, y no requiere tocar el armazón.
+`completion.kind` es una **unión discriminada de verdad**, y llegar a eso fue
+una corrección. Antes estaba tipado como `string` y **nadie lo ramificaba**:
+el código miraba sólo `completion.selector`. Un proveedor sin selector caía
+en `generating: false`, que se lee como "terminó" cuando en realidad
+significa "no sé".
 
-**Trampa que la v2 no dejó registrada: los selectores por `aria-label` son
-LOCALIZADOS.** GLM pasó la Fase 0 con `[aria-label="Stop"]` porque la cuenta
-está en inglés. Si la de Claude o Gemini está en español, el selector obvio
-no matchea nada y el síntoma se parece a un fallo del armazón. Al derivar,
-preferir `id` y `data-testid` —que son estables— sobre `aria-label`, y si no
-hay más remedio que usarlo, dejar anotado el idioma de la cuenta.
+| `kind` | Qué significa |
+|---|---|
+| `element-gone` | Hay un control observable que existe mientras genera y desaparece al terminar. El fin se **OBSERVA**. |
+| `quiescence` | No se conoce indicador en ese DOM. El fin se **INFIERE** de que el texto dejó de crecer durante `quiescenceMs`. |
+
+Y `generating` pasó a ser tri-estado: `true`, `false`, **`null` = no
+observable**. El `null` es el punto entero. Devolver `false` sin haber medido
+es afirmar algo que no se midió, y quien lo consume no puede distinguirlo de
+un fin real.
+
+**Medido, y por eso está acá.** Con la forma vieja, una respuesta que hacía
+una pausa de 7 s en el medio se daba por terminada y se leía **truncada a la
+primera mitad**: 18 caracteres de 48. Con la forma nueva, la misma página
+devuelve los 48. Una pausa así no es un caso raro — es lo que hace un modelo
+cuando piensa, usa una herramienta o arranca un bloque de código largo.
+
+ChatGPT y GLM observan el fin. **Claude y Gemini lo infieren**, con una
+ventana de 20 s que es un **piso provisional, no un valor medido**: se eligió
+porque 7 s ya alcanzaban para truncar y porque el pensamiento extendido pausa
+más que eso. Queda por validar en la Fase 2. Si aparece un indicador
+observable en esos DOM, migran a `element-gone`.
+
+El informe de `--cc-test` marca cada lectura con `finDe: "observado"` o
+`"inferido"`, y el veredicto lo dice explícitamente. Sin esa línea, una
+lectura truncada no se distingue de una respuesta corta.
+
+#### Cuatro gates, y qué agarró cada uno
+
+| Gate | Qué protege |
+|---|---|
+| `guard:judge` | El prompt del evaluador no puede ver la identidad del proveedor. |
+| `guard:specs` | Las specs cumplen el contrato que el preload espera. |
+| `guard:artefacto` | Lo COMPILADO contiene las capacidades declaradas, sin credenciales y sin clics en el sondeo. |
+
+`guard:specs` existe porque el typecheck **no cruza** la frontera del JSON:
+las specs viajan al preload como cadena serializada, así que un `kind`
+inventado o un `element-gone` sin selector compilan perfecto y fallan en
+ejecución, en silencio. Es §7.4 aplicada a sí misma — el requisito recién
+existe cuando tiene mecanismo. Exige además `_notaFin` en todo `quiescence`,
+y `_notaIdioma` en toda spec que use un selector por `aria-label`.
+
+**En su primera corrida agarró algo vivo**: GLM usaba `[aria-label="Stop"]` y
+`button[aria-label="Select a model"]` sin declarar idioma, latente desde la
+Fase 0. Con esa cuenta en español los dos dejan de matchear, y el síntoma
+—`generating` siempre falso, gate de modelo abortando por etiqueta
+ilegible— no se parece en nada a la causa.
+
+#### El sondeo no hace clic, y hubo que aprenderlo
+
+Se agregó una excepción al límite de sólo-lectura: un experimento que abría
+el desplegable del selector de modelo, justificado en que Claude no exponía
+`model` en ningún atributo. **El motivo era falso.** El selector que terminó
+derivándose es `button[data-testid="model-selector-dropdown"]`, que el patrón
+de sólo-lectura `[data-testid*="model"]` ya matcheaba. Lo que pasaba era de
+TIEMPO: a los 12 s ese botón todavía no existía en el DOM. El arreglo real
+fue esperar 20 s.
+
+Quedaba entonces código que hacía clic sobre la sesión real de Juan,
+disparado por una carrera y no por una ausencia. Se borró, y `guard:artefacto`
+prohíbe sus marcadores en el compilado para que no vuelva sin que nadie lo
+note.
+
+**La lección, que vale más que el caso:** cuando el disparador de una
+excepción es "no encontré nada", primero hay que descartar que sea "todavía
+no cargó". Ausencia y latencia se ven igual desde adentro.
+
+#### La trampa de los selectores localizados
+
+**Los selectores por `aria-label` son LOCALIZADOS**, y peor: algunos cambian
+con el **estado** del control, no sólo con el idioma. El botón de envío de
+Claude es `"Send message"` mientras está deshabilitado y `"Enviar mensaje"`
+—cuenta en español— una vez habilitado. El selector final combina ambas
+variantes con una lista separada por comas.
+
+Al derivar, preferir `id` y `data-testid`, que son estables. Si no hay más
+remedio que usar `aria-label`, `guard:specs` exige declarar `_notaIdioma`.
 
 ### Fase 2 — Persistencia y procedencia ⏳
 Modelo de datos local, historial de conversaciones, y la procedencia por
 turno (etiqueta de modelo, continuidad de hilo) para hacer detectable la
 deriva de versión.
+
+**Requisito de verificación que sale de la Fase 1: el arnés pasa a un prompt
+LARGO.** Los dos prompts de la Fase 1 pedían una palabra, y una respuesta de
+una palabra no tiene pausa donde caerse: por eso el truncado de `quiescence`
+no aparecía en un informe en verde. La Fase 2 tiene que pedir una respuesta
+extensa —de las que pausan mientras el modelo piensa o arranca un bloque de
+código— y comparar el largo leído contra el que quedó en pantalla. Es la
+única forma de que la ventana de 20 s de Claude y Gemini deje de ser un piso
+supuesto y pase a ser un valor medido.
 
 ### Fase 3 — Capa de analistas ⏳
 Extracción a pedido, anonimización con barajado y garantía estructural,
@@ -563,3 +643,134 @@ silencio sobre una ruta anidada. Nada de eso tocó el diseño.
     mundo principal, que es donde corre `executeJavaScript`.
 14. **Declarar la dependencia de workspace, aunque el monorepo "encuentre" el
     paquete igual.** Sin la declaración, el typecheck no resuelve el import.
+
+### Fase 1 — verificada en la máquina de Juan (2026-07-31)
+
+**Los cuatro investigadores en verde.** `test:fase1` reportó
+`Continuidad de hilo confirmada en: chatgpt, glm, claude, gemini`. Con eso se
+cierra la fase: la propiedad que tenía que probar —que escribir de nuevo en
+el compositor CONTINÚA la conversación del proveedor en vez de arrancar una
+nueva— quedó medida en los cuatro.
+
+**Qué cubre ese verde y qué no.** Cubre continuidad de hilo, difusión,
+persistencia de sesión y lectura limpia. **No** cubre detección de fin de
+respuesta bajo pausa, porque los dos prompts del arnés pedían una palabra y
+una respuesta de una palabra no tiene pausa donde caerse. Eso pasa a la Fase
+2 con un prompt largo. Registrarlo así importa: un informe en verde no es un
+certificado sobre lo que el informe no ejercitó.
+
+**Los tres defectos que aparecieron al revisar el push, ninguno de los cuales
+invalidaba el verde**
+
+| Defecto | Origen | Estado |
+|---|---|---|
+| `completion.kind` tipado como `string` y nunca ramificado; `quiescenceMs` declarado y nunca leído. Dos proveedores con el fin de respuesta sin detectar. | Del contrato original, escrito en Fase 0. | Corregido: unión discriminada, `generating` tri-estado, ventana por proveedor, `guard:specs`. |
+| Experimento de clic en el sondeo con justificación falsa. | Se aprobó con un motivo que la evidencia posterior refutó. | Borrado; `guard:artefacto` prohíbe sus marcadores. |
+| El BLUEPRINT no se actualizó al cerrar: seguía diciendo "faltan claude y gemini". | Proceso. | Corregido acá. |
+
+**El bug que costó gemini**, y que era mío: `selectorDe` leía `data-testid` y
+`data-test-id` pero emitía **siempre** `[data-testid="…"]`. Un nodo con la
+variante con guion producía un selector que no matcheaba nada y se reportaba
+como `matches: 0`. El `responseRoot` de Gemini usa justamente esa variante.
+
+**La corrección que se ganó el lugar.** El veredicto de continuidad exige
+tres cosas —envío ok, texto CAMBIADO, y recién ahí memoria— porque la lectura
+devuelve siempre el último mensaje del asistente: si el envío del turno 2
+falla en silencio, la lectura sigue trayendo la respuesta del turno 1, que es
+literalmente la palabra clave que se busca. En dos verificaciones distintas
+el arnés dijo `indeterminada` con el motivo correcto donde la versión
+original habría dicho "confirmada".
+
+**Un falso positivo de "corrupción" que en realidad era una instrucción mal
+escrita, y conviene registrarlo porque costó una parada en seco.** El prompt
+de verificación pedía revertir cada prueba en rojo con `git checkout -- <archivo>`.
+Ese comando restaura desde el índice, o sea desde HEAD — que es el estado
+**anterior al zip**. Y el valor que la prueba en rojo escribía a mano
+(`"sin-indicador-conocido"`) es exactamente el valor que HEAD ya tenía, en
+`claude` **y** en `gemini`, sin `_notaFin`.
+
+El resultado se ve idéntico a una corrupción: aparece la cadena de prueba en
+un proveedor que nadie tocó, faltan campos, y `git status` lo declara
+idéntico a HEAD. Reproducido en tres comandos sobre un clon limpio. Cuando lo
+que se está verificando es un cambio que todavía no se commiteó, **la única
+reversión válida es volver a extraerlo del zip**; cualquier `git checkout`,
+`git restore --source=HEAD` o `git stash` lleva al estado previo a la
+entrega, no al estado que se quería restaurar.
+
+**Lecciones que se suman a §7 desde esta fase**
+15. **Un campo de spec que nadie ramifica es decoración, y miente en la
+    dirección peligrosa.** `kind` describía una capacidad que el código no
+    tenía. Todo campo declarativo necesita un gate que lo valide o una rama
+    que lo consuma; si no tiene ninguno de los dos, no existe.
+16. **`false` y "no sé" no son el mismo valor.** Un booleano que colapsa
+    "medí que no" con "no pude medir" hace indistinguible una respuesta
+    terminada de una truncada. Cuando la ausencia de dato es posible, el tipo
+    tiene que poder expresarla.
+17. **Ausencia y latencia se ven igual desde adentro.** Cuando el disparador
+    de una excepción es "no encontré nada", primero hay que descartar que sea
+    "todavía no cargó". Una excepción aprobada sobre un diagnóstico de
+    ausencia hay que revisarla cuando aparece evidencia de timing.
+18. **Un selector por `aria-label` puede cambiar por ESTADO, no sólo por
+    idioma.** El botón de envío de Claude alterna entre inglés deshabilitado
+    y español habilitado en la misma sesión.
+19. **Revertir una prueba destructiva sobre trabajo NO commiteado se hace
+    desde el artefacto, nunca desde git.** `git checkout`, `git restore
+    --source=HEAD` y `git stash` restauran el estado anterior a la entrega.
+    Si además el valor de prueba coincide con el que había en HEAD, el
+    resultado es indistinguible de una corrupción del repositorio.
+20. **Antes de declarar una anomalía del entorno, hay que descartar que el
+    estado "imposible" sea simplemente HEAD.** Un contenido que git jura que
+    está commiteado casi siempre está commiteado.
+21. **Un error de envio que no distingue "el control nunca aparecio" de "el
+    control aparecio deshabilitado" manda a arreglar el lado equivocado.** El
+    primero significa que el editor no registro el texto y el problema esta en
+    la ESCRITURA; el segundo, que el texto entro y hay otra cosa bloqueando.
+    Es la misma forma que el veredicto de continuidad: un valor por defecto
+    que colapsa "no paso" con "no pude ver".
+22. **`writePrompt` se confirma a si mismo en editores ricos.** Escribe
+    `textContent` y despues verifica leyendo `textContent`: siempre da
+    verdadero. ProseMirror y Quill mantienen su propio modelo y no se enteran,
+    asi que el control de envio nunca se habilita. La verificacion tiene que
+    mirar un efecto del EDITOR, no un eco de lo que uno acaba de escribir.
+23. **Un `KeyboardEvent` construido sólo con `key` llega con `keyCode` 0.**
+    Mucho editor rico decide por `keyCode === 13`. El evento resulta
+    sintacticamente valido y semanticamente invisible.
+24. **Un diagnostico tomado en un estado que no existe en el momento del
+    fallo no vale.** El sondeo mira la pagina EN REPOSO. Yo use su lista de
+    candidatos vacia para descartar una hipotesis sobre lo que pasa DESPUES de
+    escribir, y la hipotesis era correcta: en Claude conviven dos botones y
+    `querySelector` devolvia siempre el primero, deshabilitado. Antes de usar
+    una observacion como evidencia hay que preguntarse en que estado se tomo.
+25. **Una lista de candidatos vacia no prueba ausencia.** Gemini muestra el
+    microfono en lugar del boton de enviar mientras el compositor esta vacio.
+26. **Un instrumento hecho para no suponer no puede suponer.** Los patrones de
+    `envio` del sondeo fallaban con Gemini por tres suposiciones simultaneas:
+    `data-testid` con "send", `aria-label` en ingles ("Enviar" no contiene
+    "end") e iconos `<svg>` en vez de `<mat-icon>`. Inglés y React dados por
+    sentado dentro de la herramienta de derivacion.
+27. **Un limite escrito con la palabra equivocada bloquea trabajo legitimo y
+    no protege nada extra.** El sondeo decia "no escribe". La linea que
+    importa es **no envia**: enviar consume cuota, deja un mensaje en la
+    conversacion y no se deshace; escribir en un cuadro de texto no hace nada
+    de eso. Con la formulacion gruesa, el instrumento no podia observar el
+    unico estado en el que ocurren los fallos que tiene que diagnosticar.
+    Redibujar un limite no es relajarlo: es ponerlo donde estaba el riesgo.
+28. **Una garantia que no se mide es una intencion.** El sondeo promete
+    limpiar el compositor; ahora lo comprueba y lo reporta en
+    `compositorLimpio`. Si algun dia sale `false`, se sabe en esa corrida.
+29. **El tamaño del PANEL es una variable de la prueba, no un detalle
+    estetico.** Con cuatro vistas en grilla cada panel mide alrededor de
+    800x434, y varias interfaces cambian de layout —o de atributos— por debajo
+    de cierto ancho. Correr uno solo a pantalla completa y cuatro en grilla
+    compara dos cosas distintas sin decirlo. De ahi `--cc-ventana=<w>x<h>`.
+30. **"No lo encontre" son dos diagnosticos con el mismo nombre.** Si la
+    pagina no tiene NINGUN cuadro de texto, no monto su interfaz y el problema
+    es tiempo o contencion. Si tiene varios pero el selector no matchea,
+    cargo y muestra otra cosa. Los arreglos son opuestos, asi que el error
+    tiene que decir cual de los dos es. Es la tercera vez que aparece la misma
+    forma de defecto en esta fase: un valor por defecto que colapsa "no paso"
+    con "no pude ver".
+31. **El commit que cierra una fase incluye el BLUEPRINT.** Si el ledger
+    sigue diciendo que falta lo que ya está hecho, la próxima sesión arranca
+    sobre una premisa falsa — que es exactamente lo que el ledger existe para
+    evitar.

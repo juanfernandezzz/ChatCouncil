@@ -17,8 +17,21 @@ interface Resultado {
 interface Lectura {
   id: string;
   text: string;
-  generating: boolean;
+  /** `true` generando, `false` terminado, **`null` no observable**. */
+  generating: boolean | null;
+  completionKind?: "element-gone" | "quiescence";
   error?: string;
+}
+
+/**
+ * Un fin de respuesta INFERIDO no se muestra igual que uno observado. Decir
+ * "listo" cuando en realidad es "dejo de crecer" le da al panel una certeza
+ * que nadie midio.
+ */
+function estadoLectura(l: Lectura): string {
+  if (l.generating === true) return " (generando)";
+  if (l.generating === null) return " (fin inferido)";
+  return "";
 }
 interface CcBridge {
   investigadores: () => Promise<string[]>;
@@ -119,14 +132,14 @@ $("leer").addEventListener("click", () => {
   void window.cc.leer().then((ls) => {
     for (const l of ls) {
       if (l.error) marcar(l.id, l.error, "mal");
-      else marcar(l.id, `${l.text.length} car.${l.generating ? " (generando)" : ""}`, l.text.length > 0 ? "ok" : "");
+      else marcar(l.id, `${l.text.length} car.${estadoLectura(l)}`, l.text.length > 0 ? "ok" : "");
     }
     pintarPaneles();
     const detalle = ls
       .map((l) =>
         l.error
           ? `  ${l.id}: ${l.error}`
-          : `  ${l.id}: ${l.text.length} caracteres${l.generating ? " (generando)" : ""}`,
+          : `  ${l.id}: ${l.text.length} caracteres${estadoLectura(l)}`,
       )
       .join("\n");
     decir(`Lectura para análisis:\n${detalle}`);

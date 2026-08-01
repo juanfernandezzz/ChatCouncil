@@ -31,7 +31,12 @@
 export interface LecturaProveedor {
   id: string;
   text: string;
-  generating: boolean;
+  /** `true` generando, `false` terminado, **`null` no observable**. */
+  generating: boolean | null;
+  /** `element-gone` = el fin se OBSERVA. `quiescence` = el fin se INFIERE. */
+  completionKind?: "element-gone" | "quiescence";
+  /** Cuánto tiene que quedarse quieto el texto para darlo por terminado. */
+  quiescenceMs?: number;
   modelLabel?: string | null;
   error?: string;
 }
@@ -50,7 +55,15 @@ export interface InformeTest {
   turnos: {
     prompt: string;
     envio: ResultadoEnvio[];
-    lectura: { id: string; chars: number; generating: boolean; muestra: string; error?: string }[];
+    lectura: {
+      id: string;
+      chars: number;
+      generating: boolean | null;
+      /** "observado" si un indicador lo dijo; "inferido" si sólo se dedujo de la quietud. */
+      finDe: "observado" | "inferido";
+      muestra: string;
+      error?: string;
+    }[];
   }[];
   continuidad: { id: string; estado: EstadoContinuidad; motivo: string }[];
   veredicto: string[];
@@ -58,33 +71,58 @@ export interface InformeTest {
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
+const PASO_MS = 1500;
+
+/** Ventana de quietud por defecto cuando la spec no declara ninguna. */
+const QUIETUD_POR_DEFECTO_MS = 4_500;
+
 /**
- * Espera a que TODOS terminen de generar: ni un marcador estructural solo ni
- * un tiempo fijo. Se corta cuando nadie está generando y el largo del texto
- * dejó de crecer, o al vencer el techo. Devolver antes de tiempo daría
- * lecturas truncadas que parecerían respuestas cortas.
+ * Espera a que TODOS terminen, **con la ventana de quietud de cada uno**.
+ *
+ * La versión anterior usaba un único criterio fijo —tres lecturas iguales cada
+ * 1,5 s, o sea 4,5 s— para todos. Con un proveedor sin indicador observable
+ * eso convierte cualquier pausa de más de 4,5 s en un fin de respuesta falso:
+ * medido, una respuesta que pausaba 7 s en el medio se leía truncada a la
+ * primera mitad. Y una pausa así no es un caso raro: es lo que hace un modelo
+ * cuando piensa, usa una herramienta o arranca un bloque de código largo.
+ *
+ * Ahora cada proveedor lleva su propio reloj:
+ *  · Si `generating` es `true`, no está quieto por definición.
+ *  · Si es `false` —fin OBSERVADO—, alcanza con que el texto no crezca.
+ *  · Si es `null` —fin INFERIDO—, el texto tiene que quedarse quieto durante
+ *    el `quiescenceMs` COMPLETO que declara su spec.
+ * Se devuelve cuando todos están quietos, o al vencer el techo global.
  */
 async function esperarQuietud(
   leer: () => Promise<LecturaProveedor[]>,
   techoMs: number,
 ): Promise<LecturaProveedor[]> {
   const hasta = Date.now() + techoMs;
-  let previo = "";
-  let estables = 0;
+  /** id → { largo visto, momento en que dejó de crecer }. */
+  const reloj = new Map<string, { largo: number; desde: number }>();
   let ultima: LecturaProveedor[] = [];
+
   for (;;) {
     ultima = await leer();
-    const huella = ultima.map((l) => `${l.id}:${l.text.length}:${l.generating ? 1 : 0}`).join("|");
-    const alguienGenerando = ultima.some((l) => l.generating);
-    if (!alguienGenerando && huella === previo) {
-      estables += 1;
-      if (estables >= 3) return ultima;
-    } else {
-      estables = 0;
-    }
-    previo = huella;
-    if (Date.now() > hasta) return ultima;
-    await sleep(1500);
+    const ahora = Date.now();
+
+    const quietos = ultima.map((l) => {
+      const previo = reloj.get(l.id);
+      if (!previo || previo.largo !== l.text.length) {
+        reloj.set(l.id, { largo: l.text.length, desde: ahora });
+        return false;
+      }
+      if (l.generating === true) return false;
+      // Fin observado: el indicador ya dijo que terminó y el texto no crece.
+      if (l.generating === false) return true;
+      // Fin inferido: hay que aguantar la ventana entera antes de creerle.
+      const ventana = l.quiescenceMs ?? QUIETUD_POR_DEFECTO_MS;
+      return ahora - previo.desde >= ventana;
+    });
+
+    if (quietos.every(Boolean)) return ultima;
+    if (ahora > hasta) return ultima;
+    await sleep(PASO_MS);
   }
 }
 
@@ -197,6 +235,7 @@ export async function correrPruebaFase1(deps: {
         id: l.id,
         chars: l.text.length,
         generating: l.generating,
+        finDe: l.completionKind === "element-gone" ? ("observado" as const) : ("inferido" as const),
         // Muestra corta: alcanza para juzgar continuidad sin volcar la
         // respuesta entera a un log.
         muestra: l.text.slice(0, 120),
@@ -212,6 +251,20 @@ export async function correrPruebaFase1(deps: {
     informe.veredicto.push(`Turno 1: ${ok} de ${t1.envio.length} recibieron el prompt.`);
     const conTexto = t1.lectura.filter((l) => l.chars > 0).length;
     informe.veredicto.push(`Turno 1: ${conTexto} de ${t1.lectura.length} produjeron texto legible.`);
+
+    // Procedencia del fin de respuesta. No es un detalle: en los que dicen
+    // "inferido" el fin no se observo, se dedujo de que el texto dejo de
+    // crecer. Si la pausa real supera la ventana declarada, la lectura sale
+    // truncada y NADA en el informe lo delata salvo esta linea.
+    const inferidos = t1.lectura.filter((l) => l.finDe === "inferido").map((l) => l.id);
+    if (inferidos.length > 0) {
+      informe.veredicto.push(
+        `Fin de respuesta INFERIDO (no observado) en: ${inferidos.join(", ")}. ` +
+          `Esos proveedores no tienen indicador conocido: el fin sale de la ventana de ` +
+          `quietud de su spec. Un prompt corto no ejercita esto — hace falta uno largo, ` +
+          `con pausa real en el medio, para que la ventana quede medida.`,
+      );
+    }
   }
 
   const lec1 = lecturasPorTurno[0];

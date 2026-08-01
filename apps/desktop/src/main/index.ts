@@ -58,8 +58,43 @@ const MODO: Modo = ARGV.includes("--cc-test") || process.env["CC_TEST"] === "1"
       ? "login"
       : "normal";
 
+/**
+ * `--cc-probe-escribe`: el sondeo escribe un marcador neutro antes de mirar,
+ * porque hay controles que sólo existen con texto en el compositor. OPT-IN y
+ * nunca por defecto. Sigue sin enviar: ni un clic en un control de envío ni
+ * una tecla, y limpia el compositor antes de devolver.
+ */
+const SONDEO_ESCRIBE = ARGV.includes("--cc-probe-escribe") || process.env["CC_PROBE_ESCRIBE"] === "1";
+
 /** Los candidatos sólo se abren cuando se los va a reconocer o loguear. */
 const CON_CANDIDATOS = MODO === "probe" || MODO === "login";
+
+/**
+ * `--cc-solo=<id>` abre UN solo investigador.
+ *
+ * Existe para separar dos causas que producen el mismo sintoma: un defecto
+ * estructural del proveedor, o contencion entre cuatro aplicaciones pesadas
+ * difundidas en paralelo dentro de un mismo proceso. Si un proveedor falla
+ * igual estando solo, no era contencion. Es una linea de comando en vez de
+ * una hipotesis.
+ */
+const SOLO = (ARGV.find((a) => a.startsWith("--cc-solo=")) ?? "").split("=")[1] ?? "";
+const ACTIVOS: readonly ProviderId[] = SOLO
+  ? INVESTIGADORES.filter((id) => id === SOLO)
+  : INVESTIGADORES;
+
+/**
+ * `--cc-ventana=<ancho>x<alto>` fuerza el tamaño de la ventana.
+ *
+ * Existe porque el tamaño del PANEL es una variable de la prueba, no un
+ * detalle estetico: con cuatro vistas en grilla cada panel mide alrededor de
+ * 800x434, y varias interfaces cambian de layout —o directamente de
+ * atributos— por debajo de cierto ancho. Correr uno solo a pantalla completa
+ * y cuatro en grilla compara dos cosas distintas sin decirlo.
+ */
+const VENTANA = /^(\d+)x(\d+)$/.exec((ARGV.find((a) => a.startsWith("--cc-ventana=")) ?? "").split("=")[1] ?? "");
+const VENTANA_W = VENTANA ? Number(VENTANA[1]) : 1600;
+const VENTANA_H = VENTANA ? Number(VENTANA[2]) : 1000;
 
 /** Alto de la franja de la interfaz propia; el resto se reparte entre las vistas. */
 const UI_HEIGHT = 132;
@@ -122,7 +157,7 @@ function crearVista(id: string, url: string): WebContentsView {
 }
 
 function createWindow(): void {
-  win = new BaseWindow({ width: 1600, height: 1000, title: "ChatCouncil" });
+  win = new BaseWindow({ width: VENTANA_W, height: VENTANA_H, title: "ChatCouncil" });
 
   uiView = new WebContentsView({
     webPreferences: { preload: join(__dirname, "../preload/ui.cjs"), sandbox: true },
@@ -130,7 +165,7 @@ function createWindow(): void {
   win.contentView.addChildView(uiView);
   void uiView.webContents.loadFile(join(__dirname, "../renderer/index.html"));
 
-  for (const id of INVESTIGADORES) {
+  for (const id of ACTIVOS) {
     const view = crearVista(id, PROVIDER_SPECS[id].newConversationUrl);
     vistas.push({ id, view });
     win.contentView.addChildView(view);
@@ -197,7 +232,7 @@ async function sesiones(): Promise<{ id: string; cookies: number }[]> {
 }
 
 function registrarIpc(): void {
-  ipcMain.handle("cc:investigadores", () => INVESTIGADORES.slice());
+  ipcMain.handle("cc:investigadores", () => ACTIVOS.slice());
 
   /**
    * DIFUSIÓN. Se lanzan todas en paralelo y se espera a todas, pero con
@@ -224,6 +259,10 @@ function emitir(etiqueta: string, cuerpo: unknown): void {
  */
 async function modoPrueba(): Promise<void> {
   try {
+    if (SOLO && ACTIVOS.length === 0) {
+      process.stdout.write(`\n===CC_TEST_ERROR===\n"${SOLO}" no esta en INVESTIGADORES.\n`);
+      return;
+    }
     emitir("CC_TEST_JSON", await correrPruebaFase1({ sesiones, difundir, leer }));
   } catch (e) {
     process.stdout.write(`\n===CC_TEST_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
@@ -245,11 +284,18 @@ async function modoSondeo(): Promise<void> {
     await new Promise((r) => setTimeout(r, 20_000));
     emitir("CC_PROBE_JSON", {
       sesiones: await sesiones(),
+      modo: SONDEO_ESCRIBE ? "con-texto" : "reposo",
       paneles: await sondear(
-        todas().map((v) => ({
-          id: v.id,
-          ejecutar: (fuente: string) => v.view.webContents.executeJavaScript(fuente, true),
-        })),
+        todas().map((v) => {
+          const spec = (PROVIDER_SPECS as Record<string, { composer?: { selector: string } } | undefined>)[v.id];
+          return {
+            id: v.id,
+            ejecutar: (fuente: string) => v.view.webContents.executeJavaScript(fuente, true),
+            // Sólo se escribe donde hay un selector YA derivado. Un candidato
+            // sin spec no se toca: no hay dónde escribir sin adivinar.
+            ...(SONDEO_ESCRIBE && spec?.composer ? { composerSelector: spec.composer.selector } : {}),
+          };
+        }),
       ),
     });
   } catch (e) {

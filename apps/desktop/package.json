@@ -9,7 +9,9 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit",
     "test:fase1": "electron-vite build && electron out/main/index.js --cc-test",
+    "test:solo": "electron-vite build && electron out/main/index.js --cc-test",
     "probe": "electron-vite build && electron out/main/index.js --cc-probe",
+    "probe:escribe": "electron-vite build && electron out/main/index.js --cc-probe --cc-probe-escribe",
     "login": "electron-vite build && electron out/main/index.js --cc-login"
   },
   "dependencies": {

@@ -136,7 +136,21 @@ const SIN_ENVIO =
   "clic, su motivo resulto falso (era timing, no ausencia) y se revirtio; este gate impide que vuelva";
 
 /**
- * EXCEPCIÓN, angosta y explícita (decisión de Juan, 2026-08-09): el banco de
+ * EXCEPCIÓN POR LÍNEA — corregida el 2026-08-09.
+ *
+ * La primera versión de esta excepción era por ARCHIVO: si el archivo contenía
+ * el marcador en algún lado, `localStorage` quedaba permitido en TODO el
+ * archivo. Y `main/index.js` es UN SOLO archivo empaquetado con todo el
+ * proceso principal adentro, y el marcador está encima en la lista de
+ * EXIGIDOS, o sea que tiene que estar siempre. Resultado: la prohibición
+ * quedaba apagada por completo y para siempre, con forma de excepción angosta.
+ * Su propio comentario afirmaba lo contrario.
+ *
+ * Ahora la excepción se evalúa LÍNEA POR LÍNEA: `localStorage` sólo pasa en
+ * una línea que además contiene el marcador de la prueba. Una aparición
+ * cualquiera en otra línea rompe el gate igual que antes.
+ *
+ * EXCEPCIÓN, angosta y explícita: el banco de
  * pruebas de persistencia (`--cc-sesion=`) necesita tocar `localStorage` DE
  * VERDAD para probar que sobrevive al cierre — es lo que la prueba mide, no
  * un accidente. La partición es sintética (`https://localhost/`-equivalente
@@ -189,8 +203,15 @@ for (const [rel, marcadores] of Object.entries(PROHIBIDO)) {
   const src = readFileSync(p, "utf8");
   for (const [m, motivo, excepcion] of marcadores) {
     if (!src.includes(m)) continue;
-    if (excepcion && src.includes(excepcion)) continue;
-    fallos.push(`${BASE}/${rel} — aparece "${m}": ${motivo}`);
+    // Por línea, no por archivo: la excepción cubre la línea que la declara y
+    // ninguna otra.
+    const culpables = src
+      .split("\n")
+      .filter((linea) => linea.includes(m) && !(excepcion && linea.includes(excepcion)));
+    if (culpables.length === 0) continue;
+    fallos.push(
+      `${BASE}/${rel} — aparece "${m}" en ${culpables.length} linea(s) sin la excepcion: ${motivo}`,
+    );
   }
 }
 

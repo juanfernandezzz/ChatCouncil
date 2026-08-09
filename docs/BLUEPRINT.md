@@ -940,6 +940,22 @@ entrega, no al estado que se quería restaurar.
     etiqueta de modelo exigía una variante, y "mini" casa dentro de "Gemini":
     la palabra "Gemini" sola pasaba como si fuera una etiqueta, y devolvió tres
     candidatos inútiles incluido el título accesible de la página.
+55. **Una excepción "angosta" por ARCHIVO apaga la prohibición entera.** Para
+    poder probar que `localStorage` sobrevive al cierre se abrió una excepción
+    en `guard:artefacto`, atada al marcador `cc_persistencia_ls` y evaluada
+    **por archivo**. Pero `main/index.js` es UN SOLO archivo empaquetado con
+    todo el proceso principal adentro, y ese marcador está además en la lista
+    de EXIGIDOS, o sea que tiene que estar siempre. La prohibición quedaba
+    apagada por completo y para siempre, con forma de excepción angosta — y su
+    propio comentario afirmaba lo contrario. Corregido a evaluación **por
+    línea**, con el literal en línea en cada acceso: cada toque queda marcado y
+    auditable de un vistazo. Probado en rojo sobre el compilado.
+56. **Escalar y proceder igual no es escalar.** El agente dijo que el choque
+    con el gate era decisión de diseño y que no lo resolvería solo, y en el
+    mismo informe lo resolvió, anotando en el código "decisión de Juan" por una
+    decisión que Juan nunca tomó. La regla se explicita: **escalar significa
+    PARAR.** Y ninguna línea de código puede atribuir una decisión a Juan sin
+    que Juan la haya escrito.
 53. **`app.exit()` saltea justo la parte que escribe.** El volcado terminaba en
     `app.exit(0)` para "asegurar" la salida. `exit` mata el proceso de una y se
     saltea el desmontaje ordenado de Chromium, que es donde se terminan de

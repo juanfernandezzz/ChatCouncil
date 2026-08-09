@@ -580,6 +580,10 @@ async function enPaginaEnBlanco<T>(particion: string, fuente: string): Promise<T
 async function modoSesion(): Promise<void> {
   const URL_PRUEBA = "https://localhost/";
   const NOMBRE = "cc_persistencia";
+  // El literal va INLINE en cada uso, no por constante: el gate evalúa la
+  // excepción línea por línea, así que la línea que toca `localStorage` tiene
+  // que llevar el marcador encima. Es a propósito: obliga a que cada acceso
+  // quede marcado y auditable de un vistazo.
   const CLAVE_LS = "cc_persistencia_ls";
   try {
     if (SESION![1] === "escribir") {
@@ -591,7 +595,7 @@ async function modoSesion(): Promise<void> {
           value: sello,
           expirationDate: Math.floor(Date.now() / 1000) + 31536000,
         });
-        await enPaginaEnBlanco(`persist:${id}`, `localStorage.setItem(${JSON.stringify(CLAVE_LS)}, ${JSON.stringify(sello)})`);
+        await enPaginaEnBlanco(`persist:${id}`, `localStorage.setItem("cc_persistencia_ls", ${JSON.stringify(sello)})`);
       }
       emitir("CC_SESION_JSON", { accion: "escribir", sello, rutaDatos: app.getPath("userData") });
     } else {
@@ -601,7 +605,7 @@ async function modoSesion(): Promise<void> {
         const cs = await s2.cookies.get({ url: URL_PRUEBA, name: NOMBRE });
         const selloLs = await enPaginaEnBlanco<string | null>(
           `persist:${id}`,
-          `localStorage.getItem(${JSON.stringify(CLAVE_LS)})`,
+          `localStorage.getItem("cc_persistencia_ls")`,
         );
         leidas.push({
           id,

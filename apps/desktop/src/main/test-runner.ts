@@ -28,6 +28,8 @@
  * resultado; §7.9: un dato de procedencia desconocida no se usa).
  */
 
+import { derivarProcedencia } from "@chatcouncil/domain";
+
 export interface LecturaProveedor {
   id: string;
   text: string;
@@ -245,7 +247,17 @@ export async function correrPruebaFase1(deps: {
         id: l.id,
         chars: l.text.length,
         generating: l.generating,
-        finDe: l.completionKind === "element-gone" ? ("observado" as const) : ("inferido" as const),
+        // Misma derivación que el almacén real (`derivarProcedencia` del
+        // dominio): una segunda copia de esta lógica se desincroniza (§7.2).
+        finDe: derivarProcedencia(
+          {
+            modelLabel: l.modelLabel ?? null,
+            generating: l.generating,
+            ...(l.completionKind !== undefined ? { completionKind: l.completionKind } : {}),
+            ...(l.quiescenceMs !== undefined ? { quiescenceMs: l.quiescenceMs } : {}),
+          },
+          { ahora: new Date().toISOString(), continuidad: "indeterminada", metodoEscritura: null, panel: null },
+        ).finDe,
         // Muestra corta: alcanza para juzgar continuidad sin volcar la
         // respuesta entera a un log.
         muestra: l.text.slice(0, 120),

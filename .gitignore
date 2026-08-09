@@ -15,3 +15,4 @@ coverage/
 _fase*/
 package-lock.json
 yarn.lock
+.claude/

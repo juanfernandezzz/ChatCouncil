@@ -381,6 +381,7 @@ lectura truncada no se distingue de una respuesta corta.
 |---|---|
 | `guard:judge` | El prompt del evaluador no puede ver la identidad del proveedor. |
 | `guard:specs` | Las specs cumplen el contrato que el preload espera. |
+| `guard:sondeo` | La fuente que el sondeo INYECTA en la página parsea, no envía y no toca credenciales. Agregado en la Fase 2. |
 | `guard:artefacto` | Lo COMPILADO contiene las capacidades declaradas, sin credenciales y sin clics en el sondeo. |
 
 `guard:specs` existe porque el typecheck **no cruza** la frontera del JSON:
@@ -430,6 +431,54 @@ remedio que usar `aria-label`, `guard:specs` exige declarar `_notaIdioma`.
 Modelo de datos local, historial de conversaciones, y la procedencia por
 turno (etiqueta de modelo, continuidad de hilo) para hacer detectable la
 deriva de versión.
+
+#### Decisiones tomadas por Juan (2026-08-01)
+
+| # | Decisión | Qué se descartó, y qué costaba |
+|---|---|---|
+| 1 | **Persistencia en archivo de texto**, una línea por respuesta, en `userData`, escrito sólo desde el proceso principal. | Base embebida tipo SQLite. Daba consultas desde el día uno; costaba una dependencia nativa a recompilar contra cada Electron, sobre Windows, donde el extractor de pnpm ya falló una vez. El costo asumido es que no hay búsqueda: si hace falta, el índice se DERIVA del archivo, que sigue siendo el dato canónico. |
+| 2 | **Medir antes de arreglar** el fallo de escritura. | Aplicar el arreglo probable —`execCommand`— y ver si anda. Las dos veces que en la Fase 1 se hizo eso costó una ronda entera. |
+| 3 | **3 corridas** del arnés, tasa y no último resultado. | 5 corridas: más confiable, casi el doble de cuota paga (§7.12). Se sube a 5 sólo sobre el caso que salga raro. |
+| 4 | **Derivar ya** la etiqueta de modelo de chatgpt y gemini. | Dejarlo para después. La fase existe para detectar deriva de versión; sin esas dos etiquetas, la mitad del consejo no la detecta y la fase no cumple lo que declara. |
+| 5 | **Sin pantalla de historial** en esta fase. Botón que abre la carpeta y un modo que vuelca la conversación por stdout. | Una lista navegable: superficie de interfaz nueva que la Fase 6 rehace entera. |
+| 6 | **El repositorio sigue público** hasta que ChatCouncil esté usable, para que el agente pueda clonarlo cuando el conector de GitHub falle. Se privatiza al cerrar. | Privatizarlo ya. Verificado antes de decidir: los 70 commits escaneados por patrones de clave real (`sk-ant-`, `sk-`, `AIza`, `ghp_`, `github_pat_`, JWT, claves privadas) dan **cero coincidencias**; el `.env.example` de la v2 sólo tenía un ID de extensión y una URL pública. Lo único personal expuesto es el correo de Juan, en `BLUEPRINT.v2.md` y como autor de los commits. |
+| 7 | **`git add --renormalize .` permitido y sin confirmación previa**, con reporte obligatorio de qué cambió. | Ruta por ruta. `--renormalize` sólo toca archivos ya rastreados, así que no puede levantar un directorio suelto como `.claude/`, que es el motivo por el que existe la regla de `git add` explícito. |
+| 8 | **Disposición en FILA HORIZONTAL**, un panel por investigador, en vez de la grilla cuadrada. | La grilla `ceil(sqrt(n))`. Sigue sin codificarse ninguna cantidad. **El costo es una variable de la prueba (§7.29):** con la ventana por defecto de 1600 y cuatro investigadores, cada panel pasa de ~800x434 a ~400x868. 400 px es ancho de teléfono, y varias interfaces esconden ahí la barra superior — que es justamente donde vive la etiqueta de modelo de la decisión 4. |
+
+#### Cómo se mide el fallo de escritura (decisión 2)
+
+El criterio de éxito **no puede ser el eco**. `writePrompt` escribe
+`textContent` y confirma leyendo `textContent`, así que siempre da verdadero
+mientras el editor —que mantiene su modelo interno— no se entera y nunca
+habilita el envío (§7.22).
+
+El sondeo prueba las **tres formas** —`execCommand`, `paste` con
+`DataTransfer`, y `textContent` como término de comparación— y juzga por un
+efecto del EDITOR que nosotros no producimos: **cuántos controles de envío
+están habilitados antes y después de escribir**. Recién con esa medición la
+spec declara `composer.escritura`. Si la única forma que deja texto a la vista
+es `textContent` y ninguna habilita el envío, el diagnóstico queda demostrado
+en vez de supuesto.
+
+El sondeo **omite la medición si el compositor ya tenía texto**: sería un
+borrador de Juan y borrarlo para medir es peor que no medir.
+
+#### Cómo se busca la etiqueta de modelo (decisión 4)
+
+Dos vías de sólo lectura, y ahora **las dos corren siempre** en vez de que la
+de texto sólo se active cuando la de atributo sale vacía: son dos diagnósticos
+distintos y colapsarlos escondía el caso real —que un atributo encuentre un
+botón cuyo texto no sirve de etiqueta—. Se informan por separado.
+
+La vía por texto exige ahora **dos condiciones a la vez**: una familia de
+modelo Y algo con forma de versión o variante. Con una sola condición, en la
+página de Gemini la palabra "Gemini" está en el título, en el logo, en el menú
+lateral y en el texto gris del compositor: devolvía ruido, no la etiqueta.
+
+Y el sondeo se corre **a dos anchos**: el panel real de la fila y el proveedor
+solo a ventana completa (`--cc-solo=<id>`). Si la etiqueta aparece en uno y no
+en el otro, el selector derivado a ancho completo fallaría exactamente cuando
+estén los cuatro abiertos, que es la condición de uso.
 
 **Segundo requisito que sale de la Fase 1: el arnés se corre VARIAS VECES y
 reporta la tasa.** Los fallos de la Fase 1 fueron intermitentes y rotaron de
@@ -830,3 +879,24 @@ entrega, no al estado que se quería restaurar.
     sigue diciendo que falta lo que ya está hecho, la próxima sesión arranca
     sobre una premisa falsa — que es exactamente lo que el ledger existe para
     evitar.
+
+**Lecciones que se suman desde la apertura de la Fase 2**
+34. **El typecheck no mira dentro de una cadena.** `FUENTE_SONDEO` es un
+    literal de plantilla: para TypeScript es texto, no código. Un paréntesis
+    de más compila perfecto y falla recién dentro de la página del proveedor,
+    en una corrida que cuesta minutos de carga y logins ya hechos. Es la misma
+    frontera que motivó `guard:specs` —el typecheck no cruza el
+    `JSON.stringify`— del otro lado del mismo problema. De ahí `guard:sondeo`.
+35. **Un marcador de gate que aparece en más de un lugar hace pasar el gate
+    por el motivo equivocado.** Medido al escribir `guard:sondeo`: la
+    comprobación de que se midieran las tres formas de escritura buscaba
+    `"execCommand"`, `"paste"` y `"textContent"` sueltos, y esos nombres
+    también aparecen en las ramas de la función que escribe. Con la lista del
+    bucle recortada a dos formas, el gate seguía dando OK. La corrección fue
+    comprobar la LISTA literal que recorre el bucle. Se suma a las cinco
+    formas de §7.7 en que un gate miente: **una sexta es un marcador que el
+    archivo contiene por otra razón.**
+36. **Un instrumento de medición no puede destruir el dato que mide.** El
+    sondeo escribe en el compositor para medir; si el compositor ya tenía
+    texto, ese texto es un borrador de Juan. Se omite la medición y se dice
+    por qué, en vez de borrarlo.

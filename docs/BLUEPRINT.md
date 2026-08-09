@@ -896,6 +896,33 @@ entrega, no al estado que se quería restaurar.
     comprobar la LISTA literal que recorre el bucle. Se suma a las cinco
     formas de §7.7 en que un gate miente: **una sexta es un marcador que el
     archivo contiene por otra razón.**
+36bis. **Medir en un instante fijo convierte "todavía no" en "no existe".**
+    El sondeo dormía 1500 ms y miraba una vez. El 2026-08-02, claude dio
+    `envioNodosDespues: 0` en 2 de 3 corridas a panel angosto y en 0 de 3 a
+    panel ancho. Con n=3 por condición eso NO separa "el ancho lo causa" de
+    "es intermitente en las dos y la ancha tuvo suerte" — la diferencia no es
+    distinguible del azar. Lo que sí se separa es midiendo **cuánto tarda** en
+    aparecer el control en vez de si está a los 1500 ms: un binario no tiene
+    distribución, una latencia sí. Es la misma familia que §7.16 y §7.30: un
+    valor que colapsa dos estados distintos.
+37. **`mutacionesFuera` resultó ser el dato, no el ruido.** Al escribirlo lo
+    anoté como métrica de contexto porque en una página viva mide animación de
+    fondo. En las seis corridas salió bimodal y perfectamente correlacionado:
+    48 cuando el control de envío no aparece, 52 cuando aparece. Un delta de 4
+    constante es un montaje de componente, no ruido. La lectura correcta es
+    que hay una carrera con el montaje de la página, y de ahí que el sondeo
+    ahora registre también `msDesdeNavegacion` y `readyState`.
+38. **El tamaño de ventana pedido no es el que se aplica, por dos motivos
+    distintos y ninguno visible.** `--cc-ventana` fijaba el MARCO, y en Windows
+    eso resta ~16 px de ancho y ~39 de alto: pedir 350x700 daba paneles de
+    334x529. Y una petición mayor que la pantalla se recorta en silencio: pedir
+    1600 sobre una pantalla de 1366 dio 1350, y una corrida entera se informó
+    como "ventana completa 1600x1000" sin serlo. Ahora el flag fija el
+    CONTENIDO y se informan `ventanaPedida` y `ventanaReal`, las dos.
+39. **Un resumen no es una salida real.** Dos rondas de reconocimiento
+    llegaron resumidas porque el bloque crudo es largo y se pierde al copiar.
+    De ahí `--cc-salida=<ruta>`: el crudo se adjunta como archivo en vez de
+    transcribirse.
 36. **Un instrumento de medición no puede destruir el dato que mide.** El
     sondeo escribe en el compositor para medir; si el compositor ya tenía
     texto, ese texto es un borrador de Juan. Se omite la medición y se dice

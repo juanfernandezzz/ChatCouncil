@@ -89,6 +89,16 @@ export interface EscrituraMetodo {
   envioHabilitadosAntes: number;
   envioNodosDespues: number;
   envioHabilitadosDespues: number;
+  /**
+   * Milisegundos desde la escritura hasta que el control de envio APARECE en
+   * el DOM. `null` significa "no aparecio dentro de `envioLimiteMs`", que NO
+   * es lo mismo que "no existe": es la distincion que la medicion por
+   * instantanea colapsaba.
+   */
+  envioApareceMs: number | null;
+  /** Idem, hasta que queda HABILITADO por encima del conteo previo. */
+  envioHabilitaMs: number | null;
+  envioLimiteMs: number;
   /** Mutaciones registradas FUERA del compositor: cambios que produjo el editor, no nosotros. */
   mutacionesFuera: number;
   /** El compositor quedó sin el marcador después de este intento. */
@@ -115,6 +125,9 @@ export interface SondeoProveedor {
    */
   etiquetaModeloPorTexto: Candidato[];
   etiquetaModeloDescartados: number;
+  /** Milisegundos desde la navegación hasta el momento de la muestra. */
+  msDesdeNavegacion?: number;
+  readyState?: string;
   /** Sólo en modo escritura: las tres formas, medidas una por una. */
   escrituraPorMetodo?: EscrituraMetodo[];
   /**
@@ -251,9 +264,33 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => 
         });
         obs.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: false });
 
+        const t0 = performance.now();
         try { escribirPor(c, metodo, MARCADOR); } catch (e) { /* se reporta abajo */ }
-        // Dar tiempo a que el framework reaccione y monte o habilite controles.
-        await dormir(1500);
+
+        // MEDICION POR LATENCIA, no por instantanea.
+        //
+        // La version anterior dormia 1500 ms y miraba una sola vez. Con eso, un
+        // control que tarda 3 segundos en montarse se informa como "0 nodos: no
+        // existe", que es indistinguible de "no existe nunca". Las seis
+        // corridas del 2026-08-02 dieron 0/1/0 a panel angosto y 1/1/1 a panel
+        // ancho MIDIENDO EN UN INSTANTE FIJO: con n=3 por condicion eso no
+        // separa "el ancho lo causa" de "es intermitente en los dos y ancho
+        // tuvo suerte". Lo que hay que medir es CUANTO TARDA en aparecer, y
+        // eso convierte un binario en una distribucion.
+        let apareceMs = null;
+        let habilitaMs = null;
+        const limite = 15000;
+        while (performance.now() - t0 < limite) {
+          const m = medirEnvio();
+          if (apareceMs === null && m.nodos > 0) apareceMs = Math.round(performance.now() - t0);
+          if (habilitaMs === null && m.habilitados > antes.habilitados) habilitaMs = Math.round(performance.now() - t0);
+          if (apareceMs !== null && habilitaMs !== null) break;
+          await dormir(250);
+        }
+        // Piso comun para que las mutaciones y el estado final sean comparables
+        // entre metodos aunque uno haya salido del bucle enseguida.
+        const transcurrido = performance.now() - t0;
+        if (transcurrido < 1500) await dormir(1500 - transcurrido);
 
         obs.disconnect();
         const textoPresente = leerCompositor(c).includes(MARCADOR);
@@ -269,6 +306,10 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => 
           envioHabilitadosAntes: antes.habilitados,
           envioNodosDespues: despues.nodos,
           envioHabilitadosDespues: despues.habilitados,
+          // null = no aparecio dentro del limite. NO es lo mismo que "no existe".
+          envioApareceMs: apareceMs,
+          envioHabilitaMs: habilitaMs,
+          envioLimiteMs: limite,
           mutacionesFuera: mutacionesFuera,
           limpio: limpio,
         });
@@ -276,7 +317,7 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => 
         // "Sirvio" quiere decir: el texto entro Y el editor reacciono
         // habilitando un control que antes no estaba habilitado. El eco solo
         // no alcanza — es exactamente el error que se esta midiendo.
-        if (!metodoQueSirvio && textoPresente && despues.habilitados > antes.habilitados) {
+        if (!metodoQueSirvio && textoPresente && habilitaMs !== null) {
           metodoQueSirvio = metodo;
         }
       }
@@ -446,6 +487,11 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => 
     etiquetaModeloPorAtributo: etiquetaModeloPorAtributo,
     etiquetaModeloPorTexto: etiquetaModeloPorTexto,
     etiquetaModeloDescartados: descartadosPorFiltro,
+    // Cuanto hacia que la pagina habia navegado cuando se tomo la muestra, y en
+    // que estado estaba. Si los fallos se concentran en valores bajos, el
+    // problema es una carrera con el montaje de la pagina y no el ancho.
+    msDesdeNavegacion: Math.round(performance.now()),
+    readyState: document.readyState,
     escrituraPorMetodo: escrituraPorMetodo,
     escrituraOmitida: escrituraOmitida,
   };

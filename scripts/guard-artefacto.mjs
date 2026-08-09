@@ -40,6 +40,8 @@ const EXIGIDO = {
     "con-texto",
     "compositorLimpio",
     "--cc-ventana=",
+    // Salida a archivo: el crudo se adjunta en vez de transcribirse.
+    "--cc-salida=",
     "CC_TEST_JSON",
     "CC_PROBE_JSON",
     // Del test-runner y del probe: prueba que NO se los llevó el tree-shaking.
@@ -56,11 +58,19 @@ const EXIGIDO = {
     // con el que se tomo cada muestra: es variable de la prueba, no adorno.
     "fila-horizontal",
     "disposicion",
+    // El tamano PEDIDO y el REAL, los dos. La pantalla recorta y el marco resta.
+    "ventanaPedida",
+    "ventanaReal",
     // Medicion de las tres formas de escritura (§7.22). Si esto no esta
     // compilado, el sondeo volvio a confirmarse a si mismo.
     "escrituraPorMetodo",
     "execCommand",
     "envioHabilitadosDespues",
+    // Latencia, no instantanea: sin estos campos el sondeo vuelve a informar
+    // "0 nodos" sin poder distinguir "todavia no aparecio" de "no existe".
+    "envioApareceMs",
+    "envioHabilitaMs",
+    "msDesdeNavegacion",
     "escrituraOmitida",
     // Las dos vias de la etiqueta de modelo, separadas y ambas informadas.
     "etiquetaModeloPorAtributo",

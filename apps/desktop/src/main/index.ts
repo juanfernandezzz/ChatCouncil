@@ -13,6 +13,7 @@
 import { app, BaseWindow, WebContentsView, ipcMain, session } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { appendFileSync } from "node:fs";
 
 import { PROVIDER_SPECS } from "@chatcouncil/providers";
 
@@ -84,7 +85,13 @@ const ACTIVOS: readonly ProviderId[] = SOLO
   : INVESTIGADORES;
 
 /**
- * `--cc-ventana=<ancho>x<alto>` fuerza el tamaño de la ventana.
+ * `--cc-salida=<ruta>` escribe además el informe a un archivo (append).
+ * `--cc-ventana=<ancho>x<alto>` fuerza el tamaño del ÁREA DE CONTENIDO, no el
+ * del marco. Antes fijaba el marco, y en Windows eso restaba unos 16 px de
+ * ancho y 39 de alto: pedir 350x700 daba paneles de 334x529 y nadie sabía por
+ * qué. El tamaño pedido y el REAL se informan los dos, porque la pantalla
+ * puede recortar el pedido igual (una petición de 1600 sobre una pantalla de
+ * 1366 termina en 1350, y esa diferencia pasó inadvertida una corrida entera).
  *
  * Existe porque el tamaño del PANEL es una variable de la prueba, no un
  * detalle estetico: con cuatro vistas en grilla cada panel mide alrededor de
@@ -167,6 +174,9 @@ function crearVista(id: string, url: string): WebContentsView {
 
 function createWindow(): void {
   win = new BaseWindow({ width: VENTANA_W, height: VENTANA_H, title: "ChatCouncil" });
+  // El pedido es sobre el CONTENIDO. `setContentSize` descuenta el marco; la
+  // pantalla puede recortar igual, y por eso el sondeo informa el real.
+  win.setContentSize(VENTANA_W, VENTANA_H);
 
   uiView = new WebContentsView({
     webPreferences: { preload: join(__dirname, "../preload/ui.cjs"), sandbox: true },
@@ -256,8 +266,29 @@ function registrarIpc(): void {
   ipcMain.handle("cc:sesiones", async () => sesiones());
 }
 
+/**
+ * `--cc-salida=<ruta>` escribe ADEMÁS el informe a un archivo, APPEND.
+ *
+ * Existe porque dos rondas seguidas de reconocimiento llegaron resumidas: el
+ * bloque crudo es largo, se pierde al copiar y pegar, y un resumen no sirve
+ * de base — la regla del proyecto es salidas reales, y un resumen es
+ * exactamente lo que la regla excluye. Con un archivo, el crudo se adjunta en
+ * vez de transcribirse. `append` para que varias corridas se acumulen solas.
+ */
+const SALIDA = (ARGV.find((a) => a.startsWith("--cc-salida=")) ?? "").split("=")[1] ?? "";
+
 function emitir(etiqueta: string, cuerpo: unknown): void {
-  process.stdout.write(`\n===${etiqueta}===\n${JSON.stringify(cuerpo, null, 2)}\n===FIN===\n`);
+  const texto = `\n===${etiqueta}===\n${JSON.stringify(cuerpo, null, 2)}\n===FIN===\n`;
+  process.stdout.write(texto);
+  if (SALIDA) {
+    try {
+      appendFileSync(SALIDA, texto, "utf8");
+    } catch (e) {
+      // Se avisa y se sigue: el informe por stdout ya salió y perderlo por no
+      // poder escribir un archivo sería peor que no tener el archivo.
+      process.stdout.write(`\n[cc] no pude escribir --cc-salida: ${String(e)}\n`);
+    }
+  }
 }
 
 /**
@@ -298,7 +329,8 @@ async function modoSondeo(): Promise<void> {
       // sondeos del mismo proveedor a anchos distintos se leen como si fueran
       // comparables, y no lo son (§7.29).
       disposicion: DISPOSICION,
-      ventana: `${VENTANA_W}x${VENTANA_H}`,
+      ventanaPedida: `${VENTANA_W}x${VENTANA_H}`,
+      ventanaReal: `${win!.getContentBounds().width}x${win!.getContentBounds().height}`,
       paneles: await sondear(
         todas().map((v) => {
           const spec = (

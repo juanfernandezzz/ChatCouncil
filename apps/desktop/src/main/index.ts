@@ -418,13 +418,58 @@ async function leer(): Promise<LecturaProveedor[]> {
   });
 }
 
-async function sesiones(): Promise<{ id: string; cookies: number }[]> {
+/**
+ * CENSO DE SESIÓN. Sólo CANTIDADES: nunca nombres, dominios ni valores de
+ * cookie. Es la línea dura del proyecto y no se cruza ni para diagnosticar.
+ *
+ * `cookies` a secas venía siendo un indicador flojo que usábamos como si
+ * fuera prueba: que haya cookies no quiere decir que haya sesión válida, y
+ * tampoco distingue las que sobreviven al cierre de las que no.
+ *
+ * `deSesion` son las que NO tienen fecha de expiración. Chromium las borra al
+ * terminar la sesión del navegador, o sea en cada cierre del proceso. Si el
+ * token de un proveedor es de ese tipo, la sesión andaría perfecto mientras la
+ * ventana está abierta y desaparecería en el proceso siguiente — que es
+ * exactamente el cuadro que estamos viendo, y que ningún arreglo de volcado
+ * puede tocar porque no es un problema de escritura.
+ */
+async function sesiones(): Promise<
+  { id: string; cookies: number; deSesion: number; persistentes: number }[]
+> {
   return Promise.all(
-    todas().map(async (v) => ({
-      id: v.id,
-      cookies: (await session.fromPartition(`persist:${v.id}`).cookies.get({})).length,
-    })),
+    todas().map(async (v) => {
+      const cs = await session.fromPartition(`persist:${v.id}`).cookies.get({});
+      const deSesion = cs.filter((c) => c.expirationDate === undefined).length;
+      return { id: v.id, cookies: cs.length, deSesion, persistentes: cs.length - deSesion };
+    }),
   );
+}
+
+/**
+ * Censo tomado JUSTO ANTES de cerrar, con la sesión todavía viva.
+ *
+ * Es el dato que falta para cerrar el diagnóstico. Hasta ahora sólo mirábamos
+ * el censo al ARRANCAR un proceso nuevo, y con eso no se puede distinguir dos
+ * cosas muy distintas: que el login haya escrito y después se haya perdido, o
+ * que el login nunca haya llegado a esa partición. Comparando el censo al
+ * cerrar con el del arranque siguiente, la diferencia lo dice sola.
+ */
+async function censoAlCerrar(): Promise<void> {
+  try {
+    const censo = await Promise.all(
+      INVESTIGADORES.map(async (id) => {
+        const cs = await session.fromPartition(`persist:${id}`).cookies.get({});
+        return {
+          id,
+          cookies: cs.length,
+          deSesion: cs.filter((c) => c.expirationDate === undefined).length,
+        };
+      }),
+    );
+    emitir("CC_CENSO_JSON", { momento: "antes-de-cerrar", rutaDatos: app.getPath("userData"), censo });
+  } catch (e) {
+    process.stdout.write(`\n[cc] no pude tomar el censo antes de cerrar: ${String(e)}\n`);
+  }
 }
 
 function registrarIpc(): void {
@@ -505,6 +550,9 @@ app.on("before-quit", (evento) => {
     process.stdout.write(`\n[cc] fallo el volcado de sesion: ${String(e)}\n`);
   }
   process.stdout.write(`\n===CC_CIERRE===\nVolcando sesiones, ${MARGEN_VOLCADO_MS} ms.\n`);
+  // El censo se toma ANTES de que el volcado termine y antes de salir: es la
+  // unica ventana en la que la sesion todavia esta viva y se puede contar.
+  void censoAlCerrar();
   // `app.quit()` y NO `app.exit()`. `exit` mata el proceso de una y saltea el
   // desmontaje ordenado de Chromium, que es justo la parte que termina de
   // escribir las bases a disco: usarlo para "asegurar" el volcado lo impedia.

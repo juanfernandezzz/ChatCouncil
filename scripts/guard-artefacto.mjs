@@ -91,6 +91,11 @@ const EXIGIDO = {
     // cierre del modo login tambien vuelque.
     "before-quit",
     "CC_CIERRE",
+    // Censo de sesion: cantidades, nunca valores. Distingue las cookies que
+    // sobreviven al cierre de las que Chromium borra al salir.
+    "CC_CENSO_JSON",
+    "deSesion",
+    "antes-de-cerrar",
     // Banco de pruebas de persistencia sin cuentas ni humano.
     "--cc-sesion=",
     "cc_persistencia",

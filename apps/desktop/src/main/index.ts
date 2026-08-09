@@ -337,25 +337,49 @@ function registrarIpc(): void {
 const SALIDA = (ARGV.find((a) => a.startsWith("--cc-salida=")) ?? "").split("=")[1] ?? "";
 
 /**
- * Cierre limpio. Chromium escribe cookies y estado de forma ASINCRÓNICA, así
- * que `app.quit()` justo después de emitir el informe puede cortar una
- * escritura a la mitad. Con un proceso por corrida —que es el diseño del
- * arnés— eso se repite decenas de veces, y una base a medio escribir es una
- * base corrupta. `flushStorageData` fuerza el volcado antes de salir.
+ * CIERRE LIMPIO — un solo punto de salida para toda la aplicación.
+ *
+ * Chromium escribe cookies, localStorage e IndexedDB de forma ASINCRÓNICA.
+ * Salir sin forzar el volcado deja escrituras a la mitad, y una base a medio
+ * escribir es una base corrupta.
+ *
+ * La versión anterior enganchaba el volcado sólo en `--cc-test` y
+ * `--cc-probe`, cada uno en su propio `finally`. Eso dejaba afuera justo el
+ * camino que más lo necesita: en `--cc-login` el proceso no cierra solo, lo
+ * cierra Juan con la X, y ese cierre disparaba `window-all-closed` →
+ * `app.quit()` sin pasar por ningún volcado. Medido: después de un login
+ * completo en los cuatro, las cookies siguieron en 10 / 27 / 13 / 6 — los
+ * mismos números que en la carpeta recién creada. El login no se perdió
+ * después: **nunca llegó a escribirse**.
+ *
+ * Por eso el enganche va en `before-quit`, que es por donde pasan TODAS las
+ * salidas: la X de la ventana, el `quit` de los modos scriptables, y
+ * cualquier otro que se agregue después. Un punto, no tres.
+ *
+ * Sobre la espera: `flushStorageData()` NO devuelve promesa —es de disparar y
+ * olvidar— así que envolverlo en `Promise.all` daba una seguridad falsa: la
+ * versión anterior parecía esperar el volcado y en realidad sólo esperaba su
+ * propio `setTimeout`. Acá se dice lo que hay: se dispara el volcado de las
+ * cuatro particiones y se espera un margen fijo, generoso a propósito porque
+ * IndexedDB tarda más que las cookies.
  */
-async function cerrarLimpio(): Promise<void> {
+const MARGEN_VOLCADO_MS = 2500;
+let cerrando = false;
+
+app.on("before-quit", (evento) => {
+  if (cerrando) return;
+  cerrando = true;
+  evento.preventDefault();
   try {
-    await Promise.all(
-      INVESTIGADORES.map(async (id) => {
-        session.fromPartition(`persist:${id}`).flushStorageData();
-      }),
-    );
-    await new Promise((r) => setTimeout(r, 600));
+    for (const id of INVESTIGADORES) {
+      session.fromPartition(`persist:${id}`).flushStorageData();
+    }
   } catch (e) {
-    process.stdout.write(`\n[cc] fallo el volcado de sesion antes de cerrar: ${String(e)}\n`);
+    process.stdout.write(`\n[cc] fallo el volcado de sesion: ${String(e)}\n`);
   }
-  app.quit();
-}
+  process.stdout.write(`\n===CC_CIERRE===\nVolcando sesiones, ${MARGEN_VOLCADO_MS} ms.\n`);
+  setTimeout(() => app.exit(0), MARGEN_VOLCADO_MS);
+});
 
 function emitir(etiqueta: string, cuerpo: unknown): void {
   const texto = `\n===${etiqueta}===\n${JSON.stringify(cuerpo, null, 2)}\n===FIN===\n`;
@@ -387,7 +411,7 @@ async function modoPrueba(): Promise<void> {
   } catch (e) {
     process.stdout.write(`\n===CC_TEST_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
   } finally {
-    await cerrarLimpio();
+    app.quit();
   }
 }
 
@@ -444,7 +468,7 @@ async function modoSondeo(): Promise<void> {
   } catch (e) {
     process.stdout.write(`\n===CC_PROBE_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
   } finally {
-    await cerrarLimpio();
+    app.quit();
   }
 }
 
@@ -472,6 +496,9 @@ void app.whenReady().then(() => {
   });
 });
 
+// La X de la ventana. `app.quit()` pasa por `before-quit`, así que este
+// camino también vuelca la sesión antes de salir — que es exactamente el que
+// se usa para hacer login.
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });

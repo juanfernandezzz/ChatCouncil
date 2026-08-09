@@ -87,6 +87,10 @@ const EXIGIDO = {
     "CC_INSTANCIA",
     // Volcado de sesion antes de cerrar: quit a secas corta la escritura.
     "flushStorageData",
+    // El volcado engancha en before-quit: un solo punto de salida, para que el
+    // cierre del modo login tambien vuelque.
+    "before-quit",
+    "CC_CIERRE",
     "muestraLimpia",
     // El sondeo reconoce y limpia su propia basura de una corrida anterior.
     "CC-SONDEO-NO-ENVIAR",

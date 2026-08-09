@@ -940,6 +940,25 @@ entrega, no al estado que se quería restaurar.
     etiqueta de modelo exigía una variante, y "mini" casa dentro de "Gemini":
     la palabra "Gemini" sola pasaba como si fuera una etiqueta, y devolvió tres
     candidatos inútiles incluido el título accesible de la página.
+50. **El volcado de sesión enganchado en dos modos dejaba afuera al que más lo
+    necesitaba.** El arreglo del volcado se puso en los `finally` de
+    `--cc-test` y `--cc-probe`. En `--cc-login` el proceso no cierra solo: lo
+    cierra Juan con la X, y ese camino iba directo a `app.quit()`. Medido:
+    después de un login completo en los cuatro, las cookies siguieron en
+    10 / 27 / 13 / 6 — **los mismos números que en la carpeta recién creada**.
+    El login no se perdió después: nunca llegó a escribirse. El enganche pasa a
+    `before-quit`, por donde salen todos los caminos. Un punto, no tres.
+51. **`flushStorageData()` no devuelve promesa, y envolverlo en `Promise.all`
+    daba una seguridad falsa.** La versión anterior parecía esperar el volcado
+    y en realidad sólo esperaba su propio temporizador. Un `await` sobre algo
+    que no es promesa es peor que no tenerlo: se lee como garantía.
+52. **Diagnóstico correcto, explicación inventada.** El agente ubicó bien el
+    camino sin volcado, y después agregó que glm y gemini sobrevivieron porque
+    "persisten cookies de forma más sincrónica" y claude y chatgpt "dependen
+    más de IndexedDB". Nada de eso se midió. Lo observable es que las cuatro
+    cuentas quedaron en el conteo de carpeta nueva; **glm y gemini se veían
+    funcionando porque admiten uso anónimo**, no porque hubieran persistido
+    nada.
 48. **Dos procesos sobre la misma partición corrompen la sesión, y el diseño
     del arnés produce esa condición sola.** El 2026-08-02 Chromium reportó una
     base de sesión corrupta en la partición de claude, la borró para

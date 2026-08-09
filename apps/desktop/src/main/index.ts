@@ -783,6 +783,22 @@ async function enPaginaEnBlanco<T>(particion: string, fuente: string): Promise<T
  * corrompiendo. `localStorage` se prueba acá con `about:blank`; la cookie
  * cubre además el volcado de la base de sesión de red.
  */
+/**
+ * PARTICIONES SINTÉTICAS para el banco de pruebas.
+ *
+ * El banco escribía y leía sobre `persist:chatgpt`, `persist:claude` y las
+ * otras dos: **las particiones reales de Juan**. Cada corrida abría, escribía
+ * y cerraba sobre las cuentas de verdad, y el propio BLUEPRINT ya tenía
+ * registrado (§7.48) que abrir y cerrar en sucesión rápida sobre la misma
+ * partición corrompe la base de sesión. O sea: el instrumento hecho para no
+ * tocar las cuentas las estaba tocando en cada corrida, y una tanda de
+ * medición del 2026-08-09 terminó con los cuatro proveedores deslogueados.
+ *
+ * Desde acá el banco NUNCA toca una partición real. Prueba el mecanismo, y el
+ * mecanismo es el mismo: `persist:` es `persist:`.
+ */
+const PARTICIONES_DE_PRUEBA = ["pruebas-a", "pruebas-b", "pruebas-c", "pruebas-d"] as const;
+
 async function modoSesion(): Promise<void> {
   const URL_PRUEBA = "https://localhost/";
   const NOMBRE = "cc_persistencia";
@@ -794,7 +810,7 @@ async function modoSesion(): Promise<void> {
   try {
     if (SESION![1] === "escribir") {
       const sello = String(Date.now());
-      for (const id of INVESTIGADORES) {
+      for (const id of PARTICIONES_DE_PRUEBA) {
         await session.fromPartition(`persist:${id}`).cookies.set({
           url: URL_PRUEBA,
           name: NOMBRE,
@@ -806,7 +822,7 @@ async function modoSesion(): Promise<void> {
       emitir("CC_SESION_JSON", { accion: "escribir", sello, rutaDatos: app.getPath("userData") });
     } else {
       const leidas = [];
-      for (const id of INVESTIGADORES) {
+      for (const id of PARTICIONES_DE_PRUEBA) {
         const s2 = session.fromPartition(`persist:${id}`);
         const cs = await s2.cookies.get({ url: URL_PRUEBA, name: NOMBRE });
         const selloLs = await enPaginaEnBlanco<string | null>(

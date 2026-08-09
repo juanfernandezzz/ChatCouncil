@@ -107,6 +107,10 @@ const EXIGIDO = {
     "cc_persistencia_ls",
     "CC_SESION_JSON",
     "sobrevivio",
+    // El banco de pruebas NUNCA toca una particion real: cada corrida sobre las
+    // reales es una apertura y un cierre mas sobre las cuentas de Juan.
+    "PARTICIONES_DE_PRUEBA",
+    "pruebas-a",
     "muestraLimpia",
     // El sondeo reconoce y limpia su propia basura de una corrida anterior.
     "CC-SONDEO-NO-ENVIAR",

@@ -940,6 +940,22 @@ entrega, no al estado que se quería restaurar.
     etiqueta de modelo exigía una variante, y "mini" casa dentro de "Gemini":
     la palabra "Gemini" sola pasaba como si fuera una etiqueta, y devolvió tres
     candidatos inútiles incluido el título accesible de la página.
+60. **REGLA DURA: ninguna tanda de diagnóstico se corre contra las particiones
+    reales.** El 2026-08-09 se ordenaron veinte aperturas y cierres alternados
+    sobre `persist:chatgpt`, `persist:claude`, `persist:glm` y `persist:gemini`
+    para comparar dos formas de lanzar la aplicación. Al terminar, los CUATRO
+    proveedores estaban deslogueados — incluidos glm y gemini, que venían
+    sobreviviendo a todo. §7.48 ya tenía registrado que abrir y cerrar en
+    sucesión rápida sobre la misma partición corrompe la base de sesión, y aun
+    así el diagnóstico se diseñó exactamente así. **Es la segunda vez que la
+    medición destruye lo que iba a medir**, después del caso de `/logout`.
+    Desde acá: el banco de pruebas usa particiones sintéticas, y las cuatro
+    reales se abren sólo para USAR la aplicación o para correr el arnés, nunca
+    para diagnosticar.
+61. **El agente propuso la partición sintética y se lo rechacé.** Dos rondas
+    antes de perder las cuatro sesiones, Code ofreció medir "con una partición
+    sintética propia (no toca chatgpt/claude de verdad)" y la respuesta fue
+    "ninguna de las dos". Tenía razón él.
 57. **El instrumento cerraba la sesión que intentaba medir.** Con el token a
     medio validar, `claude.ai/new` REDIRIGE a `claude.ai/logout`, y esa página
     no es un cartel: cierra la sesión de verdad, del lado del servidor. Cada

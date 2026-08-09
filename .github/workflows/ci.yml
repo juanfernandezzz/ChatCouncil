@@ -23,6 +23,10 @@ jobs:
         run: pnpm guard:judge
       - name: Guard - las specs cumplen el contrato que el preload espera
         run: pnpm guard:specs
+      # El typecheck no mira dentro de una cadena: la fuente que el sondeo
+      # inyecta en la pagina del proveedor se verifica aparte.
+      - name: Guard - la fuente inyectada parsea, no envia y no toca credenciales
+        run: pnpm guard:sondeo
       # Compilar no es embarcar (BLUEPRINT 6): el gate mira el COMPILADO.
       - name: Build
         run: pnpm build

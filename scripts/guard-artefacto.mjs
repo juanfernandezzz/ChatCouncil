@@ -52,6 +52,19 @@ const EXIGIDO = {
     "observado",
     // Gate de modelo de pruebas: que exista en el compilado, no solo en el fuente.
     "gate de modelo de pruebas",
+    // Disposicion en fila (decision de Juan, 2026-08-01) y el ancho de panel
+    // con el que se tomo cada muestra: es variable de la prueba, no adorno.
+    "fila-horizontal",
+    "disposicion",
+    // Medicion de las tres formas de escritura (§7.22). Si esto no esta
+    // compilado, el sondeo volvio a confirmarse a si mismo.
+    "escrituraPorMetodo",
+    "execCommand",
+    "envioHabilitadosDespues",
+    "escrituraOmitida",
+    // Las dos vias de la etiqueta de modelo, separadas y ambas informadas.
+    "etiquetaModeloPorAtributo",
+    "etiquetaModeloPorTexto",
   ],
   // "contenteditable" NO sirve como marcador: en el preload existe sólo como
   // miembro de un tipo, y los tipos se borran. El gate lo rechazó en su

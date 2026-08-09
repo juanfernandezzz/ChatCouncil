@@ -67,15 +67,56 @@ export interface Candidato {
   muestra: string;
 }
 
+/**
+ * Una forma de escribir en el compositor, MEDIDA.
+ *
+ * Existe porque `writePrompt` se confirma a sí mismo (§7.22): escribe
+ * `textContent` y verifica leyendo `textContent`, así que siempre da
+ * verdadero, mientras el editor —que mantiene su propio modelo interno— no se
+ * entera y nunca habilita el control de envío. El síntoma que se vio en
+ * producción fue "el control de envío NUNCA aparecio en el DOM".
+ *
+ * Por eso acá el criterio de éxito NO es el eco. Es un efecto que produce el
+ * EDITOR y que nosotros no tocamos: cuántos controles de envío hay y cuántos
+ * están habilitados antes y después de escribir. Si el editor registró el
+ * texto, ese número cambia; si sólo pintamos caracteres en el DOM, no.
+ */
+export interface EscrituraMetodo {
+  metodo: "execCommand" | "paste" | "textContent";
+  /** El eco: el texto figura en el compositor. Necesario pero NO suficiente. */
+  textoPresente: boolean;
+  envioNodosAntes: number;
+  envioHabilitadosAntes: number;
+  envioNodosDespues: number;
+  envioHabilitadosDespues: number;
+  /** Mutaciones registradas FUERA del compositor: cambios que produjo el editor, no nosotros. */
+  mutacionesFuera: number;
+  /** El compositor quedó sin el marcador después de este intento. */
+  limpio: boolean;
+}
+
 export interface SondeoProveedor {
   id: string;
   url: string;
   titulo: string;
+  /** Ancho x alto REAL del panel al tomar la muestra. §7.29: es variable de la prueba. */
+  panel: string;
   shadowRootsAbiertos: number;
   compositor: Candidato[];
   envio: Candidato[];
   asistente: Candidato[];
-  etiquetaModelo: Candidato[];
+  /** Por ATRIBUTO. Vacío significa "ningún atributo lo delata", no "no existe". */
+  etiquetaModeloPorAtributo: Candidato[];
+  /**
+   * Por TEXTO. Se corre SIEMPRE, no sólo cuando la vía por atributo falla: son
+   * dos diagnósticos distintos y colapsarlos esconde el caso en que el atributo
+   * encuentra un botón cuyo texto no sirve. Cuántos nodos descartó el filtro va
+   * en `etiquetaModeloDescartados`.
+   */
+  etiquetaModeloPorTexto: Candidato[];
+  etiquetaModeloDescartados: number;
+  /** Sólo en modo escritura: las tres formas, medidas una por una. */
+  escrituraPorMetodo?: EscrituraMetodo[];
   /**
    * Con qué estado del compositor se tomó la muestra. Sin esto, un `envio`
    * vacío es ambiguo entre "no existe" y "todavía no aparece", que fue
@@ -100,7 +141,7 @@ export interface SondeoProveedor {
  * contrato del proveedor, y no tiene por qué vivir en el preload que corre en
  * cada turno real.
  */
-const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, MARCADOR) => {
+const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => {
   const ATTRS_OK = ["id","class","data-testid","data-test-id","data-message-author-role","aria-label","role","contenteditable","placeholder","name","type","enterkeyhint"];
   const CAP_TEXTO = 80;
   const CAP_CANDIDATOS = 6;
@@ -113,29 +154,142 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, MARCADOR) => {
    * hace clic en ningun control y no despacha ninguna tecla.
    */
   let escrituraAceptada;
+  let escrituraPorMetodo;
+  let escrituraOmitida;
+  let metodoQueSirvio;
   const limpiar = [];
+
+  const esTextarea = (c) => c.tagName === "TEXTAREA" || c.tagName === "INPUT";
+  const leerCompositor = (c) => (esTextarea(c) ? (c.value || "") : (c.textContent || ""));
+
+  /**
+   * Cuenta controles de envio y cuantos estan accionables. NO hace clic: sólo
+   * cuenta. Es el efecto del EDITOR que sirve de criterio, en vez del eco.
+   */
+  const medirEnvio = () => {
+    if (!SELECTOR_ENVIO) return { nodos: -1, habilitados: -1 };
+    let nodos = [];
+    try { nodos = Array.from(document.querySelectorAll(SELECTOR_ENVIO)); } catch (e) { return { nodos: -1, habilitados: -1 }; }
+    let hab = 0;
+    for (const el of nodos) {
+      if (!el.disabled && el.getAttribute("aria-disabled") !== "true") hab++;
+    }
+    return { nodos: nodos.length, habilitados: hab };
+  };
+
+  const vaciar = (c) => {
+    try {
+      c.focus();
+      if (esTextarea(c)) {
+        c.value = "";
+        c.dispatchEvent(new Event("input", { bubbles: true }));
+      } else {
+        // Primero por la via del propio editor, que mantiene su modelo interno
+        // en sincronia; despues, a la fuerza, por si esa via no hizo nada.
+        document.execCommand("selectAll", false);
+        document.execCommand("delete", false);
+        if ((c.textContent || "").length > 0) {
+          c.innerHTML = "";
+          c.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+        }
+      }
+    } catch (e) { /* se reporta como limpio:false, no se rompe el sondeo */ }
+  };
+
+  /** Escribe por UNA forma concreta. Ninguna envia: ni clic ni tecla. */
+  const escribirPor = (c, metodo, texto) => {
+    c.focus();
+    if (metodo === "execCommand") {
+      document.execCommand("insertText", false, texto);
+      return;
+    }
+    if (metodo === "paste") {
+      const dt = new DataTransfer();
+      dt.setData("text/plain", texto);
+      c.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: dt }));
+      return;
+    }
+    // "textContent": la forma que usa hoy writePrompt, incluida a proposito
+    // como termino de comparacion. Si esta es la unica que da textoPresente y
+    // ninguna habilita el envio, el diagnostico queda demostrado.
+    if (esTextarea(c)) {
+      c.value = texto;
+      c.dispatchEvent(new Event("input", { bubbles: true }));
+    } else {
+      c.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType: "insertText", data: texto }));
+      if (!(c.textContent || "").includes(texto)) {
+        c.textContent = texto;
+        c.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: texto }));
+      }
+    }
+  };
+
   if (SELECTOR_COMPOSITOR && MARCADOR) {
     const c = document.querySelector(SELECTOR_COMPOSITOR);
-    if (c) {
-      c.focus();
-      if (c.tagName === "TEXTAREA" || c.tagName === "INPUT") {
-        const previo = c.value;
-        c.value = MARCADOR;
-        c.dispatchEvent(new Event("input", { bubbles: true }));
-        escrituraAceptada = c.value === MARCADOR;
-        limpiar.push(() => { c.value = previo; c.dispatchEvent(new Event("input", { bubbles: true })); });
-      } else {
-        const previo = c.innerHTML;
-        c.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType: "insertText", data: MARCADOR }));
-        if (!(c.textContent || "").includes(MARCADOR)) {
-          c.textContent = MARCADOR;
-          c.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: MARCADOR }));
+    // Si el compositor YA tenia texto, no se toca: seria un borrador de Juan y
+    // la medicion lo borraria. Se omite y se dice por que, en vez de destruirlo
+    // en silencio.
+    if (c && leerCompositor(c).trim().length > 0) {
+      escrituraOmitida = "el compositor tenia texto previo: no se midio para no borrar un borrador";
+    } else if (c) {
+      escrituraPorMetodo = [];
+      vaciar(c);
+      await dormir(400);
+
+      for (const metodo of ["execCommand", "paste", "textContent"]) {
+        const antes = medirEnvio();
+        // Mutaciones FUERA del compositor: con execCommand y paste no tocamos
+        // el DOM nosotros, asi que todo cambio es del editor. Con textContent
+        // si lo tocamos, y por eso se excluye el subarbol del compositor.
+        let mutacionesFuera = 0;
+        const obs = new MutationObserver((ms) => {
+          for (const m of ms) {
+            const t = m.target;
+            const nodo = t && t.nodeType === 1 ? t : (t ? t.parentNode : null);
+            if (nodo && !c.contains(nodo)) mutacionesFuera++;
+          }
+        });
+        obs.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: false });
+
+        try { escribirPor(c, metodo, MARCADOR); } catch (e) { /* se reporta abajo */ }
+        // Dar tiempo a que el framework reaccione y monte o habilite controles.
+        await dormir(1500);
+
+        obs.disconnect();
+        const textoPresente = leerCompositor(c).includes(MARCADOR);
+        const despues = medirEnvio();
+        vaciar(c);
+        await dormir(400);
+        const limpio = !leerCompositor(c).includes(MARCADOR);
+
+        escrituraPorMetodo.push({
+          metodo: metodo,
+          textoPresente: textoPresente,
+          envioNodosAntes: antes.nodos,
+          envioHabilitadosAntes: antes.habilitados,
+          envioNodosDespues: despues.nodos,
+          envioHabilitadosDespues: despues.habilitados,
+          mutacionesFuera: mutacionesFuera,
+          limpio: limpio,
+        });
+
+        // "Sirvio" quiere decir: el texto entro Y el editor reacciono
+        // habilitando un control que antes no estaba habilitado. El eco solo
+        // no alcanza — es exactamente el error que se esta midiendo.
+        if (!metodoQueSirvio && textoPresente && despues.habilitados > antes.habilitados) {
+          metodoQueSirvio = metodo;
         }
-        escrituraAceptada = (c.textContent || "").includes(MARCADOR);
-        limpiar.push(() => { c.innerHTML = previo; c.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" })); });
       }
-      // Dar tiempo a que el framework reaccione y monte los controles.
-      await dormir(1500);
+
+      // Para la cosecha de candidatos hace falta que el compositor tenga texto:
+      // hay controles que sólo existen en ese estado. Se reescribe con la forma
+      // que el editor acepto; si ninguna reacciono, con la que al menos dejo el
+      // texto a la vista.
+      const paraCosechar = metodoQueSirvio || "textContent";
+      try { escribirPor(c, paraCosechar, MARCADOR); } catch (e) { /* idem */ }
+      await dormir(1200);
+      escrituraAceptada = leerCompositor(c).includes(MARCADOR);
+      limpiar.push(() => { vaciar(c); });
     }
   }
 
@@ -222,14 +376,36 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, MARCADOR) => {
    * (Sin comillas invertidas acá: este bloque vive DENTRO del template
    * literal de FUENTE_SONDEO y una comilla invertida lo cortaría en dos.)
    */
+  let compositorEl = null;
+  try {
+    compositorEl = SELECTOR_COMPOSITOR
+      ? document.querySelector(SELECTOR_COMPOSITOR)
+      : document.querySelector('textarea, div[contenteditable="true"], [role="textbox"]');
+  } catch (e) { compositorEl = null; }
+
+  let descartadosPorFiltro = 0;
   const porNombreDeModelo = () => {
-    const patron = /\\b(haiku|sonnet|opus|gemini|gpt|glm)\\b/i;
+    // DOS condiciones a la vez, y esa es la correccion. La version anterior
+    // pedia solo una familia de modelo, y en la pagina de Gemini la palabra
+    // "Gemini" esta en el titulo, en el logo, en el menu lateral y en el texto
+    // gris del compositor: devolvia ruido, no la etiqueta. Ahora hace falta
+    // ademas algo con forma de VERSION o de variante.
+    const familia = /(gpt|chatgpt|gemini|claude|glm|qwen|kimi|deepseek|grok)/i;
+    const version = /(\\d|haiku|sonnet|opus|flash|pro\\b|thinking|mini|turbo|nano|air|plus|max|lite|preview)/i;
     const out = [];
     for (const raiz of raices) {
       const via = raiz === document ? "document" : "shadow";
       const candidatosEl = Array.from(raiz.querySelectorAll("*")).filter((el) => {
         const t = (el.textContent || "").trim();
-        return t.length > 0 && t.length < 60 && patron.test(t);
+        if (t.length === 0 || t.length > 40) return false;
+        if (!familia.test(t)) return false;
+        if (!version.test(t)) { descartadosPorFiltro++; return false; }
+        // El compositor y sus ancestros quedan fuera: el texto gris de
+        // marcador de posicion nombra al modelo y no es la etiqueta.
+        if (compositorEl && (el.contains(compositorEl) || compositorEl.contains(el))) { descartadosPorFiltro++; return false; }
+        // El titulo de la pagina repetido en un <title> o en un heading tampoco.
+        if (el.tagName === "TITLE" || t === document.title.trim()) { descartadosPorFiltro++; return false; }
+        return true;
       });
       for (const el of candidatosEl) {
         if (out.length >= CAP_CANDIDATOS) break;
@@ -240,10 +416,12 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, MARCADOR) => {
     return out;
   };
 
-  // Dos vías, ambas de SÓLO LECTURA: primero por atributo, y si eso no da
-  // nada, por el nombre del modelo en el texto. No hay una tercera.
-  const etiquetaModeloBase = juntar(['button[aria-label*="odel"]', '[class*="model-selector"]', '[data-testid*="model"]']);
-  const etiquetaModeloTexto = etiquetaModeloBase.length > 0 ? [] : porNombreDeModelo();
+  // Dos vias, ambas de SOLO LECTURA, y las dos se corren SIEMPRE. Antes la de
+  // texto sólo corria si la de atributo salia vacia, y eso escondia el caso
+  // real: que un atributo encuentre un boton cuyo texto no sirve de etiqueta.
+  // Son dos diagnosticos distintos y se informan por separado.
+  const etiquetaModeloPorAtributo = juntar(['button[aria-label*="odel"]', 'button[aria-label*="odelo"]', '[class*="model-selector"]', '[class*="model-switcher"]', '[data-testid*="model"]', '[data-test-id*="model"]']);
+  const etiquetaModeloPorTexto = porNombreDeModelo();
 
   const salida = {
     estadoCompositor: SELECTOR_COMPOSITOR && MARCADOR ? "con-texto" : "reposo",
@@ -265,7 +443,11 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, MARCADOR) => {
       '[role="button"][aria-label*="nvia"]',
     ]),
     asistente: juntar(['[data-message-author-role="assistant"]', '[class*="assistant"]', '[class*="model-response"]', '[class*="markdown"]']),
-    etiquetaModelo: etiquetaModeloBase.length > 0 ? etiquetaModeloBase : etiquetaModeloTexto,
+    etiquetaModeloPorAtributo: etiquetaModeloPorAtributo,
+    etiquetaModeloPorTexto: etiquetaModeloPorTexto,
+    etiquetaModeloDescartados: descartadosPorFiltro,
+    escrituraPorMetodo: escrituraPorMetodo,
+    escrituraOmitida: escrituraOmitida,
   };
 
   // Devolver el compositor como estaba. Se limpia SIEMPRE, incluso si algo de
@@ -275,10 +457,9 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, MARCADOR) => {
   // Y se COMPRUEBA que quedo limpio. Una garantia que no se mide no es una
   // garantia: es una intencion.
   if (SELECTOR_COMPOSITOR && MARCADOR) {
-    await dormir(200);
+    await dormir(300);
     const c2 = document.querySelector(SELECTOR_COMPOSITOR);
-    const resto = c2 ? (c2.value !== undefined ? c2.value : c2.textContent) || "" : "";
-    salida.compositorLimpio = !resto.includes(MARCADOR);
+    salida.compositorLimpio = c2 ? !leerCompositor(c2).includes(MARCADOR) : true;
   }
 
   return salida;
@@ -290,6 +471,8 @@ const MARCADOR = "sondeo";
 export async function sondear(
   vistas: {
     id: string;
+    /** Ancho x alto del panel. Va al informe: es variable de la prueba, no adorno. */
+    panel: string;
     ejecutar: (fuente: string) => Promise<unknown>;
     /**
      * Sólo se pasa en modo escritura, y sólo para proveedores que YA tienen
@@ -297,13 +480,19 @@ export async function sondear(
      * el sondeo no escribe nada.
      */
     composerSelector?: string;
+    /**
+     * Selector del control de envío. **No se usa para enviar**: se usa para
+     * CONTAR nodos y cuántos están habilitados antes y después de escribir. Es
+     * el efecto del editor que sirve de criterio en vez del eco (§7.22).
+     */
+    submitSelector?: string;
   }[],
 ): Promise<SondeoProveedor[]> {
   const crudos = await Promise.allSettled(
     vistas.map((v) => {
       const args = v.composerSelector
-        ? `${JSON.stringify(v.composerSelector)}, ${JSON.stringify(MARCADOR)}`
-        : "null, null";
+        ? `${JSON.stringify(v.composerSelector)}, ${JSON.stringify(v.submitSelector ?? null)}, ${JSON.stringify(MARCADOR)}`
+        : "null, null, null";
       return v.ejecutar(`(${FUENTE_SONDEO})(${args})`);
     }),
   );
@@ -314,17 +503,20 @@ export async function sondear(
         id: v.id,
         url: "",
         titulo: "",
+        panel: v.panel,
         shadowRootsAbiertos: 0,
         compositor: [],
         envio: [],
         asistente: [],
-        etiquetaModelo: [],
+        etiquetaModeloPorAtributo: [],
+        etiquetaModeloPorTexto: [],
+        etiquetaModeloDescartados: 0,
         estadoCompositor: v.composerSelector ? "con-texto" : "reposo",
         error: r.reason instanceof Error ? r.reason.message : String(r.reason),
       };
     }
-    // El `id` va DESPUÉS del spread: la página no lo conoce y si viniera con
-    // uno, el nuestro es el bueno.
-    return { ...(r.value as Omit<SondeoProveedor, "id">), id: v.id };
+    // El `id` y el `panel` van DESPUÉS del spread: la página no los conoce y
+    // si vinieran con uno, el nuestro es el bueno.
+    return { ...(r.value as Omit<SondeoProveedor, "id" | "panel">), id: v.id, panel: v.panel };
   });
 }

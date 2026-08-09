@@ -115,10 +115,23 @@ const sondeos: Vista[] = [];
 const todas = (): Vista[] => [...vistas, ...sondeos];
 
 /**
- * Grilla lo más cuadrada posible. Con 2 proveedores da dos columnas; con 4,
- * dos por dos. La disposición se DERIVA de la cantidad, así que sumar un
- * investigador no obliga a tocar el layout.
+ * Disposición: UNA FILA HORIZONTAL, un panel por investigador.
+ *
+ * Antes era la grilla más cuadrada posible (`ceil(sqrt(n))` columnas), que con
+ * cuatro daba dos por dos. Juan la cambió a fila el 2026-08-01. Sigue sin
+ * codificarse ninguna cantidad: la fila se deriva de la lista igual que antes,
+ * y sumar un investigador es agregarlo ahí y nada más.
+ *
+ * LO QUE EL CAMBIO CUESTA, Y HAY QUE TENERLO A LA VISTA (§7.29: el tamaño del
+ * panel es una VARIABLE DE LA PRUEBA, no un detalle estético). Con la ventana
+ * por defecto de 1600 y cuatro investigadores, cada panel pasa de ~800x434 a
+ * ~400x868. 400 px de ancho es ancho de teléfono: varias interfaces cambian de
+ * layout, esconden la barra superior —donde vive la etiqueta de modelo— o
+ * cambian atributos por debajo de ese umbral. Por eso el sondeo reporta con
+ * qué ancho de panel se tomó cada muestra.
  */
+const DISPOSICION = "fila-horizontal";
+
 function layout(): void {
   if (!win || !uiView) return;
   const { width, height } = win.getContentBounds();
@@ -127,15 +140,11 @@ function layout(): void {
   const abiertas = todas();
   const n = abiertas.length;
   if (n === 0) return;
-  const cols = Math.ceil(Math.sqrt(n));
-  const rows = Math.ceil(n / cols);
-  const w = Math.floor(width / cols);
-  const h = Math.floor(Math.max(0, height - UI_HEIGHT) / rows);
+  const w = Math.floor(width / n);
+  const h = Math.max(0, height - UI_HEIGHT);
 
   abiertas.forEach((v, i) => {
-    const c = i % cols;
-    const r = Math.floor(i / cols);
-    v.view.setBounds({ x: c * w, y: UI_HEIGHT + r * h, width: w, height: h });
+    v.view.setBounds({ x: i * w, y: UI_HEIGHT, width: w, height: h });
   });
 }
 
@@ -285,15 +294,31 @@ async function modoSondeo(): Promise<void> {
     emitir("CC_PROBE_JSON", {
       sesiones: await sesiones(),
       modo: SONDEO_ESCRIBE ? "con-texto" : "reposo",
+      // Con qué disposición y con qué ventana se tomó la muestra. Sin esto, dos
+      // sondeos del mismo proveedor a anchos distintos se leen como si fueran
+      // comparables, y no lo son (§7.29).
+      disposicion: DISPOSICION,
+      ventana: `${VENTANA_W}x${VENTANA_H}`,
       paneles: await sondear(
         todas().map((v) => {
-          const spec = (PROVIDER_SPECS as Record<string, { composer?: { selector: string } } | undefined>)[v.id];
+          const spec = (
+            PROVIDER_SPECS as Record<
+              string,
+              { composer?: { selector: string }; submit?: { selector?: string } } | undefined
+            >
+          )[v.id];
+          const b = v.view.getBounds();
           return {
             id: v.id,
+            panel: `${b.width}x${b.height}`,
             ejecutar: (fuente: string) => v.view.webContents.executeJavaScript(fuente, true),
             // Sólo se escribe donde hay un selector YA derivado. Un candidato
             // sin spec no se toca: no hay dónde escribir sin adivinar.
             ...(SONDEO_ESCRIBE && spec?.composer ? { composerSelector: spec.composer.selector } : {}),
+            // El selector de envío NO se usa para enviar: se usa para CONTAR
+            // cuántos nodos hay y cuántos están habilitados antes y después de
+            // escribir. Es el efecto del editor que `writePrompt` nunca miró.
+            ...(SONDEO_ESCRIBE && spec?.submit?.selector ? { submitSelector: spec.submit.selector } : {}),
           };
         }),
       ),

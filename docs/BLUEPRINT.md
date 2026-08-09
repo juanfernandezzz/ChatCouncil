@@ -940,6 +940,20 @@ entrega, no al estado que se quería restaurar.
     etiqueta de modelo exigía una variante, y "mini" casa dentro de "Gemini":
     la palabra "Gemini" sola pasaba como si fuera una etiqueta, y devolvió tres
     candidatos inútiles incluido el título accesible de la página.
+53. **`app.exit()` saltea justo la parte que escribe.** El volcado terminaba en
+    `app.exit(0)` para "asegurar" la salida. `exit` mata el proceso de una y se
+    saltea el desmontaje ordenado de Chromium, que es donde se terminan de
+    escribir las bases a disco. Usar la salida dura para asegurar una escritura
+    la impide. Va `app.quit()`, y el cerrojo `cerrando` hace que la segunda
+    vuelta por `before-quit` no reentre.
+54. **Un ciclo de verificación que necesita a una persona no se puede iterar.**
+    Comprobar si una sesión sobrevive al cierre exigía que Juan entrara a mano
+    en cuatro proveedores por cada intento de arreglo. Cinco rondas y cero
+    progreso. Lo que hay que probar no es el login: es que **algo escrito en
+    una partición siga ahí después de cerrar**, y eso se prueba con una cookie
+    propia y un reloj, sin cuentas y sin humano. De ahí `--cc-sesion`. La regla
+    general: **antes de iterar sobre un arreglo, separar el mecanismo bajo
+    prueba de todo lo que exija una persona.**
 50. **El volcado de sesión enganchado en dos modos dejaba afuera al que más lo
     necesitaba.** El arreglo del volcado se puso en los `finally` de
     `--cc-test` y `--cc-probe`. En `--cc-login` el proceso no cierra solo: lo

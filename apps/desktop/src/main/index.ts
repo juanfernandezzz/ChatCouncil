@@ -14,6 +14,8 @@ import { app, BaseWindow, WebContentsView, ipcMain, screen, session } from "elec
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { appendFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { Server } from "node:http";
 
 import { PROVIDER_SPECS } from "@chatcouncil/providers";
 
@@ -103,8 +105,30 @@ app.setName("ChatCouncil");
 app.setPath("userData", join(app.getPath("appData"), "ChatCouncil"));
 
 const ARGV = process.argv.slice(1);
-type Modo = "normal" | "test" | "probe" | "login";
-const MODO: Modo = ARGV.includes("--cc-test") || process.env["CC_TEST"] === "1"
+type Modo = "normal" | "test" | "probe" | "login" | "sesion";
+
+/**
+ * `--cc-sesion=escribir` / `--cc-sesion=leer`: banco de pruebas de
+ * PERSISTENCIA, sin cuentas y sin humano.
+ *
+ * Existe porque comprobar si una sesión sobrevive al cierre exigía que Juan
+ * entrara a mano en cuatro proveedores, cerrara la ventana y esperara — un
+ * viaje de ida y vuelta por cada intento de arreglo. Eso hace imposible
+ * iterar.
+ *
+ * Lo que hay que probar no es el login: es que algo escrito en una partición
+ * `persist:` siga ahí después de cerrar. Eso se prueba con una cookie propia y
+ * un reloj. `escribir` deja una cookie marcada en las cuatro particiones y
+ * cierra por el camino normal; `leer` la busca en un proceso nuevo. Si
+ * sobrevive, el mecanismo funciona y recién ahí vale la pena gastar un login
+ * de verdad.
+ *
+ * La cookie es nuestra, en `https://localhost/`, y no toca ninguna credencial.
+ */
+const SESION = /^(escribir|leer)$/.exec((ARGV.find((a) => a.startsWith("--cc-sesion=")) ?? "").split("=")[1] ?? "");
+const MODO: Modo = SESION
+  ? "sesion"
+  : ARGV.includes("--cc-test") || process.env["CC_TEST"] === "1"
   ? "test"
   : ARGV.includes("--cc-probe") || process.env["CC_PROBE"] === "1"
     ? "probe"
@@ -371,6 +395,11 @@ app.on("before-quit", (evento) => {
   cerrando = true;
   evento.preventDefault();
   try {
+    // Primero se cierran los WebContents. Mientras una vista sigue viva,
+    // Chromium puede tener escrituras en vuelo que el volcado no alcanza.
+    for (const v of todas()) {
+      try { v.view.webContents.close(); } catch (e) { /* ya destruido */ }
+    }
     for (const id of INVESTIGADORES) {
       session.fromPartition(`persist:${id}`).flushStorageData();
     }
@@ -378,7 +407,12 @@ app.on("before-quit", (evento) => {
     process.stdout.write(`\n[cc] fallo el volcado de sesion: ${String(e)}\n`);
   }
   process.stdout.write(`\n===CC_CIERRE===\nVolcando sesiones, ${MARGEN_VOLCADO_MS} ms.\n`);
-  setTimeout(() => app.exit(0), MARGEN_VOLCADO_MS);
+  // `app.quit()` y NO `app.exit()`. `exit` mata el proceso de una y saltea el
+  // desmontaje ordenado de Chromium, que es justo la parte que termina de
+  // escribir las bases a disco: usarlo para "asegurar" el volcado lo impedia.
+  // Con `cerrando` ya en true, esta segunda vuelta por `before-quit` sale
+  // enseguida y el cierre sigue su curso normal.
+  setTimeout(() => app.quit(), MARGEN_VOLCADO_MS);
 });
 
 function emitir(etiqueta: string, cuerpo: unknown): void {
@@ -485,12 +519,120 @@ function modoLogin(): void {
   );
 }
 
+/**
+ * Servidor HTTP efímero en loopback, sólo para el banco de pruebas de
+ * `localStorage`. `about:blank` tiene origen opaco y Chromium deshabilita
+ * `localStorage` ahí ("Storage is disabled", medido) — hace falta un origen
+ * real para que la API exista. `https://localhost/` sin servidor detrás falla
+ * la navegación y deja el documento en blanco de antes, con el mismo problema.
+ * Un servidor propio en `127.0.0.1` da un origen real sin salir a la red ni
+ * depender de que haya algo escuchando en el puerto 443.
+ */
+// Puerto FIJO, a propósito: `localStorage` está particionado por origen, y
+// `escribir` y `leer` son dos procesos distintos. Con puerto 0 (aleatorio)
+// cada corrida cae en un origen `http://127.0.0.1:<puerto>` diferente y la
+// clave nunca coincide entre escritura y lectura — medido, daba
+// `sobrevivioLs: false` en las cuatro particiones con la cookie sí viva.
+const PUERTO_LS = 47_365;
+let servidorPruebaLs: Server | null = null;
+async function servidorLs(): Promise<string> {
+  if (!servidorPruebaLs) {
+    servidorPruebaLs = createServer((_req, res) => res.end("<!doctype html><title>cc</title>"));
+    await new Promise<void>((resolve) => servidorPruebaLs!.listen(PUERTO_LS, "127.0.0.1", resolve));
+  }
+  return `http://127.0.0.1:${PUERTO_LS}/`;
+}
+
+/**
+ * Ejecuta `fuente` en una `WebContentsView` oculta —nunca agregada a ninguna
+ * ventana— cargada sobre la partición dada, y la destruye al terminar. Sirve
+ * para tocar `localStorage`, que sólo existe con un documento cargado —no hay
+ * API de Electron para leerlo sin una página—, sin abrir ningún proveedor
+ * real: la página es un placeholder en blanco servido por loopback, nadie ve
+ * nada y no hay clic ni tecla sobre un compositor.
+ *
+ * `webContents.create()` existía para esto pero ya no es API pública en esta
+ * versión de Electron (33); `WebContentsView` sin agregar a una ventana es el
+ * reemplazo soportado y es la misma clase que ya usa el resto del archivo.
+ */
+async function enPaginaEnBlanco<T>(particion: string, fuente: string): Promise<T> {
+  const sesion = session.fromPartition(particion);
+  const view = new WebContentsView({ webPreferences: { session: sesion } });
+  try {
+    await view.webContents.loadURL(await servidorLs());
+    return (await view.webContents.executeJavaScript(fuente, true)) as T;
+  } finally {
+    try { view.webContents.close(); } catch (e) { /* ya destruido */ }
+  }
+}
+
+/**
+ * Banco de pruebas de persistencia. No abre ninguna página ni toca cuentas:
+ * escribe o lee una cookie propia y una clave de `localStorage` en cada
+ * partición, y sale por el camino de cierre normal, que es exactamente el
+ * camino bajo prueba.
+ *
+ * La cookie sola no alcanza: un login real también escribe `localStorage` e
+ * `IndexedDB`, que tardan más en volcarse a disco y son los que se venían
+ * corrompiendo. `localStorage` se prueba acá con `about:blank`; la cookie
+ * cubre además el volcado de la base de sesión de red.
+ */
+async function modoSesion(): Promise<void> {
+  const URL_PRUEBA = "https://localhost/";
+  const NOMBRE = "cc_persistencia";
+  const CLAVE_LS = "cc_persistencia_ls";
+  try {
+    if (SESION![1] === "escribir") {
+      const sello = String(Date.now());
+      for (const id of INVESTIGADORES) {
+        await session.fromPartition(`persist:${id}`).cookies.set({
+          url: URL_PRUEBA,
+          name: NOMBRE,
+          value: sello,
+          expirationDate: Math.floor(Date.now() / 1000) + 31536000,
+        });
+        await enPaginaEnBlanco(`persist:${id}`, `localStorage.setItem(${JSON.stringify(CLAVE_LS)}, ${JSON.stringify(sello)})`);
+      }
+      emitir("CC_SESION_JSON", { accion: "escribir", sello, rutaDatos: app.getPath("userData") });
+    } else {
+      const leidas = [];
+      for (const id of INVESTIGADORES) {
+        const s2 = session.fromPartition(`persist:${id}`);
+        const cs = await s2.cookies.get({ url: URL_PRUEBA, name: NOMBRE });
+        const selloLs = await enPaginaEnBlanco<string | null>(
+          `persist:${id}`,
+          `localStorage.getItem(${JSON.stringify(CLAVE_LS)})`,
+        );
+        leidas.push({
+          id,
+          sobrevivio: cs.length > 0,
+          sello: cs[0]?.value ?? null,
+          cookiesTotales: (await s2.cookies.get({})).length,
+          sobrevivioLs: selloLs !== null,
+          selloLs,
+        });
+      }
+      emitir("CC_SESION_JSON", { accion: "leer", rutaDatos: app.getPath("userData"), particiones: leidas });
+    }
+  } catch (e) {
+    process.stdout.write(`\n===CC_SESION_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+  } finally {
+    servidorPruebaLs?.close();
+    app.quit();
+  }
+}
+
 void app.whenReady().then(() => {
   registrarIpc();
-  createWindow();
+  // `sesion` no abre ninguna página de proveedor —ni falta le hace: sólo
+  // toca cookies y `localStorage` propios— así que se salta `createWindow()`
+  // y con eso la carga por red de las cuatro páginas reales, que no aporta
+  // nada a esta prueba y sólo agrega tiempo y una fuente más de fallos.
+  if (MODO !== "sesion") createWindow();
   if (MODO === "test") void modoPrueba();
   if (MODO === "probe") void modoSondeo();
   if (MODO === "login") modoLogin();
+  if (MODO === "sesion") void modoSesion();
   app.on("activate", () => {
     if (BaseWindow.getAllWindows().length === 0) createWindow();
   });

@@ -91,6 +91,12 @@ const EXIGIDO = {
     // cierre del modo login tambien vuelque.
     "before-quit",
     "CC_CIERRE",
+    // Banco de pruebas de persistencia sin cuentas ni humano.
+    "--cc-sesion=",
+    "cc_persistencia",
+    "cc_persistencia_ls",
+    "CC_SESION_JSON",
+    "sobrevivio",
     "muestraLimpia",
     // El sondeo reconoce y limpia su propia basura de una corrida anterior.
     "CC-SONDEO-NO-ENVIAR",
@@ -129,10 +135,26 @@ const SIN_ENVIO =
   "consumiria cuota y dejaria un mensaje en la conversacion de Juan, que no se deshace. Hubo una excepcion de " +
   "clic, su motivo resulto falso (era timing, no ausencia) y se revirtio; este gate impide que vuelva";
 
+/**
+ * EXCEPCIÓN, angosta y explícita (decisión de Juan, 2026-08-09): el banco de
+ * pruebas de persistencia (`--cc-sesion=`) necesita tocar `localStorage` DE
+ * VERDAD para probar que sobrevive al cierre — es lo que la prueba mide, no
+ * un accidente. La partición es sintética (`https://localhost/`-equivalente
+ * en loopback), la clave es nuestra (`cc_persistencia_ls`) y nunca se lee un
+ * proveedor real.
+ *
+ * `MARCADOR_EXCEPCION` es la contraseña de esa excepción: `localStorage`
+ * sólo se permite en un archivo si ESE MISMO archivo también contiene el
+ * marcador de la prueba. Sin el marcador, la prohibición general sigue en
+ * pie sin agujeros — un `localStorage` que aparezca sin `cc_persistencia_ls`
+ * al lado sigue rompiendo el gate igual que antes.
+ */
+const MARCADOR_EXCEPCION = "cc_persistencia_ls";
+
 const PROHIBIDO = {
   "main/index.js": [
     ["document.cookie", CREDENCIALES],
-    ["localStorage", CREDENCIALES],
+    ["localStorage", CREDENCIALES, MARCADOR_EXCEPCION],
     ["sessionStorage", CREDENCIALES],
     ["aria-haspopup", SIN_ENVIO],
     [".click()", SIN_ENVIO],
@@ -165,8 +187,10 @@ for (const [rel, marcadores] of Object.entries(PROHIBIDO)) {
   const p = join(ROOT, BASE, rel);
   if (!existsSync(p)) continue;
   const src = readFileSync(p, "utf8");
-  for (const [m, motivo] of marcadores) {
-    if (src.includes(m)) fallos.push(`${BASE}/${rel} — aparece "${m}": ${motivo}`);
+  for (const [m, motivo, excepcion] of marcadores) {
+    if (!src.includes(m)) continue;
+    if (excepcion && src.includes(excepcion)) continue;
+    fallos.push(`${BASE}/${rel} — aparece "${m}": ${motivo}`);
   }
 }
 

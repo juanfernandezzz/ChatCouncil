@@ -940,6 +940,21 @@ entrega, no al estado que se quería restaurar.
     etiqueta de modelo exigía una variante, y "mini" casa dentro de "Gemini":
     la palabra "Gemini" sola pasaba como si fuera una etiqueta, y devolvió tres
     candidatos inútiles incluido el título accesible de la página.
+48. **Dos procesos sobre la misma partición corrompen la sesión, y el diseño
+    del arnés produce esa condición sola.** El 2026-08-02 Chromium reportó una
+    base de sesión corrupta en la partición de claude, la borró para
+    recuperarse, y con eso se fue el login: claude.ai rebotó `/new` a `/logout`
+    porque el token ya no valía. Dos mecanismos, los dos plausibles y ninguno
+    demostrado por separado: (a) Juan con la aplicación abierta mientras el
+    agente corría un sondeo en otro proceso, y (b) `app.quit()` inmediato
+    después de emitir el informe, con Chromium escribiendo de forma asincrónica
+    — repetido en unas veinticinco corridas, una por proceso, que es
+    precisamente el diseño que elegimos para no esconder carreras. Se cierran
+    los dos: cerrojo de instancia única y volcado de sesión antes de salir.
+49. **Un gate nuevo agarró al que lo escribió, en la entrega siguiente.**
+    `guard:sondeo` —el rechazo del acento grave, agregado el 2026-08-02—
+    frenó un comentario mío con acentos graves en la entrega inmediatamente
+    posterior. Es la prueba de que el gate no era decorativo.
 47. **La aplicación no tenía carpeta propia.** Medido: `userData` devolvía
     `AppData\Roaming\Electron`, el nombre genérico de Electron, porque al
     arrancar con `electron out/main/index.js` no toma el nombre del paquete.

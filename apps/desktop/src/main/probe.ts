@@ -397,7 +397,17 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
     if (rol) return '[data-message-author-role="' + rol + '"]';
     const al = el.getAttribute("aria-label");
     if (al) return el.tagName.toLowerCase() + '[aria-label="' + al + '"]';
-    const cls = (el.getAttribute("class") || "").trim().split(/\\s+/).filter(Boolean);
+    // Las clases de Tailwind traen dos puntos, corchetes y barras
+    // ("sm:text-base", "w-[32px]", "top-1/2") y todos esos son metacaracteres
+    // de CSS: el selector sale INVALIDO y la consulta tira, que es de donde
+    // salio el matches en -1 del 2026-08-02. Se descartan las clases con
+    // metacaracteres en vez de escaparlas: una clase de variante responsiva es
+    // ademas mala base para un selector, porque cambia con el ancho.
+    const cls = (el.getAttribute("class") || "")
+      .trim()
+      .split(/\\s+/)
+      .filter(Boolean)
+      .filter((c) => /^[A-Za-z_-][A-Za-z0-9_-]*$/.test(c));
     return el.tagName.toLowerCase() + (cls.length ? "." + cls.slice(0, 2).join(".") : "");
   };
 

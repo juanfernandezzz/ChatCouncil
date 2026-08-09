@@ -10,7 +10,7 @@
  * con 72 cookies sobreviviendo al cierre completo de la app.
  */
 
-import { app, BaseWindow, WebContentsView, ipcMain, session } from "electron";
+import { app, BaseWindow, WebContentsView, ipcMain, screen, session } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { appendFileSync } from "node:fs";
@@ -76,6 +76,29 @@ const CANDIDATOS_SONDEO: { id: string; url: string }[] = [];
  * viven mezcladas con las de otras aplicaciones en la carpeta genérica, y
  * separarlas a ojo es más riesgoso que un login.
  */
+/**
+ * CERROJO DE INSTANCIA ÚNICA.
+ *
+ * Dos procesos de Electron sobre la MISMA partición `persist:` escriben la
+ * misma base de sesión al mismo tiempo, y esa base se corrompe. El 2026-08-02
+ * Chromium reportó una base corrupta en la partición de claude, la borró para
+ * recuperarse —que es lo correcto de su parte— y con eso se fue la sesión:
+ * claude.ai rebotó `/new` a `/logout` porque el token ya no valía.
+ *
+ * El flujo de trabajo de este proyecto produce esa condición sola: Juan abre
+ * la aplicación para entrar en las cuentas y el agente corre sondeos en otro
+ * proceso. Las corridas del arnés son secuenciales, así que el cerrojo no
+ * estorba; lo único que impide es justo lo que rompe.
+ */
+if (!app.requestSingleInstanceLock()) {
+  process.stdout.write(
+    "\n===CC_INSTANCIA===\nYa hay una instancia de ChatCouncil abierta. Dos procesos sobre la misma\n" +
+      "particion corrompen la base de sesion y se pierden los logins. Cerra la otra ventana\n" +
+      "y volve a intentar.\n",
+  );
+  app.exit(1);
+}
+
 app.setName("ChatCouncil");
 app.setPath("userData", join(app.getPath("appData"), "ChatCouncil"));
 
@@ -206,7 +229,13 @@ function createWindow(): void {
   win = new BaseWindow({ width: VENTANA_W, height: VENTANA_H, title: "ChatCouncil" });
   // El pedido es sobre el CONTENIDO. `setContentSize` descuenta el marco; la
   // pantalla puede recortar igual, y por eso el sondeo informa el real.
-  win.setContentSize(VENTANA_W, VENTANA_H);
+  // Limitado al AREA UTIL de la pantalla. Sin esto, pedir 1600 sobre una
+  // pantalla de 1366 abre una ventana que se sale por la derecha: para medir
+  // da igual —el DOM recibe el ancho entero— pero para usar la aplicacion los
+  // paneles de la derecha quedan cortados. Se informa el pedido y el real, asi
+  // que el recorte nunca es silencioso.
+  const util = screen.getPrimaryDisplay().workAreaSize;
+  win.setContentSize(Math.min(VENTANA_W, util.width), Math.min(VENTANA_H, util.height));
 
   uiView = new WebContentsView({
     webPreferences: { preload: join(__dirname, "../preload/ui.cjs"), sandbox: true },
@@ -307,6 +336,27 @@ function registrarIpc(): void {
  */
 const SALIDA = (ARGV.find((a) => a.startsWith("--cc-salida=")) ?? "").split("=")[1] ?? "";
 
+/**
+ * Cierre limpio. Chromium escribe cookies y estado de forma ASINCRÓNICA, así
+ * que `app.quit()` justo después de emitir el informe puede cortar una
+ * escritura a la mitad. Con un proceso por corrida —que es el diseño del
+ * arnés— eso se repite decenas de veces, y una base a medio escribir es una
+ * base corrupta. `flushStorageData` fuerza el volcado antes de salir.
+ */
+async function cerrarLimpio(): Promise<void> {
+  try {
+    await Promise.all(
+      INVESTIGADORES.map(async (id) => {
+        session.fromPartition(`persist:${id}`).flushStorageData();
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 600));
+  } catch (e) {
+    process.stdout.write(`\n[cc] fallo el volcado de sesion antes de cerrar: ${String(e)}\n`);
+  }
+  app.quit();
+}
+
 function emitir(etiqueta: string, cuerpo: unknown): void {
   const texto = `\n===${etiqueta}===\n${JSON.stringify(cuerpo, null, 2)}\n===FIN===\n`;
   process.stdout.write(texto);
@@ -337,7 +387,7 @@ async function modoPrueba(): Promise<void> {
   } catch (e) {
     process.stdout.write(`\n===CC_TEST_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
   } finally {
-    app.quit();
+    await cerrarLimpio();
   }
 }
 
@@ -394,7 +444,7 @@ async function modoSondeo(): Promise<void> {
   } catch (e) {
     process.stdout.write(`\n===CC_PROBE_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
   } finally {
-    app.quit();
+    await cerrarLimpio();
   }
 }
 

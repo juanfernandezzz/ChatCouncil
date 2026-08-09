@@ -82,6 +82,11 @@ const EXIGIDO = {
     // investigacion viven en la carpeta generica de Electron, compartida.
     "ChatCouncil",
     "setName",
+    // Un solo proceso por particion: dos corrompen la base de sesion.
+    "requestSingleInstanceLock",
+    "CC_INSTANCIA",
+    // Volcado de sesion antes de cerrar: quit a secas corta la escritura.
+    "flushStorageData",
     "muestraLimpia",
     // El sondeo reconoce y limpia su propia basura de una corrida anterior.
     "CC-SONDEO-NO-ENVIAR",

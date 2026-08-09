@@ -96,6 +96,11 @@ const EXIGIDO = {
     "CC_CENSO_JSON",
     "deSesion",
     "antes-de-cerrar",
+    // Nunca seguir una navegacion a un endpoint de cierre de sesion: esa pagina
+    // cierra la sesion de verdad, y el sondeo se estaba deslogueando solo.
+    "will-redirect",
+    "redireccionesBloqueadas",
+    "logout",
     // Banco de pruebas de persistencia sin cuentas ni humano.
     "--cc-sesion=",
     "cc_persistencia",

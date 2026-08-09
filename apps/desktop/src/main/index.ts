@@ -320,6 +320,9 @@ function layout(): void {
   });
 }
 
+/** Navegaciones a cierre de sesión que se frenaron. Va al informe del sondeo. */
+const redireccionesBloqueadas: { id: string; destino: string; cuando: string }[] = [];
+
 function crearVista(id: string, url: string): WebContentsView {
   // Una partición POR PROVEEDOR: además de aislar cookies, permite convivir
   // cuentas distintas (la burner en uno, las pagas en otros) sin que se pisen
@@ -333,6 +336,34 @@ function crearVista(id: string, url: string): WebContentsView {
       contextIsolation: true,
     },
   });
+  /**
+   * NUNCA seguir una navegación a un endpoint de CIERRE DE SESIÓN.
+   *
+   * Esto no es una precaución teórica: es la explicación de por qué las
+   * sesiones se venían cayendo. Cuando el token está a medio validar,
+   * `claude.ai/new` REDIRIGE a `claude.ai/logout`, y esa página no es un
+   * cartel: **cierra la sesión de verdad**, del lado del servidor y borrando
+   * cookies. Cada sondeo que caía ahí destruía el login que estaba tratando de
+   * medir. Juan veía las cuatro sesiones abiertas en pantalla, el agente corría
+   * un sondeo, y a partir de ahí no había sesión — no porque no se hubiera
+   * guardado, sino porque MIRARLA la rompía.
+   *
+   * Se bloquean la navegación y la redirección, y el hecho queda registrado
+   * para que aparezca en el informe en vez de pasar callado.
+   */
+  const CIERRE_DE_SESION = /\/(logout|log-out|signout|sign-out)(\b|\/|\?|$)/i;
+  const frenar = (evento: { preventDefault: () => void }, destino: string): void => {
+    if (!CIERRE_DE_SESION.test(destino)) return;
+    evento.preventDefault();
+    redireccionesBloqueadas.push({ id, destino, cuando: new Date().toISOString() });
+    process.stdout.write(
+      `\n[cc] BLOQUEADA una navegacion a cierre de sesion en ${id}: ${destino}\n` +
+        `[cc] La sesion sigue viva. Esa pagina la habria cerrado de verdad.\n`,
+    );
+  };
+  view.webContents.on("will-navigate", (e, destino) => frenar(e, destino));
+  view.webContents.on("will-redirect", (e, destino) => frenar(e, destino));
+
   void view.webContents.loadURL(url);
   return view;
 }
@@ -629,6 +660,7 @@ async function modoSondeo(): Promise<void> {
       // ahí está la causa; si informan la misma, la causa es otra y hay que
       // buscarla en otro lado. Es una ruta de carpeta, no una credencial.
       rutaDatos: app.getPath("userData"),
+      redireccionesBloqueadas,
       ventanaPedida: `${VENTANA_W}x${VENTANA_H}`,
       ventanaReal: `${win!.getContentBounds().width}x${win!.getContentBounds().height}`,
       paneles: await sondear(

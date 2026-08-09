@@ -940,6 +940,25 @@ entrega, no al estado que se quería restaurar.
     etiqueta de modelo exigía una variante, y "mini" casa dentro de "Gemini":
     la palabra "Gemini" sola pasaba como si fuera una etiqueta, y devolvió tres
     candidatos inútiles incluido el título accesible de la página.
+57. **El instrumento cerraba la sesión que intentaba medir.** Con el token a
+    medio validar, `claude.ai/new` REDIRIGE a `claude.ai/logout`, y esa página
+    no es un cartel: cierra la sesión de verdad, del lado del servidor. Cada
+    sondeo que caía ahí destruía el login que iba a medir. De ahí el cuadro que
+    parecía imposible: Juan veía las cuatro sesiones abiertas en pantalla —hay
+    captura— y el agente, con el mismo binario y la misma carpeta, no
+    encontraba ninguna. No era que no se guardara: era que **mirarla la
+    rompía**. Se bloquean `will-navigate` y `will-redirect` hacia cualquier
+    endpoint de cierre de sesión, y el bloqueo se informa.
+58. **Cuatro rondas arreglando la escritura porque nunca cuestioné que el
+    problema fuera de escritura.** Carpeta propia, cerrojo de instancia única,
+    volcado en `before-quit`, `app.exit` por `app.quit`: todos arreglos reales
+    y ninguno tocaba la causa. La señal que lo habría delatado estaba desde el
+    principio en el informe —`url: "https://claude.ai/logout"`— y se leyó como
+    consecuencia de la corrupción en vez de como causa de la pérdida.
+59. **La hipótesis de "cookie de sesión contra persistente" quedó refutada por
+    medición**, y la refutó el agente: chatgpt conserva 7 cookies persistentes
+    y aun así cae a `/auth/login`. Si fuera sólo el tipo de cookie, esas
+    alcanzarían.
 55. **Una excepción "angosta" por ARCHIVO apaga la prohibición entera.** Para
     poder probar que `localStorage` sobrevive al cierre se abrió una excepción
     en `guard:artefacto`, atada al marcador `cc_persistencia_ls` y evaluada

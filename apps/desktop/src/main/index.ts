@@ -49,6 +49,36 @@ const CANDIDATOS_SONDEO: { id: string; url: string }[] = [];
  * es donde corre esto. Un script de npm con esa forma falla antes de arrancar
  * la app, con un error que no se parece en nada a la causa.
  */
+/**
+ * IDENTIDAD DE LA APLICACIÓN. Va antes que todo lo demás a propósito.
+ *
+ * Medido el 2026-08-02: `app.getPath("userData")` devolvía
+ * `AppData\\Roaming\\Electron` — la carpeta POR DEFECTO de Electron, no una
+ * carpeta de ChatCouncil. Pasa porque al arrancar con `electron out/main/index.js`
+ * Electron no toma el nombre del paquete y cae en su nombre genérico.
+ *
+ * Dos consecuencias, y ninguna era visible:
+ *  1. Las sesiones `persist:` de los cuatro investigadores viven en una carpeta
+ *     COMPARTIDA con cualquier otra aplicación de Electron que se corra en
+ *     modo desarrollo en esta máquina. Es la explicación más plausible del
+ *     login que desapareció, aunque no está demostrada.
+ *  2. La persistencia de la Fase 2 —decisión 1, archivo de texto en
+ *     `userData`— iba a escribir los datos de investigación en esa misma
+ *     carpeta genérica. Eso hay que arreglarlo ANTES de escribir el primer
+ *     dato, no después.
+ *
+ * `setName` y `setPath` tienen que correr antes de que se cree cualquier
+ * sesión: una vez que una partición se abrió, ya quedó apuntada a la ruta
+ * vieja.
+ *
+ * COSTO ACEPTADO: la carpeta cambia, así que los logins actuales quedan atrás
+ * y hay que entrar una vez más. No se mueven las particiones viejas a mano:
+ * viven mezcladas con las de otras aplicaciones en la carpeta genérica, y
+ * separarlas a ojo es más riesgoso que un login.
+ */
+app.setName("ChatCouncil");
+app.setPath("userData", join(app.getPath("appData"), "ChatCouncil"));
+
 const ARGV = process.argv.slice(1);
 type Modo = "normal" | "test" | "probe" | "login";
 const MODO: Modo = ARGV.includes("--cc-test") || process.env["CC_TEST"] === "1"

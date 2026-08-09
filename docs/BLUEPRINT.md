@@ -940,6 +940,32 @@ entrega, no al estado que se quería restaurar.
     etiqueta de modelo exigía una variante, y "mini" casa dentro de "Gemini":
     la palabra "Gemini" sola pasaba como si fuera una etiqueta, y devolvió tres
     candidatos inútiles incluido el título accesible de la página.
+47. **La aplicación no tenía carpeta propia.** Medido: `userData` devolvía
+    `AppData\Roaming\Electron`, el nombre genérico de Electron, porque al
+    arrancar con `electron out/main/index.js` no toma el nombre del paquete.
+    Las sesiones de los cuatro investigadores vivían en una carpeta compartida
+    con cualquier otra aplicación de Electron en modo desarrollo — explicación
+    plausible, **no demostrada**, del login que desapareció. Y la persistencia
+    de la decisión 1 iba a escribir los datos de investigación ahí mismo. Se
+    arregla ANTES del primer dato escrito, no después.
+
+#### Cierre de la decisión 2 — cómo se escribe, con medición
+
+Trece corridas de claude, tres de gemini, tres de glm, una de chatgpt:
+
+| método | chatgpt | glm | claude | gemini |
+|---|---|---|---|---|
+| `textContent` | 366 ms | 266 ms | 252–798 ms | 257–267 ms |
+| `execCommand` | 619 ms | 920 ms | 254–315 ms | 311–421 ms |
+| `paste` | 1101 ms | **el texto no entra** | 262–305 ms | **el texto no entra** |
+
+`paste` se descarta: falla en dos de cuatro. **`textContent` queda como método
+principal —que es lo que `writePrompt` ya hace— y `execCommand` como respaldo.**
+
+Con esto **§7.22 se cierra: la escritura nunca fue la causa del fallo de
+envío.** En las diecisiete corridas medidas, cuando el control de envío
+aparece, aparece con cualquier método que haya dejado el texto.
+
 43. **Un filtro de dos condiciones excluye el caso que sólo cumple una.** La
     búsqueda de etiqueta de modelo exigía familia Y versión. El selector de
     gemini no dice "Gemini": dice la versión sola. La regla dejaba afuera al

@@ -78,6 +78,10 @@ const EXIGIDO = {
     "etiquetaModeloPorForma",
     "MARCADORES_VIEJOS",
     "rutaDatos",
+    // La app tiene carpeta propia. Sin esto las sesiones y los datos de
+    // investigacion viven en la carpeta generica de Electron, compartida.
+    "ChatCouncil",
+    "setName",
     "muestraLimpia",
     // El sondeo reconoce y limpia su propia basura de una corrida anterior.
     "CC-SONDEO-NO-ENVIAR",

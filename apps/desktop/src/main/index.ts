@@ -18,9 +18,17 @@ import { createServer } from "node:http";
 import type { Server } from "node:http";
 
 import { PROVIDER_SPECS } from "@chatcouncil/providers";
+import type { Procedencia } from "@chatcouncil/domain";
 
 import { correrPruebaFase1, type LecturaProveedor, type ResultadoEnvio } from "./test-runner";
 import { sondear } from "./probe";
+import {
+  crearConversacion,
+  escribirIntentos,
+  escribirRespuestas,
+  escribirRonda,
+  leerRegistroDeArchivo,
+} from "./registro";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -105,7 +113,14 @@ app.setName("ChatCouncil");
 app.setPath("userData", join(app.getPath("appData"), "ChatCouncil"));
 
 const ARGV = process.argv.slice(1);
-type Modo = "normal" | "test" | "probe" | "login" | "sesion";
+type Modo = "normal" | "test" | "probe" | "login" | "sesion" | "historial";
+
+/**
+ * `--cc-historial=<id>` vuelca UNA conversación por stdout como JSON, leída
+ * con `leerRegistro` del paquete de dominio. No abre ninguna ventana ni
+ * proveedor: es puro almacén, así que corre y sale.
+ */
+const HISTORIAL_ID = (ARGV.find((a) => a.startsWith("--cc-historial=")) ?? "").split("=")[1] ?? "";
 
 /**
  * `--cc-sesion=escribir` / `--cc-sesion=leer`: banco de pruebas de
@@ -126,7 +141,9 @@ type Modo = "normal" | "test" | "probe" | "login" | "sesion";
  * La cookie es nuestra, en `https://localhost/`, y no toca ninguna credencial.
  */
 const SESION = /^(escribir|leer)$/.exec((ARGV.find((a) => a.startsWith("--cc-sesion=")) ?? "").split("=")[1] ?? "");
-const MODO: Modo = SESION
+const MODO: Modo = HISTORIAL_ID
+  ? "historial"
+  : SESION
   ? "sesion"
   : ARGV.includes("--cc-test") || process.env["CC_TEST"] === "1"
   ? "test"
@@ -197,6 +214,77 @@ const vistas: { id: ProviderId; view: WebContentsView }[] = [];
 const sondeos: Vista[] = [];
 
 const todas = (): Vista[] => [...vistas, ...sondeos];
+
+/**
+ * ALMACEN — estado de la conversación en curso de este proceso.
+ *
+ * Una corrida de la app (o del arnés) es UNA conversación: se crea sola, la
+ * primera vez que algo se difunde. `indiceRonda` numera las rondas de esa
+ * conversación y `rondaActualId` es el enganche entre `difundir` (que abre
+ * la ronda) y la escritura de las respuestas que llegan después, cuando la
+ * lectura se asienta.
+ */
+let conversacionActual: string | null = null;
+let indiceRonda = 0;
+let rondaActualId: string | null = null;
+
+/**
+ * Continuidad NO se infiere del texto (BLUEPRINT / contrato Fase 2): se
+ * deriva de un hecho del proceso — si la vista navegó o se recargó desde la
+ * ronda anterior. `did-navigate` cubre ambos: una recarga es una navegación
+ * al mismo URL. `contadorNavegaciones` cuenta esos eventos por proveedor;
+ * `navegacionesEnRondaAnterior` es la foto de ese contador al cerrar la
+ * ronda anterior, para comparar en la próxima.
+ */
+const contadorNavegaciones = new Map<string, number>();
+const navegacionesEnRondaAnterior = new Map<string, number>();
+
+function continuidadDe(id: string): Procedencia["continuidad"] {
+  const actual = contadorNavegaciones.get(id) ?? 0;
+  const previa = navegacionesEnRondaAnterior.get(id);
+  if (previa === undefined) return "indeterminada";
+  return previa === actual ? "confirmada" : "refutada";
+}
+
+function panelDe(id: string): string | null {
+  const v = todas().find((x) => x.id === id);
+  if (!v) return null;
+  const b = v.view.getBounds();
+  return `${b.width}x${b.height}`;
+}
+
+function asegurarConversacion(esPrueba: boolean): string {
+  if (!conversacionActual) {
+    conversacionActual = crearConversacion(app.getPath("userData"), esPrueba);
+  }
+  return conversacionActual;
+}
+
+/** `cc:difundir` escribe: la ronda y un intento por proveedor, incluidos los que fallaron. */
+async function difundirConRegistro(prompt: string, esPrueba: boolean): Promise<ResultadoEnvio[]> {
+  const conv = asegurarConversacion(esPrueba);
+  const resultados = await difundir(prompt);
+  rondaActualId = escribirRonda(app.getPath("userData"), conv, indiceRonda++, prompt, null);
+  escribirIntentos(app.getPath("userData"), conv, rondaActualId, resultados);
+  return resultados;
+}
+
+/**
+ * `cc:leer` escribe: una respuesta por proveedor, con procedencia derivada
+ * por `derivarProcedencia` (Fase 2). Sin una ronda abierta no hay a qué
+ * enganchar la respuesta, así que se omite la escritura — sigue devolviendo
+ * la lectura igual.
+ */
+function registrarRespuestasDeRondaActual(lecturas: readonly LecturaProveedor[]): void {
+  if (!conversacionActual || !rondaActualId) return;
+  escribirRespuestas(app.getPath("userData"), conversacionActual, rondaActualId, lecturas, (id) => ({
+    continuidad: continuidadDe(id),
+    panel: panelDe(id),
+  }));
+  for (const id of ACTIVOS) {
+    navegacionesEnRondaAnterior.set(id, contadorNavegaciones.get(id) ?? 0);
+  }
+}
 
 /**
  * Disposición: UNA FILA HORIZONTAL, un panel por investigador.
@@ -271,6 +359,12 @@ function createWindow(): void {
     const view = crearVista(id, PROVIDER_SPECS[id].newConversationUrl);
     vistas.push({ id, view });
     win.contentView.addChildView(view);
+    // Continuidad se deriva de esto, no del texto: cada navegación —incluida
+    // una recarga, que navega al mismo URL— cuenta acá.
+    contadorNavegaciones.set(id, 0);
+    view.webContents.on("did-navigate", () => {
+      contadorNavegaciones.set(id, (contadorNavegaciones.get(id) ?? 0) + 1);
+    });
   }
 
   if (CON_CANDIDATOS) {
@@ -342,9 +436,13 @@ function registrarIpc(): void {
    * que falla se reporta como fallo y los demás siguen. Nunca se simula un
    * resultado que no ocurrió.
    */
-  ipcMain.handle("cc:difundir", async (_e, prompt: string) => difundir(prompt));
+  ipcMain.handle("cc:difundir", async (_e, prompt: string) => difundirConRegistro(prompt, false));
 
-  ipcMain.handle("cc:leer", async () => leer());
+  ipcMain.handle("cc:leer", async () => {
+    const lecturas = await leer();
+    registrarRespuestasDeRondaActual(lecturas);
+    return lecturas;
+  });
 
   ipcMain.handle("cc:sesiones", async () => sesiones());
 }
@@ -441,7 +539,17 @@ async function modoPrueba(): Promise<void> {
       process.stdout.write(`\n===CC_TEST_ERROR===\n"${SOLO}" no esta en INVESTIGADORES.\n`);
       return;
     }
-    emitir("CC_TEST_JSON", await correrPruebaFase1({ sesiones, difundir, leer }));
+    emitir(
+      "CC_TEST_JSON",
+      await correrPruebaFase1({
+        sesiones,
+        // `esPrueba: true` — el arnés escribe en el MISMO almacén que el
+        // camino real, marcado como corrida de prueba, nunca en uno paralelo.
+        difundir: (prompt) => difundirConRegistro(prompt, true),
+        leer,
+        registrarRespuestas: registrarRespuestasDeRondaActual,
+      }),
+    );
   } catch (e) {
     process.stdout.write(`\n===CC_TEST_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
   } finally {
@@ -517,6 +625,24 @@ function modoLogin(): void {
       `Iniciar sesion en cada panel y cerrar la ventana. Las particiones son persistentes:\n` +
       `no hay que repetirlo en las corridas siguientes.\n`,
   );
+}
+
+/**
+ * Modo de historial (`--cc-historial=<id>`). Vuelca por stdout, como JSON, el
+ * registro completo de una conversación — leído con `leerRegistro` del
+ * paquete de dominio, la misma función que valida el archivo en cualquier
+ * otro lugar que lo lea. Las líneas ilegibles se REPORTAN dentro del volcado,
+ * nunca se saltean en silencio: son parte de la respuesta, no un detalle de
+ * implementación que se traga.
+ */
+function modoHistorial(): void {
+  try {
+    emitir("CC_HISTORIAL_JSON", leerRegistroDeArchivo(app.getPath("userData"), HISTORIAL_ID));
+  } catch (e) {
+    process.stdout.write(`\n===CC_HISTORIAL_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+  } finally {
+    app.quit();
+  }
 }
 
 /**
@@ -632,11 +758,12 @@ void app.whenReady().then(() => {
   // toca cookies y `localStorage` propios— así que se salta `createWindow()`
   // y con eso la carga por red de las cuatro páginas reales, que no aporta
   // nada a esta prueba y sólo agrega tiempo y una fuente más de fallos.
-  if (MODO !== "sesion") createWindow();
+  if (MODO !== "sesion" && MODO !== "historial") createWindow();
   if (MODO === "test") void modoPrueba();
   if (MODO === "probe") void modoSondeo();
   if (MODO === "login") modoLogin();
   if (MODO === "sesion") void modoSesion();
+  if (MODO === "historial") modoHistorial();
   app.on("activate", () => {
     if (BaseWindow.getAllWindows().length === 0) createWindow();
   });

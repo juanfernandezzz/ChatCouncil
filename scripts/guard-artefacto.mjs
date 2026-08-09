@@ -101,6 +101,16 @@ const EXIGIDO = {
     // El sondeo reconoce y limpia su propia basura de una corrida anterior.
     "CC-SONDEO-NO-ENVIAR",
     "restoLimpiado",
+    // El almacen de la Fase 2: un archivo por conversacion, append-only, y el
+    // modo que lo vuelca por stdout.
+    "conversaciones",
+    "--cc-historial=",
+    "CC_HISTORIAL_JSON",
+    "lineasIlegibles",
+    "ultimaLineaIncompleta",
+    "esPrueba",
+    "derivarProcedencia",
+    "did-navigate",
   ],
   // "contenteditable" NO sirve como marcador: en el preload existe sólo como
   // miembro de un tipo, y los tipos se borran. El gate lo rechazó en su

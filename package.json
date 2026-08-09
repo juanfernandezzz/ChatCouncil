@@ -12,6 +12,7 @@
     "guard:judge": "node scripts/guard-judge-anonymity.mjs",
     "guard:specs": "node scripts/guard-specs.mjs",
     "guard:sondeo": "node scripts/guard-sondeo.mjs",
+    "guard:dominio": "node scripts/guard-dominio.mjs",
     "guard:artefacto": "node scripts/guard-artefacto.mjs",
     "dev": "pnpm --filter @chatcouncil/desktop dev",
     "build": "pnpm --filter @chatcouncil/desktop build"

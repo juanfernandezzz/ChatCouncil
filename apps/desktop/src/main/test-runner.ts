@@ -179,6 +179,15 @@ export async function correrPruebaFase1(deps: {
   sesiones: () => Promise<{ id: string; cookies: number }[]>;
   difundir: (prompt: string) => Promise<ResultadoEnvio[]>;
   leer: () => Promise<LecturaProveedor[]>;
+  /**
+   * Escribe la respuesta ya QUIETA de cada proveedor en el almacén, una vez
+   * por ronda. Deliberadamente separada de `leer`: `esperarQuietud` llama a
+   * `leer` decenas de veces por ronda mientras espera, y escribir en cada una
+   * de esas llamadas produciría docenas de respuestas por ronda en vez de
+   * una — el contrato de la Fase 2 pide una respuesta por proveedor y ronda,
+   * la ÚLTIMA lectura, no cada lectura intermedia de la espera.
+   */
+  registrarRespuestas: (lecturas: LecturaProveedor[]) => void;
 }): Promise<InformeTest> {
   const informe: InformeTest = { sesiones: [], turnos: [], continuidad: [], veredicto: [] };
 
@@ -226,6 +235,7 @@ export async function correrPruebaFase1(deps: {
   for (const prompt of prompts) {
     const envio = await deps.difundir(prompt);
     const lecturas = await esperarQuietud(deps.leer, 180_000);
+    deps.registrarRespuestas(lecturas);
     envios.push(envio);
     lecturasPorTurno.push(lecturas);
     informe.turnos.push({

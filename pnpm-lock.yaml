@@ -14,6 +14,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@chatcouncil/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@chatcouncil/providers':
         specifier: workspace:*
         version: link:../../packages/providers
@@ -35,6 +38,12 @@ importers:
         version: 5.4.21(@types/node@22.20.1)
 
   packages/analysis:
+    devDependencies:
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  packages/domain:
     devDependencies:
       typescript:
         specifier: ^7.0.2

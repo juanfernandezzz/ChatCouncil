@@ -940,6 +940,34 @@ entrega, no al estado que se quería restaurar.
     etiqueta de modelo exigía una variante, y "mini" casa dentro de "Gemini":
     la palabra "Gemini" sola pasaba como si fuera una etiqueta, y devolvió tres
     candidatos inútiles incluido el título accesible de la página.
+62. **Una comprobación escrita DESPUÉS del `exit` no comprueba nada.** La regla
+    nueva de `guard:specs` —exigir `_notaModelo` donde no hay `modelLabel`— se
+    agregó al final del archivo, es decir después del bloque que ya había
+    salido con error. Recolectaba fallos que nadie miraba. La prueba en rojo lo
+    delató: quitando la nota, el gate seguía dando OK. Sexta forma de gate que
+    miente, y la primera que se detecta ANTES de confiar en ella.
+
+#### Etiqueta de modelo — estado al cierre de la derivación
+
+| | selector | qué dice |
+|---|---|---|
+| claude | `button[data-testid="model-selector-dropdown"]` | "Modelo: Haiku 4.5" en el aria-label ✔ |
+| glm | `button[aria-label="Select a model"]` | "GLM-4.7" en el texto ✔ |
+| gemini | `div[data-test-id="logo-pill-label-container"]` | "Gemini 3.5 Flash-Lite" ✔ |
+| chatgpt | `button[data-testid="model-switcher-dropdown-button"]` | sólo "ChatGPT". **Sin versión.** |
+
+En gemini el botón hermano lleva la versión DENTRO del `aria-label`
+("…actualmente 3.5 Flash-Lite"), así que se rompe justo cuando el modelo
+cambia: por eso va el `div`, que es estable y deja la versión en el texto. Es
+la misma trampa que el id de glm, `#model-selector-glm-4_7-button`.
+
+En chatgpt, medido en cinco corridas y a dos anchos de panel: **la versión no
+está en la cabecera**, y no es un problema de ancho. La deriva de versión no es
+detectable ahí desde el encabezado, y la procedencia va a quedar con
+`modelLabel` en `null`. Queda anotado en la spec y `guard:specs` ahora EXIGE
+esa nota. Pendiente para más adelante: buscarla en los atributos de los
+mensajes de respuesta, que sólo existen cuando ya hay conversación.
+
 60. **REGLA DURA: ninguna tanda de diagnóstico se corre contra las particiones
     reales.** El 2026-08-09 se ordenaron veinte aperturas y cierres alternados
     sobre `persist:chatgpt`, `persist:claude`, `persist:glm` y `persist:gemini`

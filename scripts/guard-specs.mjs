@@ -70,6 +70,24 @@ for (const [id, spec] of Object.entries(specs)) {
   }
 }
 
+// Un proveedor SIN `modelLabel` tiene que decir POR QUE en `_notaModelo`.
+//
+// Sin esto, un hueco de capacidad se lee igual que un campo que nadie lleno:
+// la procedencia sale con `modelLabel: null` y nada dice si el proveedor no lo
+// expone o si simplemente no se derivo todavia. La Fase 2 existe para hacer
+// detectable la deriva de version; donde NO sea detectable, tiene que estar
+// escrito.
+for (const [id, spec] of Object.entries(specs)) {
+  if (spec.modelLabel) continue;
+  const nota = spec._notaModelo;
+  if (typeof nota !== "string" || nota.trim().length < 40) {
+    fallos.push(
+      `${id}: no tiene "modelLabel" y tampoco un "_notaModelo" que explique por que. ` +
+        `Un hueco declarado es visible; uno callado se lee como un campo vacio.`,
+    );
+  }
+}
+
 if (fallos.length > 0) {
   console.error("[guard:specs] FALLO:");
   for (const f of fallos) console.error("  · " + f);

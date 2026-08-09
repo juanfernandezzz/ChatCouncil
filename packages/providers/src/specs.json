@@ -27,7 +27,8 @@
         "submitReadyMs": 8000,
         "submitConfirmMs": 10000,
         "emptyResponseMs": 90000
-      }
+      },
+      "_notaModelo": "SIN etiqueta de version. Medido en cinco corridas, a 333 y a 1334 px de panel: el selector de modelo existe (button[data-testid=\"model-switcher-dropdown-button\"], una coincidencia) pero su texto dice solo \"ChatGPT\" y su aria-label \"Selector de modelo\". No es un problema de ancho. CONSECUENCIA: en chatgpt la deriva de version NO es detectable desde la cabecera, y la procedencia va a quedar con modelLabel en null. Pendiente: buscarla en los atributos de los mensajes de respuesta, que solo existen cuando hay conversacion."
     },
     "glm": {
       "newConversationUrl": "https://chat.z.ai/",
@@ -128,7 +129,11 @@
       },
       "_notaIdioma": "compositor derivado con la cuenta de Juan en espanol (aria-label localizado): 'Ingresa una instruccion para Gemini'. Si la cuenta cambia de idioma, este selector deja de matchear. El boton de envio tiene el mismo problema y es MAS fragil que el de claude: solo se pudo observar la variante en espanol 'Enviar mensaje' (derivada con --cc-probe-escribe, matches:1) porque la cuenta de Juan esta en espanol; a diferencia de claude, el boton no tiene data-testid ni clase distintiva que sirva de respaldo, solo clases genericas de Material (mdc-icon-button, mat-mdc-icon-button) compartidas con otros botones del panel. No se agrega la variante en ingles ('Send message', sin confirmar) porque no se observo: agregarla seria inventar un selector, no derivarlo. Si la cuenta cambia de idioma, este selector deja de matchear y hay que volver a correr --cc-probe-escribe.",
       "_notaTiempo": "composerMs subido de 15000 (default) a 45000: con panel angosto (800x600, aislado, sin contencion) el compositor monta bien -> descarta tamano; con paneles grandes (~1280x734) bajo la misma contencion de 4 procesos, tambien anda -> descarta contencion pura. La falla intermitente observada con paneles chicos en grupo es de TIEMPO al margen bajo contencion, no un defecto estructural. Ver BLUEPRINT SS10 para el detalle de las tres corridas que lo separaron.",
-      "_notaFin": "gemini: sin indicador de generacion conocido en su DOM. El fin se INFIERE de que el texto dejo de crecer durante quiescenceMs. Los 20000 ms son un PISO PROVISIONAL, no un valor medido: se copio del piso de claude por prudencia, y el modo de razonamiento de Gemini todavia no se observo, asi que la ventana real podria ser distinta en cualquiera de las dos direcciones. Queda por validar en la Fase 2 con un prompt largo."
+      "_notaFin": "gemini: sin indicador de generacion conocido en su DOM. El fin se INFIERE de que el texto dejo de crecer durante quiescenceMs. Los 20000 ms son un PISO PROVISIONAL, no un valor medido: se copio del piso de claude por prudencia, y el modo de razonamiento de Gemini todavia no se observo, asi que la ventana real podria ser distinta en cualquiera de las dos direcciones. Queda por validar en la Fase 2 con un prompt largo.",
+      "modelLabel": {
+        "selector": "div[data-test-id=\"logo-pill-label-container\"]"
+      },
+      "_notaModelo": "Derivado por medicion el 2026-08-09 (sondeo, via estructural). El boton hermano lleva la version DENTRO del aria-label (\"...actualmente 3.5 Flash-Lite\"), asi que se rompe justo cuando el modelo cambia: por eso se usa el div, que es estable y deja la version en el texto."
     }
   }
 }

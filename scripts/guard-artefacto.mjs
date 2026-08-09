@@ -75,6 +75,10 @@ const EXIGIDO = {
     // Las dos vias de la etiqueta de modelo, separadas y ambas informadas.
     "etiquetaModeloPorAtributo",
     "etiquetaModeloPorTexto",
+    "muestraLimpia",
+    // El sondeo reconoce y limpia su propia basura de una corrida anterior.
+    "CC-SONDEO-NO-ENVIAR",
+    "restoLimpiado",
   ],
   // "contenteditable" NO sirve como marcador: en el preload existe sólo como
   // miembro de un tipo, y los tipos se borran. El gate lo rechazó en su

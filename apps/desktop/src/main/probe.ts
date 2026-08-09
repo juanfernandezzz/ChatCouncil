@@ -65,6 +65,8 @@ export interface Candidato {
   /** Cuántos nodos matchea ese selector: si no es 1, el selector todavía no sirve. */
   matches: number;
   muestra: string;
+  /** `muestra` sin glifos de fuente de iconos ni espacios repetidos. */
+  muestraLimpia?: string;
 }
 
 /**
@@ -130,6 +132,9 @@ export interface SondeoProveedor {
   readyState?: string;
   /** Sólo en modo escritura: las tres formas, medidas una por una. */
   escrituraPorMetodo?: EscrituraMetodo[];
+  escrituraOmitida?: string;
+  /** Había un marcador de una corrida anterior y esta corrida lo limpió. */
+  restoLimpiado?: boolean;
   /**
    * Con qué estado del compositor se tomó la muestra. Sin esto, un `envio`
    * vacío es ambiguo entre "no existe" y "todavía no aparece", que fue
@@ -169,6 +174,7 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => 
   let escrituraAceptada;
   let escrituraPorMetodo;
   let escrituraOmitida;
+  let restoLimpiado = false;
   let metodoQueSirvio;
   const limpiar = [];
 
@@ -242,9 +248,13 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => 
     // Si el compositor YA tenia texto, no se toca: seria un borrador de Juan y
     // la medicion lo borraria. Se omite y se dice por que, en vez de destruirlo
     // en silencio.
-    if (c && leerCompositor(c).trim().length > 0) {
-      escrituraOmitida = "el compositor tenia texto previo: no se midio para no borrar un borrador";
+    const previo = c ? leerCompositor(c).trim() : "";
+    if (c && previo.length > 0 && previo !== MARCADOR) {
+      escrituraOmitida = "el compositor tenia texto previo que NO es nuestro marcador: no se midio para no borrar un borrador de Juan";
     } else if (c) {
+      // Si lo previo es NUESTRO marcador, es basura de una corrida anterior:
+      // se limpia y se sigue. Abstenerse ahi costaba una muestra por nada.
+      if (previo === MARCADOR) restoLimpiado = true;
       escrituraPorMetodo = [];
       vaciar(c);
       await dormir(400);
@@ -349,10 +359,33 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => 
     return out;
   };
 
-  /** Selector propuesto: id > data-testid > aria-label > tag+primera clase. */
+  /**
+   * Selector propuesto: data-testid > data-test-id > id ESTABLE > aria-label >
+   * tag+clase.
+   *
+   * El id iba primero y estaba al reves para este dominio. Medido el
+   * 2026-08-02: el boton de modelo de claude tiene
+   * data-testid="model-selector-dropdown" —estable, y ya en la spec— pero el
+   * sondeo proponia "#base-ui-_r_8l_", un id generado por la libreria de
+   * componentes que cambia en cada render. Lo mismo en chatgpt con
+   * "#radix-_r_3_" contra data-testid="model-switcher-dropdown-button".
+   * Derivar de esos ids habria dado selectores que fallan en la corrida
+   * siguiente.
+   *
+   * Y hay un id peor todavia: el de glm es "#model-selector-glm-4_7-button",
+   * que lleva la VERSION DEL MODELO adentro. Un selector asi se rompe
+   * exactamente cuando el modelo cambia, que es el evento que la Fase 2
+   * existe para detectar.
+   */
+  const ID_INESTABLE = /(^|[-_])(radix|base-ui|headlessui|mui|chakra|reach|rc)[-_]|_r_|::/i;
+  const ID_CON_VERSION = /\\d+[._]\\d+/;
   const selectorDe = (el) => {
+    const dt0 = el.getAttribute("data-testid");
+    if (dt0) return el.tagName.toLowerCase() + '[data-testid="' + dt0 + '"]';
+    const dti0 = el.getAttribute("data-test-id");
+    if (dti0) return el.tagName.toLowerCase() + '[data-test-id="' + dti0 + '"]';
     const id = el.getAttribute("id");
-    if (id && /^[A-Za-z][\\w-]*$/.test(id)) return "#" + id;
+    if (id && /^[A-Za-z][\\w-]*$/.test(id) && !ID_INESTABLE.test(id) && !ID_CON_VERSION.test(id)) return "#" + id;
     const dt = el.getAttribute("data-testid");
     if (dt) return el.tagName.toLowerCase() + '[data-testid="' + dt + '"]';
     const dti = el.getAttribute("data-test-id");
@@ -376,6 +409,10 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => 
       attrs: attrsDe(el),
       matches: matches,
       muestra: (el.textContent || "").trim().slice(0, CAP_TEXTO),
+      // El texto visible viene con glifos de fuente de iconos pegados: el de
+      // claude salio como "Haiku 4.5\\ue027". El aria-label venia limpio
+      // ("Modelo: Haiku 4.5"), asi que se informan los dos y se elige despues.
+      muestraLimpia: (el.textContent || "").replace(/[\\uE000-\\uF8FF]/g, "").replace(/\\s+/g, " ").trim().slice(0, CAP_TEXTO),
     };
   };
 
@@ -432,7 +469,11 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => 
     // gris del compositor: devolvia ruido, no la etiqueta. Ahora hace falta
     // ademas algo con forma de VERSION o de variante.
     const familia = /(gpt|chatgpt|gemini|claude|glm|qwen|kimi|deepseek|grok)/i;
-    const version = /(\\d|haiku|sonnet|opus|flash|pro\\b|thinking|mini|turbo|nano|air|plus|max|lite|preview)/i;
+    // Cada variante con LIMITES DE PALABRA. Sin ellos "mini" casa dentro de
+    // "Gemini" y el filtro deja pasar la palabra "Gemini" sola como si fuera
+    // una etiqueta de modelo: paso el 2026-08-02 y devolvio tres candidatos
+    // inutiles, incluido el titulo accesible de la pagina.
+    const version = /(\\d|\\b(haiku|sonnet|opus|flash|pro|thinking|mini|turbo|nano|air|plus|max|lite|preview)\\b)/i;
     const out = [];
     for (const raiz of raices) {
       const via = raiz === document ? "document" : "shadow";
@@ -494,6 +535,8 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => 
     readyState: document.readyState,
     escrituraPorMetodo: escrituraPorMetodo,
     escrituraOmitida: escrituraOmitida,
+    /** Habia un marcador nuestro de una corrida anterior y se limpio. */
+    restoLimpiado: restoLimpiado,
   };
 
   // Devolver el compositor como estaba. Se limpia SIEMPRE, incluso si algo de
@@ -512,7 +555,14 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => 
 }`;
 
 /** Marcador neutro. No es una instruccion: es texto para que aparezcan los controles. */
-const MARCADOR = "sondeo";
+/**
+ * Marcador de sondeo. Era la palabra "sondeo" a secas — una palabra española
+ * común, que ni el propio sondeo podía distinguir de un borrador de Juan. El
+ * 2026-08-02 quedó uno olvidado en el compositor de ChatGPT y la corrida
+ * siguiente se abstuvo de medir por no pisarlo: perdimos una muestra por no
+ * poder reconocer nuestra propia basura.
+ */
+const MARCADOR = "CC-SONDEO-NO-ENVIAR";
 
 export async function sondear(
   vistas: {

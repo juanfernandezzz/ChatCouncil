@@ -919,6 +919,30 @@ entrega, no al estado que se quería restaurar.
     1600 sobre una pantalla de 1366 dio 1350, y una corrida entera se informó
     como "ventana completa 1600x1000" sin serlo. Ahora el flag fija el
     CONTENIDO y se informan `ventanaPedida` y `ventanaReal`, las dos.
+39bis. **Todo número que me llegó resumido no reprodujo; todo número que me
+    llegó crudo se sostuvo.** La ronda del 2026-08-02 informó, sin crudo, que
+    el envío de claude fallaba 2 de 3 veces a panel angosto y 0 de 3 a ancho,
+    con `mutacionesFuera` bimodal en 48/52. Con el crudo en la mano, **12 de 12
+    corridas dan éxito** a los dos anchos y con los tres métodos, con
+    `mutacionesFuera` constante en 52. Ni la intermitencia ni la bimodalidad
+    reproducen. No se establece si aquello fue narrado en vez de leído o si la
+    página cambió; lo que queda establecido es que un resumen no sirve de base.
+40. **El id iba primero en `selectorDe` y para este dominio estaba al revés.**
+    El botón de modelo de claude tiene `data-testid="model-selector-dropdown"`
+    —estable, y ya en la spec— y el sondeo proponía `#base-ui-_r_8l_`, un id
+    generado por la librería de componentes. Igual en chatgpt: `#radix-_r_3_`
+    contra `data-testid="model-switcher-dropdown-button"`. Derivar de esos ids
+    daba selectores que fallan en la corrida siguiente. Peor todavía, el id de
+    glm es `#model-selector-glm-4_7-button`: **lleva la versión del modelo
+    adentro**, así que un selector así se rompe exactamente cuando el modelo
+    cambia, que es el evento que esta fase existe para detectar.
+41. **Un filtro sin límites de palabra deja pasar la subcadena.** El filtro de
+    etiqueta de modelo exigía una variante, y "mini" casa dentro de "Gemini":
+    la palabra "Gemini" sola pasaba como si fuera una etiqueta, y devolvió tres
+    candidatos inútiles incluido el título accesible de la página.
+42. **Una herramienta que su dueño no puede abrir no está hecha.** Hasta el
+    2026-08-02 la única forma de abrir ChatCouncil era un comando de pnpm en
+    una terminal. De ahí `AbrirChatCouncil.cmd`.
 39. **Un resumen no es una salida real.** Dos rondas de reconocimiento
     llegaron resumidas porque el bloque crudo es largo y se pierde al copiar.
     De ahí `--cc-salida=<ruta>`: el crudo se adjunta como archivo en vez de

@@ -329,6 +329,12 @@ async function modoSondeo(): Promise<void> {
       // sondeos del mismo proveedor a anchos distintos se leen como si fueran
       // comparables, y no lo son (§7.29).
       disposicion: DISPOSICION,
+      // DÓNDE viven las sesiones. Diagnóstico: el 2026-08-02 una apertura desde
+      // el lanzador no encontró ningún login, y las particiones `persist:` son
+      // las mismas en los dos modos. Si dos aperturas informan rutas distintas,
+      // ahí está la causa; si informan la misma, la causa es otra y hay que
+      // buscarla en otro lado. Es una ruta de carpeta, no una credencial.
+      rutaDatos: app.getPath("userData"),
       ventanaPedida: `${VENTANA_W}x${VENTANA_H}`,
       ventanaReal: `${win!.getContentBounds().width}x${win!.getContentBounds().height}`,
       paneles: await sondear(

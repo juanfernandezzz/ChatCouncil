@@ -40,6 +40,20 @@ if (hasta < 0) {
 }
 const cuerpo = fuente.slice(desde, hasta);
 
+// Un acento grave dentro del literal lo CIERRA antes de tiempo, y entonces
+// esta extraccion agarra un pedazo equivocado y valida lo que no es. Paso el
+// 2026-08-02: un comentario con `guard:artefacto` entre acentos graves rompio
+// el literal, el typecheck lo agarro y este gate seguia dando OK sobre un
+// fragmento mal cortado. Un gate que valida el texto equivocado es peor que
+// no tenerlo.
+if (cuerpo.includes("`")) {
+  console.error(
+    "[guard:sondeo] FALLO: FUENTE_SONDEO contiene un acento grave. Cierra el literal antes " +
+      "de tiempo y hace que este gate valide un fragmento equivocado. Ni siquiera en comentarios.",
+  );
+  process.exit(1);
+}
+
 if (cuerpo.includes("${")) {
   console.error(
     "[guard:sondeo] FALLO: FUENTE_SONDEO contiene una interpolacion. Tiene que ser texto " +

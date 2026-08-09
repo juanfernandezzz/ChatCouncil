@@ -75,6 +75,9 @@ const EXIGIDO = {
     // Las dos vias de la etiqueta de modelo, separadas y ambas informadas.
     "etiquetaModeloPorAtributo",
     "etiquetaModeloPorTexto",
+    "etiquetaModeloPorForma",
+    "MARCADORES_VIEJOS",
+    "rutaDatos",
     "muestraLimpia",
     // El sondeo reconoce y limpia su propia basura de una corrida anterior.
     "CC-SONDEO-NO-ENVIAR",

@@ -126,6 +126,8 @@ export interface SondeoProveedor {
    * en `etiquetaModeloDescartados`.
    */
   etiquetaModeloPorTexto: Candidato[];
+  /** Estructural: un control con texto corto que contiene un número. No exige nombre de familia. */
+  etiquetaModeloPorForma: Candidato[];
   etiquetaModeloDescartados: number;
   /** Milisegundos desde la navegación hasta el momento de la muestra. */
   msDesdeNavegacion?: number;
@@ -159,7 +161,7 @@ export interface SondeoProveedor {
  * contrato del proveedor, y no tiene por qué vivir en el preload que corre en
  * cada turno real.
  */
-const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => {
+const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MARCADORES_VIEJOS) => {
   const ATTRS_OK = ["id","class","data-testid","data-test-id","data-message-author-role","aria-label","role","contenteditable","placeholder","name","type","enterkeyhint"];
   const CAP_TEXTO = 80;
   const CAP_CANDIDATOS = 6;
@@ -249,12 +251,13 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => 
     // la medicion lo borraria. Se omite y se dice por que, en vez de destruirlo
     // en silencio.
     const previo = c ? leerCompositor(c).trim() : "";
-    if (c && previo.length > 0 && previo !== MARCADOR) {
+    const esNuestro = previo === MARCADOR || (MARCADORES_VIEJOS || []).indexOf(previo) >= 0;
+    if (c && previo.length > 0 && !esNuestro) {
       escrituraOmitida = "el compositor tenia texto previo que NO es nuestro marcador: no se midio para no borrar un borrador de Juan";
     } else if (c) {
       // Si lo previo es NUESTRO marcador, es basura de una corrida anterior:
       // se limpia y se sigue. Abstenerse ahi costaba una muestra por nada.
-      if (previo === MARCADOR) restoLimpiado = true;
+      if (esNuestro && previo.length > 0) restoLimpiado = true;
       escrituraPorMetodo = [];
       vaciar(c);
       await dormir(400);
@@ -498,12 +501,55 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => 
     return out;
   };
 
-  // Dos vias, ambas de SOLO LECTURA, y las dos se corren SIEMPRE. Antes la de
+  /**
+   * Tercera via: por FORMA, sin exigir nombre de familia.
+   *
+   * Las dos vias anteriores exigen una familia de modelo en el texto, y esa
+   * condicion excluye justo el caso que hacia falta: medido el 2026-08-02, el
+   * selector de modelo de gemini no dice "Gemini", dice la version sola
+   * ("2.5 Flash"). Mi propia regla de dos condiciones dejaba afuera al unico
+   * proveedor que todavia faltaba.
+   *
+   * Esta via no pregunta COMO SE LLAMA sino QUE ES: un control —boton, menu,
+   * combo— con texto corto que contiene un numero. Es estructural, asi que no
+   * hay que acertarle de antemano al nombre del modelo.
+   */
+  // Deliberadamente NO se mira el atributo de menu desplegable que
+  // guard:artefacto prohibe en el proceso principal. El gate tiene razon
+  // aunque aca solo se leyera: ese atributo entro a la lista negra como
+  // sustituto de "no salgas a buscar disparadores de menu para clickearlos", y
+  // relajarlo por comodidad seria justo la clase de excepcion que ya se
+  // revirtio una vez. Con el tag y el rol alcanza. (El gate llego a frenar
+  // esta misma entrega, y se cedio en vez de aflojarlo.)
+  const esControl = (el) => {
+    if (el.tagName === "BUTTON") return true;
+    const rol = el.getAttribute("role");
+    return rol === "button" || rol === "combobox" || rol === "menuitem";
+  };
+  const porFormaDeVersion = () => {
+    const out = [];
+    for (const raiz of raices) {
+      const via = raiz === document ? "document" : "shadow";
+      for (const el of raiz.querySelectorAll("*")) {
+        if (out.length >= CAP_CANDIDATOS) break;
+        if (!esControl(el)) continue;
+        const t = (el.textContent || "").replace(/[\\uE000-\\uF8FF]/g, "").replace(/\\s+/g, " ").trim();
+        if (t.length === 0 || t.length > 30) continue;
+        if (!/\\d/.test(t)) continue;
+        if (compositorEl && (el.contains(compositorEl) || compositorEl.contains(el))) continue;
+        out.push(candidato(el, via));
+      }
+    }
+    return out;
+  };
+
+  // Tres vias, todas de SOLO LECTURA, y las tres se corren SIEMPRE. Antes la de
   // texto sólo corria si la de atributo salia vacia, y eso escondia el caso
   // real: que un atributo encuentre un boton cuyo texto no sirve de etiqueta.
   // Son dos diagnosticos distintos y se informan por separado.
   const etiquetaModeloPorAtributo = juntar(['button[aria-label*="odel"]', 'button[aria-label*="odelo"]', '[class*="model-selector"]', '[class*="model-switcher"]', '[data-testid*="model"]', '[data-test-id*="model"]']);
   const etiquetaModeloPorTexto = porNombreDeModelo();
+  const etiquetaModeloPorForma = porFormaDeVersion();
 
   const salida = {
     estadoCompositor: SELECTOR_COMPOSITOR && MARCADOR ? "con-texto" : "reposo",
@@ -527,6 +573,7 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => 
     asistente: juntar(['[data-message-author-role="assistant"]', '[class*="assistant"]', '[class*="model-response"]', '[class*="markdown"]']),
     etiquetaModeloPorAtributo: etiquetaModeloPorAtributo,
     etiquetaModeloPorTexto: etiquetaModeloPorTexto,
+    etiquetaModeloPorForma: etiquetaModeloPorForma,
     etiquetaModeloDescartados: descartadosPorFiltro,
     // Cuanto hacia que la pagina habia navegado cuando se tomo la muestra, y en
     // que estado estaba. Si los fallos se concentran en valores bajos, el
@@ -564,6 +611,16 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR) => 
  */
 const MARCADOR = "CC-SONDEO-NO-ENVIAR";
 
+/**
+ * Marcadores de versiones anteriores. Cambiar el marcador dejo HUERFANO al
+ * resto que el cambio venia a resolver: el olvidado en el compositor de
+ * chatgpt era la palabra "sondeo", no coincidia con el nuevo, y la corrida
+ * siguiente lo clasifico como borrador de Juan y se abstuvo de medir tres
+ * veces seguidas. Un instrumento tiene que reconocer TODA su propia basura,
+ * no solo la de la version de hoy.
+ */
+const MARCADORES_VIEJOS = ["sondeo"];
+
 export async function sondear(
   vistas: {
     id: string;
@@ -587,8 +644,8 @@ export async function sondear(
   const crudos = await Promise.allSettled(
     vistas.map((v) => {
       const args = v.composerSelector
-        ? `${JSON.stringify(v.composerSelector)}, ${JSON.stringify(v.submitSelector ?? null)}, ${JSON.stringify(MARCADOR)}`
-        : "null, null, null";
+        ? `${JSON.stringify(v.composerSelector)}, ${JSON.stringify(v.submitSelector ?? null)}, ${JSON.stringify(MARCADOR)}, ${JSON.stringify(MARCADORES_VIEJOS)}`
+        : "null, null, null, []";
       return v.ejecutar(`(${FUENTE_SONDEO})(${args})`);
     }),
   );
@@ -606,6 +663,7 @@ export async function sondear(
         asistente: [],
         etiquetaModeloPorAtributo: [],
         etiquetaModeloPorTexto: [],
+        etiquetaModeloPorForma: [],
         etiquetaModeloDescartados: 0,
         estadoCompositor: v.composerSelector ? "con-texto" : "reposo",
         error: r.reason instanceof Error ? r.reason.message : String(r.reason),

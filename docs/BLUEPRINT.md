@@ -940,6 +940,27 @@ entrega, no al estado que se quería restaurar.
     etiqueta de modelo exigía una variante, y "mini" casa dentro de "Gemini":
     la palabra "Gemini" sola pasaba como si fuera una etiqueta, y devolvió tres
     candidatos inútiles incluido el título accesible de la página.
+43. **Un filtro de dos condiciones excluye el caso que sólo cumple una.** La
+    búsqueda de etiqueta de modelo exigía familia Y versión. El selector de
+    gemini no dice "Gemini": dice la versión sola. La regla dejaba afuera al
+    único proveedor que faltaba. De ahí la tercera vía, **estructural**: no
+    pregunta cómo se llama sino qué es — un control con texto corto que
+    contiene un número.
+44. **Cambiar un marcador deja huérfana la basura vieja.** El resto olvidado en
+    chatgpt era `sondeo`; la autolimpieza comparaba contra el marcador nuevo,
+    no coincidía, y tres corridas seguidas se abstuvieron de medir tratándolo
+    como borrador de Juan. Un instrumento tiene que reconocer TODA su propia
+    basura, no sólo la de la versión de hoy.
+45. **Un acento grave dentro del literal inyectado lo cierra antes de tiempo, y
+    el gate valida el fragmento equivocado.** Un comentario con acentos graves
+    rompió `FUENTE_SONDEO`: el typecheck lo agarró, pero `guard:sondeo` siguió
+    dando OK sobre un pedazo mal cortado. Un gate que valida el texto
+    equivocado es peor que no tenerlo. Ahora rechaza el acento grave.
+46. **Cuando un gate frena una entrega, se cede.** `guard:artefacto` prohibió
+    el atributo de menú desplegable en el detector estructural. Sólo se leía,
+    no se clicaba, así que había excusa para aflojarlo — y la excusa es
+    exactamente la forma de la excepción de clic que ya se revirtió una vez. Se
+    reescribió el detector sin ese atributo.
 42. **Una herramienta que su dueño no puede abrir no está hecha.** Hasta el
     2026-08-02 la única forma de abrir ChatCouncil era un comando de pnpm en
     una terminal. De ahí `AbrirChatCouncil.cmd`.

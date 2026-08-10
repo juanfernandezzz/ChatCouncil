@@ -13,7 +13,7 @@
 import { app, BaseWindow, WebContentsView, ipcMain, screen, session } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 
@@ -521,6 +521,98 @@ function registrarIpc(): void {
   });
 
   ipcMain.handle("cc:sesiones", async () => sesiones());
+
+  ipcMain.handle("cc:sondear", async () => sondeoVivo());
+}
+
+/**
+ * SONDEO A PEDIDO SOBRE LA VENTANA VIVA (decisión de Juan, 2026-08-10).
+ *
+ * POR QUÉ EXISTE, y conviene tenerlo escrito porque el motivo no es cómodo.
+ * `--cc-probe` arranca un proceso, navega a la pantalla de conversación nueva,
+ * duerme 20 s, mira y cierra. O sea que **sólo puede observar la página recién
+ * cargada y sin conversación**, y hay fallos que no ocurren en ese estado.
+ *
+ * El caso que lo forzó, con las mediciones adelante: la etiqueta de modelo de
+ * gemini. El mismo selector —`div[data-test-id="logo-pill-label-container"]`,
+ * `matches: 1`— devolvió "Gemini 3.5 Flash-Lite" en CINCO sondeos y
+ * "GeminiFlash-Lite" en el registro del camino real, con la MISMA extracción
+ * (`textContent.trim()`) de los dos lados. El número no se pierde al
+ * concatenar: el nodo que lo lleva no está en el DOM cuando se lee. Y el
+ * sondeo no podía verlo porque miraba la única pantalla en la que el fallo no
+ * pasa. Es §7.24 literal: un diagnóstico tomado en un estado que no existe en
+ * el momento del fallo no vale.
+ *
+ * El mismo instrumento hace falta para la Fase 3: si qwen o kimi tienen un
+ * indicador observable de "corrida profunda en curso", sólo existe MIENTRAS
+ * la corrida ocurre, o sea nunca en una página recién cargada.
+ *
+ * DOS GARANTÍAS, y las dos son estructurales, no promesas:
+ *
+ *  1. **No navega.** Corre `executeJavaScript` sobre las vistas que ya están
+ *     abiertas. Ninguna vista se recarga, así que el contador de navegaciones
+ *     no se mueve y la continuidad de hilo no se rompe por mirar.
+ *  2. **No escribe NUNCA.** Los descriptores que se le pasan a `sondear()` van
+ *     SIN `composerSelector` y SIN `submitSelector`, y sin esos campos la
+ *     fuente inyectada recibe `null` y ni siquiera entra al bloque de
+ *     escritura. Acá esa garantía es más importante que en `--cc-probe`: el
+ *     compositor de Juan puede tener un borrador a medio escribir, y la
+ *     medición de escritura lo borraría.
+ *
+ * La salida va a un ARCHIVO en la carpeta de datos, no sólo a stdout. Cuando
+ * Juan abre la aplicación con el lanzador no hay una terminal donde leer nada,
+ * y §7.39 ya dejó registrado que un crudo transcrito a mano no es una salida
+ * real. El informe se adjunta; no se cuenta.
+ */
+async function sondeoVivo(): Promise<{
+  ok: boolean;
+  ruta: string | null;
+  paneles: number;
+  error?: string;
+}> {
+  try {
+    const informe = {
+      // "sondeo-vivo" y no "vivo": este literal es ADEMAS el marcador de
+      // guard:artefacto para esta capacidad, y un marcador tiene que ser una
+      // subcadena que el codigo contenga por UN solo motivo. "sondeos" a secas
+      // no servia: el proceso principal ya tiene una variable con ese nombre,
+      // asi que el gate habria pasado por el motivo equivocado (§7.35).
+      momento: "sondeo-vivo",
+      cuando: new Date().toISOString(),
+      disposicion: DISPOSICION,
+      rutaDatos: app.getPath("userData"),
+      ventanaPedida: `${VENTANA_W}x${VENTANA_H}`,
+      ventanaReal: win ? `${win.getContentBounds().width}x${win.getContentBounds().height}` : null,
+      // Con qué estado de conversación se tomó la muestra. Sin esto, un sondeo
+      // vivo y uno de arranque se leen como comparables y no lo son: es la
+      // variable entera que este modo existe para poder mover.
+      conversacionActual,
+      rondasEnviadas: indiceRonda,
+      redireccionesBloqueadas,
+      sesiones: await sesiones(),
+      paneles: await sondear(
+        todas().map((v) => {
+          const b = v.view.getBounds();
+          // SIN composerSelector y SIN submitSelector: es lo que hace que este
+          // camino sea de sólo lectura por construcción y no por promesa.
+          return {
+            id: v.id,
+            panel: `${b.width}x${b.height}`,
+            ejecutar: (fuente: string) => v.view.webContents.executeJavaScript(fuente, true),
+          };
+        }),
+      ),
+    };
+    const dir = join(app.getPath("userData"), "sondeos");
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const ruta = join(dir, `sondeo-${informe.cuando.replace(/[:.]/g, "-")}.json`);
+    writeFileSync(ruta, JSON.stringify(informe, null, 2), "utf8");
+    emitir("CC_SONDEO_VIVO_JSON", informe);
+    return { ok: true, ruta, paneles: informe.paneles.length };
+  } catch (e) {
+    // Nunca se simula un resultado: si falló, se dice que falló y por qué.
+    return { ok: false, ruta: null, paneles: 0, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 /**

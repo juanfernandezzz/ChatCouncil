@@ -33,11 +33,18 @@ function estadoLectura(l: Lectura): string {
   if (l.generating === null) return " (fin inferido)";
   return "";
 }
+interface Sondeo {
+  ok: boolean;
+  ruta: string | null;
+  paneles: number;
+  error?: string;
+}
 interface CcBridge {
   investigadores: () => Promise<string[]>;
   difundir: (prompt: string) => Promise<Resultado[]>;
   leer: () => Promise<Lectura[]>;
   sesiones: () => Promise<{ id: string; cookies: number }[]>;
+  sondear: () => Promise<Sondeo>;
 }
 declare global {
   interface Window {
@@ -155,6 +162,35 @@ $("sesiones").addEventListener("click", () => {
       .join("\n");
     decir(`Sesiones persistentes:\n${detalle}`, ss.every((s) => s.cookies > 0) ? "ok" : undefined);
   });
+});
+
+/**
+ * SONDEAR — mira el DOM de los paneles TAL COMO ESTAN AHORA.
+ *
+ * Es el unico camino que puede observar un panel con conversacion viva o con
+ * una respuesta a medio generar. `--cc-probe` arranca un proceso, navega y
+ * mira a los 20 s: la pantalla en la que varios fallos NO ocurren.
+ *
+ * No navega, no recarga y no escribe en ningun compositor. Deja el informe
+ * crudo en un archivo y muestra la ruta: un crudo transcrito a mano no es una
+ * salida real (§7.39).
+ */
+$("sondear").addEventListener("click", () => {
+  const boton = $<HTMLButtonElement>("sondear");
+  boton.disabled = true;
+  decir("Sondeando los paneles tal como estan ahora… (solo lectura, no envia nada)");
+  void window.cc
+    .sondear()
+    .then((s) => {
+      if (!s.ok) {
+        decir(`El sondeo fallo: ${s.error ?? "sin detalle"}`, "mal");
+        return;
+      }
+      decir(`Sondeo de ${s.paneles} panel/es guardado en:\n  ${s.ruta ?? "(sin ruta)"}`, "ok");
+    })
+    .finally(() => {
+      boton.disabled = false;
+    });
 });
 
 export {};

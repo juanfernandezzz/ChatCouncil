@@ -69,6 +69,29 @@ export interface Candidato {
   muestraLimpia?: string;
 }
 
+/** Un nodo del subárbol de un candidato a etiqueta de modelo. */
+export interface NodoDesglose {
+  /** Profundidad respecto del candidato: 0 es el candidato mismo. */
+  prof: number;
+  tag: string;
+  attrs: Record<string, string>;
+  /**
+   * Texto PROPIO: sólo los nodos de texto hijos directos, no el heredado de
+   * los descendientes. Es lo que permite ver en qué nodo vive cada pedazo de
+   * la etiqueta, y por lo tanto cuál falta cuando falta.
+   */
+  propio: string;
+}
+
+export interface DesgloseEtiqueta {
+  selector: string;
+  /** `textContent` completo del candidato, sin recortar a 80 como `muestra`. */
+  textoCompleto: string;
+  nodos: NodoDesglose[];
+  ancestros: { tag: string; attrs: Record<string, string> }[];
+  hermanos: { tag: string; attrs: Record<string, string>; muestra: string }[];
+}
+
 /**
  * Una forma de escribir en el compositor, MEDIDA.
  *
@@ -129,6 +152,24 @@ export interface SondeoProveedor {
   /** Estructural: un control con texto corto que contiene un número. No exige nombre de familia. */
   etiquetaModeloPorForma: Candidato[];
   etiquetaModeloDescartados: number;
+  /**
+   * DESGLOSE del subárbol de cada candidato a etiqueta de modelo.
+   *
+   * Existe por un fallo concreto que las tres vías anteriores no podían
+   * explicar: el mismo selector de gemini —`div[data-test-id="logo-pill-label-container"]`,
+   * `matches: 1`— devuelve "Gemini 3.5 Flash-Lite" en el sondeo y
+   * "GeminiFlash-Lite" en el registro del camino real, con la MISMA extracción
+   * (`textContent.trim()`) en los dos lados. O sea que el número no se pierde
+   * al concatenar: el nodo que lo contiene no está en el DOM en el momento de
+   * la lectura. Un candidato que sólo informa su texto no puede decir eso.
+   *
+   * El desglose informa, por candidato: el texto propio de CADA nodo del
+   * subárbol —no el heredado—, los ancestros y los HERMANOS. Los hermanos van
+   * porque en gemini el control que lleva la versión dentro del `aria-label`
+   * es hermano del contenedor, y si la corrección pasa por leer un atributo en
+   * vez de un texto, hace falta verlo en la misma muestra.
+   */
+  etiquetaModeloDesglose?: DesgloseEtiqueta[];
   /** Milisegundos desde la navegación hasta el momento de la muestra. */
   msDesdeNavegacion?: number;
   readyState?: string;
@@ -435,7 +476,7 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
   // ("Enviar" no contiene "end"), y sus iconos son <mat-icon> con ligadura,
   // no <svg>. Tres suposiciones inglesas y de React en un archivo que existe
   // justamente para no suponer.
-  const juntar = (selectores) => {
+  const juntar = (selectores, sink) => {
     const vistos = new Set();
     const out = [];
     for (const raiz of raices) {
@@ -446,6 +487,7 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
         for (const el of nodos) {
           if (vistos.has(el)) continue;
           vistos.add(el);
+          if (sink) sink.add(el);
           out.push(candidato(el, via));
           if (out.length >= CAP_CANDIDATOS) return out;
         }
@@ -453,6 +495,15 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
     }
     return out;
   };
+
+  /**
+   * Los ELEMENTOS que cualquiera de las tres vias propuso como etiqueta de
+   * modelo. Se guardan aparte de los candidatos porque el desglose necesita el
+   * nodo vivo, no su resumen: la pregunta que tiene que contestar es en QUE
+   * nodo vive cada pedazo de la etiqueta, y eso no se puede reconstruir desde
+   * un texto ya concatenado.
+   */
+  const elsEtiqueta = new Set();
 
   /**
    * Respaldo para etiquetaModelo cuando ningún atributo delata al selector de
@@ -505,7 +556,7 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
       for (const el of candidatosEl) {
         if (out.length >= CAP_CANDIDATOS) break;
         const tieneHijoMatch = candidatosEl.some((otro) => otro !== el && el.contains(otro));
-        if (!tieneHijoMatch) out.push(candidato(el, via));
+        if (!tieneHijoMatch) { elsEtiqueta.add(el); out.push(candidato(el, via)); }
       }
     }
     return out;
@@ -547,19 +598,74 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
         if (t.length === 0 || t.length > 30) continue;
         if (!/\\d/.test(t)) continue;
         if (compositorEl && (el.contains(compositorEl) || compositorEl.contains(el))) continue;
+        elsEtiqueta.add(el);
         out.push(candidato(el, via));
       }
     }
     return out;
   };
 
+  /**
+   * DESGLOSE: en que nodo vive cada pedazo de la etiqueta.
+   *
+   * Un candidato informa su texto ya concatenado, y con eso no se puede
+   * distinguir "el numero esta en un nodo que ahora no existe" de "la
+   * concatenacion se lo comio". Aca se informa el texto PROPIO de cada nodo
+   * —solo sus hijos de tipo texto, no el heredado—, mas los ancestros y los
+   * HERMANOS, porque la correccion puede pasar por leer un atributo de un
+   * hermano en vez de un texto.
+   *
+   * Sigue siendo de SOLO LECTURA y sigue respetando la lista blanca de
+   * atributos: no agrega ninguna capacidad, agrega resolucion.
+   */
+  const CAP_NODOS = 40;
+  const CAP_PROPIO = 60;
+  const limpiarTexto = (s) => (s || "").replace(/[\\uE000-\\uF8FF]/g, "").replace(/\\s+/g, " ").trim();
+  const textoPropio = (n) => {
+    let out = "";
+    for (const h of n.childNodes) {
+      if (h.nodeType === 3) out += h.nodeValue || "";
+    }
+    return limpiarTexto(out).slice(0, CAP_PROPIO);
+  };
+  const desglosar = (el) => {
+    const nodos = [];
+    const recorrer = (n, prof) => {
+      if (nodos.length >= CAP_NODOS) return;
+      nodos.push({ prof: prof, tag: n.tagName.toLowerCase(), attrs: attrsDe(n), propio: textoPropio(n) });
+      for (const h of n.children) recorrer(h, prof + 1);
+    };
+    recorrer(el, 0);
+    const ancestros = [];
+    let p = el.parentElement;
+    for (let k = 0; k < 3 && p; k++) {
+      ancestros.push({ tag: p.tagName.toLowerCase(), attrs: attrsDe(p) });
+      p = p.parentElement;
+    }
+    const hermanos = [];
+    if (el.parentElement) {
+      for (const h of el.parentElement.children) {
+        if (h === el || hermanos.length >= 6) continue;
+        hermanos.push({ tag: h.tagName.toLowerCase(), attrs: attrsDe(h), muestra: limpiarTexto(h.textContent).slice(0, CAP_PROPIO) });
+      }
+    }
+    return {
+      selector: selectorDe(el),
+      textoCompleto: (el.textContent || "").slice(0, 120),
+      nodos: nodos,
+      ancestros: ancestros,
+      hermanos: hermanos,
+    };
+  };
+
   // Tres vias, todas de SOLO LECTURA, y las tres se corren SIEMPRE. Antes la de
   // texto sólo corria si la de atributo salia vacia, y eso escondia el caso
   // real: que un atributo encuentre un boton cuyo texto no sirve de etiqueta.
   // Son dos diagnosticos distintos y se informan por separado.
-  const etiquetaModeloPorAtributo = juntar(['button[aria-label*="odel"]', 'button[aria-label*="odelo"]', '[class*="model-selector"]', '[class*="model-switcher"]', '[data-testid*="model"]', '[data-test-id*="model"]']);
+  const etiquetaModeloPorAtributo = juntar(['button[aria-label*="odel"]', 'button[aria-label*="odelo"]', '[class*="model-selector"]', '[class*="model-switcher"]', '[data-testid*="model"]', '[data-test-id*="model"]'], elsEtiqueta);
   const etiquetaModeloPorTexto = porNombreDeModelo();
   const etiquetaModeloPorForma = porFormaDeVersion();
+  const etiquetaModeloDesglose = Array.from(elsEtiqueta).slice(0, 4).map(desglosar);
 
   const salida = {
     estadoCompositor: SELECTOR_COMPOSITOR && MARCADOR ? "con-texto" : "reposo",
@@ -584,6 +690,7 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
     etiquetaModeloPorAtributo: etiquetaModeloPorAtributo,
     etiquetaModeloPorTexto: etiquetaModeloPorTexto,
     etiquetaModeloPorForma: etiquetaModeloPorForma,
+    etiquetaModeloDesglose: etiquetaModeloDesglose,
     etiquetaModeloDescartados: descartadosPorFiltro,
     // Cuanto hacia que la pagina habia navegado cuando se tomo la muestra, y en
     // que estado estaba. Si los fallos se concentran en valores bajos, el

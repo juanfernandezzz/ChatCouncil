@@ -10,4 +10,11 @@ contextBridge.exposeInMainWorld("cc", {
   difundir: (prompt: string): Promise<unknown[]> => ipcRenderer.invoke("cc:difundir", prompt),
   leer: (): Promise<unknown[]> => ipcRenderer.invoke("cc:leer"),
   sesiones: (): Promise<{ id: string; cookies: number }[]> => ipcRenderer.invoke("cc:sesiones"),
+  /**
+   * Sondeo de SÓLO LECTURA sobre las vistas que ya están abiertas. No navega
+   * y no escribe en ningún compositor: la garantía es estructural y vive en
+   * `sondeoVivo()` del proceso principal, no acá.
+   */
+  sondear: (): Promise<{ ok: boolean; ruta: string | null; paneles: number; error?: string }> =>
+    ipcRenderer.invoke("cc:sondear"),
 });

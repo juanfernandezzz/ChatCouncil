@@ -505,6 +505,49 @@ supuesto y pase a ser un valor medido.
 Extracción a pedido, anonimización con barajado y garantía estructural,
 Qwen y Kimi sobre el turno actual, conteos calculados en código.
 
+**Vocabulario.** No hay juez ni veredicto. Tres funciones: **investigadores**
+(chatgpt, glm, claude, gemini) · **analistas** (qwen extrae, kimi adjudica lo
+que el código no decide) · **operador** (deepseek, Fase 4). Esta fase es sólo
+la parte 2.
+
+#### Decisiones tomadas por Juan (2026-08-10)
+
+| # | Decisión | Qué se descartó, y qué costaba |
+|---|---|---|
+| 9 | **Sondeo A PEDIDO sobre la ventana viva.** Un botón corre el sondeo contra las vistas que ya están abiertas: no navega, no recarga y **no escribe en ningún compositor**. El informe crudo va a un archivo en `sondeos/` de la carpeta de datos. | Un flag de espera en `--cc-probe` para que Juan mandara un mensaje a mano en esa ventana: mete a una persona en cada iteración, y un ciclo de verificación que necesita a alguien no se puede iterar (§7.54). El costo asumido es una superficie de interfaz nueva. **El motivo:** `--cc-probe` arranca, navega, duerme 20 s y cierra — sólo puede mirar la página recién cargada y sin conversación, que es la pantalla en la que varios fallos NO ocurren (§7.24). Es además el único instrumento capaz de observar una corrida profunda EN CURSO, que es lo que necesita la decisión 10. |
+| 10 | **El fin de una corrida de investigación profunda NO se infiere: lo declara Juan** con "Respuestas listas, continuar", y `finDe` queda en `declarado-por-usuario`. El aviso "sigue generando" se deriva de **leer el texto dos veces separadas por N segundos y comparar los largos**. | (a) Buscar un indicador observable y migrar a `element-gone`: mejor fidelidad, pero su existencia no está garantizada y averiguarlo depende de la decisión 9. (b) Subir `quiescenceMs` con piso y techo: sigue siendo inferencia y sigue pudiendo truncar en una pausa más larga, en verde y en silencio. **El riesgo que esto cierra:** `quiescenceMs` está en 20 s y una corrida profunda dura de 10 a 20 minutos con pausas largas mientras lee fuentes. Con inferencia, el lector declara "terminó" en la primera pausa y guarda un informe TRUNCADO sin que nada falle. El crecimiento del texto es observable en cualquier proveedor y **no necesita ningún selector nuevo**. |
+| 11 | **Cuatro hechos nuevos PLANOS** —`afirmacion`, `cita`, `verificacion`, `adjudicacion`—, append-only, cada uno con su id, su enlace a la respuesta de la que salió y su propia procedencia. En `packages/domain`, TypeScript puro. | (a) Anidar las citas dentro de la afirmación: menos líneas, pero verificar una cita más tarde obligaría a **reescribir** la línea de la afirmación, y eso rompe append-only. (b) Un hecho genérico con bolsa de datos: es §7.15, el campo declarativo que nadie ramifica. |
+| 11A | **Renombre de vocabulario** (ver el commit del 2026-08-10): `build-judge-prompt.ts` → `build-analyst-prompt.ts`, `guard:judge` → `guard:sellado`. | Dejar los nombres viejos. Un nombre que describe un rol inexistente manda a buscar el mecanismo donde no está. |
+| 12 | **El código resuelve la fuente citada EN LA RED** —estado HTTP, DOI contra doi.org, título contra los metadatos del destino— con dos reglas duras: el resultado es **tri-estado** (`cumple` / `no cumple` / `no se pudo comprobar`, nunca booleano) y el código **NUNCA sale a buscar** una fuente que el investigador no citó. | (a) Sin red, sólo forma de la cita: reproducible al 100%, pero deja afuera "la fuente no existe", que es justo la falsedad que importa. (b) El código también compara contenido: una comparación difusa guardada como mecánica miente sobre su propia procedencia. **El costo asumido** es la variabilidad de red, que se registra como condición del turno junto con qué herramientas tenía cada parte. |
+
+#### El defecto de la etiqueta de gemini, y por qué el criterio de éxito era el equivocado
+
+Medido el 2026-08-10 leyendo las salidas crudas que ya estaban en el árbol
+(`sondeo_live.txt`, `sondeo_live3.txt`, `sondeo5.txt`, `antes.txt`,
+`despues.txt`, `historial.txt`):
+
+| Dónde | Qué devolvió `div[data-test-id="logo-pill-label-container"]` |
+|---|---|
+| Cinco sondeos, panel 341 y 400, gemini anónimo, sin conversación | `matches: 1`, **"Gemini 3.5 Flash-Lite"** — con el número |
+| Registro del camino real, dos rondas, panel 341, con conversación | **"GeminiFlash-Lite"** — sin el número |
+
+`readModelLabel` y el sondeo usan **la misma extracción** (`textContent.trim()`),
+así que la concatenación no se come nada: el nodo que lleva el número **no está
+en el DOM** en el momento de la lectura. La hipótesis de que el defecto era de
+concatenación queda refutada.
+
+Y hay un segundo agujero, más grande, que ninguna de las dos lecturas anteriores
+mostraba: **en las dos corridas con gemini LOGUEADO** (`sondeo.txt`,
+`sondeo4.txt`, 48 cookies) ese selector **no aparece**. La cabecera es otro
+componente (`span.gds-body-l.picker-primary-text`) cuyo texto es "Gemini" a
+secas, sin versión por ningún lado. El selector se derivó en la interfaz
+anónima; con la cuenta iniciada, `modelLabel` cae a `null` en silencio.
+
+**El criterio de éxito que traía la tarea —"una corrida de sondeo devuelve la
+etiqueta con el número"— ya se cumplía**, cinco veces, y por eso no discrimina:
+`--cc-probe` sólo puede muestrear el estado en el que el fallo no ocurre. De ahí
+la decisión 9.
+
 ### Fase 4 — Operador y herramientas ⏳
 DeepSeek sobre el output unificado. Herramienta por defecto: **convergencia
 y divergencia**, no resumen. Herramientas editables con defaults inmutables.
@@ -960,7 +1003,7 @@ entrega, no al estado que se quería restaurar.
 |---|---|---|
 | claude | `button[data-testid="model-selector-dropdown"]` | "Modelo: Haiku 4.5" en el aria-label ✔ |
 | glm | `button[aria-label="Select a model"]` | "GLM-4.7" en el texto ✔ |
-| gemini | `div[data-test-id="logo-pill-label-container"]` | "Gemini 3.5 Flash-Lite" ✔ |
+| gemini | `div[data-test-id="logo-pill-label-container"]` | "Gemini 3.5 Flash-Lite" ✔ **— este ✔ quedó desmentido el 2026-08-10; ver §5, Fase 3. El selector sólo existe en la interfaz ANÓNIMA, y ahí mismo pierde el número cuando hay conversación.** |
 | chatgpt | `button[data-testid="model-switcher-dropdown-button"]` | sólo "ChatGPT". **Sin versión.** |
 
 En gemini el botón hermano lleva la versión DENTRO del `aria-label`

@@ -125,6 +125,24 @@ const EXIGIDO = {
     "esPrueba",
     "derivarProcedencia",
     "did-navigate",
+    // Sondeo a pedido sobre la ventana VIVA. Sin esto, el unico sondeo posible
+    // es el de arranque, que solo ve la pagina recien cargada y sin
+    // conversacion: la pantalla en la que varios fallos NO ocurren (7.24).
+    "cc:sondear",
+    "CC_SONDEO_VIVO_JSON",
+    // "sondeo-vivo" y NO "sondeos": el proceso principal ya tiene una variable
+    // llamada `sondeos`, y el build no minifica, asi que ese marcador pasaba
+    // por el motivo equivocado. Medido al escribirlo: con el manejador
+    // cc:sondear borrado, el gate seguia encontrando "sondeos". Es la sexta
+    // forma de gate que miente (§7.35), agarrada antes de confiar en ella.
+    "sondeo-vivo",
+    "rondasEnviadas",
+    // Desglose del subarbol de la etiqueta de modelo: en QUE nodo vive cada
+    // pedazo. Un candidato que solo informa texto ya concatenado no puede
+    // distinguir "el nodo del numero no esta" de "la concatenacion se lo comio".
+    "etiquetaModeloDesglose",
+    "textoCompleto",
+    "hermanos",
   ],
   // "contenteditable" NO sirve como marcador: en el preload existe sólo como
   // miembro de un tipo, y los tipos se borran. El gate lo rechazó en su
@@ -144,8 +162,8 @@ const EXIGIDO = {
     "NUNCA aparecio",
     "deshabilitado",
   ],
-  "preload/ui.cjs": ["cc:investigadores", "cc:difundir", "cc:leer", "cc:sesiones"],
-  "renderer/index.html": ["no-preguntar", "confirmacion", "paneles"],
+  "preload/ui.cjs": ["cc:investigadores", "cc:difundir", "cc:leer", "cc:sesiones", "cc:sondear"],
+  "renderer/index.html": ["no-preguntar", "confirmacion", "paneles", "sondear"],
 };
 
 /**

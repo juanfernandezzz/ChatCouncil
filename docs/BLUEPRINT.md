@@ -1,5 +1,12 @@
 # ChatCouncil — BLUEPRINT v3 (aplicación de escritorio)
 
+> **Contrato de agentes: `docs/AGENTES.md`.** Ese archivo tiene las reglas duras
+> —BYOA, sólo Haiku en pruebas, nada de credenciales, gates, `git add` por ruta,
+> cuándo se escala— y se lee ANTES que este documento. Vive en el repositorio a
+> propósito: se trabaja desde varias superficies (Chat, Code, Cowork, Dispatch)
+> y ninguna comparte memoria ni instrucciones con las otras. Un contrato en la
+> configuración de una herramienta se pierde al cambiar de herramienta.
+
 > Reconstrucción desde cero decidida por Juan el 2026-07-29. El BLUEPRINT
 > anterior se conserva como `BLUEPRINT.v2.md`: su valor no es el plan —que
 > queda superado— sino el **registro de lo aprendido**, que se importa a

@@ -9,7 +9,7 @@
   },
   "scripts": {
     "typecheck": "pnpm -r --parallel run typecheck",
-    "guard:judge": "node scripts/guard-judge-anonymity.mjs",
+    "guard:sellado": "node scripts/guard-sellado.mjs",
     "guard:specs": "node scripts/guard-specs.mjs",
     "guard:sondeo": "node scripts/guard-sondeo.mjs",
     "guard:dominio": "node scripts/guard-dominio.mjs",

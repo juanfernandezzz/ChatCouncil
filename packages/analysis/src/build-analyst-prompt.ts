@@ -1,27 +1,43 @@
 /**
- * Builder del prompt del juez — ChatCouncil Fase 5 (Q30/E2, capa 2)
+ * Builder del prompt de los ANALISTAS — capa 2 de la anonimización
+ * estructural (capa 1: `anonymize.ts`; capa 3: el gate en CI).
  * ------------------------------------------------------------------
- * MÓDULO SELLADO: cero imports POR DISEÑO (scripts/guard-judge-anonymity
+ * MÓDULO SELLADO: cero imports POR DISEÑO (`scripts/guard-sellado.mjs`
  * rompe el build si aparece uno). Este archivo no puede conocer
- * proveedores, modelos, la base de datos ni el store: su input es el
- * tipo anonimizado {label, text} y nada más. La identidad de proveedor
- * no tiene por dónde entrar al prompt sin un cast deliberado en el
- * llamador — que a su vez está limitado por el guard.
+ * proveedores, modelos, el almacén ni el estado de la aplicación: su
+ * input es el tipo anonimizado {label, text} y nada más. La identidad
+ * de proveedor no tiene por dónde entrar al prompt sin un cast
+ * deliberado en el llamador — que a su vez está limitado por el gate.
  *
- * La rúbrica v1 (Q30) es FIJA: corrección factual aparente,
- * profundidad, señales de sesgo, tono.
+ * VOCABULARIO. Acá no hay "juez": las tres funciones del plan son
+ * INVESTIGADORES, ANALISTAS y OPERADOR (BLUEPRINT §1). El nombre viejo
+ * —heredado de la v2— describía un ROL que ya no existe; el nuevo
+ * describe a quién va dirigido el prompt que este módulo construye.
+ *
+ * La rúbrica de esta versión es FIJA: corrección factual aparente,
+ * profundidad, señales de sesgo, tono. Es la heredada de la v2 y sigue
+ * en pie porque nadie la llama todavía: la Fase 3 define dos plantillas
+ * nuevas —ronda VERIFICABLE y ronda NO VERIFICABLE— y ahí se decide qué
+ * pasa con ésta.
+ *
+ * PENDIENTE, y se anota en vez de resolverse solo: el esquema de salida
+ * de `compare` todavía tiene un campo llamado "veredicto", palabra que
+ * el plan vigente excluye junto con "juez". Cambiarlo altera el
+ * contrato de salida que el modelo tiene que producir, o sea el
+ * instrumento, no el vocabulario del repositorio. Se deja como está y
+ * se decide con Juan al definir las plantillas de la Fase 3.
  */
 
-export interface JudgeReplyInput {
+export interface AnalystReplyInput {
   label: string;
   text: string;
 }
 
-export interface JudgePromptInput {
+export interface AnalystPromptInput {
   kind: "compare" | "summarize";
   /** Pregunta original del usuario (idéntica para todas las respuestas — no rompe la ceguera). */
   originalPrompt: string;
-  replies: JudgeReplyInput[];
+  replies: AnalystReplyInput[];
 }
 
 const COMPARE_SCHEMA = `{
@@ -43,13 +59,13 @@ const SUMMARIZE_SCHEMA = `{
   "divergencias": ["punto en el que las respuestas divergen", "..."]
 }`;
 
-function repliesSection(replies: JudgeReplyInput[]): string {
+function repliesSection(replies: AnalystReplyInput[]): string {
   return replies
     .map((r) => `### Respuesta ${r.label}\n${r.text.trim() || "(respuesta vacía)"}`)
     .join("\n\n");
 }
 
-export function buildJudgePrompt(input: JudgePromptInput): string {
+export function buildAnalystPrompt(input: AnalystPromptInput): string {
   const header =
     input.kind === "compare"
       ? [

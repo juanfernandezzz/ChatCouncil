@@ -19,14 +19,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Typecheck
         run: pnpm typecheck
-      - name: Guard - el prompt del evaluador no puede ver la identidad del proveedor
-        run: pnpm guard:judge
+      - name: Guard - el constructor del prompt esta sellado y no puede ver la identidad del proveedor
+        run: pnpm guard:sellado
       - name: Guard - las specs cumplen el contrato que el preload espera
         run: pnpm guard:specs
       # El typecheck no mira dentro de una cadena: la fuente que el sondeo
       # inyecta en la pagina del proveedor se verifica aparte.
       - name: Guard - la fuente inyectada parsea, no envia y no toca credenciales
         run: pnpm guard:sondeo
+      # Faltaba: los gates son CINCO y el CI corria cuatro. Un gate que solo se
+      # corre a mano no protege la rama, que es justo lo que un gate existe para
+      # hacer (BLUEPRINT 7.4: un requisito escrito no se hace cumplir solo).
+      - name: Guard - packages/ no importa de apps/ y el dominio sigue portable
+        run: pnpm guard:dominio
       # Compilar no es embarcar (BLUEPRINT 6): el gate mira el COMPILADO.
       - name: Build
         run: pnpm build

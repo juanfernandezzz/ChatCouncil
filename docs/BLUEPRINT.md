@@ -386,7 +386,7 @@ lectura truncada no se distingue de una respuesta corta.
 
 | Gate | Qué protege |
 |---|---|
-| `guard:judge` | El prompt del evaluador no puede ver la identidad del proveedor. |
+| `guard:sellado` | El constructor del prompt está SELLADO: cero imports, y sólo el índice del paquete puede importarlo. Con eso la identidad del proveedor no tiene por dónde llegar al prompt de los analistas. Se llamaba `guard:judge`; renombrado el 2026-08-10 (decisión 11A) porque el nombre nuevo dice lo que el gate HACE en vez de un rol —"juez"— que el plan vigente no tiene. |
 | `guard:specs` | Las specs cumplen el contrato que el preload espera. |
 | `guard:sondeo` | La fuente que el sondeo INYECTA en la página parsea, no envía y no toca credenciales. Agregado en la Fase 2. |
 | `guard:artefacto` | Lo COMPILADO contiene las capacidades declaradas, sin credenciales y sin clics en el sondeo. |

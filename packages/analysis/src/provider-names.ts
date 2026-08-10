@@ -1,20 +1,22 @@
 /**
- * Lista curada de términos que identifican proveedor/modelo/empresa —
- * ChatCouncil Fase 5 (E2). Dos consumidores legítimos y SOLO dos
- * (aplicado por scripts/guard-judge-anonymity.mjs):
+ * Lista curada de términos que identifican proveedor/modelo/empresa.
+ * El allowlist de importadores lo aplica `scripts/guard-sellado.mjs`:
  *
- *   · anonymize.ts — scrub de la copia que va al juez (E2-iii)
- *   · run-analysis.ts — aserción runtime post-scrub (defensa en
- *     profundidad: si un término sobrevive, NO se envía)
+ *   · anonymize.ts — scrub de la copia que va a los ANALISTAS
+ *   · index.ts — re-exporta
  *
- * build-judge-prompt.ts tiene PROHIBIDO importar este módulo: la lista
+ * Cuando exista el despacho hacia la parte 2, su aserción runtime
+ * post-scrub —si un término sobrevive, NO se envía— entra al allowlist
+ * en el mismo commit que la escribe, no antes.
+ *
+ * build-analyst-prompt.ts tiene PROHIBIDO importar este módulo: la lista
  * de nombres no puede acercarse al camino que construye el prompt.
  *
- * Trade-off asumido y aprobado (E2-iii): el scrub es por término, no
- * semántico — una respuesta que menciona "Google" como buscador o el
- * verbo castellano "sonar" queda con huecos. El log de redacciones por
- * etiqueta (persistido en RoundAnalysis.redactions) lo hace auditable;
- * el original queda intacto en Dexie y en la UI.
+ * Trade-off asumido: el scrub es por término, no semántico — una
+ * respuesta que menciona "Google" como buscador o el verbo castellano
+ * "sonar" queda con huecos. El conteo de redacciones por etiqueta lo
+ * hace auditable, y el original queda intacto en el registro
+ * append-only, que es el dato canónico.
  */
 
 export const PROVIDER_NAME_BLOCKLIST: readonly string[] = [

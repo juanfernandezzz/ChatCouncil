@@ -1,28 +1,42 @@
 import { buildBlocklistRegex, REDACTION_TOKEN } from "./provider-names";
 
 /**
- * Anonimizador — ChatCouncil Fase 5 (Q30/E2, capa 1 de 3)
+ * Anonimizador — capa 1 de 3 de la anonimización estructural.
+ * (capa 2: `build-analyst-prompt.ts`; capa 3: `guard:sellado` en CI.)
  * ------------------------------------------------------------------
+ * La numeración de fase que este encabezado traía —"Fase 5"— era de la v2 y
+ * quedó desincronizada: en el plan vigente la capa de analistas es la
+ * **Fase 3** (BLUEPRINT §5). El encabezado ya no numera fases a propósito:
+ * una referencia de fase dentro de un módulo se desincroniza en cuanto el
+ * roadmap se mueve, que es exactamente lo que pasó acá.
+ *
  * ÚNICO módulo que decide qué etiqueta lleva cada respuesta. Produce
  * dos salidas deliberadamente separadas:
  *
  *   · `labeled` — {label, text}[] SIN identidad de proveedor: es lo
- *     único que build-judge-prompt.ts acepta (el tipo no puede
+ *     único que build-analyst-prompt.ts acepta (el tipo no puede
  *     transportar identidad sin un cast deliberado).
- *   · `seal` — la correspondencia etiqueta→panel. Va a Dexie
- *     (RoundAnalysis.labelMap) y a la UI para des-referenciar; JAMÁS
- *     al camino del prompt.
+ *   · `seal` — la correspondencia etiqueta→panel. Va al almacén y a la
+ *     interfaz para des-referenciar al armar el informe final; JAMÁS al
+ *     camino del prompt.
  *
- * Con `anonymized: true` (default Q30, el toggle sólo lo DESACTIVA):
- *   · etiquetas neutras "Modelo A/B/C…" en el orden recibido
- *   · scrub E2-iii: términos identificatorios del CONTENIDO → ▮▮▮,
- *     porque las respuestas se auto-identifican ("Soy Claude…") y eso
- *     rompe el juicio ciego por dentro. Sólo se toca la copia que va
- *     al juez; el original queda intacto. Cada redacción se cuenta.
+ *     (Decía "va a Dexie (RoundAnalysis.labelMap)". Eso era la v2: la
+ *     persistencia de hoy es un archivo append-only de una línea por hecho
+ *     en `userData`, decisión 1 de la Fase 2. Se corrige porque un
+ *     comentario que nombra un almacén que no existe manda a buscar el dato
+ *     donde no está.)
+ *
+ * Con `anonymized: true` (el toggle sólo lo DESACTIVA):
+ *   · etiquetas neutras "Modelo A/B/C…" en el orden recibido —barajado
+ *     con semilla si se pasa una—
+ *   · scrub de términos identificatorios del CONTENIDO → ▮▮▮, porque las
+ *     respuestas se auto-identifican ("Soy Claude…") y eso rompe el
+ *     análisis ciego por dentro. Sólo se toca la copia que va a los
+ *     ANALISTAS; el original queda intacto. Cada redacción se cuenta.
  *
  * El prompt ORIGINAL del usuario no se scrubbea: es idéntico para
  * todas las respuestas y no revela qué etiqueta es qué proveedor
- * (mencionar "Claude" en la PREGUNTA no rompe la ceguera del juicio).
+ * (mencionar "Claude" en la PREGUNTA no rompe la ceguera).
  */
 
 export interface AnalyzableReply {

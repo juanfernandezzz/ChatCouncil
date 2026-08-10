@@ -106,7 +106,7 @@ romper una, la tarea está mal planteada: **pará y decilo.**
 
 Cinco, y los cinco tienen que dar verde:
 
-    pnpm guard:judge · guard:specs · guard:sondeo · guard:dominio · guard:artefacto
+    pnpm guard:sellado · guard:specs · guard:sondeo · guard:dominio · guard:artefacto
 
 - Todo requisito declarativo nuevo necesita un gate o una rama que lo consuma.
   Un campo de spec que nadie ramifica es decoración, y miente.

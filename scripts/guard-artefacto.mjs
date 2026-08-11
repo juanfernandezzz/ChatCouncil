@@ -167,6 +167,15 @@ const EXIGIDO = {
     // no solo los investigadores: si no, el login de qwen y kimi no se escribe
     // nunca y se pierde al salir (§7.50).
     "PARTICIONES_CONOCIDAS",
+    // Controles ALREDEDOR del compositor. La lista generica de envio tiene cupo
+    // y en kimi se lleno con botones de la barra lateral, informando cero
+    // controles de envio cuando lo que pasaba era que el cupo estaba lleno de
+    // ruido. Ahi mismo vive ademas el conmutador de investigacion profunda.
+    "controlesDelCompositor",
+    // Escribir en un CANDIDATO, que por definicion no tiene spec todavia: sin
+    // esto no se puede derivar el control de envio, porque solo existe con
+    // texto en el compositor.
+    "--cc-compositor=",
   ],
   // "contenteditable" NO sirve como marcador: en el preload existe sólo como
   // miembro de un tipo, y los tipos se borran. El gate lo rechazó en su

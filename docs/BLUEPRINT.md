@@ -591,6 +591,71 @@ subárbol dice si el nodo del número desapareció (hipótesis del momento) o si
 selector pasó a matchear otra cosa (hipótesis del selector), y recién ahí se
 corrige lo que corresponda.
 
+#### C0b — derivación de las specs de qwen y kimi: lo derivado y lo que falta
+
+Cuatro corridas de sondeo el 2026-08-10, con los dos analistas ya logueados, a
+dos anchos de panel (683 px = la etapa de dos paneles; 1366 px = el proveedor
+solo). `shadowRootsAbiertos: 0` en los dos, a los dos anchos: **nada de esto es
+un problema de shadow DOM**, ni abierto ni cerrado.
+
+| | qwen | kimi |
+|---|---|---|
+| `composer` | `textarea.message-input-textarea` · `matches: 1` · textarea | `div.chat-input-editor` · `matches: 1` · contenteditable, `role="textbox"` |
+| `submit` | `button[aria-label="Send"]` (clase `send-button`) · `matches: 1` — **sólo existe con texto en el compositor** | **no aparece por ninguna vía** |
+| `modelLabel` | `div[aria-label="Select Model"]` · `matches: 1` · texto **"Qwen3.8-Max"** | **cero candidatos** en las tres vías |
+| conmutador de modo | `div[aria-label="Select Mode"]` (clase `mode-select-open`) — candidato, SIN confirmar que sea investigación profunda | no observado |
+| `responseRoot` / `assistantMessage` | **PENDIENTE** | **PENDIENTE** |
+
+**Por qué el submit de qwen tardó dos corridas**: en reposo no existe, igual que
+el de Gemini (§7.25). Aparece recién con texto en el compositor.
+
+**Sobre el submit de kimi, tres hipótesis agotadas y ninguna cerró**, así que se
+escribe el estado en vez de seguir insistiendo:
+
+1. Aparece en reposo → no (corrida 1).
+2. Aparece con texto, cosechando 4 ancestros desde el compositor → no (corrida
+   2). Ese fallo era **del instrumento**: 4 niveles fijos no salen del editor de
+   kimi. Corregido a búsqueda adaptativa con techo de 8, que informa
+   `controlesNivelesArriba`.
+3. Aparece con el cupo ampliado → no (corrida 4). Con cupo 30 la página entera
+   devuelve **9 botones** y ninguno es de envío, así que **el cupo tampoco era
+   la causa**. Esto sí descarta el instrumento como explicación.
+
+**El bloqueo real es otro y es anterior**: `responseRoot` y `assistantMessage`
+**no se pueden derivar sin una conversación con al menos una respuesta**, y el
+sondeo tiene prohibido enviar. No es una limitación que se pueda rodear con más
+corridas: es la razón por la que existe la decisión 9. El mismo estado —una
+conversación viva— es el que probablemente destrabe también el submit y la
+etiqueta de kimi, porque las dos ausencias se midieron en la única pantalla en
+la que la interfaz todavía no montó su barra de acciones.
+
+Queda PENDIENTE de una ronda real: Juan escribe un mensaje en cada analista y
+aprieta **Sondear**, que corre sobre la ventana viva sin navegar ni escribir.
+
+**Tres defectos del sondeo que estas corridas destaparon, los tres corregidos:**
+
+39ter. **`vaciar()` no vaciaba un editor rico, y el sondeo dejaba su marcador en
+    la sesión.** En kimi dio `limpio: false` en los tres métodos y
+    `compositorLimpio: false`. Es §7.22 del otro lado: borrar el DOM con
+    `innerHTML` no le avisa al editor, que **re-renderiza desde su modelo
+    interno** y repone el texto. Ahora el vaciado usa la Selection API y
+    `beforeinput`/`deleteContentBackward` —lo que esos editores escuchan— antes
+    de la fuerza bruta, reintenta tres veces y **espera entre intentos**, porque
+    el re-render es asincrónico y comprobar en el mismo tick da un verde que el
+    frame siguiente desmiente. Medido después: `compositorLimpio: true`.
+42bis. **La limpieza final se encolaba sin esperar.** `limpiar.push(() => vaciar(c))`
+    se llamaba sin `await`, así que el informe salía mientras el vaciado seguía
+    en curso y `compositorLimpio` se medía sobre un estado a medio camino.
+    §7.28: una garantía que no se mide es una intención — y una que se mide mal
+    es peor, porque además tranquiliza.
+63. **Un cupo compartido convierte "no lo vi" en "no está".** La lista `envio`
+    cortaba en 6 candidatos y en kimi esos 6 se agotaron con botones de la barra
+    lateral, porque `button:has(svg)` matchea media página y el orden de
+    documento pone la barra antes que el compositor. Tres corridas informaron
+    cero controles de envío por esa razón. Es la cuarta vez que aparece la misma
+    forma de defecto —§7.16, §7.30, §7.36bis— y la primera en que la causa es un
+    límite del propio informe.
+
 ### Fase 4 — Operador y herramientas ⏳
 DeepSeek sobre el output unificado. Herramienta por defecto: **convergencia
 y divergencia**, no resumen. Herramientas editables con defaults inmutables.

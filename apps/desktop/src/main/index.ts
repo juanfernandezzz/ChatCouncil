@@ -170,6 +170,40 @@ const MODO: Modo = HISTORIAL_ID
  */
 const SONDEO_ESCRIBE = ARGV.includes("--cc-probe-escribe") || process.env["CC_PROBE_ESCRIBE"] === "1";
 
+/**
+ * `--cc-compositor=<id>:<selector>` (repetible) — selector de compositor para
+ * un CANDIDATO, que por definición todavía no tiene spec.
+ *
+ * Existe por un orden obligado que no se puede saltear. Hay controles que sólo
+ * existen con texto en el compositor —Gemini muestra el micrófono en vez del
+ * botón de enviar mientras está vacío (§7.25)—, así que derivar el control de
+ * envío exige escribir; y `--cc-probe-escribe` sólo escribe donde hay un
+ * selector YA derivado, que sale de la spec. Un candidato no tiene spec, así
+ * que quedaba trabado: no se puede derivar el envío sin escribir, y no se puede
+ * escribir sin la spec que el envío completa.
+ *
+ * La salida NO es meter una spec de relleno en `specs.json`: eso ensucia la
+ * única fuente de verdad de los selectores, que es justo el motivo por el que
+ * los candidatos viven en una lista aparte. El selector derivado en la corrida
+ * anterior viaja por la línea de comandos, se usa para esa corrida y no queda
+ * escrito en ningún lado.
+ *
+ * No debilita ninguna garantía: sigue sin haber clic y sin tecla, así que sigue
+ * sin enviar. Lo único que habilita es escribir texto donde ya se sabe que hay
+ * un cuadro de texto.
+ */
+const COMPOSITORES_CLI = new Map<string, string>();
+for (const a of ARGV) {
+  if (!a.startsWith("--cc-compositor=")) continue;
+  const v = a.slice("--cc-compositor=".length);
+  const corte = v.indexOf(":");
+  // Se corta en el PRIMER ":" porque el id no lo lleva nunca y el selector sí
+  // puede (`:hover`, `:nth-child`). Al revés, un selector con pseudoclase se
+  // partiría al medio y el sondeo escribiría en cualquier lado.
+  if (corte <= 0) continue;
+  COMPOSITORES_CLI.set(v.slice(0, corte), v.slice(corte + 1));
+}
+
 /** Los candidatos sólo se abren cuando se los va a reconocer o loguear. */
 const CON_CANDIDATOS = MODO === "probe" || MODO === "login";
 
@@ -962,9 +996,12 @@ async function modoSondeo(): Promise<void> {
             // spec directo es lo unico que separa "el selector dejo de
             // matchear" de "matchea y el texto se degrado".
             ...(spec?.modelLabel ? { modelLabelSelector: spec.modelLabel.selector } : {}),
-            // Sólo se escribe donde hay un selector YA derivado. Un candidato
-            // sin spec no se toca: no hay dónde escribir sin adivinar.
-            ...(SONDEO_ESCRIBE && spec?.composer ? { composerSelector: spec.composer.selector } : {}),
+            // Sólo se escribe donde hay un selector YA derivado: el de la spec,
+            // o el que `--cc-compositor=` pasa para un candidato que todavía no
+            // la tiene. Nunca uno adivinado.
+            ...(SONDEO_ESCRIBE && (COMPOSITORES_CLI.get(v.id) ?? spec?.composer?.selector)
+              ? { composerSelector: (COMPOSITORES_CLI.get(v.id) ?? spec?.composer?.selector) as string }
+              : {}),
             // El selector de envío NO se usa para enviar: se usa para CONTAR
             // cuántos nodos hay y cuántos están habilitados antes y después de
             // escribir. Es el efecto del editor que `writePrompt` nunca miró.

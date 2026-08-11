@@ -218,6 +218,35 @@ export interface SondeoProveedor {
   /** Milisegundos desde la navegación hasta el momento de la muestra. */
   msDesdeNavegacion?: number;
   readyState?: string;
+  /**
+   * Controles que viven ALREDEDOR del compositor, en orden de documento.
+   *
+   * Existe por dos huecos medidos el 2026-08-10 en la primera corrida sobre
+   * kimi. La lista `envio` se llena con los primeros seis nodos que matchean
+   * patrones GENÉRICOS (`button:has(svg)` y parientes), y en kimi esos seis se
+   * agotaron con botones de la BARRA LATERAL —ocultar barra, crear proyecto,
+   * invitar— sin llegar al compositor. O sea que "no hay control de envío" no
+   * era una observación sobre la página: era el cupo lleno de ruido. Es §7.30
+   * otra vez: "no lo encontré" son dos diagnósticos con el mismo nombre.
+   *
+   * El segundo hueco es de la Fase 3: hay que comprobar que qwen y kimi exponen
+   * modo de investigación profunda, y ese conmutador vive exactamente acá —
+   * pegado al compositor— y ninguna vía lo miraba.
+   *
+   * La cosecha es ESTRUCTURAL y no supone nada del idioma ni del framework:
+   * sube unos pocos ancestros desde el compositor y lista todo lo accionable
+   * que haya dentro, con su texto y sus atributos de la lista blanca. Sólo
+   * lectura, sin clics.
+   */
+  controlesDelCompositor?: Candidato[];
+  /**
+   * Cuántos ancestros hubo que subir desde el compositor para encontrar algo
+   * accionable. Va al informe porque dos proveedores con árboles de distinta
+   * profundidad producen muestras que se leen como comparables y no lo son:
+   * qwen encuentra controles cerca y kimi mucho más arriba. `null` = no había
+   * compositor.
+   */
+  controlesNivelesArriba?: number | null;
   /** Sólo en modo escritura: las tres formas, medidas una por una. */
   escrituraPorMetodo?: EscrituraMetodo[];
   escrituraOmitida?: string;
@@ -284,23 +313,71 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
     return { nodos: nodos.length, habilitados: hab };
   };
 
-  const vaciar = (c) => {
+  /**
+   * Vacia el compositor. MEDIDO el 2026-08-10: la version anterior fallaba en
+   * kimi las tres veces (limpio:false en los tres metodos) y dejaba el marcador
+   * del sondeo colgado en la sesion de Juan.
+   *
+   * La causa es la misma que §7.22 del otro lado: un editor rico mantiene su
+   * propio modelo interno. Borrar el DOM a la fuerza con innerHTML no le avisa
+   * a nadie, y el editor RE-RENDERIZA desde su modelo, o sea que repone el
+   * texto que acabamos de sacar. Por eso el vaciado tiene que hablarle al
+   * editor en el idioma que el editor escucha.
+   *
+   * Cuatro vias, de la mas respetuosa a la mas bruta, y se COMPRUEBA entre
+   * cada una en vez de suponer que anduvo:
+   *   1. Selection API sobre todo el contenido, que es lo que un usuario hace
+   *      con Ctrl+A y lo unico que deja al editor con una seleccion real.
+   *   2. beforeinput/input con deleteContent, que es lo que escuchan los
+   *      editores modernos (Lexical, ProseMirror, Slate).
+   *   3. execCommand delete, para los que todavia dependen de el.
+   *   4. innerHTML vacio como ultimo recurso.
+   * Y un reintento con espera, porque el re-render es asincronico: comprobar en
+   * el mismo tick da un verde que el siguiente frame desmiente.
+   *
+   * NINGUNA de las cuatro envia: no hay clic ni tecla en ningun lado.
+   */
+  const vaciarUnaVez = (c) => {
+    c.focus();
+    if (esTextarea(c)) {
+      c.value = "";
+      c.dispatchEvent(new Event("input", { bubbles: true }));
+      return;
+    }
+    // 1. Seleccionar TODO el contenido del compositor, no del documento.
     try {
-      c.focus();
-      if (esTextarea(c)) {
-        c.value = "";
-        c.dispatchEvent(new Event("input", { bubbles: true }));
-      } else {
-        // Primero por la via del propio editor, que mantiene su modelo interno
-        // en sincronia; despues, a la fuerza, por si esa via no hizo nada.
-        document.execCommand("selectAll", false);
-        document.execCommand("delete", false);
-        if ((c.textContent || "").length > 0) {
-          c.innerHTML = "";
-          c.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
-        }
-      }
-    } catch (e) { /* se reporta como limpio:false, no se rompe el sondeo */ }
+      const sel = window.getSelection();
+      const rango = document.createRange();
+      rango.selectNodeContents(c);
+      sel.removeAllRanges();
+      sel.addRange(rango);
+    } catch (e) { /* sin seleccion se sigue igual con las otras vias */ }
+    // 2. El evento que los editores modernos escuchan para borrar.
+    try {
+      c.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType: "deleteContentBackward", data: null }));
+      c.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+    } catch (e) { /* idem */ }
+    // 3. La via vieja, para los que dependen de ella.
+    if (leerCompositor(c).length > 0) {
+      try { document.execCommand("selectAll", false); } catch (e) { /* idem */ }
+      try { document.execCommand("delete", false); } catch (e) { /* idem */ }
+    }
+    // 4. Ultimo recurso. Va con el evento al lado para que el editor tenga al
+    // menos la chance de enterarse.
+    if (leerCompositor(c).length > 0) {
+      c.innerHTML = "";
+      c.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+    }
+  };
+
+  const vaciar = async (c) => {
+    for (let intento = 0; intento < 3; intento++) {
+      try { vaciarUnaVez(c); } catch (e) { /* se reporta como limpio:false */ }
+      // El re-render del editor es asincronico: comprobar en el mismo tick da
+      // un verde que el frame siguiente desmiente.
+      await dormir(250);
+      if (leerCompositor(c).trim().length === 0) return;
+    }
   };
 
   /** Escribe por UNA forma concreta. Ninguna envia: ni clic ni tecla. */
@@ -345,7 +422,7 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
       // se limpia y se sigue. Abstenerse ahi costaba una muestra por nada.
       if (esNuestro && previo.length > 0) restoLimpiado = true;
       escrituraPorMetodo = [];
-      vaciar(c);
+      await vaciar(c);
       await dormir(400);
 
       for (const metodo of ["execCommand", "paste", "textContent"]) {
@@ -394,7 +471,7 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
         obs.disconnect();
         const textoPresente = leerCompositor(c).includes(MARCADOR);
         const despues = medirEnvio();
-        vaciar(c);
+        await vaciar(c);
         await dormir(400);
         const limpio = !leerCompositor(c).includes(MARCADOR);
 
@@ -429,7 +506,11 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
       try { escribirPor(c, paraCosechar, MARCADOR); } catch (e) { /* idem */ }
       await dormir(1200);
       escrituraAceptada = leerCompositor(c).includes(MARCADOR);
-      limpiar.push(() => { vaciar(c); });
+      // La limpieza final se ESPERA. Antes se empujaba una funcion sincronica
+      // que se llamaba sin await, asi que el sondeo devolvia el informe
+      // mientras el vaciado seguia en curso y compositorLimpio se media sobre
+      // un estado a medio camino.
+      limpiar.push(() => vaciar(c));
     }
   }
 
@@ -521,7 +602,7 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
   // ("Enviar" no contiene "end"), y sus iconos son <mat-icon> con ligadura,
   // no <svg>. Tres suposiciones inglesas y de React en un archivo que existe
   // justamente para no suponer.
-  const juntar = (selectores, sink) => {
+  const juntar = (selectores, sink, cap) => {
     const vistos = new Set();
     const out = [];
     for (const raiz of raices) {
@@ -534,7 +615,7 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
           vistos.add(el);
           if (sink) sink.add(el);
           out.push(candidato(el, via));
-          if (out.length >= CAP_CANDIDATOS) return out;
+          if (out.length >= (cap || CAP_CANDIDATOS)) return out;
         }
       }
     }
@@ -727,6 +808,60 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
    * Es la misma forma de defecto que ya aparecio tres veces en este proyecto:
    * un valor por defecto que colapsa "no pasa" con "no pude ver".
    */
+  /**
+   * CONTROLES ALREDEDOR DEL COMPOSITOR.
+   *
+   * Sube unos pocos ancestros desde el compositor y lista todo lo accionable
+   * que haya adentro. Dos motivos, los dos medidos:
+   *
+   *  1. La lista "envio" usa patrones genericos y tiene cupo. En kimi los seis
+   *     lugares se llenaron con botones de la BARRA LATERAL y el sondeo informo
+   *     cero controles de envio — que no es una observacion sobre la pagina
+   *     sino un cupo lleno de ruido.
+   *  2. El conmutador de investigacion profunda vive justo aca, y ninguna via
+   *     lo miraba.
+   *
+   * Es estructural: no supone idioma, ni framework, ni como se llama el modo.
+   */
+  const SEL_CONTROLES = "button, [role=button], [role=switch], [role=checkbox], [role=menuitem], [role=tab], input[type=checkbox]";
+  let controlesNivelesArriba = null;
+  const controlesDelCompositor = (() => {
+    if (!compositorEl) return [];
+    // ADAPTATIVO, y esa es la correccion. La version anterior subia CUATRO
+    // niveles fijos: alcanzaba en qwen —seis controles, con el boton de enviar
+    // y el selector de modo— y en kimi devolvia CERO, porque su editor esta mas
+    // anidado y a cuatro niveles todavia no se sale de adentro del editor. Un
+    // numero fijo de saltos supone una profundidad de arbol ajena, que es
+    // exactamente lo que un instrumento hecho para no suponer no puede hacer.
+    //
+    // Ahora sube de a uno hasta encontrar algo accionable, con techo de OCHO
+    // para no terminar cosechando la pagina entera, e informa cuantos niveles
+    // subio: sin ese numero, dos proveedores con arboles distintos producen
+    // muestras que se leen como comparables y no lo son.
+    let raiz = compositorEl;
+    for (let k = 0; k <= 8; k++) {
+      let encontrados = 0;
+      try { encontrados = raiz.querySelectorAll(SEL_CONTROLES).length; } catch (e) { encontrados = 0; }
+      if (encontrados > 0) { controlesNivelesArriba = k; break; }
+      if (!raiz.parentElement) break;
+      raiz = raiz.parentElement;
+      controlesNivelesArriba = k + 1;
+    }
+    const out = [];
+    const vistos = new Set();
+    let nodos = [];
+    try { nodos = Array.from(raiz.querySelectorAll(SEL_CONTROLES)); } catch (e) { nodos = []; }
+    for (const el of nodos) {
+      if (vistos.has(el)) continue;
+      vistos.add(el);
+      // Hasta 25: son los controles de UNA barra, no de la pagina entera, y con
+      // seis ya se demostro que un cupo chico esconde justo lo que se busca.
+      if (out.length >= 25) break;
+      out.push(candidato(el, "document"));
+    }
+    return out;
+  })();
+
   let etiquetaModeloSpec;
   if (SELECTOR_ETIQUETA) {
     let nodosSpec = [];
@@ -750,6 +885,15 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
     titulo: document.title.slice(0, 120),
     shadowRootsAbiertos: shadowAbiertos,
     compositor: juntar(['textarea', 'div[contenteditable="true"]', '[role="textbox"]']),
+    // Cupo PROPIO y grande para el envio. MEDIDO el 2026-08-10: con el cupo
+    // comun de 6, en kimi los seis lugares se llenaron con botones de la BARRA
+    // LATERAL —ocultar barra, crear proyecto, invitar a ganar— porque
+    // 'button:has(svg)' matchea media pagina y el orden de documento pone la
+    // barra antes que el compositor. El sondeo informo cero controles de envio
+    // en tres corridas, y eso no era una observacion sobre la pagina: era el
+    // cupo lleno de ruido. Un cupo que esconde justo lo que se busca convierte
+    // "no lo vi" en "no esta", que es la tercera vez que la misma forma de
+    // defecto aparece en este proyecto.
     envio: juntar([
       'button[data-testid*="send"]',
       'button[class*="send"]',
@@ -761,13 +905,15 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
       'button:has(mat-icon)',
       'button:has(i)',
       '[role="button"][aria-label*="nvia"]',
-    ]),
+    ], null, 30),
     asistente: juntar(['[data-message-author-role="assistant"]', '[class*="assistant"]', '[class*="model-response"]', '[class*="markdown"]']),
     etiquetaModeloPorAtributo: etiquetaModeloPorAtributo,
     etiquetaModeloPorTexto: etiquetaModeloPorTexto,
     etiquetaModeloPorForma: etiquetaModeloPorForma,
     etiquetaModeloDesglose: etiquetaModeloDesglose,
     etiquetaModeloSpec: etiquetaModeloSpec,
+    controlesDelCompositor: controlesDelCompositor,
+    controlesNivelesArriba: controlesNivelesArriba,
     etiquetaModeloDescartados: descartadosPorFiltro,
     // Cuanto hacia que la pagina habia navegado cuando se tomo la muestra, y en
     // que estado estaba. Si los fallos se concentran en valores bajos, el
@@ -782,7 +928,7 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
 
   // Devolver el compositor como estaba. Se limpia SIEMPRE, incluso si algo de
   // arriba fallo, para no dejar un borrador colgado en la sesion de Juan.
-  for (const f of limpiar) { try { f(); } catch (e) { /* no hay nada mejor que hacer */ } }
+  for (const f of limpiar) { try { await f(); } catch (e) { /* no hay nada mejor que hacer */ } }
 
   // Y se COMPRUEBA que quedo limpio. Una garantia que no se mide no es una
   // garantia: es una intencion.

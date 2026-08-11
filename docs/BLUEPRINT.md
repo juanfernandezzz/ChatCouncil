@@ -434,7 +434,7 @@ variantes con una lista separada por comas.
 Al derivar, preferir `id` y `data-testid`, que son estables. Si no hay más
 remedio que usar `aria-label`, `guard:specs` exige declarar `_notaIdioma`.
 
-### Fase 2 — Persistencia y procedencia ⏳
+### Fase 2 — Persistencia y procedencia ✅ (cerrada 2026-08-10 — ver §10)
 Modelo de datos local, historial de conversaciones, y la procedencia por
 turno (etiqueta de modelo, continuidad de hilo) para hacer detectable la
 deriva de versión.
@@ -929,6 +929,53 @@ entrega, no al estado que se quería restaurar.
     sigue diciendo que falta lo que ya está hecho, la próxima sesión arranca
     sobre una premisa falsa — que es exactamente lo que el ledger existe para
     evitar.
+
+### Fase 2 — verificada en la máquina de Juan (2026-08-10)
+
+**Cerrada con datos del CAMINO REAL, no del arnés.** Juan generó dos rondas
+desde la ventana de la aplicación y volcó el registro con
+`--cc-historial=<id>`. Eso importa más que el verde de una corrida del arnés:
+lo que la fase tenía que probar es que el uso normal —el compositor, el botón
+de leer— produce hechos con procedencia, y el arnés recorre un camino propio.
+
+| Qué | Medido |
+|---|---|
+| conversación | **1**, con `esPrueba: false` |
+| rondas | **2** |
+| intentos | **8**, los ocho con `ok: true` y `error: null` |
+| respuestas | **8** |
+| `finDe` | presente en las ocho: **observado** en chatgpt y glm, **inferido** en claude y gemini |
+| `modelLabel` | con valor en claude (`Haiku 4.5`), glm (`GLM-4.7`) y gemini (`GeminiFlash-Lite`); **`null` en chatgpt**, exactamente como declara su `_notaModelo` |
+| continuidad | **`indeterminada` en la ronda 1 → `confirmada` en la ronda 2**, en los cuatro |
+| `lineasIlegibles` | **vacío**, y `ultimaLineaIncompleta: false` |
+| largo de las respuestas | ronda 1: **4.007 / 5.014 / 5.043 / 5.574** caracteres · ronda 2: **246 / 225 / 221 / 259** |
+
+El `indeterminada → confirmada` es el resultado que la fase perseguía y es la
+forma correcta: en la primera ronda no hay ronda anterior contra la cual
+comparar el contador de navegaciones, así que decir "confirmada" ahí sería
+afirmar lo no medido. Se confirma recién cuando existe la comparación.
+
+**Sobre el largo de las respuestas, porque el crudo corrigió lo que se venía
+diciendo.** La ronda 1 usó un prompt largo —el requisito que la Fase 1 dejó
+abierto— y dio respuestas de 4.007 a 5.574 caracteres; la ronda 2 fue una
+pregunta corta de seguimiento y dio de 221 a 259. "Respuestas de 4.000 a 5.500
+caracteres" describe la ronda 1 y no las ocho, y además recorta por arriba: el
+máximo real es 5.574. Se registra el crudo de las dos rondas.
+
+#### Lo que queda ABIERTO al cerrar la Fase 2
+
+No se cierra como resuelto lo que no se explicó. Las dos cosas pasan a la
+Fase 3:
+
+1. **Por qué el camino real y el sondeo veían sesiones distintas NUNCA se
+   explicó.** Queda ABIERTO. No se le inventa una causa: hay hipótesis
+   plausibles —dos procesos, momento de la muestra, la carpeta de datos— y
+   ninguna se midió por separado, así que elegir una sería narrar en vez de
+   medir (§7.52 es exactamente ese error).
+2. **El defecto de la etiqueta de modelo de gemini queda ABIERTO** y pasa a la
+   Fase 3. El registro del camino real guarda `GeminiFlash-Lite`: sin el
+   número de versión y sin los espacios, contra "Gemini 3.5 Flash-Lite" que el
+   sondeo lee en reposo. El detalle medido está arriba, en §5 → Fase 3.
 
 **Lecciones que se suman desde la apertura de la Fase 2**
 34. **El typecheck no mira dentro de una cadena.** `FUENTE_SONDEO` es un

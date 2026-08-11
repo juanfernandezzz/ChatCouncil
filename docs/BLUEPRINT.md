@@ -536,17 +536,60 @@ así que la concatenación no se come nada: el nodo que lleva el número **no es
 en el DOM** en el momento de la lectura. La hipótesis de que el defecto era de
 concatenación queda refutada.
 
-Y hay un segundo agujero, más grande, que ninguna de las dos lecturas anteriores
-mostraba: **en las dos corridas con gemini LOGUEADO** (`sondeo.txt`,
-`sondeo4.txt`, 48 cookies) ese selector **no aparece**. La cabecera es otro
-componente (`span.gds-body-l.picker-primary-text`) cuyo texto es "Gemini" a
-secas, sin versión por ningún lado. El selector se derivó en la interfaz
-anónima; con la cuenta iniciada, `modelLabel` cae a `null` en silencio.
+Se había registrado además que el selector "no aparece con gemini LOGUEADO", y
+esa lectura **queda corregida**. Barridos los NUEVE crudos del árbol —once
+corridas de gemini, no dos— la variable que separa no es la sesión:
+
+| Corte | Pill presente | Pill ausente |
+|---|---|---|
+| compositor **en reposo** | **5 de 5** | 0 |
+| compositor **escrito** (`--cc-probe-escribe`) | 0 | **6 de 6** |
+| 6 cookies | 5 | 1 |
+| 48 cookies | 0 | 5 |
+| panel 333 / 341 / 400 / 1334 px | 341 y 400 | 333 y 1334 |
+
+El estado del compositor separa **11 de 11, sin excepción**. Las cookies no:
+`sondeo6.txt` tiene 6 cookies y tampoco ve el pill — con el compositor escrito.
+El ancho tampoco: 341 lo ve y 333 no, y los dos son paneles angostos. Cookies y
+ancho estaban CONFUNDIDOS con el modo, porque todas las corridas escritas eran
+además las logueadas.
+
+Con eso, **la hipótesis viva es el MOMENTO DE LECTURA**: `readModelLabel` corre
+DESPUÉS del envío (`preload/provider.ts`), o sea del lado en que el pill ya se
+degradó.
+
+Falta una distinción que el instrumento no podía hacer, y por eso se instrumentó
+en vez de arreglarse: las tres vías del sondeo **descubren** candidatos con
+filtros, así que "ninguna vía lo propuso" **no es** "no está en el DOM". El
+camino real, que consulta el selector directo, SÍ lo encontró — devolvió
+`GeminiFlash-Lite`, degradado pero presente. Desde el 2026-08-10 el sondeo
+consulta también el `modelLabel.selector` de la spec DIRECTO y lo desglosa
+exista o no entre los candidatos.
 
 **El criterio de éxito que traía la tarea —"una corrida de sondeo devuelve la
 etiqueta con el número"— ya se cumplía**, cinco veces, y por eso no discrimina:
 `--cc-probe` sólo puede muestrear el estado en el que el fallo no ocurre. De ahí
 la decisión 9.
+
+##### PENDIENTE, con esa palabra
+
+**La causa NO está establecida y no se prueba ningún arreglo hasta que lo esté.**
+Medirla exige leer la etiqueta después de enviar, y el sondeo tiene prohibido
+enviar: es §5 del contrato de esta fase —lo que no se puede medir con los
+instrumentos que hay no se adivina—. Lo que se entrega es el instrumento:
+
+- `readModelLabel` registra, en la MISMA lectura, el subárbol del nodo: texto
+  propio por nodo (no el heredado), atributos de la lista blanca, hermanos, y si
+  el nodo tiene shadow root abierto — `textContent` no cruza un shadow root, así
+  que un pedazo ahí adentro se lee igual que un nodo ausente.
+- El volcado va a `diagnostico/etiqueta-modelo.jsonl` en la carpeta de datos,
+  **aparte** del registro append-only: el registro es el dato de investigación y
+  un volcado de DOM es instrumental.
+
+Queda PENDIENTE de la próxima ronda real de Juan. Con ese archivo en la mano, el
+subárbol dice si el nodo del número desapareció (hipótesis del momento) o si el
+selector pasó a matchear otra cosa (hipótesis del selector), y recién ahí se
+corrige lo que corresponda.
 
 ### Fase 4 — Operador y herramientas ⏳
 DeepSeek sobre el output unificado. Herramienta por defecto: **convergencia
@@ -1050,7 +1093,7 @@ Fase 3:
 |---|---|---|
 | claude | `button[data-testid="model-selector-dropdown"]` | "Modelo: Haiku 4.5" en el aria-label ✔ |
 | glm | `button[aria-label="Select a model"]` | "GLM-4.7" en el texto ✔ |
-| gemini | `div[data-test-id="logo-pill-label-container"]` | "Gemini 3.5 Flash-Lite" ✔ **— este ✔ quedó desmentido el 2026-08-10; ver §5, Fase 3. El selector sólo existe en la interfaz ANÓNIMA, y ahí mismo pierde el número cuando hay conversación.** |
+| gemini | `div[data-test-id="logo-pill-label-container"]` | "Gemini 3.5 Flash-Lite" ✔ **— este ✔ vale SÓLO con el compositor en reposo; ver §5, Fase 3. Con el compositor escrito ninguna vía del sondeo lo propone (0 de 6), y el camino real —que lee después de enviar— guarda "GeminiFlash-Lite", sin el número. Causa PENDIENTE de la próxima ronda real; el instrumento ya está.** |
 | chatgpt | `button[data-testid="model-switcher-dropdown-button"]` | sólo "ChatGPT". **Sin versión.** |
 
 En gemini el botón hermano lleva la versión DENTRO del `aria-label`

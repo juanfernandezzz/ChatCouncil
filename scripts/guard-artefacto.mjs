@@ -157,6 +157,16 @@ const EXIGIDO = {
     // de la investigacion. Los dos son literales de cadena de verdad.
     "diagnostico",
     "etiqueta-modelo",
+    // Candidatos de la Fase 3 y el modo que los abre SOLOS para el login. Con
+    // los seis abiertos sobre 1366 px quedan ~225 px por panel, ancho hostil
+    // para una pantalla de inicio de sesion; con dos, ~675 px.
+    "--cc-solo-candidatos",
+    "chat.qwen.ai",
+    "kimi.com",
+    // El volcado de cierre y el censo recorren TODAS las particiones conocidas,
+    // no solo los investigadores: si no, el login de qwen y kimi no se escribe
+    // nunca y se pierde al salir (§7.50).
+    "PARTICIONES_CONOCIDAS",
   ],
   // "contenteditable" NO sirve como marcador: en el preload existe sólo como
   // miembro de un tipo, y los tipos se borran. El gate lo rechazó en su

@@ -50,7 +50,16 @@ type ProviderId = (typeof INVESTIGADORES)[number];
  * sale de acá. La partición `persist:` es la misma en ambos casos, así que el
  * login hecho durante el reconocimiento se reutiliza intacto.
  */
-const CANDIDATOS_SONDEO: { id: string; url: string }[] = [];
+const CANDIDATOS_SONDEO: { id: string; url: string }[] = [
+  // URLs CONFIRMADAS cargándolas el 2026-08-10 y mirando la URL final: ninguna
+  // de las dos redirige. `chat.qwen.ai/` responde con título "Qwen Studio";
+  // `www.kimi.com/` conserva el `www` y responde con su portada. Iban sin
+  // verificar en la tarea, así que se verificaron antes de escribirlas: una URL
+  // que redirige deja la partición apuntando a un origen distinto del que uno
+  // cree, y eso recién se nota cuando la sesión no aparece.
+  { id: "qwen", url: "https://chat.qwen.ai/" },
+  { id: "kimi", url: "https://www.kimi.com/" },
+];
 
 /**
  * Modo de arranque. Se lee de `process.argv` Y de `process.env`, y el
@@ -101,7 +110,7 @@ const CANDIDATOS_SONDEO: { id: string; url: string }[] = [];
  * estorba; lo único que impide es justo lo que rompe.
  */
 if (!app.requestSingleInstanceLock()) {
-  process.stdout.write(
+  decirPorSalida(
     "\n===CC_INSTANCIA===\nYa hay una instancia de ChatCouncil abierta. Dos procesos sobre la misma\n" +
       "particion corrompen la base de sesion y se pierden los logins. Cierra la otra ventana\n" +
       "e intenta de nuevo.\n",
@@ -173,10 +182,36 @@ const CON_CANDIDATOS = MODO === "probe" || MODO === "login";
  * igual estando solo, no era contencion. Es una linea de comando en vez de
  * una hipotesis.
  */
-const SOLO = (ARGV.find((a) => a.startsWith("--cc-solo=")) ?? "").split("=")[1] ?? "";
-const ACTIVOS: readonly ProviderId[] = SOLO
-  ? INVESTIGADORES.filter((id) => id === SOLO)
-  : INVESTIGADORES;
+/**
+ * `--cc-solo=<id>[,<id>…]` — acepta una LISTA y filtra investigadores **y
+ * candidatos**, no sólo investigadores.
+ *
+ * Filtraba únicamente `INVESTIGADORES`, y con eso no había forma de abrir un
+ * candidato solo: el modo login abría los seis, y sobre la pantalla de 1366 px
+ * de Juan seis paneles dan ~225 px cada uno. 225 px es ancho hostil para una
+ * pantalla de inicio de sesión —varias esconden el formulario o lo mandan a un
+ * flujo distinto—, así que el único paso humano de la fase se hacía en las
+ * peores condiciones posibles. Con dos paneles son ~675 px.
+ */
+const SOLO_LISTA = ((ARGV.find((a) => a.startsWith("--cc-solo=")) ?? "").split("=")[1] ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+/**
+ * `--cc-solo-candidatos` — atajo para "abrí sólo los que todavía no tienen
+ * spec". Se DERIVA de `CANDIDATOS_SONDEO` en vez de repetir los ids: una lista
+ * paralela a un registro termina desincronizándose, y en este proyecto ya pasó
+ * tres veces con la misma lista. Sumar un candidato sigue siendo agregarlo
+ * arriba y nada más.
+ */
+const SOLO_CANDIDATOS = ARGV.includes("--cc-solo-candidatos") || process.env["CC_SOLO_CANDIDATOS"] === "1";
+
+const SELECCION: readonly string[] = SOLO_CANDIDATOS ? CANDIDATOS_SONDEO.map((c) => c.id) : SOLO_LISTA;
+const SOLO = SELECCION.join(",");
+
+const ACTIVOS: readonly ProviderId[] =
+  SELECCION.length > 0 ? INVESTIGADORES.filter((id) => SELECCION.includes(id)) : INVESTIGADORES;
 
 /**
  * `--cc-salida=<ruta>` escribe además el informe a un archivo (append).
@@ -214,6 +249,26 @@ const vistas: { id: ProviderId; view: WebContentsView }[] = [];
 const sondeos: Vista[] = [];
 
 const todas = (): Vista[] => [...vistas, ...sondeos];
+
+/**
+ * TODAS las particiones que la aplicación puede tener con sesión iniciada.
+ *
+ * Se deriva de las dos listas y no se escribe a mano. Importa porque el
+ * volcado de cierre y el censo recorrían sólo `INVESTIGADORES`: en cuanto un
+ * candidato tiene login —que es exactamente lo que va a pasar con qwen y
+ * kimi—, ese login no se volcaría al salir y se perdería. Es la lección 50
+ * literal: el volcado enganchado en un subconjunto deja afuera justo al que
+ * más lo necesita, y el síntoma —"nunca me guardó la sesión"— no se parece en
+ * nada a la causa.
+ *
+ * No depende de qué vistas estén abiertas en ESTA corrida: si Juan entró a
+ * qwen con `--cc-solo-candidatos` y después abre la app normal, la partición
+ * de qwen sigue existiendo y tiene que volcarse igual.
+ */
+const PARTICIONES_CONOCIDAS: readonly string[] = [
+  ...INVESTIGADORES,
+  ...CANDIDATOS_SONDEO.map((c) => c.id),
+];
 
 /**
  * ALMACEN — estado de la conversación en curso de este proceso.
@@ -302,7 +357,7 @@ function registrarDiagnosticoEtiqueta(
     // Se avisa y se sigue. Perder una ronda real de Juan porque no se pudo
     // escribir un archivo de diagnóstico seria cambiar el dato por el
     // instrumento.
-    process.stdout.write(`\n[cc] no pude escribir el diagnostico de etiqueta: ${String(e)}\n`);
+    decirPorSalida(`\n[cc] no pude escribir el diagnostico de etiqueta: ${String(e)}\n`);
   }
 }
 
@@ -422,7 +477,7 @@ function crearVista(id: string, url: string): WebContentsView {
     if (!CIERRE_DE_SESION.test(destino)) return;
     evento.preventDefault();
     redireccionesBloqueadas.push({ id, destino, cuando: new Date().toISOString() });
-    process.stdout.write(
+    decirPorSalida(
       `\n[cc] BLOQUEADA una navegacion a cierre de sesion en ${id}: ${destino}\n` +
         `[cc] La sesion sigue viva. Esa pagina la habria cerrado de verdad.\n`,
     );
@@ -465,11 +520,29 @@ function createWindow(): void {
   }
 
   if (CON_CANDIDATOS) {
-    for (const c of CANDIDATOS_SONDEO) {
+    // El mismo filtro que los investigadores: sin esto `--cc-solo` no podía
+    // acotar el modo login a los candidatos, que es justo para lo que hace
+    // falta acotarlo.
+    const candidatos =
+      SELECCION.length > 0 ? CANDIDATOS_SONDEO.filter((c) => SELECCION.includes(c.id)) : CANDIDATOS_SONDEO;
+    for (const c of candidatos) {
       const view = crearVista(c.id, c.url);
       sondeos.push({ id: c.id, view });
       win.contentView.addChildView(view);
     }
+  }
+
+  // Un id pedido que no existe en NINGUNA de las dos listas se avisa. Sin esto,
+  // un tipeo abre cero paneles y la ventana vacia se lee como "la aplicacion no
+  // arranco": otra vez dos estados distintos colapsados en un mismo sintoma.
+  const conocidos = new Set<string>([...INVESTIGADORES, ...CANDIDATOS_SONDEO.map((c) => c.id)]);
+  const desconocidos = SELECCION.filter((id) => !conocidos.has(id));
+  if (desconocidos.length > 0) {
+    decirPorSalida(
+      `\n[cc] --cc-solo pidio ${desconocidos.join(", ")}, que no esta en INVESTIGADORES ` +
+        `(${INVESTIGADORES.join(", ")}) ni en CANDIDATOS_SONDEO ` +
+        `(${CANDIDATOS_SONDEO.map((c) => c.id).join(", ") || "vacio"}).\n`,
+    );
   }
 
   layout();
@@ -554,7 +627,10 @@ async function sesiones(): Promise<
 async function censoAlCerrar(): Promise<void> {
   try {
     const censo = await Promise.all(
-      INVESTIGADORES.map(async (id) => {
+      // Incluye a los candidatos: el censo al cerrar es el que dice si un login
+      // llegó a escribirse, y el login de qwen y kimi es justamente el que hay
+      // que poder comprobar.
+      PARTICIONES_CONOCIDAS.map(async (id) => {
         const cs = await session.fromPartition(`persist:${id}`).cookies.get({});
         return {
           id,
@@ -565,7 +641,7 @@ async function censoAlCerrar(): Promise<void> {
     );
     emitir("CC_CENSO_JSON", { momento: "antes-de-cerrar", rutaDatos: app.getPath("userData"), censo });
   } catch (e) {
-    process.stdout.write(`\n[cc] no pude tomar el censo antes de cerrar: ${String(e)}\n`);
+    decirPorSalida(`\n[cc] no pude tomar el censo antes de cerrar: ${String(e)}\n`);
   }
 }
 
@@ -701,6 +777,40 @@ async function sondeoVivo(): Promise<{
 const SALIDA = (ARGV.find((a) => a.startsWith("--cc-salida=")) ?? "").split("=")[1] ?? "";
 
 /**
+ * ESCRITURA A stdout QUE NO PUEDE TUMBAR EL PROCESO.
+ *
+ * Medido el 2026-08-10, y es un defecto de verdad, no una precaución. Al correr
+ * `--cc-probe` con la salida canalizada a `head`, `head` cierra el pipe al
+ * llegar a su límite y el `process.stdout.write` siguiente falla con
+ * `EPIPE: broken pipe`. Como nadie lo capturaba, salía como **excepción no
+ * atrapada del proceso principal**: cuadro de error de Electron y muerte del
+ * proceso.
+ *
+ * Lo grave no es el cuadro. Es que ese camino de salida **no pasa por
+ * `before-quit`**, o sea que se saltea el volcado de sesión — el mismo agujero
+ * que en §7.50 y §7.53 costó los logins de los cuatro proveedores. Un proceso
+ * que muere por no poder escribir en una terminal se lleva puestas las
+ * credenciales que estaba a punto de guardar.
+ *
+ * Dos cierres, porque el fallo llega por dos vías distintas: el `write`
+ * sincrónico lanza, y el stream además emite `error` de forma asincrónica. Se
+ * atienden las dos y se sigue: perder una línea de informe es aceptable, perder
+ * la sesión no. El informe crudo va igual a `--cc-salida` y, en el sondeo vivo,
+ * al archivo de `sondeos/`.
+ */
+process.stdout.on("error", () => {
+  /* pipe cerrado del otro lado: no hay a dónde escribir, y no es motivo para morir */
+});
+
+function decirPorSalida(texto: string): void {
+  try {
+    process.stdout.write(texto);
+  } catch (e) {
+    /* idem: la salida es un canal de informe, no el trabajo */
+  }
+}
+
+/**
  * CIERRE LIMPIO — un solo punto de salida para toda la aplicación.
  *
  * Chromium escribe cookies, localStorage e IndexedDB de forma ASINCRÓNICA.
@@ -740,13 +850,15 @@ app.on("before-quit", (evento) => {
     for (const v of todas()) {
       try { v.view.webContents.close(); } catch (e) { /* ya destruido */ }
     }
-    for (const id of INVESTIGADORES) {
+    // Todas las conocidas, no sólo los investigadores: qwen y kimi son
+    // candidatos y van a tener login (§7.50).
+    for (const id of PARTICIONES_CONOCIDAS) {
       session.fromPartition(`persist:${id}`).flushStorageData();
     }
   } catch (e) {
-    process.stdout.write(`\n[cc] fallo el volcado de sesion: ${String(e)}\n`);
+    decirPorSalida(`\n[cc] fallo el volcado de sesion: ${String(e)}\n`);
   }
-  process.stdout.write(`\n===CC_CIERRE===\nVolcando sesiones, ${MARGEN_VOLCADO_MS} ms.\n`);
+  decirPorSalida(`\n===CC_CIERRE===\nVolcando sesiones, ${MARGEN_VOLCADO_MS} ms.\n`);
   // El censo se toma ANTES de que el volcado termine y antes de salir: es la
   // unica ventana en la que la sesion todavia esta viva y se puede contar.
   void censoAlCerrar();
@@ -760,14 +872,14 @@ app.on("before-quit", (evento) => {
 
 function emitir(etiqueta: string, cuerpo: unknown): void {
   const texto = `\n===${etiqueta}===\n${JSON.stringify(cuerpo, null, 2)}\n===FIN===\n`;
-  process.stdout.write(texto);
+  decirPorSalida(texto);
   if (SALIDA) {
     try {
       appendFileSync(SALIDA, texto, "utf8");
     } catch (e) {
       // Se avisa y se sigue: el informe por stdout ya salió y perderlo por no
       // poder escribir un archivo sería peor que no tener el archivo.
-      process.stdout.write(`\n[cc] no pude escribir --cc-salida: ${String(e)}\n`);
+      decirPorSalida(`\n[cc] no pude escribir --cc-salida: ${String(e)}\n`);
     }
   }
 }
@@ -781,7 +893,7 @@ function emitir(etiqueta: string, cuerpo: unknown): void {
 async function modoPrueba(): Promise<void> {
   try {
     if (SOLO && ACTIVOS.length === 0) {
-      process.stdout.write(`\n===CC_TEST_ERROR===\n"${SOLO}" no esta en INVESTIGADORES.\n`);
+      decirPorSalida(`\n===CC_TEST_ERROR===\n"${SOLO}" no esta en INVESTIGADORES.\n`);
       return;
     }
     emitir(
@@ -796,7 +908,7 @@ async function modoPrueba(): Promise<void> {
       }),
     );
   } catch (e) {
-    process.stdout.write(`\n===CC_TEST_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+    decirPorSalida(`\n===CC_TEST_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
   } finally {
     app.quit();
   }
@@ -862,7 +974,7 @@ async function modoSondeo(): Promise<void> {
       ),
     });
   } catch (e) {
-    process.stdout.write(`\n===CC_PROBE_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+    decirPorSalida(`\n===CC_PROBE_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
   } finally {
     app.quit();
   }
@@ -874,7 +986,7 @@ async function modoSondeo(): Promise<void> {
  * credenciales. Como las particiones son `persist:`, se hace una sola vez.
  */
 function modoLogin(): void {
-  process.stdout.write(
+  decirPorSalida(
     `\n===CC_LOGIN===\nVentana abierta con: ${todas().map((v) => v.id).join(", ")}.\n` +
       `Iniciar sesion en cada panel y cerrar la ventana. Las particiones son persistentes:\n` +
       `no hay que repetirlo en las corridas siguientes.\n`,
@@ -893,7 +1005,7 @@ function modoHistorial(): void {
   try {
     emitir("CC_HISTORIAL_JSON", leerRegistroDeArchivo(app.getPath("userData"), HISTORIAL_ID));
   } catch (e) {
-    process.stdout.write(`\n===CC_HISTORIAL_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+    decirPorSalida(`\n===CC_HISTORIAL_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
   } finally {
     app.quit();
   }
@@ -1015,7 +1127,7 @@ async function modoSesion(): Promise<void> {
       emitir("CC_SESION_JSON", { accion: "leer", rutaDatos: app.getPath("userData"), particiones: leidas });
     }
   } catch (e) {
-    process.stdout.write(`\n===CC_SESION_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+    decirPorSalida(`\n===CC_SESION_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
   } finally {
     servidorPruebaLs?.close();
     app.quit();

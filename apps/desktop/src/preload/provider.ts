@@ -183,10 +183,140 @@ function readModelLabel(spec: PageSpec): string | null {
   return t && t.length > 0 && t.length < 120 ? t : null;
 }
 
+/**
+ * DESGLOSE DE LA ETIQUETA, EN EL MOMENTO EXACTO DE LA LECTURA.
+ * ------------------------------------------------------------
+ * Existe por un defecto que NINGÚN instrumento del proyecto podía medir, y
+ * conviene tener escrito por qué.
+ *
+ * El camino real guarda `GeminiFlash-Lite`: sin el número de versión y sin los
+ * espacios. El sondeo, con el MISMO selector y la MISMA extracción
+ * (`textContent.trim()`), devuelve `Gemini 3.5 Flash-Lite`. Medido sobre los
+ * nueve crudos del árbol el 2026-08-10, la variable que separa los dos
+ * resultados es el ESTADO DEL COMPOSITOR, con separación perfecta en 11 de 11
+ * corridas: en reposo el pill aparece (5 de 5), con el compositor escrito no
+ * aparece por ninguna vía (6 de 6). Ni las cookies ni el ancho de panel
+ * separan.
+ *
+ * Y `readModelLabel` corre DESPUÉS del envío, o sea del lado en el que el pill
+ * está degradado. El sondeo NO puede reproducir ese estado porque tiene
+ * prohibido enviar, y una corrida profunda sólo existe después de enviar. La
+ * única medición posible es que la lectura real se mire a sí misma.
+ *
+ * Por eso esto NO es un arreglo: es el instrumento que va a decidir cuál de
+ * las dos causas es, en la próxima ronda de Juan. No se prueba ningún arreglo
+ * a ciegas antes de tener ese dato.
+ *
+ * Es de SÓLO LECTURA y no agrega ninguna capacidad: recorre el subárbol
+ * leyendo `tagName`, los atributos de una lista blanca ESTRUCTURAL y el texto
+ * propio de cada nodo. Nunca cookies, tokens ni almacenamiento.
+ */
+const ATRIBUTOS_ESTRUCTURALES = [
+  "id",
+  "class",
+  "data-testid",
+  "data-test-id",
+  "aria-label",
+  "role",
+] as const;
+
+export interface NodoEtiqueta {
+  prof: number;
+  tag: string;
+  attrs: Record<string, string>;
+  /** Sólo los nodos de texto hijos DIRECTOS: dice en qué nodo vive cada pedazo. */
+  propio: string;
+  /** `textContent` no cruza un shadow root: un pedazo ahí adentro se lee como ausente. */
+  sombra: boolean;
+}
+
+export interface DesgloseModelLabel {
+  selector: string;
+  presente: boolean;
+  matches: number;
+  /** Lo que `readModelLabel` devolvió en esta misma lectura, sin recortar. */
+  textoCompleto: string | null;
+  nodos: NodoEtiqueta[];
+  hermanos: { tag: string; attrs: Record<string, string>; muestra: string }[];
+}
+
+function atributosDe(el: Element): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const a of ATRIBUTOS_ESTRUCTURALES) {
+    const v = el.getAttribute(a);
+    if (v != null && v !== "") out[a] = v.slice(0, 120);
+  }
+  return out;
+}
+
+function textoPropio(n: Element): string {
+  let out = "";
+  for (const h of Array.from(n.childNodes)) {
+    if (h.nodeType === 3) out += h.nodeValue ?? "";
+  }
+  // Se quitan los glifos del Area de Uso Privado y NADA mas: las fuentes de
+  // iconos meten uno pegado al texto (el de claude salio como "Haiku 4.5" con
+  // un glifo detras). Guiones y puntos se conservan a proposito: "Flash-Lite"
+  // y "3.5" son justo lo que hay que poder ver aparecer y desaparecer.
+  return out.replace(/[-]/g, "").replace(/\s+/g, " ").trim().slice(0, 60);
+}
+
+function readModelLabelDesglose(spec: PageSpec): DesgloseModelLabel | null {
+  const sel = spec.modelLabel?.selector;
+  if (!sel) return null;
+  let nodos: Element[];
+  try {
+    nodos = Array.from(document.querySelectorAll(sel));
+  } catch {
+    return { selector: sel, presente: false, matches: -1, textoCompleto: null, nodos: [], hermanos: [] };
+  }
+  const el = nodos[0];
+  if (!el) {
+    return { selector: sel, presente: false, matches: 0, textoCompleto: null, nodos: [], hermanos: [] };
+  }
+  const arbol: NodoEtiqueta[] = [];
+  const recorrer = (n: Element, prof: number): void => {
+    if (arbol.length >= 40) return;
+    arbol.push({
+      prof,
+      tag: n.tagName.toLowerCase(),
+      attrs: atributosDe(n),
+      propio: textoPropio(n),
+      sombra: n.shadowRoot !== null,
+    });
+    for (const h of Array.from(n.children)) recorrer(h, prof + 1);
+  };
+  recorrer(el, 0);
+  // Los HERMANOS van porque en gemini el control que lleva la version dentro
+  // del aria-label es hermano del contenedor: si la correccion pasa por leer
+  // un atributo en vez de un texto, hace falta verlo en la misma muestra.
+  const hermanos: DesgloseModelLabel["hermanos"] = [];
+  const padre = el.parentElement;
+  if (padre) {
+    for (const h of Array.from(padre.children)) {
+      if (h === el || hermanos.length >= 6) continue;
+      hermanos.push({
+        tag: h.tagName.toLowerCase(),
+        attrs: atributosDe(h),
+        muestra: (h.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 60),
+      });
+    }
+  }
+  return {
+    selector: sel,
+    presente: true,
+    matches: nodos.length,
+    textoCompleto: (el.textContent ?? "").slice(0, 200),
+    nodos: arbol,
+    hermanos,
+  };
+}
+
 export interface RunResult {
   ok: boolean;
   error?: string;
   modelLabel?: string | null;
+  modelLabelDesglose?: DesgloseModelLabel | null;
 }
 
 /**
@@ -271,7 +401,10 @@ async function run(spec: PageSpec, prompt: string): Promise<RunResult> {
     await sleep(100);
   }
 
-  return { ok: true, modelLabel: readModelLabel(spec) };
+  // El desglose se toma EN ESTE MOMENTO, el de después del envío, que es el
+  // único en el que el defecto de la etiqueta de gemini ocurre. Tomarlo antes
+  // volvería a medir el estado en el que el fallo no pasa (§7.24).
+  return { ok: true, modelLabel: readModelLabel(spec), modelLabelDesglose: readModelLabelDesglose(spec) };
 }
 
 /**
@@ -294,5 +427,9 @@ contextBridge.exposeInMainWorld("__ccProvider", {
     completionKind: spec.completion.kind,
     quiescenceMs: spec.completion.quiescenceMs,
     modelLabel: readModelLabel(spec),
+    // Viaja junto con la etiqueta y en la MISMA lectura: si se tomara en otra
+    // llamada, el DOM ya no seria el mismo y el desglose describiria un
+    // instante distinto del que produjo la etiqueta que se guarda.
+    modelLabelDesglose: readModelLabelDesglose(spec),
   }),
 });

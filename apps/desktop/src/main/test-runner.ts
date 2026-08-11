@@ -40,6 +40,14 @@ export interface LecturaProveedor {
   /** Cuánto tiene que quedarse quieto el texto para darlo por terminado. */
   quiescenceMs?: number;
   modelLabel?: string | null;
+  /**
+   * Subárbol del nodo de la etiqueta, tal como estaba EN ESTA lectura. No es
+   * dato de investigación: es el instrumento que tiene que decidir por qué el
+   * camino real guarda `GeminiFlash-Lite` donde el sondeo lee
+   * `Gemini 3.5 Flash-Lite`. Va a un archivo de diagnóstico aparte, nunca al
+   * registro append-only.
+   */
+  modelLabelDesglose?: unknown;
   error?: string;
 }
 
@@ -48,6 +56,8 @@ export interface ResultadoEnvio {
   ok?: boolean;
   error?: string;
   modelLabel?: string | null;
+  /** Idem, tomado justo después del envío — el momento en que el fallo ocurre. */
+  modelLabelDesglose?: unknown;
 }
 
 export type EstadoContinuidad = "confirmada" | "refutada" | "indeterminada";

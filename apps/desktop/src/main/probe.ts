@@ -81,6 +81,13 @@ export interface NodoDesglose {
    * la etiqueta, y por lo tanto cuál falta cuando falta.
    */
   propio: string;
+  /**
+   * El nodo tiene un shadow root ABIERTO colgando. Va porque `textContent` no
+   * cruza un shadow root: si el pedazo que falta vive ahí adentro, el texto se
+   * lee incompleto sin que nada falle, y eso es indistinguible de un nodo que
+   * no existe. Es la misma distinción que `via: "shadow"` en los candidatos.
+   */
+  sombra: boolean;
 }
 
 export interface DesgloseEtiqueta {
@@ -90,6 +97,37 @@ export interface DesgloseEtiqueta {
   nodos: NodoDesglose[];
   ancestros: { tag: string; attrs: Record<string, string> }[];
   hermanos: { tag: string; attrs: Record<string, string>; muestra: string }[];
+}
+
+/**
+ * El selector de etiqueta de modelo que la spec YA usa, consultado DIRECTO.
+ *
+ * POR QUÉ HACE FALTA, medido el 2026-08-10 sobre los nueve crudos del árbol.
+ * Las tres vías de descubrimiento proponen candidatos con FILTROS —familia más
+ * versión, o un control con un número— y `div[data-test-id="logo-pill-label-container"]`
+ * de gemini aparece en las 5 corridas en reposo y en NINGUNA de las 6 con el
+ * compositor escrito. Pero "ninguna vía lo propuso" NO es "no está en el DOM":
+ * puede seguir ahí con un texto que ya no pasa el filtro. El camino real, que
+ * consulta el selector directo, lo encontró y devolvió "GeminiFlash-Lite".
+ *
+ * O sea que el instrumento no podía distinguir las dos cosas que importan —el
+ * selector dejó de matchear, o matchea y el texto se degradó— porque nunca
+ * preguntaba por el selector de la spec. Acá se pregunta, exista o no entre los
+ * candidatos, y se desglosa igual.
+ *
+ * Sigue siendo de SÓLO LECTURA: es un `querySelectorAll` y un recorrido de
+ * texto y atributos de la lista blanca. No agrega ninguna capacidad.
+ */
+export interface EtiquetaModeloSpec {
+  selector: string;
+  presente: boolean;
+  matches: number;
+  /**
+   * El MISMO valor que `readModelLabel` obtendría (`textContent.trim()`), para
+   * poder comparar el sondeo con el registro sin traducir nada en el medio.
+   */
+  textoComoLoLee: string | null;
+  desglose: DesgloseEtiqueta | null;
 }
 
 /**
@@ -170,6 +208,13 @@ export interface SondeoProveedor {
    * vez de un texto, hace falta verlo en la misma muestra.
    */
   etiquetaModeloDesglose?: DesgloseEtiqueta[];
+  /**
+   * El selector de la spec, consultado DIRECTO y desglosado exista o no entre
+   * los candidatos. Es lo único que separa "el selector dejó de matchear" de
+   * "matchea y el texto se degradó". `undefined` = el proveedor no tiene
+   * `modelLabel` en su spec, que no es lo mismo que `presente: false`.
+   */
+  etiquetaModeloSpec?: EtiquetaModeloSpec;
   /** Milisegundos desde la navegación hasta el momento de la muestra. */
   msDesdeNavegacion?: number;
   readyState?: string;
@@ -202,7 +247,7 @@ export interface SondeoProveedor {
  * contrato del proveedor, y no tiene por qué vivir en el preload que corre en
  * cada turno real.
  */
-const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MARCADORES_VIEJOS) => {
+const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MARCADORES_VIEJOS, SELECTOR_ETIQUETA) => {
   const ATTRS_OK = ["id","class","data-testid","data-test-id","data-message-author-role","aria-label","role","contenteditable","placeholder","name","type","enterkeyhint"];
   const CAP_TEXTO = 80;
   const CAP_CANDIDATOS = 6;
@@ -632,7 +677,10 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
     const nodos = [];
     const recorrer = (n, prof) => {
       if (nodos.length >= CAP_NODOS) return;
-      nodos.push({ prof: prof, tag: n.tagName.toLowerCase(), attrs: attrsDe(n), propio: textoPropio(n) });
+      // "sombra": textContent NO cruza un shadow root. Si el pedazo que falta
+      // vive ahi adentro, el texto sale incompleto sin que nada falle, y eso es
+      // indistinguible de un nodo ausente. Se informa por nodo.
+      nodos.push({ prof: prof, tag: n.tagName.toLowerCase(), attrs: attrsDe(n), propio: textoPropio(n), sombra: !!n.shadowRoot });
       for (const h of n.children) recorrer(h, prof + 1);
     };
     recorrer(el, 0);
@@ -667,6 +715,34 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
   const etiquetaModeloPorForma = porFormaDeVersion();
   const etiquetaModeloDesglose = Array.from(elsEtiqueta).slice(0, 4).map(desglosar);
 
+  /**
+   * El selector que la spec YA usa, consultado DIRECTO.
+   *
+   * Las tres vias de arriba DESCUBREN candidatos, y descubren con filtros. Que
+   * ninguna proponga el selector de la spec no prueba que el selector no
+   * matchee: prueba que su texto no paso el filtro. Son dos cosas distintas y
+   * piden arreglos opuestos —re-derivar el selector, o mirar por que el texto
+   * se degrada— asi que el sondeo tiene que poder decir cual de las dos es.
+   *
+   * Es la misma forma de defecto que ya aparecio tres veces en este proyecto:
+   * un valor por defecto que colapsa "no pasa" con "no pude ver".
+   */
+  let etiquetaModeloSpec;
+  if (SELECTOR_ETIQUETA) {
+    let nodosSpec = [];
+    try { nodosSpec = Array.from(document.querySelectorAll(SELECTOR_ETIQUETA)); } catch (e) { nodosSpec = []; }
+    const elSpec = nodosSpec.length > 0 ? nodosSpec[0] : null;
+    etiquetaModeloSpec = {
+      selector: SELECTOR_ETIQUETA,
+      presente: elSpec !== null,
+      matches: nodosSpec.length,
+      // Exactamente lo que readModelLabel obtendria, para comparar el sondeo
+      // con el registro sin traducir nada en el medio.
+      textoComoLoLee: elSpec ? (elSpec.textContent || "").trim().slice(0, 120) : null,
+      desglose: elSpec ? desglosar(elSpec) : null,
+    };
+  }
+
   const salida = {
     estadoCompositor: SELECTOR_COMPOSITOR && MARCADOR ? "con-texto" : "reposo",
     escrituraAceptada: escrituraAceptada,
@@ -691,6 +767,7 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
     etiquetaModeloPorTexto: etiquetaModeloPorTexto,
     etiquetaModeloPorForma: etiquetaModeloPorForma,
     etiquetaModeloDesglose: etiquetaModeloDesglose,
+    etiquetaModeloSpec: etiquetaModeloSpec,
     etiquetaModeloDescartados: descartadosPorFiltro,
     // Cuanto hacia que la pagina habia navegado cuando se tomo la muestra, y en
     // que estado estaba. Si los fallos se concentran en valores bajos, el
@@ -756,13 +833,24 @@ export async function sondear(
      * el efecto del editor que sirve de criterio en vez del eco (§7.22).
      */
     submitSelector?: string;
+    /**
+     * Selector de etiqueta de modelo que la spec YA usa. Se consulta DIRECTO y
+     * se desglosa exista o no entre los candidatos que las tres vías proponen.
+     *
+     * Va SIEMPRE que el proveedor tenga uno, también en el sondeo de sólo
+     * lectura: es un `querySelectorAll` y una lectura de texto y atributos, no
+     * escribe nada. Sin esto, "ninguna vía lo propuso" se lee como "no está en
+     * el DOM", y son dos diagnósticos distintos con arreglos opuestos.
+     */
+    modelLabelSelector?: string;
   }[],
 ): Promise<SondeoProveedor[]> {
   const crudos = await Promise.allSettled(
     vistas.map((v) => {
+      const etiqueta = JSON.stringify(v.modelLabelSelector ?? null);
       const args = v.composerSelector
-        ? `${JSON.stringify(v.composerSelector)}, ${JSON.stringify(v.submitSelector ?? null)}, ${JSON.stringify(MARCADOR)}, ${JSON.stringify(MARCADORES_VIEJOS)}`
-        : "null, null, null, []";
+        ? `${JSON.stringify(v.composerSelector)}, ${JSON.stringify(v.submitSelector ?? null)}, ${JSON.stringify(MARCADOR)}, ${JSON.stringify(MARCADORES_VIEJOS)}, ${etiqueta}`
+        : `null, null, null, [], ${etiqueta}`;
       return v.ejecutar(`(${FUENTE_SONDEO})(${args})`);
     }),
   );

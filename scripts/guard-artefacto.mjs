@@ -143,6 +143,20 @@ const EXIGIDO = {
     "etiquetaModeloDesglose",
     "textoCompleto",
     "hermanos",
+    // El selector de la SPEC, consultado directo y desglosado exista o no entre
+    // los candidatos. Sin esto, "ninguna via lo propuso" se lee como "no esta
+    // en el DOM", y son dos diagnosticos con arreglos opuestos: re-derivar el
+    // selector, o mirar por que el texto se degrada. Los tres marcadores viven
+    // DENTRO de FUENTE_SONDEO, que es un literal de cadena: cumplen la regla de
+    // §7.7 de ser subcadenas ASCII que el codigo vivo contiene tal cual.
+    "SELECTOR_ETIQUETA",
+    "etiquetaModeloSpec",
+    "textoComoLoLee",
+    // Diagnostico de la etiqueta escrito en un archivo APARTE del registro: el
+    // registro es el dato de investigacion y un volcado de DOM no es un hecho
+    // de la investigacion. Los dos son literales de cadena de verdad.
+    "diagnostico",
+    "etiqueta-modelo",
   ],
   // "contenteditable" NO sirve como marcador: en el preload existe sólo como
   // miembro de un tipo, y los tipos se borran. El gate lo rechazó en su
@@ -161,6 +175,12 @@ const EXIGIDO = {
     // El error de envio tiene que distinguir "nunca aparecio" de "deshabilitado".
     "NUNCA aparecio",
     "deshabilitado",
+    // Desglose de la etiqueta EN EL MOMENTO de la lectura real. Es lo unico que
+    // puede mirar el estado de despues del envio, al que el sondeo no llega
+    // porque tiene prohibido enviar. "data-test-id" es un literal de cadena de
+    // la lista blanca de atributos y entro al preload SOLO por esta capacidad:
+    // si el desglose se cae, el marcador se cae con el (probado en rojo).
+    "data-test-id",
   ],
   "preload/ui.cjs": ["cc:investigadores", "cc:difundir", "cc:leer", "cc:sesiones", "cc:sondear"],
   "renderer/index.html": ["no-preguntar", "confirmacion", "paneles", "sondear"],

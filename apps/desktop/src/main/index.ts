@@ -246,6 +246,66 @@ function continuidadDe(id: string): Procedencia["continuidad"] {
   return previa === actual ? "confirmada" : "refutada";
 }
 
+/**
+ * DIAGNÓSTICO DE LA ETIQUETA DE MODELO — archivo APARTE del registro.
+ *
+ * Va aparte a propósito, y el motivo no es de orden sino de contrato: el
+ * registro `conversaciones/<id>.jsonl` es el dato de investigación de Juan y es
+ * append-only con un esquema declarado. Un volcado de DOM no es un hecho de la
+ * investigación: es instrumental, cambia con el instrumento, y meterlo ahí
+ * ensucia el dato canónico con algo que mañana se borra.
+ *
+ * QUÉ CONTESTA, y por qué no se puede contestar de otra manera. El camino real
+ * guarda `GeminiFlash-Lite`; el sondeo, con el MISMO selector y la MISMA
+ * extracción, lee `Gemini 3.5 Flash-Lite`. Medido sobre los nueve crudos del
+ * árbol el 2026-08-10, lo que separa los dos resultados es el estado del
+ * compositor —11 de 11 corridas, sin excepción— y no las cookies ni el ancho.
+ * `readModelLabel` corre DESPUÉS del envío, o sea del lado degradado, y el
+ * sondeo no puede llegar ahí porque tiene prohibido enviar.
+ *
+ * Así que el dato sólo puede producirlo una ronda REAL. Esto lo instrumenta y
+ * lo deja escrito; NO arregla nada, porque arreglar antes de medir ya costó
+ * dos rondas enteras en este proyecto.
+ */
+function registrarDiagnosticoEtiqueta(
+  momento: "envio" | "lectura",
+  filas: readonly { id: string; modelLabel?: string | null; modelLabelDesglose?: unknown }[],
+): void {
+  const conDesglose = filas.filter((f) => f.modelLabelDesglose != null);
+  if (conDesglose.length === 0) return;
+  try {
+    const dir = join(app.getPath("userData"), "diagnostico");
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const cuando = new Date().toISOString();
+    for (const f of conDesglose) {
+      appendFileSync(
+        join(dir, "etiqueta-modelo.jsonl"),
+        JSON.stringify({
+          tipo: "etiqueta-modelo",
+          cuando,
+          momento,
+          proveedorId: f.id,
+          conversacionId: conversacionActual,
+          rondaId: rondaActualId,
+          rondasEnviadas: indiceRonda,
+          panel: panelDe(f.id),
+          // Lo que se GUARDÓ en la procedencia, al lado del subárbol del que
+          // salió: sin las dos cosas juntas no se puede decir cuál de los dos
+          // se degradó.
+          modelLabel: f.modelLabel ?? null,
+          desglose: f.modelLabelDesglose,
+        }) + "\n",
+        "utf8",
+      );
+    }
+  } catch (e) {
+    // Se avisa y se sigue. Perder una ronda real de Juan porque no se pudo
+    // escribir un archivo de diagnóstico seria cambiar el dato por el
+    // instrumento.
+    process.stdout.write(`\n[cc] no pude escribir el diagnostico de etiqueta: ${String(e)}\n`);
+  }
+}
+
 function panelDe(id: string): string | null {
   const v = todas().find((x) => x.id === id);
   if (!v) return null;
@@ -266,6 +326,7 @@ async function difundirConRegistro(prompt: string, esPrueba: boolean): Promise<R
   const resultados = await difundir(prompt);
   rondaActualId = escribirRonda(app.getPath("userData"), conv, indiceRonda++, prompt, null);
   escribirIntentos(app.getPath("userData"), conv, rondaActualId, resultados);
+  registrarDiagnosticoEtiqueta("envio", resultados);
   return resultados;
 }
 
@@ -276,6 +337,11 @@ async function difundirConRegistro(prompt: string, esPrueba: boolean): Promise<R
  * la lectura igual.
  */
 function registrarRespuestasDeRondaActual(lecturas: readonly LecturaProveedor[]): void {
+  // El diagnóstico se escribe SIEMPRE, aunque no haya ronda abierta a la que
+  // enganchar la respuesta: es un archivo aparte y su valor no depende del
+  // registro. Justo la lectura huérfana —leer sin haber difundido en este
+  // proceso— es un estado que interesa poder mirar.
+  registrarDiagnosticoEtiqueta("lectura", lecturas);
   if (!conversacionActual || !rondaActualId) return;
   escribirRespuestas(app.getPath("userData"), conversacionActual, rondaActualId, lecturas, (id) => ({
     continuidad: continuidadDe(id),
@@ -593,12 +659,20 @@ async function sondeoVivo(): Promise<{
       paneles: await sondear(
         todas().map((v) => {
           const b = v.view.getBounds();
+          const spec = (PROVIDER_SPECS as Record<string, { modelLabel?: { selector: string } } | undefined>)[v.id];
           // SIN composerSelector y SIN submitSelector: es lo que hace que este
           // camino sea de sólo lectura por construcción y no por promesa.
+          //
+          // `modelLabelSelector` SÍ va, y no debilita nada: es un
+          // `querySelectorAll` más una lectura de texto y de atributos de la
+          // lista blanca. Es además el único modo que puede mirar el pill con
+          // una conversación viva, que es el estado en el que la etiqueta de
+          // gemini se degrada.
           return {
             id: v.id,
             panel: `${b.width}x${b.height}`,
             ejecutar: (fuente: string) => v.view.webContents.executeJavaScript(fuente, true),
+            ...(spec?.modelLabel ? { modelLabelSelector: spec.modelLabel.selector } : {}),
           };
         }),
       ),
@@ -760,7 +834,11 @@ async function modoSondeo(): Promise<void> {
           const spec = (
             PROVIDER_SPECS as Record<
               string,
-              { composer?: { selector: string }; submit?: { selector?: string } } | undefined
+              {
+                composer?: { selector: string };
+                submit?: { selector?: string };
+                modelLabel?: { selector: string };
+              } | undefined
             >
           )[v.id];
           const b = v.view.getBounds();
@@ -768,6 +846,10 @@ async function modoSondeo(): Promise<void> {
             id: v.id,
             panel: `${b.width}x${b.height}`,
             ejecutar: (fuente: string) => v.view.webContents.executeJavaScript(fuente, true),
+            // Va SIEMPRE, escriba o no el sondeo: consultar el selector de la
+            // spec directo es lo unico que separa "el selector dejo de
+            // matchear" de "matchea y el texto se degrado".
+            ...(spec?.modelLabel ? { modelLabelSelector: spec.modelLabel.selector } : {}),
             // Sólo se escribe donde hay un selector YA derivado. Un candidato
             // sin spec no se toca: no hay dónde escribir sin adivinar.
             ...(SONDEO_ESCRIBE && spec?.composer ? { composerSelector: spec.composer.selector } : {}),

@@ -158,7 +158,7 @@ $("sesiones").addEventListener("click", () => {
     for (const s of ss) marcar(s.id, `${s.cookies} cookies`, s.cookies > 0 ? "ok" : "mal");
     pintarPaneles();
     const detalle = ss
-      .map((s) => `  ${s.id}: ${s.cookies} cookies${s.cookies === 0 ? "  ← sin sesión, logueate en su panel" : ""}`)
+      .map((s) => `  ${s.id}: ${s.cookies} cookies${s.cookies === 0 ? "  ← sin sesión, inicia sesión en su panel" : ""}`)
       .join("\n");
     decir(`Sesiones persistentes:\n${detalle}`, ss.every((s) => s.cookies > 0) ? "ok" : undefined);
   });

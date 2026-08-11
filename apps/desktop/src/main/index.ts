@@ -103,8 +103,8 @@ const CANDIDATOS_SONDEO: { id: string; url: string }[] = [];
 if (!app.requestSingleInstanceLock()) {
   process.stdout.write(
     "\n===CC_INSTANCIA===\nYa hay una instancia de ChatCouncil abierta. Dos procesos sobre la misma\n" +
-      "particion corrompen la base de sesion y se pierden los logins. Cerra la otra ventana\n" +
-      "y volve a intentar.\n",
+      "particion corrompen la base de sesion y se pierden los logins. Cierra la otra ventana\n" +
+      "e intenta de nuevo.\n",
   );
   app.exit(1);
 }

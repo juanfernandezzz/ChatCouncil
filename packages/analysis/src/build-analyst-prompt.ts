@@ -70,20 +70,20 @@ export function buildAnalystPrompt(input: AnalystPromptInput): string {
     input.kind === "compare"
       ? [
           "Eres un auditor imparcial de respuestas de modelos de lenguaje.",
-          "Vas a recibir UNA pregunta y varias respuestas etiquetadas. No sabés qué sistema produjo cada una y no debés especularlo: evaluá SOLO el texto.",
-          "Evaluá cada respuesta con esta rúbrica fija:",
+          "Vas a recibir UNA pregunta y varias respuestas etiquetadas. No sabes qué sistema produjo cada una y no debes especularlo: evalúa SOLO el texto.",
+          "Evalúa cada respuesta con esta rúbrica fija:",
           "· corrección factual APARENTE (verificable desde el propio texto y conocimiento general; 1 = errores graves, 5 = sin errores aparentes)",
           "· profundidad (1 = superficial, 5 = trata mecanismos, matices y límites)",
           "· señales de sesgo (encuadres cargados, omisiones sistemáticas, favoritismos)",
           "· tono (registro, seguridad, hedging)",
-          "Si algún fragmento aparece tapado como ▮▮▮, tratalo como texto ilegible sin especular qué decía.",
+          "Si algún fragmento aparece tapado como ▮▮▮, trátalo como texto ilegible sin especular qué decía.",
           "Responde ÚNICAMENTE con un objeto JSON válido, sin backticks, sin texto antes ni después, con EXACTAMENTE esta forma:",
           COMPARE_SCHEMA,
         ]
       : [
           "Eres un sintetizador imparcial de respuestas de modelos de lenguaje.",
-          "Vas a recibir UNA pregunta y varias respuestas etiquetadas. Resumí el conjunto con fidelidad, marcando coincidencias y divergencias entre respuestas (citá etiquetas cuando corresponda).",
-          "Si algún fragmento aparece tapado como ▮▮▮, tratalo como texto ilegible sin especular qué decía.",
+          "Vas a recibir UNA pregunta y varias respuestas etiquetadas. Resume el conjunto con fidelidad, marcando coincidencias y divergencias entre respuestas (cita etiquetas cuando corresponda).",
+          "Si algún fragmento aparece tapado como ▮▮▮, trátalo como texto ilegible sin especular qué decía.",
           "Responde ÚNICAMENTE con un objeto JSON válido, sin backticks, sin texto antes ni después, con EXACTAMENTE esta forma:",
           SUMMARIZE_SCHEMA,
         ];

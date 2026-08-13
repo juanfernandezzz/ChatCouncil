@@ -59,6 +59,12 @@ const CANDIDATOS_SONDEO: { id: string; url: string }[] = [
   // cree, y eso recién se nota cuando la sesión no aparece.
   { id: "qwen", url: "https://chat.qwen.ai/" },
   { id: "kimi", url: "https://www.kimi.com/" },
+  // Verificadas el 2026-08-13 cargándolas y mirando `location.href` final.
+  // grok.com y chat.mistral.ai NO redirigen. chat.deepseek.com SI redirige a
+  // /sign_in — se usa la URL final, no la que estaba supuesta en la tarea.
+  { id: "grok", url: "https://grok.com/" },
+  { id: "mistral", url: "https://chat.mistral.ai/" },
+  { id: "deepseek", url: "https://chat.deepseek.com/sign_in" },
 ];
 
 /**

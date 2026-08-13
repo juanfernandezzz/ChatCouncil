@@ -61,13 +61,92 @@ irrelevante incluso como dato, y que el objetivo no sea consenso sino
 **matiz**: complementariedad, validación cruzada de los puntos salientes, y
 alternativas que un solo modelo no daría.
 
-### Los tres roles (conjuntos DISJUNTOS)
+### Arquitectura vigente: DOS partes, no tres (decidida por Juan, 2026-08-13)
+
+> **Esto REEMPLAZA la tabla de "tres roles" que seguía abajo hasta el
+> 2026-08-13, y reemplaza también lo que las Fases 3 y 4 describían.** El
+> pipeline de analistas —Qwen extrae, Kimi adjudica— **queda descartado**.
+> Motivo: extraer, verificar y adjudicar son ETAPAS de un pipeline, no roles
+> diferenciados, y la única diferencia real entre los dos "analistas" era el
+> turno en que hablaban. Separar por turno no es separar por rol.
+
+Ahora hay **un pool de 8**, en este orden fijo, y **cada modelo cumple los
+dos roles** (investiga y opera):
+
+    1 chatgpt · 2 gemini · 3 claude · 4 grok · 5 mistral · 6 glm · 7 kimi · 8 qwen
+
+Y un **noveno, fuera del pool**: `deepseek`, que sólo informa.
+
+**Ese orden es orden de PANEL y nada más.** Nunca es el orden en que el
+cuerpo llega a quien opera: eso lo decide el barajado con la semilla de la
+ronda (misma garantía que ya regía en la v3 original — ver §2). Si el orden
+del pool se filtrara al cuerpo que reciben los operadores, el barajado
+quedaría anulado sin que nada fallara en rojo; es un requisito para
+`guard:sellado` o el gate que lo suceda, no una nota de intención.
+
+**Parte 1 — investigación.** Los 8 reciben la MISMA pregunta, con búsqueda
+web activada. No investigación profunda: búsqueda web y nada más.
+
+**Entre partes, lo hace el código:** extrae las respuestas y las fuentes
+citadas, verifica lo mecánico, anonimiza y baraja con la semilla de la
+ronda.
+
+**Parte 2 — operación.** Los MISMOS 8 operan sobre ese cuerpo. Diseño
+round-robin con exclusión de autoevaluación: cada uno recibe las 7
+respuestas que NO son suyas, nadie evalúa su propio trabajo. Produce una
+matriz operador × respuesta. (Fundamento metodológico y limitaciones: ver
+`docs/LIMITACIONES.md`.)
+
+**Noveno — informe.** `deepseek` recibe la matriz y produce el informe
+final: resumen de hallazgos e interpretación de convergencia y divergencia,
+siempre en relación con la pregunta original. NO busca. NO agrega
+contenido. NO adjudica quién tiene razón. Trabaja ciego, con etiquetas
+barajadas; el código desanonimiza después con el sello.
+
+**Regla dura del noveno:** cada afirmación de su informe debe referenciar
+una CELDA de la matriz. Lo que no está en la matriz no se puede afirmar.
+Puede decir que la matriz no alcanza para responder algo — eso también es
+hallazgo.
+
+**Los tres prompts y el hilo.** Se le mandan tres textos a un modelo, y hay
+UNA pregunta que los atraviesa:
+
+- **La pregunta** — la escribe Juan cada vez. Es su pregunta de
+  investigación.
+- **Prompt 1, investigación**: la pregunta más instrucciones de método.
+  IDÉNTICO Y LITERAL para los ocho. Sin ajustes por proveedor.
+- **Prompt 2, operación**: la herramienta elegida de la biblioteca. Cada
+  término definido DENTRO del prompt (si "convergencia" no está definida,
+  la define cada modelo a su manera y se mide la ambigüedad del protocolo
+  en vez de la diferencia entre modelos).
+- **Prompt 3, informe**: instrucciones para leer la matriz.
+
+La pregunta viaja por los tres. Ningún prompt pide postura hostil ni
+adversarial: condiciona la respuesta y produce crítica performativa.
+
+**Declaración de salida a la red.** Esta arquitectura hace que la
+aplicación salga a la red hacia terceros por primera vez: la verificación
+mecánica de fuentes citadas. Sale SÓLO hacia las URL que el investigador
+citó, nunca a buscar respaldo que el investigador no dio. Una respuesta sin
+fuentes se marca "sin fuentes" y no se verifica — eso es un hallazgo en sí
+mismo, no un error.
+
+**Ya decidido, no se rediscute:**
+- El fin de cada respuesta lo declara Juan marcando un checklist por panel.
+  El botón que pasa de la parte 1 a la parte 2 se llama "Consolidar
+  respuestas" y sólo se habilita con los ocho marcados.
+- `Procedencia.finDe` gana el valor `"declarado-por-usuario"`, sin
+  migración.
+- El informe final lo arma el CÓDIGO juntando piezas; el noveno aporta la
+  lectura semántica, no el ensamblado.
+
+### Los tres roles (conjuntos DISJUNTOS) — histórico, SUPERSEDIDO arriba
 
 | Rol | Modelos | Qué hace |
 |---|---|---|
 | **Investigadores** | Claude, Gemini, ChatGPT, GLM | Reciben la misma pregunta en paralelo, cada uno en SU interfaz real, con sus capacidades nativas activables (razonamiento, búsqueda). Diálogo multi-turno: cada uno mantiene su conversación. |
-| **Analistas** | Qwen (extracción), Kimi (análisis comparativo) | Dos llamadas sobre el turno actual que producen un output unificado. |
-| **Operador** | DeepSeek | Ejecuta las herramientas que el usuario escribe sobre ese output. |
+| **Analistas** | Qwen (extracción), Kimi (análisis comparativo) | Dos llamadas sobre el turno actual que producen un output unificado. **DESCARTADO, ver arriba.** |
+| **Operador** | DeepSeek | Ejecuta las herramientas que el usuario escribe sobre ese output. **DeepSeek pasa a ser el noveno, sólo informe — ver arriba.** |
 
 Perplexity y Grok quedan como investigadores futuros (cuotas gratuitas
 demasiado ajustadas). **El número de investigadores no se codifica en
@@ -501,7 +580,16 @@ código— y comparar el largo leído contra el que quedó en pantalla. Es la
 única forma de que la ventana de 20 s de Claude y Gemini deje de ser un piso
 supuesto y pase a ser un valor medido.
 
-### Fase 3 — Capa de analistas ⏳
+### Fase 3 — Capa de analistas ⏳ **DESCRIPCIÓN SUPERSEDIDA (2026-08-13)**
+
+> Lo que sigue describe el pipeline de tres partes con Qwen/Kimi como
+> analistas. Ese pipeline **quedó descartado** — ver "Arquitectura vigente:
+> DOS partes" en §1. Se conserva el texto original por ser registro de lo
+> que se probó (specs de qwen y kimi derivadas acá siguen siendo válidas: son
+> conocimiento del DOM, no del rol). Lo que reemplaza esta fase son las
+> Tareas 0–3 de la corrida de reescritura del plan (ver informe de esa
+> corrida); no hay todavía un "Fase 3 nueva" numerada en este documento.
+
 Extracción a pedido, anonimización con barajado y garantía estructural,
 Qwen y Kimi sobre el turno actual, conteos calculados en código.
 
@@ -656,7 +744,12 @@ aprieta **Sondear**, que corre sobre la ventana viva sin navegar ni escribir.
     forma de defecto —§7.16, §7.30, §7.36bis— y la primera en que la causa es un
     límite del propio informe.
 
-### Fase 4 — Operador y herramientas ⏳
+### Fase 4 — Operador y herramientas ⏳ **DESCRIPCIÓN SUPERSEDIDA (2026-08-13)**
+
+> DeepSeek deja de ser "el operador" y pasa a ser el noveno que sólo informa
+> — ver "Arquitectura vigente: DOS partes" en §1. La operación (parte 2) la
+> hacen los mismos 8 del pool, round-robin con exclusión de autoevaluación.
+
 DeepSeek sobre el output unificado. Herramienta por defecto: **convergencia
 y divergencia**, no resumen. Herramientas editables con defaults inmutables.
 

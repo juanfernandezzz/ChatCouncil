@@ -744,6 +744,47 @@ aprieta **Sondear**, que corre sobre la ventana viva sin navegar ni escribir.
     forma de defecto —§7.16, §7.30, §7.36bis— y la primera en que la causa es un
     límite del propio informe.
 
+#### C0c — derivación de las specs de grok, mistral y deepseek: lo derivado y lo que falta
+
+Corridas de sondeo el 2026-08-13, con las tres cuentas ya logueadas (Juan
+confirmó el login antes de esta ronda), a dos anchos de panel: 273 px (los
+cinco candidatos abiertos juntos) y 1366 px (`--cc-solo=<id>`, panel solo).
+`shadowRootsAbiertos: 1` en grok y en mistral a los dos anchos —tienen un
+shadow root abierto en la página, pero el compositor y los controles
+derivados matchean todos por `document`, así que no hace falta cruzarlo—; 0
+en deepseek.
+
+| | grok | mistral | deepseek |
+|---|---|---|---|
+| `composer` | `div[aria-label="Ask Grok anything"]` · `matches: 1` · contenteditable, `role="textbox"` | `div.ProseMirror` · `matches: 1` · contenteditable | `textarea._27c9245.ds-scroll-area` · `matches: 1` · textarea |
+| `submit` | `button[data-testid="chat-submit"]` (aria-label **"Enviar"**, en español) · `matches: 1` — sólo con texto en el compositor | `button[aria-label="Enviar"]` · `matches: 1` — sólo con texto en el compositor | **`div.ds-button.ds-button--primary`, `role="button"`, `matches: 1`** — no es un `<button>`; misma familia de defecto que Gemini (§7.26: el sondeo asumía `<button>` o `role` explícito). Repite en los dos anchos, con y sin texto. **No confirmado con un envío real** porque el sondeo tiene prohibido enviar — es un candidato estructural fuerte, no una spec cerrada. |
+| `modelLabel` | `#model-select-trigger` · `matches: 1` · texto **"Fast"** (nombre del modo/modelo activo) | `button[aria-label="Rápido"]` (localizado, español) · `matches: 1` · texto **"Rápido"** | **cero candidatos** en las tres vías automáticas y en `controlesDelCompositor`. DeepSeek no muestra selector de modelo visible en la cabecera del compositor en esta cuenta. |
+| conmutador de búsqueda web | **no encontrado** cerca del compositor (sólo adjuntar, selector de modelo y dictado) — podría vivir dentro del desplegable que abre `model-select-trigger`, que el sondeo no puede abrir porque abrir un desplegable es un clic | **no encontrado** cerca del compositor | **no encontrado**: los 3 controles `div.ds-button--iconLabelPrimary` cerca del compositor no traen texto (`muestra: ""`), así que cuál es "buscar" y cuál es "adjuntar" no se puede distinguir sin abrir cada uno |
+| `responseRoot` / `assistantMessage` | **PENDIENTE** | **PENDIENTE** | **PENDIENTE** |
+
+**El bloqueo es el mismo que dejó pendientes a qwen y kimi (C0b), y por el
+mismo motivo:** `responseRoot` y `assistantMessage` no se pueden derivar sin
+una conversación con al menos una respuesta del proveedor, y el sondeo tiene
+prohibido enviar. No hay atajo: la Tarea 2 no puede cerrar sin que Juan
+mande un mensaje real, con lo que quiera, en cada uno de los cinco
+candidatos (grok, mistral, deepseek, qwen, kimi), y sin borrarlo después —el
+sondeo lee lo que quede, no lo que ni el sondeo ni el agente escribieron.
+
+Con esas cinco conversaciones vivas, un sondeo en REPOSO (sin escribir,
+sin tocar el compositor con contenido de Juan) puede leer:
+- `responseRoot` y `assistantMessage` de los cinco, igual que se hizo con
+  chatgpt/glm/claude/gemini en la Fase 1.
+- El conmutador de búsqueda web de grok y deepseek, si al mandar el mensaje
+  Juan lo dejó activado: un control que cambia de estado visible (marcado
+  vs. no) es observable en reposo aunque el sondeo no lo haya tocado.
+- El `modelLabel` de deepseek, por si aparece sólo dentro de una conversación
+  con historial (mismo patrón que chatgpt en la Fase 2, que tampoco lo
+  mostraba en la pantalla vacía).
+
+Queda **PENDIENTE** de esa ronda real. Se documenta acá en vez de adivinarse:
+§5, regla 5 de la corrida ("lo que no se puede medir con los instrumentos que
+hay no se adivina") y AGENTES.md ("es técnicamente imposible sin Juan").
+
 ### Fase 4 — Operador y herramientas ⏳ **DESCRIPCIÓN SUPERSEDIDA (2026-08-13)**
 
 > DeepSeek deja de ser "el operador" y pasa a ser el noveno que sólo informa

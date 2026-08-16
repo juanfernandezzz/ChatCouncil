@@ -45,6 +45,7 @@ interface CcBridge {
   leer: () => Promise<Lectura[]>;
   sesiones: () => Promise<{ id: string; cookies: number }[]>;
   sondear: () => Promise<Sondeo>;
+  desplazar: (direccion: 1 | -1) => Promise<{ scrollX: number; anchoTotal: number; ventanaAncho: number }>;
 }
 declare global {
   interface Window {
@@ -192,5 +193,17 @@ $("sondear").addEventListener("click", () => {
       boton.disabled = false;
     });
 });
+
+/**
+ * Desplazamiento horizontal de la fila de paneles. Con anchos heterogéneos
+ * por proveedor (medidos con `--cc-barrido`), la fila ya no entra entera en
+ * la ventana: se desplaza en vez de apretarse. Nunca navega ni recarga —el
+ * proceso principal sólo mueve `setBounds`— así que la continuidad de hilo
+ * de cada panel no se toca.
+ */
+const izquierda = document.getElementById("desplazar-izquierda") as HTMLButtonElement | null;
+const derecha = document.getElementById("desplazar-derecha") as HTMLButtonElement | null;
+izquierda?.addEventListener("click", () => void window.cc.desplazar(-1));
+derecha?.addEventListener("click", () => void window.cc.desplazar(1));
 
 export {};

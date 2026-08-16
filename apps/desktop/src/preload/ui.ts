@@ -17,4 +17,7 @@ contextBridge.exposeInMainWorld("cc", {
    */
   sondear: (): Promise<{ ok: boolean; ruta: string | null; paneles: number; error?: string }> =>
     ipcRenderer.invoke("cc:sondear"),
+  /** Desplaza la fila de paneles. Nunca navega: sólo cambia posición. */
+  desplazar: (direccion: 1 | -1): Promise<{ scrollX: number; anchoTotal: number; ventanaAncho: number }> =>
+    ipcRenderer.invoke("cc:desplazar", direccion),
 });

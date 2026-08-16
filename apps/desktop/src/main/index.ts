@@ -128,7 +128,7 @@ app.setName("ChatCouncil");
 app.setPath("userData", join(app.getPath("appData"), "ChatCouncil"));
 
 const ARGV = process.argv.slice(1);
-type Modo = "normal" | "test" | "probe" | "login" | "sesion" | "historial";
+type Modo = "normal" | "test" | "probe" | "login" | "sesion" | "historial" | "barrido";
 
 /**
  * `--cc-historial=<id>` vuelca UNA conversación por stdout como JSON, leída
@@ -156,6 +156,15 @@ const HISTORIAL_ID = (ARGV.find((a) => a.startsWith("--cc-historial=")) ?? "").s
  * La cookie es nuestra, en `https://localhost/`, y no toca ninguna credencial.
  */
 const SESION = /^(escribir|leer)$/.exec((ARGV.find((a) => a.startsWith("--cc-sesion=")) ?? "").split("=")[1] ?? "");
+/**
+ * `--cc-barrido`: barrido de ANCHOS sobre vistas YA ABIERTAS, para derivar el
+ * ancho mínimo funcional de cada proveedor — el menor ancho en el que
+ * `composer`, un control de envío y `modelLabel` siguen presentes en el DOM.
+ * NO abre ni cierra ningún proceso entre anchos: es un `setBounds` sobre la
+ * misma vista, una apertura y un cierre por proveedor. Reutiliza `sondear()`,
+ * así que hereda sus garantías: nunca envía, sólo escribe si hay un selector
+ * de compositor YA derivado (igual que `--cc-probe-escribe`).
+ */
 const MODO: Modo = HISTORIAL_ID
   ? "historial"
   : SESION
@@ -166,7 +175,9 @@ const MODO: Modo = HISTORIAL_ID
     ? "probe"
     : ARGV.includes("--cc-login") || process.env["CC_LOGIN"] === "1"
       ? "login"
-      : "normal";
+      : ARGV.includes("--cc-barrido") || process.env["CC_BARRIDO"] === "1"
+        ? "barrido"
+        : "normal";
 
 /**
  * `--cc-probe-escribe`: el sondeo escribe un marcador neutro antes de mirar,
@@ -210,8 +221,49 @@ for (const a of ARGV) {
   COMPOSITORES_CLI.set(v.slice(0, corte), v.slice(corte + 1));
 }
 
-/** Los candidatos sólo se abren cuando se los va a reconocer o loguear. */
-const CON_CANDIDATOS = MODO === "probe" || MODO === "login";
+/**
+ * Selectores YA DERIVADOS por sondeo real (Tarea 2, 2026-08-13) para
+ * candidatos que todavía no tienen spec en `specs.json` — ver
+ * `docs/BLUEPRINT.md` §5 (C0b, C0c). Sirven de default para `--cc-barrido`
+ * y para `--cc-probe-escribe` sin tener que repetirlos por línea de
+ * comandos. `COMPOSITORES_CLI` los pisa si se pasan explícitos.
+ *
+ * `responseRoot`/`assistantMessage` siguen PENDIENTE para los cinco: no se
+ * pueden derivar sin una conversación con al menos una respuesta, y esto no
+ * es una spec cerrada — es apoyo para instrumentos de reconocimiento.
+ */
+const SELECTORES_CONOCIDOS: Readonly<
+  Record<string, { composer?: string; modelLabel?: string; submit?: string }>
+> = {
+  qwen: {
+    composer: "textarea.message-input-textarea",
+    modelLabel: 'div[aria-label="Select Model"]',
+    submit: 'button[aria-label="Send"]',
+  },
+  kimi: { composer: "div.chat-input-editor" },
+  grok: {
+    composer: 'div[aria-label="Ask Grok anything"]',
+    modelLabel: "#model-select-trigger",
+    submit: 'button[data-testid="chat-submit"]',
+  },
+  mistral: {
+    composer: "div.ProseMirror",
+    modelLabel: 'button[aria-label="Rápido"]',
+    submit: 'button[aria-label="Enviar"]',
+  },
+  deepseek: { composer: 'textarea._27c9245.ds-scroll-area', submit: "div.ds-button.ds-button--primary" },
+};
+
+/**
+ * Anchos del barrido de `--cc-barrido`. Los saltos de layout de la mayoría de
+ * las interfaces web caen en los breakpoints de Tailwind (640/768/1024/1280);
+ * son EXPECTATIVA, no dato — por eso el barrido mide una grilla más fina
+ * alrededor y no se conforma con esos cuatro números sueltos.
+ */
+const ANCHOS_BARRIDO = [400, 500, 640, 768, 900, 1024, 1200, 1366] as const;
+
+/** Los candidatos sólo se abren cuando se los va a reconocer, loguear o medir. */
+const CON_CANDIDATOS = MODO === "probe" || MODO === "login" || MODO === "barrido";
 
 /**
  * `--cc-solo=<id>` abre UN solo investigador.
@@ -463,7 +515,56 @@ function registrarRespuestasDeRondaActual(lecturas: readonly LecturaProveedor[])
  * cambian atributos por debajo de ese umbral. Por eso el sondeo reporta con
  * qué ancho de panel se tomó cada muestra.
  */
-const DISPOSICION = "fila-horizontal";
+const DISPOSICION = "fila-horizontal-con-scroll";
+
+/**
+ * ANCHO POR PROVEEDOR, y no un reparto uniforme.
+ *
+ * El reparto uniforme (`Math.floor(width / n)`) fuerza a todos los paneles al
+ * mismo ancho aunque sus interfaces necesiten anchos distintos para no
+ * esconder `modelLabel`, el compositor o el control de envío. Medido con
+ * `--cc-barrido` (Tarea de scroll horizontal, 2026-08-13): cada proveedor
+ * tiene su propio ANCHO MÍNIMO FUNCIONAL, no un número compartido.
+ *
+ * `ANCHO_MINIMO_MEDIDO` sólo lleva los proveedores que YA se midieron con
+ * `--cc-barrido`, con salida real (ver `docs/BLUEPRINT.md`). El que no está
+ * acá usa `ANCHO_PROVISIONAL`, declarado como tal — no es un número supuesto
+ * escondido en el código, es un default explícito para lo que falta medir.
+ *
+ * MEDIDO el 2026-08-13, `--cc-barrido` sobre qwen/kimi/grok/mistral/deepseek,
+ * anchos 400 a 1366 (`sondeo-barrido.txt`):
+ *   qwen, grok, mistral → `composer`, un control cerca del compositor y
+ *     `modelLabel` siguen los tres presentes en TODO el rango probado. El
+ *     ancho mínimo real puede ser MENOR a 400: es el piso del barrido, no un
+ *     mínimo confirmado — se necesitaría un barrido con anchos más chicos
+ *     para acotarlo mejor. Se usa 400 porque es el menor valor con evidencia.
+ *   kimi, deepseek → `composer` y controles cerca del compositor presentes en
+ *     TODO el rango, pero `modelLabel` AUSENTE en los ocho anchos, incluido
+ *     1366. Es un HALLAZGO, no un defecto del barrido: ninguno de los dos
+ *     tiene, en esta cuenta, un selector de etiqueta de modelo confirmado
+ *     (ver C0b/C0c). No se les asigna ancho medido — quedan en
+ *     `ANCHO_PROVISIONAL` hasta que haya uno.
+ */
+const ANCHO_PROVISIONAL = 500;
+const ANCHO_MINIMO_MEDIDO: Readonly<Record<string, number>> = {
+  qwen: 400,
+  grok: 400,
+  mistral: 400,
+};
+function anchoDe(id: string): number {
+  return ANCHO_MINIMO_MEDIDO[id] ?? ANCHO_PROVISIONAL;
+}
+
+/**
+ * DESPLAZAMIENTO HORIZONTAL. Con anchos heterogéneos, el reparto uniforme ya
+ * no puede meter a todos en la ventana: la fila se desplaza en vez de
+ * apretarse. `scrollX` es sólo estado de POSICIÓN — mover la fila es un
+ * `setBounds`, nunca una navegación, así que el contador de navegaciones de
+ * cada vista queda intacto al desplazarse (es la prueba, no la impresión
+ * visual).
+ */
+let scrollX = 0;
+const PASO_DESPLAZAMIENTO = 400;
 
 function layout(): void {
   if (!win || !uiView) return;
@@ -471,14 +572,27 @@ function layout(): void {
   uiView.setBounds({ x: 0, y: 0, width, height: UI_HEIGHT });
 
   const abiertas = todas();
-  const n = abiertas.length;
-  if (n === 0) return;
-  const w = Math.floor(width / n);
   const h = Math.max(0, height - UI_HEIGHT);
+  if (abiertas.length === 0) return;
 
-  abiertas.forEach((v, i) => {
-    v.view.setBounds({ x: i * w, y: UI_HEIGHT, width: w, height: h });
-  });
+  const anchoTotal = abiertas.reduce((acc, v) => acc + anchoDe(v.id), 0);
+  const scrollMax = Math.max(0, anchoTotal - width);
+  if (scrollX > scrollMax) scrollX = scrollMax;
+  if (scrollX < 0) scrollX = 0;
+
+  let x = 0;
+  for (const v of abiertas) {
+    const w = anchoDe(v.id);
+    v.view.setBounds({ x: x - scrollX, y: UI_HEIGHT, width: w, height: h });
+    x += w;
+  }
+}
+
+function desplazar(direccion: 1 | -1): { scrollX: number; anchoTotal: number; ventanaAncho: number } {
+  scrollX += direccion * PASO_DESPLAZAMIENTO;
+  layout();
+  const anchoTotal = todas().reduce((acc, v) => acc + anchoDe(v.id), 0);
+  return { scrollX, anchoTotal, ventanaAncho: win ? win.getContentBounds().width : 0 };
 }
 
 /** Navegaciones a cierre de sesión que se frenaron. Va al informe del sondeo. */
@@ -705,6 +819,13 @@ function registrarIpc(): void {
   ipcMain.handle("cc:sesiones", async () => sesiones());
 
   ipcMain.handle("cc:sondear", async () => sondeoVivo());
+
+  /**
+   * Desplaza la fila de paneles. `direccion` es -1 (izquierda) o 1 (derecha).
+   * Nunca navega ni recarga: es un `setBounds` sobre las vistas ya abiertas,
+   * así que el contador de navegaciones de cada una queda intacto.
+   */
+  ipcMain.handle("cc:desplazar", (_e, direccion: 1 | -1) => desplazar(direccion));
 }
 
 /**
@@ -1037,6 +1158,105 @@ function modoLogin(): void {
 }
 
 /**
+ * Modo de barrido de anchos (`--cc-barrido`). Deriva el ANCHO MÍNIMO
+ * FUNCIONAL de cada proveedor abierto: el menor ancho en el que `composer`,
+ * un control cerca del compositor con forma de envío, y `modelLabel` siguen
+ * presentes en el DOM.
+ *
+ * NO abre ni cierra ningún proceso entre anchos — sería la misma forma de
+ * defecto que ya corrompió cuatro logins (§10, "60"): una apertura, un
+ * barrido de `setBounds` sobre la MISMA vista, un cierre.
+ *
+ * REPOSO, A PROPÓSITO — no se pasa `composerSelector` a `sondear()`.
+ *
+ * La primera versión SÍ lo pasaba, y `sondear()` trata "hay composerSelector"
+ * como "escribir": entra al camino de `--cc-probe-escribe`, que prueba TRES
+ * métodos de escritura y para cada uno espera hasta `envioLimiteMs` (15000 ms)
+ * a que aparezca un control de envío — pero sin `submitSelector` ese conteo
+ * nunca puede pasar de -1, así que cada método agota el límite entero. Son
+ * 3 métodos × 8 anchos × 5 proveedores, cada uno tocando el piso de 15 s:
+ * more de 30 minutos reales, y en la corrida del 2026-08-13 quedó colgado
+ * mucho más que eso — hubo que matar el proceso a mano. MEDIDO, no supuesto:
+ * los PID no avanzaron entre dos chequeos con varios minutos de diferencia.
+ *
+ * La detección de `composer` en reposo usa el selector GENÉRICO que
+ * `sondear()` ya usa cuando no se le pasa uno propio (`textarea,
+ * div[contenteditable="true"], [role="textbox"]`): estructural, sin
+ * escribir nada, y alcanza para la pregunta que este barrido hace ("¿sigue
+ * habiendo ALGO con forma de compositor a este ancho?"), que es más gruesa
+ * que la que responde una spec cerrada.
+ *
+ * `envio` se mide igual de estructural, con `controlesDelCompositor` —que no
+ * depende de que el compositor tenga texto, sólo de que exista— y, cuando
+ * hay un selector de envío YA conocido (`SELECTORES_CONOCIDOS`), también con
+ * una consulta directa a ESE selector.
+ */
+async function modoBarrido(): Promise<void> {
+  try {
+    await new Promise((r) => setTimeout(r, 20_000));
+    const objetivos = todas().filter((v) => SELECCION.length === 0 || SELECCION.includes(v.id));
+    const resultados: Record<
+      string,
+      { ancho: number; composer: boolean; envio: boolean; modelLabel: boolean }[]
+    > = {};
+    for (const v of objetivos) {
+      const conocidos = SELECTORES_CONOCIDOS[v.id] ?? {};
+      const modelSel = conocidos.modelLabel;
+      const submitSel = conocidos.submit;
+      const alto = v.view.getBounds().height || 596;
+      const filas: { ancho: number; composer: boolean; envio: boolean; modelLabel: boolean }[] = [];
+      for (const ancho of ANCHOS_BARRIDO) {
+        v.view.setBounds({ x: 0, y: UI_HEIGHT, width: ancho, height: alto });
+        await new Promise((r) => setTimeout(r, 700));
+        const [muestra] = await sondear([
+          {
+            id: v.id,
+            panel: `${ancho}x${alto}`,
+            ejecutar: (fuente: string) => v.view.webContents.executeJavaScript(fuente, true),
+            // SIN composerSelector: reposo, sin escribir. Ver comentario arriba.
+            ...(modelSel ? { modelLabelSelector: modelSel } : {}),
+          },
+        ]);
+        const composerOk = (muestra?.compositor?.length ?? 0) > 0;
+        let envioOk = (muestra?.controlesDelCompositor?.length ?? 0) > 0 || (muestra?.envio?.length ?? 0) > 0;
+        if (!envioOk && submitSel) {
+          // Consulta directa al selector YA conocido, por si el barrido
+          // estructural no lo propuso como candidato (mismo motivo que
+          // `etiquetaModeloSpec`: "ningun candidato lo propuso" no es "no esta").
+          try {
+            const count = (await v.view.webContents.executeJavaScript(
+              `document.querySelectorAll(${JSON.stringify(submitSel)}).length`,
+              true,
+            )) as number;
+            envioOk = count > 0;
+          } catch (e) {
+            /* selector invalido a este ancho: queda en false */
+          }
+        }
+        const modelOk = modelSel
+          ? !!muestra?.etiquetaModeloSpec?.presente
+          : (muestra?.etiquetaModeloPorAtributo?.length ?? 0) +
+              (muestra?.etiquetaModeloPorTexto?.length ?? 0) +
+              (muestra?.etiquetaModeloPorForma?.length ?? 0) >
+            0;
+        filas.push({ ancho, composer: composerOk, envio: envioOk, modelLabel: modelOk });
+      }
+      resultados[v.id] = filas;
+    }
+    const anchoMinimoPorId: Record<string, number | null> = {};
+    for (const [id, filas] of Object.entries(resultados)) {
+      const ok = filas.find((f) => f.composer && f.envio && f.modelLabel);
+      anchoMinimoPorId[id] = ok ? ok.ancho : null;
+    }
+    emitir("CC_BARRIDO_JSON", { anchos: ANCHOS_BARRIDO, resultados, anchoMinimoPorId });
+  } catch (e) {
+    decirPorSalida(`\n===CC_BARRIDO_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+  } finally {
+    app.quit();
+  }
+}
+
+/**
  * Modo de historial (`--cc-historial=<id>`). Vuelca por stdout, como JSON, el
  * registro completo de una conversación — leído con `leerRegistro` del
  * paquete de dominio, la misma función que valida el archivo en cualquier
@@ -1187,6 +1407,7 @@ void app.whenReady().then(() => {
   if (MODO === "test") void modoPrueba();
   if (MODO === "probe") void modoSondeo();
   if (MODO === "login") modoLogin();
+  if (MODO === "barrido") void modoBarrido();
   if (MODO === "sesion") void modoSesion();
   if (MODO === "historial") modoHistorial();
   app.on("activate", () => {

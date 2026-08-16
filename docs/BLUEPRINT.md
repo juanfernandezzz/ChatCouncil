@@ -785,6 +785,70 @@ Queda **PENDIENTE** de esa ronda real. Se documenta acá en vez de adivinarse:
 §5, regla 5 de la corrida ("lo que no se puede medir con los instrumentos que
 hay no se adivina") y AGENTES.md ("es técnicamente imposible sin Juan").
 
+#### C0d — ancho mínimo por proveedor y scroll horizontal, para que Juan pueda enviar en los cinco
+
+Antes de la ronda real de arriba, Juan quedó bloqueado: `IniciarSesionProveedores.cmd`
+abría sólo tres paneles y no había forma de desplazarse hasta qwen y kimi para
+enviarles el mensaje que la Tarea 2 necesita. Esto se resolvió antes de cerrar
+la Tarea 2.
+
+**El defecto de la primera corrida de `--cc-barrido`, y por qué importa
+registrarlo.** La primera versión del barrido pasaba `composerSelector` a
+`sondear()` sin `submitSelector`. `sondear()` trata "hay composerSelector"
+como "escribir": entra al camino de `--cc-probe-escribe`, que prueba TRES
+métodos de escritura y por cada uno espera hasta `envioLimiteMs` (15000 ms) a
+que aparezca un control de envío — pero sin `submitSelector` ese conteo nunca
+puede pasar de -1, así que cada método agota el límite entero. Con 3 métodos
+× 8 anchos × 5 proveedores eso ya son más de 30 minutos sólo de espera
+estructural, y la corrida real quedó colgada bastante más que eso: **medido**,
+los PID de los procesos de Electron no avanzaron entre dos chequeos separados
+por varios minutos, y hubo que matar el proceso a mano (`taskkill /F /IM
+electron.exe /T`) — no se navegó ni se cerró ninguna partición real en el
+proceso, así que no hay riesgo de sesión perdida, pero tampoco hay dato: se
+descarta la corrida entera.
+
+**La corrección**: el barrido corre en REPOSO — nunca pasa `composerSelector`,
+así que `sondear()` no entra al camino de escritura. La detección de
+`composer` usa el patrón genérico de `sondear()` (`textarea,
+div[contenteditable="true"], [role="textbox"]`); la de un control de envío
+usa `controlesDelCompositor` (no depende de que haya texto) y, cuando hay un
+selector de envío ya conocido, una consulta directa a ese selector.
+
+**MEDIDO el 2026-08-13**, `--cc-barrido` sobre qwen/kimi/grok/mistral/deepseek,
+anchos 400 a 1366 px (`sondeo-barrido.txt`):
+
+| proveedor | composer | control de envío | `modelLabel` | ancho mínimo |
+|---|---|---|---|---|
+| qwen | presente en los 8 anchos | presente en los 8 | presente en los 8 | **400** (piso del rango probado, no un mínimo confirmado) |
+| grok | ídem | ídem | ídem | **400** (ídem) |
+| mistral | ídem | ídem | ídem | **400** (ídem) |
+| kimi | presente en los 8 | presente en los 8 | **ausente en los 8, incluido 1366** | sin medir — es un hallazgo, no falta de rango |
+| deepseek | presente en los 8 | presente en los 8 | **ausente en los 8, incluido 1366** | sin medir, mismo motivo |
+
+Que kimi y deepseek no muestren `modelLabel` ni siquiera a pantalla completa
+es consistente con C0b/C0c: ninguno de los dos tiene, en esta cuenta, un
+selector de etiqueta de modelo confirmado — no es un problema de ancho.
+
+**Scroll horizontal con anchos heterogéneos.** `layout()` (antes
+`Math.floor(width / n)`, reparto uniforme forzado) ahora asigna a cada
+proveedor su `anchoDe(id)` —el medido arriba, o `ANCHO_PROVISIONAL = 500`
+para el que todavía no tiene medición— y los coloca en fila con un offset
+`scrollX`. Dos botones nuevos en la barra (`◀`/`▶`, `cc:desplazar`) mueven
+`scrollX`; el mecanismo es sólo `setBounds`, nunca navegación, así que el
+contador de navegaciones de cada vista queda intacto al desplazarse — la
+prueba estructural, no la impresión visual. **Verificado con `--cc-probe`
+sobre los cinco candidatos**: `qwen 400x596 · kimi 500x596 · grok 400x596 ·
+mistral 400x596 · deepseek 500x596` (`sondeo-tarea2c.txt`), heterogéneo como
+se esperaba.
+
+**`IniciarSesionProveedores.cmd`** pasa a abrir los CINCO candidatos
+(`--cc-solo=grok,mistral,deepseek,qwen,kimi`) en vez de tres, con su texto
+sincronizado: qué abre, que los anchos son heterogéneos, que hay que
+desplazarse con las flechas para llegar a qwen y kimi, y cómo confirmar un
+login (compositor visible, no conteo de cookies — mismo criterio que ya
+regía). Se mantiene la forma de abrir un subconjunto por terminal, para un
+login puntual.
+
 ### Fase 4 — Operador y herramientas ⏳ **DESCRIPCIÓN SUPERSEDIDA (2026-08-13)**
 
 > DeepSeek deja de ser "el operador" y pasa a ser el noveno que sólo informa

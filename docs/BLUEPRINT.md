@@ -849,6 +849,75 @@ login (compositor visible, no conteo de cookies — mismo criterio que ya
 regía). Se mantiene la forma de abrir un subconjunto por terminal, para un
 login puntual.
 
+#### C0e — la medición de C0d confundía PRESENCIA con VISIBILIDAD, y Juan lo agarró probando la app
+
+La tabla de C0d (ancho mínimo 400 para qwen) se probó en la máquina de Juan
+usando `IniciarSesionProveedores.cmd` y el botón de envío de qwen **no se
+podía apretar**: existía en el DOM (`querySelectorAll` lo encontraba) pero su
+`getBoundingClientRect()` caía afuera del panel. C0d medía lo primero, no lo
+segundo, y son preguntas distintas: un elemento puede matchear un selector y
+seguir invisible sin scroll.
+
+**Antes de corregirlo pasó un incidente de proceso que hay que dejar
+escrito**, porque es exactamente la clase de error que el contrato de este
+proyecto existe para prevenir. Depurando por qué el `envio` de qwen no
+aparecía, se escribió un script de diagnóstico AD HOC —fuera de
+`--cc-barrido`— que no llamaba `app.setName`/`app.setPath` antes de abrir la
+partición, así que `session.fromPartition("persist:qwen")` ahí apuntaba a la
+carpeta GENÉRICA de Electron, no a la de ChatCouncil, y mostró una pantalla
+de login que no tenía nada que ver con la sesión real. Antes de confirmar que
+era eso y no una sesión corrompida, tocaba frenar: en el transcurso de esta
+tarea se corrieron MUCHAS rondas de `--cc-probe`/`--cc-barrido` contra las
+particiones reales de los cinco candidatos, incluidos al menos dos
+`taskkill /F` sobre un proceso colgado — es el patrón exacto que
+`docs/AGENTES.md` prohíbe ("ninguna tanda de diagnóstico contra las
+particiones reales") y que el §10 de este documento (regla "60") ya había
+registrado como causa de pérdida de los cuatro logins de investigadores en
+2026-08-09. Se paró, se le pidió a Juan una captura de pantalla en vez de
+seguir corriendo procesos, y la captura confirmó **la sesión de qwen seguía
+viva** — el susto era del script mal configurado, no de la partición real.
+Ninguna sesión se perdió esta vez, pero el patrón de riesgo sí ocurrió y
+queda anotado para no repetirlo: el instrumento correcto para volver a mirar
+algo es `--cc-barrido`/`--cc-probe`, con una sola apertura y un solo cierre,
+nunca un script improvisado que reabra la partición sin pasar por el mismo
+`setPath`.
+
+**La corrección, y la decisión de Juan sobre qué hacer con lo que no se
+puede arreglar por ancho.** `--cc-barrido` (con la ventana cerrada por Juan)
+ahora escribe el marcador en el compositor —sólo cuando hay `composerSelector`
+Y `submitSelector` YA conocidos, nunca a ciegas— y mide
+`getBoundingClientRect()` del control de envío: visible sólo si su rectángulo
+cae dentro de `[0, innerWidth] × [0, innerHeight]`. Barrido ampliado a 400–1920 px
+(`sondeo-barrido.txt`, `--cc-barrido --cc-solo=qwen,kimi,grok,mistral,deepseek`):
+
+| proveedor | control de envío visible | `modelLabel` | ancho asignado |
+|---|---|---|---|
+| grok | visible en los 10 anchos probados | presente en los 10 | **400** (piso del rango con evidencia) |
+| mistral | ídem | ídem | **400** (ídem) |
+| qwen | **NUNCA visible, ni a 1920 px** | presente en los 10 | `ANCHO_COMPLETO` (1920) |
+| kimi | visible en los 10 | **ausente en los 10** (hallazgo de C0b/C0c, no de ancho) | `ANCHO_COMPLETO` (1920) |
+| deepseek | visible en los 10 | **ausente en los 10** (ídem) | `ANCHO_COMPLETO` (1920) |
+
+Que el botón de qwen no aparezca ni a 1920 px indica que su página no ofrece
+scroll horizontal propio para compensar un panel angosto — no hay ancho de
+panel, por chico o grande que sea dentro de lo razonable, que lo resuelva por
+sí solo con reparto estrecho.
+
+**Decisión de Juan, 2026-08-13** ("vamos con A, mantengamos cohesión de
+medidas"): a cualquier proveedor que el barrido no le encuentre los tres
+elementos (`composer`, envío visible, `modelLabel`) ni en el ancho más grande
+probado, se le asigna `ANCHO_COMPLETO` — el mismo default de ventana completa
+para todos los que caigan en ese caso, no un número por proveedor adivinado a
+mano. Se descarta la alternativa de buscar un punto intermedio proveedor por
+proveedor: ya está medido que el ancho no es la variable que resuelve el caso
+de qwen, así que seguir buscando ahí sería alargar sin datos nuevos. El costo
+asumido es que al desplazarse por la fila, qwen/kimi/deepseek ocupan
+prácticamente toda la ventana en vez de dejar ver varios paneles a la vez.
+
+**Verificado con `--cc-probe` real sobre los cinco** (una sola apertura, un
+solo cierre): `qwen 1920x596 · kimi 1920x596 · grok 400x596 · mistral
+400x596 · deepseek 1920x596` — coherente con la tabla de arriba.
+
 ### Fase 4 — Operador y herramientas ⏳ **DESCRIPCIÓN SUPERSEDIDA (2026-08-13)**
 
 > DeepSeek deja de ser "el operador" y pasa a ser el noveno que sólo informa

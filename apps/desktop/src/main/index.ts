@@ -260,7 +260,25 @@ const SELECTORES_CONOCIDOS: Readonly<
  * son EXPECTATIVA, no dato — por eso el barrido mide una grilla más fina
  * alrededor y no se conforma con esos cuatro números sueltos.
  */
-const ANCHOS_BARRIDO = [400, 500, 640, 768, 900, 1024, 1200, 1366] as const;
+/**
+ * Sube hasta 1600 y no se para en 1366: con scroll horizontal el panel de UN
+ * proveedor no tiene por qué caber en la pantalla junto a los demás — el
+ * usuario se desplaza hasta él. La primera version de este barrido se paraba
+ * en 1366 (el ancho de la pantalla de Juan) por costumbre de la Fase 1/2, y
+ * eso no tiene sentido acá: lo único que importa es el ancho que LA PAGINA
+ * necesita para no esconder su propio boton de envio, no el de la ventana.
+ */
+const ANCHOS_BARRIDO = [400, 500, 640, 768, 900, 1024, 1200, 1366, 1600, 1920] as const;
+
+/**
+ * Ancho de RESPALDO cuando ningún ancho probado deja el control de envío
+ * visible sin scroll interno (decisión de Juan, 2026-08-13: "vamos con A,
+ * mantengamos cohesión de medidas"). No es un número por proveedor adivinado
+ * a mano: es el mismo default de ancho completo para cualquiera que caiga en
+ * ese caso, medido igual que los demás — el ancho más grande de
+ * `ANCHOS_BARRIDO`.
+ */
+const ANCHO_COMPLETO: number = ANCHOS_BARRIDO[ANCHOS_BARRIDO.length - 1]!;
 
 /** Los candidatos sólo se abren cuando se los va a reconocer, loguear o medir. */
 const CON_CANDIDATOS = MODO === "probe" || MODO === "login" || MODO === "barrido";
@@ -531,25 +549,38 @@ const DISPOSICION = "fila-horizontal-con-scroll";
  * acá usa `ANCHO_PROVISIONAL`, declarado como tal — no es un número supuesto
  * escondido en el código, es un default explícito para lo que falta medir.
  *
- * MEDIDO el 2026-08-13, `--cc-barrido` sobre qwen/kimi/grok/mistral/deepseek,
- * anchos 400 a 1366 (`sondeo-barrido.txt`):
- *   qwen, grok, mistral → `composer`, un control cerca del compositor y
- *     `modelLabel` siguen los tres presentes en TODO el rango probado. El
- *     ancho mínimo real puede ser MENOR a 400: es el piso del barrido, no un
- *     mínimo confirmado — se necesitaría un barrido con anchos más chicos
- *     para acotarlo mejor. Se usa 400 porque es el menor valor con evidencia.
- *   kimi, deepseek → `composer` y controles cerca del compositor presentes en
- *     TODO el rango, pero `modelLabel` AUSENTE en los ocho anchos, incluido
- *     1366. Es un HALLAZGO, no un defecto del barrido: ninguno de los dos
- *     tiene, en esta cuenta, un selector de etiqueta de modelo confirmado
- *     (ver C0b/C0c). No se les asigna ancho medido — quedan en
- *     `ANCHO_PROVISIONAL` hasta que haya uno.
+ * MEDICIÓN FINAL, 2026-08-13 — `--cc-barrido` con `getBoundingClientRect`
+ * (visibilidad real, no sólo presencia en el DOM) sobre
+ * qwen/kimi/grok/mistral/deepseek, anchos 400 a 1920 (`sondeo-barrido.txt`).
+ * Reemplaza una medición previa que sólo comprobaba PRESENCIA en el DOM: Juan
+ * reportó que con esos números el botón de envío de qwen quedaba fuera del
+ * panel y no se podía apretar — presente y visible son cosas distintas.
+ *
+ *   grok, mistral → composer + control de envío VISIBLE + modelLabel, los
+ *     tres presentes en TODO el rango probado. Ancho: **400** (piso del
+ *     rango con evidencia, no un mínimo confirmado por debajo de eso).
+ *   qwen → composer y modelLabel presentes en los 10 anchos, pero el control
+ *     de envío NUNCA queda visible dentro del panel, ni a 1920 px. La página
+ *     de qwen no ofrece scroll horizontal propio, así que un panel angosto
+ *     no tiene forma de alcanzarlo pase lo que pase con el ancho.
+ *   kimi, deepseek → el control de envío SÍ es visible en todo el rango, pero
+ *     `modelLabel` está AUSENTE en los 10 anchos — hallazgo de C0b/C0c, no
+ *     del ancho: ninguno de los dos tiene, en esta cuenta, un selector de
+ *     etiqueta de modelo confirmado.
+ *
+ * DECISIÓN DE JUAN (2026-08-13, "vamos con A, mantengamos cohesión de
+ * medidas"): a quien el barrido no le encuentre los tres elementos ni en el
+ * ancho más grande probado, se le asigna `ANCHO_COMPLETO` — el mismo default
+ * de ancho de ventana completa para cualquiera que caiga en ese caso, no un
+ * número por proveedor adivinado a mano.
  */
 const ANCHO_PROVISIONAL = 500;
 const ANCHO_MINIMO_MEDIDO: Readonly<Record<string, number>> = {
-  qwen: 400,
   grok: 400,
   mistral: 400,
+  qwen: ANCHO_COMPLETO,
+  kimi: ANCHO_COMPLETO,
+  deepseek: ANCHO_COMPLETO,
 };
 function anchoDe(id: string): number {
   return ANCHO_MINIMO_MEDIDO[id] ?? ANCHO_PROVISIONAL;
@@ -1158,38 +1189,121 @@ function modoLogin(): void {
 }
 
 /**
+ * Marcador de escritura del barrido de anchos. Mismo texto que usa
+ * `probe.ts`, para que las dos herramientas dejen la misma huella
+ * reconocible si algo queda a medio limpiar.
+ */
+const MARCADOR_BARRIDO = "CC-SONDEO-NO-ENVIAR";
+
+/**
+ * Escribe el marcador, mide si `SEL_SUBMIT` queda VISIBLE dentro del
+ * viewport del panel (no sólo presente en el DOM), y limpia. Nunca hace
+ * clic ni despacha una tecla: la escritura usa el mismo repertorio de
+ * eventos que `probe.ts` (Selection API + `beforeinput`, con `textContent`
+ * como respaldo), y la limpieza usa el mismo camino a la inversa.
+ *
+ * Existe PORQUE varios de estos proveedores (qwen, grok — medido el
+ * 2026-08-13) sólo montan su botón de envío cuando el compositor tiene
+ * texto (§7.25, el mismo patrón que Gemini). Medir "visible" en REPOSO da
+ * `false` siempre para esos dos, y eso no distingue "el ancho lo esconde"
+ * de "el botón todavía no existe". Sin escribir, la pregunta de Juan
+ * —¿en qué ancho puedo hacer clic?— no se puede contestar para esos casos.
+ *
+ * Si el compositor ya tenía texto que no es nuestro marcador, se omite: es
+ * un borrador de Juan y esta medición no lo toca.
+ */
+const FUENTE_VISIBILIDAD_ENVIO = `(SEL_COMPOSER, SEL_SUBMIT, MARCADOR) => {
+  const c = document.querySelector(SEL_COMPOSER);
+  if (!c) return { omitido: "sin compositor a este ancho" };
+  const esTextarea = c.tagName === "TEXTAREA" || c.tagName === "INPUT";
+  const leer = () => (esTextarea ? (c.value || "") : (c.textContent || ""));
+  const previo = leer().trim();
+  if (previo.length > 0 && previo !== MARCADOR) {
+    return { omitido: "el compositor tenia texto previo que no es nuestro marcador" };
+  }
+  c.focus();
+  if (esTextarea) {
+    c.value = MARCADOR;
+    c.dispatchEvent(new Event("input", { bubbles: true }));
+  } else {
+    c.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType: "insertText", data: MARCADOR }));
+    if (!(c.textContent || "").includes(MARCADOR)) {
+      c.textContent = MARCADOR;
+      c.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: MARCADOR }));
+    }
+  }
+  return new Promise((resolve) => setTimeout(() => {
+    const el = document.querySelector(SEL_SUBMIT);
+    let visible = false;
+    let matches = 0;
+    try { matches = document.querySelectorAll(SEL_SUBMIT).length; } catch (e) { matches = -1; }
+    if (el) {
+      const r = el.getBoundingClientRect();
+      visible = r.width > 0 && r.height > 0 && r.left >= 0 && r.right <= window.innerWidth && r.top >= 0 && r.bottom <= window.innerHeight;
+    }
+    // Limpieza: Selection API + beforeinput, igual que probe.ts. Sin clic,
+    // sin tecla.
+    try {
+      const sel = window.getSelection();
+      const rango = document.createRange();
+      rango.selectNodeContents(c);
+      sel.removeAllRanges();
+      sel.addRange(rango);
+    } catch (e) { /* se sigue igual */ }
+    try {
+      c.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType: "deleteContentBackward", data: null }));
+      c.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+    } catch (e) { /* idem */ }
+    if (esTextarea) {
+      c.value = "";
+      c.dispatchEvent(new Event("input", { bubbles: true }));
+    } else if (leer().includes(MARCADOR)) {
+      c.innerHTML = "";
+      c.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+    }
+    resolve({ visible: visible, matches: matches, limpio: !leer().includes(MARCADOR) });
+  }, 900));
+}`;
+
+/**
  * Modo de barrido de anchos (`--cc-barrido`). Deriva el ANCHO MÍNIMO
- * FUNCIONAL de cada proveedor abierto: el menor ancho en el que `composer`,
- * un control cerca del compositor con forma de envío, y `modelLabel` siguen
- * presentes en el DOM.
+ * FUNCIONAL de cada proveedor abierto: el menor ancho en el que `composer`
+ * y `modelLabel` están presentes, y el control de envío queda VISIBLE
+ * dentro del viewport del panel — no sólo presente en el DOM.
  *
  * NO abre ni cierra ningún proceso entre anchos — sería la misma forma de
  * defecto que ya corrompió cuatro logins (§10, "60"): una apertura, un
  * barrido de `setBounds` sobre la MISMA vista, un cierre.
  *
- * REPOSO, A PROPÓSITO — no se pasa `composerSelector` a `sondear()`.
+ * DOS DEFECTOS QUE ESTA VERSIÓN CORRIGE, medidos los dos el 2026-08-13:
  *
- * La primera versión SÍ lo pasaba, y `sondear()` trata "hay composerSelector"
- * como "escribir": entra al camino de `--cc-probe-escribe`, que prueba TRES
- * métodos de escritura y para cada uno espera hasta `envioLimiteMs` (15000 ms)
- * a que aparezca un control de envío — pero sin `submitSelector` ese conteo
- * nunca puede pasar de -1, así que cada método agota el límite entero. Son
- * 3 métodos × 8 anchos × 5 proveedores, cada uno tocando el piso de 15 s:
- * more de 30 minutos reales, y en la corrida del 2026-08-13 quedó colgado
- * mucho más que eso — hubo que matar el proceso a mano. MEDIDO, no supuesto:
- * los PID no avanzaron entre dos chequeos con varios minutos de diferencia.
+ *  1. La primera versión pasaba `composerSelector` a `sondear()` sin
+ *     `submitSelector`. `sondear()` trata eso como "escribir" y entra al
+ *     camino de `--cc-probe-escribe`, que prueba TRES métodos de escritura
+ *     y por cada uno espera hasta `envioLimiteMs` (15000 ms) a que aparezca
+ *     un control de envío — sin `submitSelector` ese conteo nunca pasa de
+ *     -1, así que cada método agota el límite entero: 3 × 8 anchos × 5
+ *     proveedores, más de 30 minutos sólo de espera estructural. La corrida
+ *     real quedó colgada bastante más — hubo que matar el proceso a mano
+ *     (PID sin avanzar entre dos chequeos separados por varios minutos).
+ *  2. La segunda versión corrigió (1) yéndose al otro extremo — reposo,
+ *     nunca escribir— y con eso medía PRESENCIA en el DOM, no VISIBILIDAD.
+ *     Juan reportó que el botón de envío de qwen no se podía apretar en el
+ *     ancho que esa versión daba por bueno: **presente en el DOM no es lo
+ *     mismo que visible dentro del panel sin que la página ofrezca su
+ *     propio scroll horizontal**, y la mayoría de estas interfaces no lo
+ *     ofrecen porque están pensadas para ocupar toda la ventana del
+ *     navegador. Peor: en reposo, el botón de qwen y el de grok NI SIQUIERA
+ *     EXISTEN en el DOM (§7.25 — sólo se montan con texto en el
+ *     compositor), así que "presente" y "visible" daban `false` por dos
+ *     motivos distintos sin que el informe lo distinguiera.
  *
- * La detección de `composer` en reposo usa el selector GENÉRICO que
- * `sondear()` ya usa cuando no se le pasa uno propio (`textarea,
- * div[contenteditable="true"], [role="textbox"]`): estructural, sin
- * escribir nada, y alcanza para la pregunta que este barrido hace ("¿sigue
- * habiendo ALGO con forma de compositor a este ancho?"), que es más gruesa
- * que la que responde una spec cerrada.
- *
- * `envio` se mide igual de estructural, con `controlesDelCompositor` —que no
- * depende de que el compositor tenga texto, sólo de que exista— y, cuando
- * hay un selector de envío YA conocido (`SELECTORES_CONOCIDOS`), también con
- * una consulta directa a ESE selector.
+ * Por eso esta versión escribe el marcador (`FUENTE_VISIBILIDAD_ENVIO`)
+ * SÓLO cuando hay `composerSelector` Y `submitSelector` conocidos —nunca
+ * a ciegas—, mide visibilidad real con `getBoundingClientRect`, y limpia.
+ * Nunca hace clic ni despacha una tecla. Cuando falta alguno de los dos
+ * selectores (kimi, hoy), sigue en reposo con la heurística estructural
+ * (`controlesDelCompositor`), que es lo único que hay.
  */
 async function modoBarrido(): Promise<void> {
   try {
@@ -1197,58 +1311,69 @@ async function modoBarrido(): Promise<void> {
     const objetivos = todas().filter((v) => SELECCION.length === 0 || SELECCION.includes(v.id));
     const resultados: Record<
       string,
-      { ancho: number; composer: boolean; envio: boolean; modelLabel: boolean }[]
+      { ancho: number; composer: boolean; envio: boolean; envioOmitido?: string }[]
     > = {};
+    const resultadosModelo: Record<string, { ancho: number; modelLabel: boolean }[]> = {};
     for (const v of objetivos) {
       const conocidos = SELECTORES_CONOCIDOS[v.id] ?? {};
+      const composerSel = conocidos.composer;
       const modelSel = conocidos.modelLabel;
       const submitSel = conocidos.submit;
       const alto = v.view.getBounds().height || 596;
-      const filas: { ancho: number; composer: boolean; envio: boolean; modelLabel: boolean }[] = [];
+      const filas: { ancho: number; composer: boolean; envio: boolean; envioOmitido?: string }[] = [];
+      const filasModelo: { ancho: number; modelLabel: boolean }[] = [];
       for (const ancho of ANCHOS_BARRIDO) {
         v.view.setBounds({ x: 0, y: UI_HEIGHT, width: ancho, height: alto });
         await new Promise((r) => setTimeout(r, 700));
+        // Presencia de composer y modelLabel: reposo, estructural, vía sondear().
         const [muestra] = await sondear([
           {
             id: v.id,
             panel: `${ancho}x${alto}`,
             ejecutar: (fuente: string) => v.view.webContents.executeJavaScript(fuente, true),
-            // SIN composerSelector: reposo, sin escribir. Ver comentario arriba.
             ...(modelSel ? { modelLabelSelector: modelSel } : {}),
           },
         ]);
         const composerOk = (muestra?.compositor?.length ?? 0) > 0;
-        let envioOk = (muestra?.controlesDelCompositor?.length ?? 0) > 0 || (muestra?.envio?.length ?? 0) > 0;
-        if (!envioOk && submitSel) {
-          // Consulta directa al selector YA conocido, por si el barrido
-          // estructural no lo propuso como candidato (mismo motivo que
-          // `etiquetaModeloSpec`: "ningun candidato lo propuso" no es "no esta").
-          try {
-            const count = (await v.view.webContents.executeJavaScript(
-              `document.querySelectorAll(${JSON.stringify(submitSel)}).length`,
-              true,
-            )) as number;
-            envioOk = count > 0;
-          } catch (e) {
-            /* selector invalido a este ancho: queda en false */
-          }
-        }
         const modelOk = modelSel
           ? !!muestra?.etiquetaModeloSpec?.presente
           : (muestra?.etiquetaModeloPorAtributo?.length ?? 0) +
               (muestra?.etiquetaModeloPorTexto?.length ?? 0) +
               (muestra?.etiquetaModeloPorForma?.length ?? 0) >
             0;
-        filas.push({ ancho, composer: composerOk, envio: envioOk, modelLabel: modelOk });
+
+        let envioOk = false;
+        let envioOmitido: string | undefined;
+        if (composerSel && submitSel) {
+          try {
+            const r = (await v.view.webContents.executeJavaScript(
+              `(${FUENTE_VISIBILIDAD_ENVIO})(${JSON.stringify(composerSel)}, ${JSON.stringify(submitSel)}, ${JSON.stringify(MARCADOR_BARRIDO)})`,
+              true,
+            )) as { omitido?: string; visible?: boolean };
+            if (r.omitido) envioOmitido = r.omitido;
+            else envioOk = !!r.visible;
+          } catch (e) {
+            envioOmitido = `error midiendo: ${e instanceof Error ? e.message : String(e)}`;
+          }
+        } else {
+          // Sin los dos selectores, sigue la heuristica estructural en reposo
+          // (presencia, no visibilidad): es lo unico que hay para kimi hoy.
+          envioOk = (muestra?.controlesDelCompositor?.length ?? 0) > 0 || (muestra?.envio?.length ?? 0) > 0;
+        }
+        filas.push({ ancho, composer: composerOk, envio: envioOk, ...(envioOmitido ? { envioOmitido } : {}) });
+        filasModelo.push({ ancho, modelLabel: modelOk });
       }
       resultados[v.id] = filas;
+      resultadosModelo[v.id] = filasModelo;
     }
     const anchoMinimoPorId: Record<string, number | null> = {};
-    for (const [id, filas] of Object.entries(resultados)) {
-      const ok = filas.find((f) => f.composer && f.envio && f.modelLabel);
+    for (const id of Object.keys(resultados)) {
+      const filas = resultados[id]!;
+      const filasModelo = resultadosModelo[id]!;
+      const ok = filas.find((f, i) => f.composer && f.envio && filasModelo[i]!.modelLabel);
       anchoMinimoPorId[id] = ok ? ok.ancho : null;
     }
-    emitir("CC_BARRIDO_JSON", { anchos: ANCHOS_BARRIDO, resultados, anchoMinimoPorId });
+    emitir("CC_BARRIDO_JSON", { anchos: ANCHOS_BARRIDO, resultados, resultadosModelo, anchoMinimoPorId });
   } catch (e) {
     decirPorSalida(`\n===CC_BARRIDO_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
   } finally {

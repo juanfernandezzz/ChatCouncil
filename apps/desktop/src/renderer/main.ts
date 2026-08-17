@@ -39,13 +39,20 @@ interface Sondeo {
   paneles: number;
   error?: string;
 }
+interface Posicion {
+  scrollX: number;
+  anchoTotal: number;
+  ventanaAncho: number;
+}
 interface CcBridge {
   investigadores: () => Promise<string[]>;
   difundir: (prompt: string) => Promise<Resultado[]>;
   leer: () => Promise<Lectura[]>;
   sesiones: () => Promise<{ id: string; cookies: number }[]>;
   sondear: () => Promise<Sondeo>;
-  desplazar: (direccion: 1 | -1) => Promise<{ scrollX: number; anchoTotal: number; ventanaAncho: number }>;
+  desplazar: (direccion: 1 | -1) => Promise<Posicion>;
+  desplazarA: (x: number) => Promise<Posicion>;
+  posicion: () => Promise<Posicion>;
 }
 declare global {
   interface Window {
@@ -195,15 +202,37 @@ $("sondear").addEventListener("click", () => {
 });
 
 /**
- * Desplazamiento horizontal de la fila de paneles. Con anchos heterogéneos
- * por proveedor (medidos con `--cc-barrido`), la fila ya no entra entera en
- * la ventana: se desplaza en vez de apretarse. Nunca navega ni recarga —el
- * proceso principal sólo mueve `setBounds`— así que la continuidad de hilo
- * de cada panel no se toca.
+ * Desplazamiento horizontal de la fila de paneles. Cada panel ocupa el ancho
+ * ENTERO de la ventana (decisión de Juan, 2026-08-13): las flechas avanzan
+ * un panel entero —el proveedor siguiente o el anterior— y la barra de
+ * scroll de abajo permite el ajuste FINO entre esos pasos, para ver por
+ * ejemplo la mitad de un panel y la mitad del siguiente. Ninguna de las dos
+ * navega ni recarga —el proceso principal sólo mueve `setBounds`— así que la
+ * continuidad de hilo de cada panel no se toca.
  */
 const izquierda = document.getElementById("desplazar-izquierda") as HTMLButtonElement | null;
 const derecha = document.getElementById("desplazar-derecha") as HTMLButtonElement | null;
-izquierda?.addEventListener("click", () => void window.cc.desplazar(-1));
-derecha?.addEventListener("click", () => void window.cc.desplazar(1));
+const barra = document.getElementById("barra-scroll") as HTMLInputElement | null;
+
+/** Refleja el estado de posición en la barra, sin re-disparar su propio evento. */
+function pintarPosicion(p: Posicion): void {
+  if (!barra) return;
+  const max = Math.max(0, p.anchoTotal - p.ventanaAncho);
+  barra.max = String(max);
+  barra.disabled = max <= 0;
+  if (document.activeElement !== barra) barra.value = String(p.scrollX);
+}
+
+izquierda?.addEventListener("click", () => void window.cc.desplazar(-1).then(pintarPosicion));
+derecha?.addEventListener("click", () => void window.cc.desplazar(1).then(pintarPosicion));
+barra?.addEventListener("input", () => {
+  void window.cc.desplazarA(Number(barra.value)).then(pintarPosicion);
+});
+
+void window.cc.posicion().then(pintarPosicion);
+// La ventana puede resize (y con ella el ancho de cada panel y el máximo de
+// scroll): se vuelve a consultar la posición para que la barra no quede con
+// límites viejos.
+window.addEventListener("resize", () => void window.cc.posicion().then(pintarPosicion));
 
 export {};

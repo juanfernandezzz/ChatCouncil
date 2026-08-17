@@ -17,7 +17,16 @@ contextBridge.exposeInMainWorld("cc", {
    */
   sondear: (): Promise<{ ok: boolean; ruta: string | null; paneles: number; error?: string }> =>
     ipcRenderer.invoke("cc:sondear"),
-  /** Desplaza la fila de paneles. Nunca navega: sólo cambia posición. */
-  desplazar: (direccion: 1 | -1): Promise<{ scrollX: number; anchoTotal: number; ventanaAncho: number }> =>
-    ipcRenderer.invoke("cc:desplazar", direccion),
+  /** Desplaza la fila un PANEL ENTERO (paginado). Nunca navega. */
+  desplazar: (direccion: 1 | -1): Promise<Posicion> => ipcRenderer.invoke("cc:desplazar", direccion),
+  /** Desplaza a una posición ABSOLUTA en píxeles (barra de scroll fina). */
+  desplazarA: (x: number): Promise<Posicion> => ipcRenderer.invoke("cc:desplazarA", x),
+  /** Estado actual de desplazamiento, para dibujar la barra sin moverse primero. */
+  posicion: (): Promise<Posicion> => ipcRenderer.invoke("cc:posicion"),
 });
+
+interface Posicion {
+  scrollX: number;
+  anchoTotal: number;
+  ventanaAncho: number;
+}

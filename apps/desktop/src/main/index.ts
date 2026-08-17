@@ -270,16 +270,6 @@ const SELECTORES_CONOCIDOS: Readonly<
  */
 const ANCHOS_BARRIDO = [400, 500, 640, 768, 900, 1024, 1200, 1366, 1600, 1920] as const;
 
-/**
- * Ancho de RESPALDO cuando ningún ancho probado deja el control de envío
- * visible sin scroll interno (decisión de Juan, 2026-08-13: "vamos con A,
- * mantengamos cohesión de medidas"). No es un número por proveedor adivinado
- * a mano: es el mismo default de ancho completo para cualquiera que caiga en
- * ese caso, medido igual que los demás — el ancho más grande de
- * `ANCHOS_BARRIDO`.
- */
-const ANCHO_COMPLETO: number = ANCHOS_BARRIDO[ANCHOS_BARRIDO.length - 1]!;
-
 /** Los candidatos sólo se abren cuando se los va a reconocer, loguear o medir. */
 const CON_CANDIDATOS = MODO === "probe" || MODO === "login" || MODO === "barrido";
 
@@ -342,8 +332,13 @@ const VENTANA = /^(\d+)x(\d+)$/.exec((ARGV.find((a) => a.startsWith("--cc-ventan
 const VENTANA_W = VENTANA ? Number(VENTANA[1]) : 1600;
 const VENTANA_H = VENTANA ? Number(VENTANA[2]) : 1000;
 
-/** Alto de la franja de la interfaz propia; el resto se reparte entre las vistas. */
-const UI_HEIGHT = 132;
+/**
+ * Alto de la franja de la interfaz propia; el resto se reparte entre las
+ * vistas. Subido de 132 a 158 al agregar la barra de scroll fino permanente
+ * (fila nueva bajo los chips de estado) — si no crece, esa fila queda tapada
+ * por los paneles de proveedor.
+ */
+const UI_HEIGHT = 158;
 
 interface Vista {
   id: string;
@@ -536,66 +531,43 @@ function registrarRespuestasDeRondaActual(lecturas: readonly LecturaProveedor[])
 const DISPOSICION = "fila-horizontal-con-scroll";
 
 /**
- * ANCHO POR PROVEEDOR, y no un reparto uniforme.
+ * CADA PANEL OCUPA EL ANCHO ENTERO DE LA VENTANA (decisión de Juan,
+ * 2026-08-13, segunda ronda: "quiero que cada proveedor ocupe todo el
+ * tamaño horizontal de la misma ventana de ChatCouncil").
  *
- * El reparto uniforme (`Math.floor(width / n)`) fuerza a todos los paneles al
- * mismo ancho aunque sus interfaces necesiten anchos distintos para no
- * esconder `modelLabel`, el compositor o el control de envío. Medido con
- * `--cc-barrido` (Tarea de scroll horizontal, 2026-08-13): cada proveedor
- * tiene su propio ANCHO MÍNIMO FUNCIONAL, no un número compartido.
+ * Reemplaza el ancho HETEROGÉNEO por proveedor de la ronda anterior (C0d/C0e
+ * en `docs/BLUEPRINT.md`, que sigue documentada ahí como registro de lo
+ * medido — no se borra, se supersede). Aquella medición resolvía "¿en qué
+ * ancho se ve el botón de envío?", pero dejaba paneles de tamaños muy
+ * distintos entre sí (400 px junto a 1920 px), que es justo lo que Juan
+ * pidió cambiar: quiere que CUALQUIER proveedor, con su panel a pantalla
+ * completa, tenga garantizado el mismo espacio que le daría abrir esa
+ * página sola en un navegador — que es exactamente la condición en la que
+ * `--cc-barrido` midió que todos funcionan.
  *
- * `ANCHO_MINIMO_MEDIDO` sólo lleva los proveedores que YA se midieron con
- * `--cc-barrido`, con salida real (ver `docs/BLUEPRINT.md`). El que no está
- * acá usa `ANCHO_PROVISIONAL`, declarado como tal — no es un número supuesto
- * escondido en el código, es un default explícito para lo que falta medir.
- *
- * MEDICIÓN FINAL, 2026-08-13 — `--cc-barrido` con `getBoundingClientRect`
- * (visibilidad real, no sólo presencia en el DOM) sobre
- * qwen/kimi/grok/mistral/deepseek, anchos 400 a 1920 (`sondeo-barrido.txt`).
- * Reemplaza una medición previa que sólo comprobaba PRESENCIA en el DOM: Juan
- * reportó que con esos números el botón de envío de qwen quedaba fuera del
- * panel y no se podía apretar — presente y visible son cosas distintas.
- *
- *   grok, mistral → composer + control de envío VISIBLE + modelLabel, los
- *     tres presentes en TODO el rango probado. Ancho: **400** (piso del
- *     rango con evidencia, no un mínimo confirmado por debajo de eso).
- *   qwen → composer y modelLabel presentes en los 10 anchos, pero el control
- *     de envío NUNCA queda visible dentro del panel, ni a 1920 px. La página
- *     de qwen no ofrece scroll horizontal propio, así que un panel angosto
- *     no tiene forma de alcanzarlo pase lo que pase con el ancho.
- *   kimi, deepseek → el control de envío SÍ es visible en todo el rango, pero
- *     `modelLabel` está AUSENTE en los 10 anchos — hallazgo de C0b/C0c, no
- *     del ancho: ninguno de los dos tiene, en esta cuenta, un selector de
- *     etiqueta de modelo confirmado.
- *
- * DECISIÓN DE JUAN (2026-08-13, "vamos con A, mantengamos cohesión de
- * medidas"): a quien el barrido no le encuentre los tres elementos ni en el
- * ancho más grande probado, se le asigna `ANCHO_COMPLETO` — el mismo default
- * de ancho de ventana completa para cualquiera que caiga en ese caso, no un
- * número por proveedor adivinado a mano.
+ * Con esto, `anchoDe()` deja de tener sentido: no hay ancho "por
+ * proveedor", hay un único ancho, el de la ventana.
  */
-const ANCHO_PROVISIONAL = 500;
-const ANCHO_MINIMO_MEDIDO: Readonly<Record<string, number>> = {
-  grok: 400,
-  mistral: 400,
-  qwen: ANCHO_COMPLETO,
-  kimi: ANCHO_COMPLETO,
-  deepseek: ANCHO_COMPLETO,
-};
-function anchoDe(id: string): number {
-  return ANCHO_MINIMO_MEDIDO[id] ?? ANCHO_PROVISIONAL;
+function anchoPanel(): number {
+  return win ? win.getContentBounds().width : 0;
 }
 
 /**
- * DESPLAZAMIENTO HORIZONTAL. Con anchos heterogéneos, el reparto uniforme ya
- * no puede meter a todos en la ventana: la fila se desplaza en vez de
- * apretarse. `scrollX` es sólo estado de POSICIÓN — mover la fila es un
- * `setBounds`, nunca una navegación, así que el contador de navegaciones de
- * cada vista queda intacto al desplazarse (es la prueba, no la impresión
- * visual).
+ * DESPLAZAMIENTO HORIZONTAL, DOS FORMAS.
+ *
+ * `scrollX` es sólo estado de POSICIÓN — mover la fila es un `setBounds`,
+ * nunca una navegación, así que el contador de navegaciones de cada vista
+ * queda intacto al desplazarse (es la prueba, no la impresión visual).
+ *
+ *  1. Las flechas (`desplazar`) avanzan UN PANEL ENTERO (el ancho de la
+ *     ventana): con cada panel a ancho completo, "un paso" es "el proveedor
+ *     siguiente o el anterior".
+ *  2. La barra de scroll permanente (`desplazarA`) mueve a una posición
+ *     ABSOLUTA en píxeles, para el ajuste fino que Juan pidió además de las
+ *     flechas — por ejemplo, ver la mitad derecha de un panel y la mitad
+ *     izquierda del siguiente, sin tener que dar un paso entero.
  */
 let scrollX = 0;
-const PASO_DESPLAZAMIENTO = 400;
 
 function layout(): void {
   if (!win || !uiView) return;
@@ -606,24 +578,32 @@ function layout(): void {
   const h = Math.max(0, height - UI_HEIGHT);
   if (abiertas.length === 0) return;
 
-  const anchoTotal = abiertas.reduce((acc, v) => acc + anchoDe(v.id), 0);
+  const anchoTotal = width * abiertas.length;
   const scrollMax = Math.max(0, anchoTotal - width);
   if (scrollX > scrollMax) scrollX = scrollMax;
   if (scrollX < 0) scrollX = 0;
 
-  let x = 0;
-  for (const v of abiertas) {
-    const w = anchoDe(v.id);
-    v.view.setBounds({ x: x - scrollX, y: UI_HEIGHT, width: w, height: h });
-    x += w;
-  }
+  abiertas.forEach((v, i) => {
+    v.view.setBounds({ x: i * width - scrollX, y: UI_HEIGHT, width, height: h });
+  });
+}
+
+function estadoDesplazamiento(): { scrollX: number; anchoTotal: number; ventanaAncho: number } {
+  const anchoTotal = anchoPanel() * todas().length;
+  return { scrollX, anchoTotal, ventanaAncho: anchoPanel() };
 }
 
 function desplazar(direccion: 1 | -1): { scrollX: number; anchoTotal: number; ventanaAncho: number } {
-  scrollX += direccion * PASO_DESPLAZAMIENTO;
+  scrollX += direccion * anchoPanel();
   layout();
-  const anchoTotal = todas().reduce((acc, v) => acc + anchoDe(v.id), 0);
-  return { scrollX, anchoTotal, ventanaAncho: win ? win.getContentBounds().width : 0 };
+  return estadoDesplazamiento();
+}
+
+/** Posición ABSOLUTA en píxeles, para la barra de scroll de ajuste fino. */
+function desplazarA(x: number): { scrollX: number; anchoTotal: number; ventanaAncho: number } {
+  scrollX = x;
+  layout();
+  return estadoDesplazamiento();
 }
 
 /** Navegaciones a cierre de sesión que se frenaron. Va al informe del sondeo. */
@@ -857,6 +837,19 @@ function registrarIpc(): void {
    * así que el contador de navegaciones de cada una queda intacto.
    */
   ipcMain.handle("cc:desplazar", (_e, direccion: 1 | -1) => desplazar(direccion));
+
+  /**
+   * Posición ABSOLUTA en píxeles, para la barra de scroll permanente que
+   * permite el ajuste fino entre las flechas (que avanzan un panel entero).
+   * Igual que `cc:desplazar`, nunca navega: sólo `setBounds`.
+   */
+  ipcMain.handle("cc:desplazarA", (_e, x: number) => desplazarA(x));
+
+  /**
+   * Estado actual de desplazamiento, para que el renderer pueda dibujar la
+   * barra de scroll (mínimo, máximo, posición) sin tener que moverse primero.
+   */
+  ipcMain.handle("cc:posicion", () => estadoDesplazamiento());
 }
 
 /**

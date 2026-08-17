@@ -23,6 +23,10 @@
       button:disabled { opacity: .5; cursor: default; }
       button.primario { background: #5a4a33; border-color: #6d5a3e; }
       .paneles { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+      .fila-scroll { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+      .fila-scroll span { font-size: 11px; opacity: .7; white-space: nowrap; }
+      #barra-scroll { flex: 1; accent-color: #6d5a3e; cursor: pointer; }
+      #barra-scroll:disabled { opacity: .35; cursor: default; }
       .chip {
         font-size: 12px; padding: 2px 9px; border: 1px solid #3a332c;
         border-radius: 999px; opacity: .85; white-space: nowrap;
@@ -54,6 +58,10 @@
       <button id="desplazar-derecha" title="Desplazar la fila de paneles a la derecha. No navega ni recarga.">▶</button>
     </div>
     <div id="paneles"></div>
+    <div class="fila-scroll">
+      <span>◀ scroll fino ▶</span>
+      <input type="range" id="barra-scroll" min="0" max="0" value="0" title="Desplazamiento fino entre paneles. Nunca navega ni recarga." />
+    </div>
     <div id="estado">Listo.</div>
 
     <dialog id="confirmacion">

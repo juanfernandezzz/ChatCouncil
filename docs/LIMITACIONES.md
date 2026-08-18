@@ -80,6 +80,24 @@ en este repositorio.
   antes de la primera ronda en que ocurre. Ver `docs/BLUEPRINT.md` §5/§10
   para el estado medido de la detección de etiqueta por proveedor.
 
+- **kimi y deepseek no exponen `modelLabel` a ningún ancho.** Barrido
+  400–1920 px: en ninguno de los dos hay, en esta cuenta, un selector de
+  etiqueta de modelo que devuelva un valor. Consecuencia directa: en estos
+  dos proveedores **no hay detección de deriva de versión del modelo** —el
+  mecanismo que la Fase 2 existe para dar no puede operar ahí, no por un
+  defecto del código sino porque la interfaz no expone el dato. *MEDIDA,
+  2026-08-13, `--cc-barrido` (`docs/BLUEPRINT.md` §5, C0e/C0f).*
+
+- **qwen: el control de envío no queda visible a ningún ancho probado**
+  (400 a 1920 px), aunque el botón existe en el DOM
+  (`button[aria-label="Send"]`). Estado: **PENDIENTE**. Hipótesis sin
+  probar: que Enter envíe sin necesidad de que el botón sea visible o
+  clickeable — se decide en la próxima ronda real de Juan; hasta entonces
+  qwen puede no poder operar como investigador ni como operador del pool de
+  8. *MEDIDA (la ausencia de visibilidad), 2026-08-13, `--cc-barrido`
+  (`docs/BLUEPRINT.md` §5, C0e). El estado de si Enter resuelve esto queda
+  PENDIENTE, no medido todavía.*
+
 ## Sobre qué es y qué no es
 
 - Es un instrumento para **comparar** respuestas, no para determinar cuál

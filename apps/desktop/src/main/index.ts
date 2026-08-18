@@ -128,7 +128,7 @@ app.setName("ChatCouncil");
 app.setPath("userData", join(app.getPath("appData"), "ChatCouncil"));
 
 const ARGV = process.argv.slice(1);
-type Modo = "normal" | "test" | "probe" | "login" | "sesion" | "historial" | "barrido";
+type Modo = "normal" | "test" | "probe" | "login" | "sesion" | "historial" | "barrido" | "test-scroll";
 
 /**
  * `--cc-historial=<id>` vuelca UNA conversación por stdout como JSON, leída
@@ -177,7 +177,9 @@ const MODO: Modo = HISTORIAL_ID
       ? "login"
       : ARGV.includes("--cc-barrido") || process.env["CC_BARRIDO"] === "1"
         ? "barrido"
-        : "normal";
+        : ARGV.includes("--cc-test-scroll") || process.env["CC_TEST_SCROLL"] === "1"
+          ? "test-scroll"
+          : "normal";
 
 /**
  * `--cc-probe-escribe`: el sondeo escribe un marcador neutro antes de mirar,
@@ -271,7 +273,7 @@ const SELECTORES_CONOCIDOS: Readonly<
 const ANCHOS_BARRIDO = [400, 500, 640, 768, 900, 1024, 1200, 1366, 1600, 1920] as const;
 
 /** Los candidatos sólo se abren cuando se los va a reconocer, loguear o medir. */
-const CON_CANDIDATOS = MODO === "probe" || MODO === "login" || MODO === "barrido";
+const CON_CANDIDATOS = MODO === "probe" || MODO === "login" || MODO === "barrido" || MODO === "test-scroll";
 
 /**
  * `--cc-solo=<id>` abre UN solo investigador.
@@ -1375,6 +1377,78 @@ async function modoBarrido(): Promise<void> {
 }
 
 /**
+ * Modo de prueba del scroll (`--cc-test-scroll`). Existe porque el commit
+ * anterior afirmó "nunca navega ni recarga — mismo mecanismo de setBounds"
+ * como argumento MECÁNICO, sin medir el contador de navegaciones — que es
+ * justo el instrumento que este proyecto tiene para no tener que creerle a
+ * un argumento así (BLUEPRINT §2, §7: "un dato de procedencia desconocida no
+ * se usa ni para confirmar ni para refutar").
+ *
+ * Ejercita `desplazar()` y `desplazarA()` DIRECTO — las mismas funciones que
+ * llaman los IPC `cc:desplazar` y `cc:desplazarA` — recorriendo la fila
+ * entera de ida y vuelta con las dos formas, y compara
+ * `contadorNavegaciones` de cada vista antes y después. No pasa por clics de
+ * la interfaz porque no hay forma de clickear una `BaseWindow` desde estas
+ * herramientas (mismo motivo que el resto de los modos scriptables); ejercita
+ * el mecanismo exacto que la interfaz dispara, no una aproximación.
+ */
+async function modoTestScroll(): Promise<void> {
+  try {
+    await new Promise((r) => setTimeout(r, 20_000));
+    const objetivos = todas().filter((v) => SELECCION.length === 0 || SELECCION.includes(v.id));
+    const antes: Record<string, number> = {};
+    for (const v of objetivos) antes[v.id] = contadorNavegaciones.get(v.id) ?? 0;
+
+    // 1. Las FLECHAS: recorrer con desplazar(1) hasta el tope, y de vuelta
+    // con desplazar(-1) hasta 0. `estadoDesplazamiento()` after each paso
+    // dice cuándo se llegó al máximo (scrollX deja de crecer).
+    let anterior = -1;
+    let pasos = 0;
+    for (;;) {
+      const r = desplazar(1);
+      pasos++;
+      if (r.scrollX === anterior || pasos > objetivos.length + 2) break;
+      anterior = r.scrollX;
+    }
+    anterior = -1;
+    pasos = 0;
+    for (;;) {
+      const r = desplazar(-1);
+      pasos++;
+      if (r.scrollX === anterior || pasos > objetivos.length + 2) break;
+      anterior = r.scrollX;
+    }
+
+    // 2. La BARRA: recorrer con desplazarA() a varias posiciones absolutas
+    // entre 0 y el máximo, ida y vuelta.
+    const estado0 = estadoDesplazamiento();
+    const max = Math.max(0, estado0.anchoTotal - estado0.ventanaAncho);
+    const pasosBarra = [0, Math.round(max * 0.25), Math.round(max * 0.5), Math.round(max * 0.75), max];
+    for (const x of pasosBarra) desplazarA(x);
+    for (const x of [...pasosBarra].reverse()) desplazarA(x);
+
+    const despues: Record<string, number> = {};
+    for (const v of objetivos) despues[v.id] = contadorNavegaciones.get(v.id) ?? 0;
+
+    const diferencias = objetivos
+      .map((v) => ({ id: v.id, antes: antes[v.id], despues: despues[v.id] }))
+      .filter((d) => d.antes !== d.despues);
+
+    emitir("CC_TEST_SCROLL_JSON", {
+      objetivos: objetivos.map((v) => v.id),
+      antes,
+      despues,
+      diferencias,
+      intacto: diferencias.length === 0,
+    });
+  } catch (e) {
+    decirPorSalida(`\n===CC_TEST_SCROLL_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+  } finally {
+    app.quit();
+  }
+}
+
+/**
  * Modo de historial (`--cc-historial=<id>`). Vuelca por stdout, como JSON, el
  * registro completo de una conversación — leído con `leerRegistro` del
  * paquete de dominio, la misma función que valida el archivo en cualquier
@@ -1526,6 +1600,7 @@ void app.whenReady().then(() => {
   if (MODO === "probe") void modoSondeo();
   if (MODO === "login") modoLogin();
   if (MODO === "barrido") void modoBarrido();
+  if (MODO === "test-scroll") void modoTestScroll();
   if (MODO === "sesion") void modoSesion();
   if (MODO === "historial") modoHistorial();
   app.on("activate", () => {

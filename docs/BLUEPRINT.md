@@ -918,6 +918,63 @@ prácticamente toda la ventana en vez de dejar ver varios paneles a la vez.
 solo cierre): `qwen 1920x596 · kimi 1920x596 · grok 400x596 · mistral
 400x596 · deepseek 1920x596` — coherente con la tabla de arriba.
 
+#### C0f — el ancho por proveedor de C0d/C0e queda SUPERSEDIDO: cada panel usa el ancho de la ventana, no una constante
+
+Juan probó el ancho heterogéneo de C0e (400 px para grok/mistral, 1920 para
+qwen/kimi/deepseek) y pidió otra cosa: que cada proveedor ocupe el ancho
+ENTERO de la ventana, con las flechas paginando de a un proveedor y una barra
+de scroll permanente para el ajuste fino. Con eso, `ANCHO_MINIMO_MEDIDO`,
+`ANCHO_PROVISIONAL` y `ANCHO_COMPLETO` **se borraron del código**: no hay más
+un ancho "por proveedor", hay un único `anchoPanel()` que devuelve
+`win.getContentBounds().width` — el ancho real de la ventana en cada momento,
+no una constante.
+
+**Por qué el informe anterior decía "1920" y el siguiente "1366", y no es una
+contradicción sino dos preguntas distintas.** `ANCHO_COMPLETO = 1920` era el
+último valor de `ANCHOS_BARRIDO`, usado como ancho de PANEL AISLADO durante
+la medición de C0e (¿en qué ancho se ve el botón de envío, probando panel por
+panel?). `qwen 1920x596` en la tabla de C0e es la medición a ESE ancho de
+prueba, no el ancho que la aplicación usa en producción. Con el cambio de
+Juan, la aplicación ya no elige un ancho por proveedor: usa el de la
+VENTANA, que en la máquina de Juan es 1366 px. Por eso el ancho real en la
+app es 1366, no 1920 — la constante `ANCHO_COMPLETO` ni siquiera existe ya
+en el código.
+
+**Consecuencia que hay que dejar escrita:** la tabla de C0e midió que el botón
+de envío de qwen no aparece visible ni a 1920 px de panel aislado, y 1920 >
+1366. O sea que a la ventana real de Juan (1366 px) el botón de qwen **sigue
+sin estar visible** — la medición de C0e ya cubre este caso, no hace falta
+remedirlo a 1366 porque un ancho mayor que ya dio `false` implica que uno
+menor tampoco lo va a dar. Es la Tarea 1 de esta ronda ("Qwen no puede
+enviar") y se trata aparte, más abajo.
+
+**Verificado con `--cc-probe` real sobre los cinco, ventana 1366x900**:
+`qwen 1366x570 · kimi 1366x570 · grok 1366x570 · mistral 1366x570 · deepseek
+1366x570` (`sondeo-tarea2c.txt`) — los cinco al mismo ancho, el de la
+ventana, sin excepción por proveedor.
+
+**El contador de navegaciones, medido y no sólo argumentado.** El informe que
+cerró la ronda anterior dijo "nunca navega ni recarga — mismo mecanismo de
+setBounds" sin medirlo: un argumento mecánico, no un dato. Se agregó
+`--cc-test-scroll`, que ejercita `desplazar()` y `desplazarA()` —las mismas
+funciones que llaman los IPC de la interfaz— recorriendo la fila entera de
+ida y vuelta con las DOS formas (flechas y barra), y compara
+`contadorNavegaciones` de cada vista antes y después.
+
+**Medido, `--cc-test-scroll --cc-solo=qwen,kimi,grok,mistral,deepseek`,
+ventana 1366x900** (`sondeo-tarea2c.txt`):
+
+```
+antes:   { qwen: 0, kimi: 0, grok: 0, mistral: 0, deepseek: 0 }
+despues: { qwen: 0, kimi: 0, grok: 0, mistral: 0, deepseek: 0 }
+diferencias: []
+intacto: true
+```
+
+Contador intacto en los cinco, con las dos formas de desplazamiento
+ejercitadas. El argumento mecánico queda confirmado por dato, no sólo por
+lectura del código.
+
 ### Fase 4 — Operador y herramientas ⏳ **DESCRIPCIÓN SUPERSEDIDA (2026-08-13)**
 
 > DeepSeek deja de ser "el operador" y pasa a ser el noveno que sólo informa

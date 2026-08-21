@@ -975,21 +975,41 @@ Contador intacto en los cinco, con las dos formas de desplazamiento
 ejercitadas. El argumento mecánico queda confirmado por dato, no sólo por
 lectura del código.
 
-#### Resuelto — "Qwen no puede enviar" (Tarea 1 de la ronda anterior)
+#### Resuelto A MEDIAS — "Qwen no puede enviar" (Tarea 1 de la ronda anterior)
 
-**Qwen se queda en el pool de 8.** Confirmado por Juan, 2026-08-13, probando
-la app real: **Enter envía**, sin que haga falta que ningún botón sea visible
-ni clickeable. La hipótesis barata de la ronda anterior era la correcta y no
-hizo falta escalar nada.
+**Qwen se queda en el pool de 8** para el caso que se midió. Confirmado por
+Juan, 2026-08-13, probando la app real: **Enter envía**, sin que haga falta
+que ningún botón sea visible ni clickeable.
 
 De paso, Juan explicó la forma real del control que `--cc-barrido` no podía
 identificar: no es que el botón se esconda por ancho de panel — es que el
 MISMO lugar alterna entre dos controles distintos según el estado del
 compositor. Vacío, es un botón de chat de voz; con texto, es el de enviar.
 "Presente en el DOM sólo con texto" (medido en C0b/C0c) y "nunca visible en
-ningún ancho" (medido en C0e) eran dos síntomas del mismo mecanismo, y ninguno
-de los dos importa ahora que se sabe que Enter resuelve el envío sin pasar
-por ese control en absoluto.
+ningún ancho" (medido en C0e) eran dos síntomas del mismo mecanismo.
+
+**PENDIENTE, y con esa palabra a propósito para que esto no se cierre dos
+veces: lo medido es Enter con Juan apretando la tecla en la app real, NO
+Enter disparado por el instrumento de difusión.** `difundir()` manda un
+evento SINTÉTICO, y el BLUEPRINT ya tiene un caso registrado (§10, Fase 1)
+donde el éxito del envío varió según el MÉTODO usado para producirlo —a
+Gemini un `KeyboardEvent` sintético no le disparaba el envío, y hubo que
+pasar a `click`—. No hay ninguna base para asumir que un Enter sintético en
+qwen se comporta igual que el de Juan sin medirlo. Sigue sin haber spec de
+qwen (`responseRoot`/`assistantMessage` también PENDIENTE, ver C0b/C0c), así
+que esto no bloquea nada HOY; queda anotado para cuando se derive esa spec.
+
+**RIESGO CONCRETO A EVITAR cuando se implemente el envío de qwen — anotado
+AHORA para que no se pierda entre rondas:** el lugar donde `--cc-barrido`
+encontró `button[aria-label="Send"]` es, con el compositor VACÍO, un botón
+de **chat de voz**. Un envío que haga clic ahí sin haber confirmado que hay
+texto en el compositor abriría el chat de voz en la cuenta REAL de Juan —no
+un panel de prueba, la cuenta con la que se investiga. Regla dura para el
+envío de qwen, la del día en que se implemente:
+  1. Nunca clic en ese selector sin haber confirmado texto no vacío en el
+     compositor primero.
+  2. Preferir Enter sobre clic para qwen, ya que es la vía que Juan confirmó
+     funcionando y evita el control ambiguo por completo.
 
 ### Fase 4 — Operador y herramientas ⏳ **DESCRIPCIÓN SUPERSEDIDA (2026-08-13)**
 

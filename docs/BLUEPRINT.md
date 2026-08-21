@@ -975,6 +975,22 @@ Contador intacto en los cinco, con las dos formas de desplazamiento
 ejercitadas. El argumento mecánico queda confirmado por dato, no sólo por
 lectura del código.
 
+#### Resuelto — "Qwen no puede enviar" (Tarea 1 de la ronda anterior)
+
+**Qwen se queda en el pool de 8.** Confirmado por Juan, 2026-08-13, probando
+la app real: **Enter envía**, sin que haga falta que ningún botón sea visible
+ni clickeable. La hipótesis barata de la ronda anterior era la correcta y no
+hizo falta escalar nada.
+
+De paso, Juan explicó la forma real del control que `--cc-barrido` no podía
+identificar: no es que el botón se esconda por ancho de panel — es que el
+MISMO lugar alterna entre dos controles distintos según el estado del
+compositor. Vacío, es un botón de chat de voz; con texto, es el de enviar.
+"Presente en el DOM sólo con texto" (medido en C0b/C0c) y "nunca visible en
+ningún ancho" (medido en C0e) eran dos síntomas del mismo mecanismo, y ninguno
+de los dos importa ahora que se sabe que Enter resuelve el envío sin pasar
+por ese control en absoluto.
+
 ### Fase 4 — Operador y herramientas ⏳ **DESCRIPCIÓN SUPERSEDIDA (2026-08-13)**
 
 > DeepSeek deja de ser "el operador" y pasa a ser el noveno que sólo informa

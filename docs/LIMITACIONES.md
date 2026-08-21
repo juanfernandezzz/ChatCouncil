@@ -88,15 +88,18 @@ en este repositorio.
   defecto del código sino porque la interfaz no expone el dato. *MEDIDA,
   2026-08-13, `--cc-barrido` (`docs/BLUEPRINT.md` §5, C0e/C0f).*
 
-- **qwen: el control de envío no queda visible a ningún ancho probado**
-  (400 a 1920 px), aunque el botón existe en el DOM
-  (`button[aria-label="Send"]`). Estado: **PENDIENTE**. Hipótesis sin
-  probar: que Enter envíe sin necesidad de que el botón sea visible o
-  clickeable — se decide en la próxima ronda real de Juan; hasta entonces
-  qwen puede no poder operar como investigador ni como operador del pool de
-  8. *MEDIDA (la ausencia de visibilidad), 2026-08-13, `--cc-barrido`
-  (`docs/BLUEPRINT.md` §5, C0e). El estado de si Enter resuelve esto queda
-  PENDIENTE, no medido todavía.*
+- **RESUELTO — qwen: el control de envío no queda visible a ningún ancho
+  probado** (400 a 1920 px), pero eso ya no bloquea nada: el botón que
+  `--cc-barrido` buscaba (`button[aria-label="Send"]`) sólo existe cuando el
+  compositor tiene texto, y cuando está vacío el mismo lugar lo ocupa un
+  botón de chat de voz — no es que el botón se esconda por ancho, es un
+  cambio de CONTROL según el estado del compositor. Y para el caso que
+  importa, Enter envía sin necesidad de que ningún botón sea visible ni
+  clickeable, **confirmado por Juan en su ronda real**. qwen sigue en el
+  pool de 8. *Observado de paso (el porqué del botón de voz), 2026-08-13,
+  reportado por Juan tras probar la app; confirmado (Enter envía), mismo
+  día, por la misma vía — no medido por el sondeo, que tiene prohibido
+  enviar.*
 
 ## Sobre qué es y qué no es
 

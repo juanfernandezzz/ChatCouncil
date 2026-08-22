@@ -1011,6 +1011,40 @@ envío de qwen, la del día en que se implemente:
   2. Preferir Enter sobre clic para qwen, ya que es la vía que Juan confirmó
      funcionando y evita el control ambiguo por completo.
 
+#### Dos defectos de interfaz, anotados para cuando se toque — NO ahora
+
+Encontrados por Juan al planear la corrida de medición previa a la Tarea
+3.a. Se anotan para no perderlos entre rondas; se arreglan cuando toque la
+interfaz, no en esta.
+
+**Defecto 1 — "Sondear" no va en la barra principal.**
+`renderer/index.html` pone el botón "Sondear" al mismo nivel que "Enviar a
+todos" y "Leer". Sondear es DIAGNÓSTICO —existe para derivar specs, no para
+el uso normal de la herramienta—, y el flujo real de uso es: escribir →
+"Enviar a todos" → los paneles generan → Juan marca el checklist por panel →
+"Consolidar respuestas". "Sondear" no aparece en ese flujo y no debería vivir
+en la misma barra que los botones que sí forman parte de él. Sigue
+existiendo, pero como modo de diagnóstico aparte, no como botón junto a los
+del flujo principal.
+
+**Defecto 2 — "Enviar a todos" no confirma que el prompt llegó al
+compositor del proveedor.**
+`difundir()` (main) devuelve `Resultado[]` y el renderer pinta chips a partir
+de eso — pero ese resultado confirma que la APP CREE que escribió y envió,
+no que el texto haya quedado efectivamente en el compositor del proveedor
+antes de disparar el envío. Es relevante ahora que se sabe (Tarea de qwen,
+2026-08-13) que UN MISMO lugar en pantalla puede ser un control de envío o
+uno completamente distinto —chat de voz en qwen— según si el compositor
+tiene texto o no: un clic en el lugar equivocado con el compositor vacío
+ejecuta la acción equivocada en la cuenta REAL de Juan.
+
+Falta: después de escribir y ANTES de dar por enviado, RELEER el
+compositor y comprobar que contiene el texto que se acaba de escribir. Si no
+lo contiene, el chip tiene que decir que falló — no hace falta enviar de más
+para verificar esto, es una lectura, no una escritura ni un envío. Regla
+específica para qwen cuando se implemente su envío: NUNCA clic con el
+compositor vacío; preferir Enter siempre.
+
 ### Fase 4 — Operador y herramientas ⏳ **DESCRIPCIÓN SUPERSEDIDA (2026-08-13)**
 
 > DeepSeek deja de ser "el operador" y pasa a ser el noveno que sólo informa

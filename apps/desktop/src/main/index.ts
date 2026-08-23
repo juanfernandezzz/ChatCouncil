@@ -58,7 +58,19 @@ const CANDIDATOS_SONDEO: { id: string; url: string }[] = [
   // que redirige deja la partición apuntando a un origen distinto del que uno
   // cree, y eso recién se nota cuando la sesión no aparece.
   { id: "qwen", url: "https://chat.qwen.ai/" },
-  { id: "kimi", url: "https://www.kimi.com/" },
+  // CORREGIDO el 2026-08-21: Kimi separó su producto por región. `kimi.com`
+  // pasó a servir la versión CHINA (中文, empresa 北京月之暗面科技有限公司);
+  // el producto internacional -el mismo que antes vivía en `www.kimi.com`,
+  // en español- se mudó a `kimi.ai`. Juan lo reportó: el login no actualizaba
+  // la página porque no era un problema de caché/reload, era que la app
+  // seguía apuntando al dominio viejo, que ahora es un sitio DISTINTO.
+  // Verificado cargando `https://www.kimi.ai/` y mirando `location.href`
+  // final: redirige a `https://kimi.ai` (sin `www`), mismo título en español
+  // ("Kimi AI con K3 | Diseñado para la programación agéntica...") que antes
+  // daba `www.kimi.com`. La partición `persist:kimi` sigue siendo la misma;
+  // el login hay que rehacerlo porque es un origen distinto, con sus propias
+  // cookies.
+  { id: "kimi", url: "https://kimi.ai/" },
   // Verificadas el 2026-08-13 cargándolas y mirando `location.href` final.
   // grok.com y chat.mistral.ai NO redirigen. chat.deepseek.com SI redirige a
   // /sign_in — se usa la URL final, no la que estaba supuesta en la tarea.

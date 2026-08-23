@@ -162,7 +162,10 @@ const EXIGIDO = {
     // para una pantalla de inicio de sesion; con dos, ~675 px.
     "--cc-solo-candidatos",
     "chat.qwen.ai",
-    "kimi.com",
+    // "kimi.com" dejó de ser el dominio correcto el 2026-08-21: pasó a servir
+    // la versión china de Kimi. El producto internacional se mudó a
+    // "kimi.ai", que es lo que el marcador exige ahora.
+    "kimi.ai",
     // El volcado de cierre y el censo recorren TODAS las particiones conocidas,
     // no solo los investigadores: si no, el login de qwen y kimi no se escribe
     // nunca y se pierde al salir (§7.50).

@@ -134,6 +134,136 @@
         "selector": "div[data-test-id=\"logo-pill-label-container\"]"
       },
       "_notaModelo": "Derivado por medicion el 2026-08-09 (sondeo, via estructural). El boton hermano lleva la version DENTRO del aria-label (\"...actualmente 3.5 Flash-Lite\"), asi que se rompe justo cuando el modelo cambia: por eso se usa el div, que es estable y deja la version en el texto."
+    },
+    "grok": {
+      "newConversationUrl": "https://grok.com/",
+      "composer": {
+        "selector": "div[aria-label=\"Ask Grok anything\"]",
+        "kind": "contenteditable"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "button[data-testid=\"chat-submit\"]"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "div.relative.response-content-markdown",
+        "pick": "last"
+      },
+      "completion": {
+        "kind": "quiescence",
+        "quiescenceMs": 20000
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 10000,
+        "emptyResponseMs": 90000
+      },
+      "modelLabel": {
+        "selector": "#model-select-trigger"
+      },
+      "_notaIdioma": "el compositor es 'Ask Grok anything', en ingles, aunque el resto de la interfaz de grok esta en espanol ('Buscar', 'Historial', 'Alternar barra lateral'): no es un problema de cuenta completa en un idioma, es ese control puntual. Si grok lo traduce, el selector deja de matchear. modelLabel (#model-select-trigger) es un id estable, no localizado; medido con texto 'Fast'.",
+      "_notaFin": "grok: sin indicador de generacion conocido en su DOM, medido en dos corridas de sondeo (2026-08-13 y 2026-08-23). El fin se INFIERE por quiescencia. 20000 ms es el mismo PISO PROVISIONAL que claude/gemini, no un valor medido para grok en particular: falta un prompt largo con pausas para confirmar si esa ventana alcanza."
+    },
+    "mistral": {
+      "newConversationUrl": "https://chat.mistral.ai/",
+      "composer": {
+        "selector": "div.ProseMirror",
+        "kind": "contenteditable"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "button[aria-label=\"Enviar\"]"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "div.markdown-container-style.max-w-none",
+        "pick": "last"
+      },
+      "completion": {
+        "kind": "quiescence",
+        "quiescenceMs": 20000
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 10000,
+        "emptyResponseMs": 90000
+      },
+      "modelLabel": {
+        "selector": "button[aria-label=\"Rápido\"]"
+      },
+      "_notaIdioma": "submit ('Enviar') y modelLabel ('Rápido') son aria-label en espanol (cuenta de Juan). El submit SOLO aparece con texto en el compositor (medido: cero candidatos en reposo, presente con texto), igual que qwen. 'Rápido' es el nombre del MODO activo (rapido/razonamiento, etc.), no necesariamente un nombre de modelo formal — se usa como modelLabel porque es lo unico que la interfaz expone en ese lugar, con esta salvedad anotada.",
+      "_notaFin": "mistral: sin indicador de generacion conocido en su DOM. El fin se INFIERE por quiescencia. 20000 ms es el mismo PISO PROVISIONAL que claude/gemini/grok, sin medir todavia con un prompt largo especifico de mistral."
+    },
+    "qwen": {
+      "newConversationUrl": "https://chat.qwen.ai/",
+      "composer": {
+        "selector": "textarea.message-input-textarea",
+        "kind": "textarea"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "button[aria-label=\"Send\"]"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "div.qwen-chat-message.qwen-chat-message-assistant",
+        "pick": "last"
+      },
+      "completion": {
+        "kind": "quiescence",
+        "quiescenceMs": 20000
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 10000,
+        "emptyResponseMs": 90000
+      },
+      "modelLabel": {
+        "selector": "div[aria-label=\"Select Model\"]"
+      },
+      "_notaIdioma": "submit ('Send') y modelLabel ('Select Model') son aria-label en ingles, aunque el resto de la cuenta de Juan esta en espanol/mixto. El boton de envio EXISTE en reposo (deshabilitado, clase 'send-button disabled') y es un control DISTINTO del boton de voz que ocupa un lugar cercano — no el mismo elemento cambiando de rol, como se penso antes de medirlo con una conversacion real (ver BLUEPRINT C0e/f). modelLabel dio 'Qwen3.7-Max' el 2026-08-10 y 'Qwen3.7-Plus' el 2026-08-23: deriva de version real, capturada en vivo.",
+      "_notaFin": "qwen: sin indicador de generacion conocido en su DOM. El fin se INFIERE por quiescencia, mismo piso provisional que el resto."
+    },
+    "kimi": {
+      "newConversationUrl": "https://kimi.ai/",
+      "composer": {
+        "selector": "div.chat-input-editor",
+        "kind": "contenteditable"
+      },
+      "submit": {
+        "kind": "key",
+        "key": "Enter"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "div.chat-content-item.chat-content-item-assistant",
+        "pick": "last",
+        "exclude": [
+          "div.markdown-container.toolcall-content-text",
+          "div.segment-assistant-actions"
+        ]
+      },
+      "completion": {
+        "kind": "quiescence",
+        "quiescenceMs": 20000
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 10000,
+        "emptyResponseMs": 90000
+      },
+      "_notaModelo": "Sin modelLabel. Cuatro corridas de sondeo (tres antes de tener conversacion real, una el 2026-08-23 con conversacion viva) dieron CERO candidatos en las tres vias de deteccion, con controlesNivelesArriba:9 en las cuatro: el arbol del compositor de kimi es mas profundo que el resto y ninguna via estructural encuentra un selector de etiqueta de modelo. No es un problema de ancho de panel ni de estado de la pagina. Tres hipotesis agotadas (ver BLUEPRINT C0b): no hay una cuarta pendiente de probar.",
+      "_notaFin": "kimi: sin indicador de generacion conocido en su DOM. El fin se INFIERE por quiescencia, mismo piso provisional que el resto.",
+      "_notaEnvio": "submit.kind='key' (Enter) en vez de 'click', PORQUE NO HAY selector de envio derivado (ver _notaModelo: mismo bloqueo estructural). Juan confirmo Enter funcionando MANUALMENTE, tecleando el en la app real (2026-08-13, misma confirmacion para qwen); el envio SINTETICO de esta spec -el evento de teclado sintetico con keyCode/which que dispara difundir()- TODAVIA NO SE MIDIO en kimi. Hay precedente de que la via importa: a gemini un evento de teclado sintetico simple no le disparaba el envio y hubo que pasar a click (Fase 1); la version actual de ese evento SI incluye keyCode/which, que es la correccion que faltaba entonces, pero eso no es lo mismo que haberlo medido en kimi. PENDIENTE: confirmar en la primera ronda real que este envio sintetico efectivamente despacha el mensaje."
     }
   }
 }

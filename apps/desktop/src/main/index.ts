@@ -36,8 +36,31 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * Investigadores activos. **El número no se codifica en ningún lado** —fue un
  * requisito que la v2 escribió y violó tres veces— así que todo lo que sigue
  * se deriva de esta lista: la grilla, la difusión y el estado.
+ *
+ * ORDEN FIJADO por Juan (2026-08-23) para el pool de 8: chatgpt, gemini,
+ * claude, grok, mistral, glm, kimi, qwen. Es orden de PANEL únicamente — no
+ * es el orden en que el cuerpo llega a quien opera, eso lo decide el
+ * barajado con la semilla de la ronda (ver BLUEPRINT §1, "Arquitectura
+ * vigente"). `deepseek` NO entra: es el noveno, panel aparte.
+ *
+ * grok, mistral, kimi y qwen se promovieron desde `CANDIDATOS_SONDEO` con
+ * specs completas derivadas por sondeo (ver `docs/BLUEPRINT.md`, C0b/C0c y
+ * la ronda del 2026-08-23 con conversación real). kimi usa `submit.kind:
+ * "key"` (Enter) en vez de "click" porque no hay selector de envío
+ * derivable en su DOM tras cuatro corridas — ver `_notaEnvio` en su spec:
+ * el envío SINTÉTICO de esa vía queda PENDIENTE de confirmar en la primera
+ * ronda real, Juan sólo confirmó el Enter manual.
  */
-const INVESTIGADORES = ["chatgpt", "glm", "claude", "gemini"] as const;
+const INVESTIGADORES = [
+  "chatgpt",
+  "gemini",
+  "claude",
+  "grok",
+  "mistral",
+  "glm",
+  "kimi",
+  "qwen",
+] as const;
 type ProviderId = (typeof INVESTIGADORES)[number];
 
 /**
@@ -49,33 +72,13 @@ type ProviderId = (typeof INVESTIGADORES)[number];
  * Cuando un candidato tenga su spec derivada, se muda a `INVESTIGADORES` y
  * sale de acá. La partición `persist:` es la misma en ambos casos, así que el
  * login hecho durante el reconocimiento se reutiliza intacto.
+ *
+ * Sólo queda `deepseek`: los otros cuatro (qwen, kimi, grok, mistral) se
+ * promovieron a `INVESTIGADORES` el 2026-08-23. Salen de acá porque una
+ * lista paralela a un registro termina desincronizándose — ya pasó tres
+ * veces en este proyecto con la misma forma de error.
  */
 const CANDIDATOS_SONDEO: { id: string; url: string }[] = [
-  // URLs CONFIRMADAS cargándolas el 2026-08-10 y mirando la URL final: ninguna
-  // de las dos redirige. `chat.qwen.ai/` responde con título "Qwen Studio";
-  // `www.kimi.com/` conserva el `www` y responde con su portada. Iban sin
-  // verificar en la tarea, así que se verificaron antes de escribirlas: una URL
-  // que redirige deja la partición apuntando a un origen distinto del que uno
-  // cree, y eso recién se nota cuando la sesión no aparece.
-  { id: "qwen", url: "https://chat.qwen.ai/" },
-  // CORREGIDO el 2026-08-21: Kimi separó su producto por región. `kimi.com`
-  // pasó a servir la versión CHINA (中文, empresa 北京月之暗面科技有限公司);
-  // el producto internacional -el mismo que antes vivía en `www.kimi.com`,
-  // en español- se mudó a `kimi.ai`. Juan lo reportó: el login no actualizaba
-  // la página porque no era un problema de caché/reload, era que la app
-  // seguía apuntando al dominio viejo, que ahora es un sitio DISTINTO.
-  // Verificado cargando `https://www.kimi.ai/` y mirando `location.href`
-  // final: redirige a `https://kimi.ai` (sin `www`), mismo título en español
-  // ("Kimi AI con K3 | Diseñado para la programación agéntica...") que antes
-  // daba `www.kimi.com`. La partición `persist:kimi` sigue siendo la misma;
-  // el login hay que rehacerlo porque es un origen distinto, con sus propias
-  // cookies.
-  { id: "kimi", url: "https://kimi.ai/" },
-  // Verificadas el 2026-08-13 cargándolas y mirando `location.href` final.
-  // grok.com y chat.mistral.ai NO redirigen. chat.deepseek.com SI redirige a
-  // /sign_in — se usa la URL final, no la que estaba supuesta en la tarea.
-  { id: "grok", url: "https://grok.com/" },
-  { id: "mistral", url: "https://chat.mistral.ai/" },
   { id: "deepseek", url: "https://chat.deepseek.com/sign_in" },
 ];
 

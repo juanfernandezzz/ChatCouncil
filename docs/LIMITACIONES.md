@@ -93,20 +93,21 @@ en este repositorio.
   pendiente de probar. *MEDIDA, última vez 2026-08-23, con conversación
   real.*
 
-- **kimi: el envío usa Enter, no clic — y sólo el Enter MANUAL está
-  medido.** No hay selector de envío derivable en el DOM de kimi (mismo
-  bloqueo estructural que el ítem anterior), así que su spec usa
-  `submit.kind: "key"` en vez de `"click"`. Juan confirmó que Enter
-  tecleado por él en la app real envía. **El envío SINTÉTICO** —el que
-  `difundir()` dispara con un evento de teclado generado por código, no por
-  una persona— **no está medido.** Hay precedente en este mismo repositorio
-  de que la vía importa: a Gemini, un evento de teclado sintético simple no
-  le disparaba el envío y hubo que pasar a clic (Fase 1); la versión actual
-  de ese evento sí incluye los campos que le faltaban entonces
-  (`keyCode`/`which`), pero eso no es lo mismo que haberlo medido en kimi.
-  Se confirma en la primera ronda real que use la difusión automática sobre
-  kimi. *Enter manual: MEDIDO, 2026-08-23, reportado por Juan. Enter
-  sintético: PENDIENTE.*
+- **BLOQUEO CONFIRMADO — en kimi, el envío AUTOMÁTICO no funciona.** No hay
+  selector de envío derivable en el DOM de kimi, así que su spec usa
+  `submit.kind: "key"` (Enter sintético) en vez de `"click"`. Juan probó la
+  difusión automática sobre el pool de 8 el 2026-08-23: kimi recibió el
+  texto en el compositor, pero el Enter sintético **no lo envió** — tuvo
+  que apretar Enter él mismo para que saliera. Es la misma familia de falla
+  que ya se había registrado como riesgo (Fase 1, Gemini): un evento de
+  teclado generado por código no siempre dispara lo que un editor rico
+  escucha, aunque incluya `keyCode`/`which`. **Hoy, kimi sólo puede
+  investigar si Juan escribe el mensaje y lo envía él mismo** — la difusión
+  por botón no lo alcanza. Es una decisión de diseño pendiente (¿kimi
+  queda con envío manual permanente, sale del pool automático, o se busca
+  otra vía de envío?), no algo que se resuelva adivinando un método más.
+  *MEDIDA, 2026-08-23: Enter manual funciona, Enter sintético de
+  `difundir()` NO funciona, reportado por Juan sobre la app real.*
 
 - **qwen: el botón de envío y el de chat de voz son controles DISTINTOS**,
   no el mismo elemento cambiando de rol según el estado del compositor —

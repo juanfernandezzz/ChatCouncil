@@ -637,6 +637,14 @@ function crearVista(id: string, url: string): WebContentsView {
       preload: join(__dirname, "../preload/provider.cjs"),
       sandbox: true,
       contextIsolation: true,
+      // Sin esto, Chromium frena los timers de un renderer SIN FOCO a ~1 Hz.
+      // Con 8 investigadores en fila sólo uno tiene foco a la vez; los demás
+      // corren su lógica de render (texto en streaming, indicadores de
+      // generación) a paso de tortuga o directamente pausada. Medido: Juan
+      // reportó `--cc-leer` devolviendo "2 caracteres" en GLM hasta que hizo
+      // clic sobre ESE panel — la lectura no estaba mal, el DOM de esa
+      // pestaña sin foco todavía no había terminado de actualizarse.
+      backgroundThrottling: false,
     },
   });
   /**

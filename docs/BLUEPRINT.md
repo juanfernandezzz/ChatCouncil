@@ -1090,6 +1090,32 @@ tecleó) no está medido. Se confirma en la primera ronda real que use el
 envío automático — no antes, porque medirlo ahora exigiría que el
 instrumento enviara, y eso está prohibido fuera de una ronda real de Juan.
 
+#### Tres defectos medidos en la primera ronda real con el pool de 8 (2026-08-23)
+
+**1. BLOQUEO — el Enter sintético de kimi NO envía.** Ya no está PENDIENTE:
+Juan corrió la difusión automática y kimi recibió el texto pero no lo
+envió solo; tuvo que apretar Enter él mismo. Es la misma familia de falla
+que Gemini en la Fase 1 (un evento de teclado sintético no siempre dispara
+lo que un editor rico escucha). **Decisión de diseño pendiente, no resuelta
+acá:** ¿kimi queda con envío manual, sale del pool automático, o se prueba
+otra vía? Ver `docs/LIMITACIONES.md` para el detalle medido.
+
+**2. Gemini: `submitConfirmMs` de 10 s era demasiado corto.** El error "el
+envío no produjo ningún cambio observable" salió por impaciencia del
+instrumento, no por un fallo real: la página seguía respondiendo. Subido a
+30000 ms — PISO PROVISIONAL, no remedido con cronómetro, sólo movido en la
+dirección que el síntoma pedía (commit con esta ronda).
+
+**3. GLM devolvía un `leer()` truncado ("2 caracteres") hasta que Juan
+hacía clic sobre ESE panel.** Causa identificada: `WebContentsView` no
+tenía `backgroundThrottling: false`, así que Chromium frena a ~1 Hz los
+timers de cualquier vista SIN FOCO — con 8 investigadores en fila, sólo
+uno tiene foco a la vez. La lectura no estaba mal: el DOM de la pestaña sin
+foco todavía no había terminado de actualizar su render de streaming.
+Corregido agregando `backgroundThrottling: false` a las vistas de
+proveedor. Sin remedir todavía con una corrida real — es un fix razonado
+por causa identificada, no una corrida de verificación posterior.
+
 ### Fase 4 — Operador y herramientas ⏳ **DESCRIPCIÓN SUPERSEDIDA (2026-08-13)**
 
 > DeepSeek deja de ser "el operador" y pasa a ser el noveno que sólo informa

@@ -37,19 +37,27 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * requisito que la v2 escribió y violó tres veces— así que todo lo que sigue
  * se deriva de esta lista: la grilla, la difusión y el estado.
  *
- * ORDEN FIJADO por Juan (2026-08-23) para el pool de 8: chatgpt, gemini,
- * claude, grok, mistral, glm, kimi, qwen. Es orden de PANEL únicamente — no
- * es el orden en que el cuerpo llega a quien opera, eso lo decide el
- * barajado con la semilla de la ronda (ver BLUEPRINT §1, "Arquitectura
- * vigente"). `deepseek` NO entra: es el noveno, panel aparte.
+ * ORDEN, chatgpt, gemini, claude, grok, mistral, glm, kimi, qwen, deepseek.
+ * Es orden de PANEL únicamente — no es el orden en que el cuerpo llega a
+ * quien opera, eso lo decide el barajado con la semilla de la ronda (ver
+ * BLUEPRINT §1, "Arquitectura vigente").
  *
- * grok, mistral, kimi y qwen se promovieron desde `CANDIDATOS_SONDEO` con
- * specs completas derivadas por sondeo (ver `docs/BLUEPRINT.md`, C0b/C0c y
- * la ronda del 2026-08-23 con conversación real). kimi usa `submit.kind:
- * "key"` (Enter) en vez de "click" porque no hay selector de envío
- * derivable en su DOM tras cuatro corridas — ver `_notaEnvio` en su spec:
- * el envío SINTÉTICO de esa vía queda PENDIENTE de confirmar en la primera
- * ronda real, Juan sólo confirmó el Enter manual.
+ * `deepseek` entró el 2026-08-23, decisión de Juan: el rol de "noveno /
+ * informe" deja de estar atado a un proveedor fijo — cualquiera del pool
+ * puede cumplirlo si se configura así, y de momento eso significa que
+ * deepseek difunde y lee IGUAL que el resto. Qué proveedor arma el informe
+ * final es una decisión de la CAPA DE ANÁLISIS (todavía no construida), no
+ * de esta lista: `INVESTIGADORES` ya no distingue entre "pool" y "noveno".
+ *
+ * grok, mistral, kimi, qwen y deepseek se promovieron desde
+ * `CANDIDATOS_SONDEO` con specs completas derivadas por sondeo (ver
+ * `docs/BLUEPRINT.md`, C0b/C0c y la ronda del 2026-08-23 con conversación
+ * real). kimi usa `envioConfiable: true` porque su compositor
+ * `contenteditable` ignora la entrada sintética (medido: `dispatchEvent`
+ * no actualiza el modelo interno del editor); el resto usa el camino
+ * estándar de `click`/`key` sobre un `textarea` o un `contenteditable` que
+ * SÍ acepta esa entrada. Confirmado por Juan en su app real: kimi ya
+ * difunde sin intervención manual.
  */
 const INVESTIGADORES = [
   "chatgpt",
@@ -60,6 +68,7 @@ const INVESTIGADORES = [
   "glm",
   "kimi",
   "qwen",
+  "deepseek",
 ] as const;
 type ProviderId = (typeof INVESTIGADORES)[number];
 
@@ -73,14 +82,10 @@ type ProviderId = (typeof INVESTIGADORES)[number];
  * sale de acá. La partición `persist:` es la misma en ambos casos, así que el
  * login hecho durante el reconocimiento se reutiliza intacto.
  *
- * Sólo queda `deepseek`: los otros cuatro (qwen, kimi, grok, mistral) se
- * promovieron a `INVESTIGADORES` el 2026-08-23. Salen de acá porque una
- * lista paralela a un registro termina desincronizándose — ya pasó tres
- * veces en este proyecto con la misma forma de error.
+ * VACÍA por ahora: los nueve tienen spec. Sigue existiendo como mecanismo
+ * para el próximo candidato que se agregue, no se borra.
  */
-const CANDIDATOS_SONDEO: { id: string; url: string }[] = [
-  { id: "deepseek", url: "https://chat.deepseek.com/sign_in" },
-];
+const CANDIDATOS_SONDEO: { id: string; url: string }[] = [];
 
 /**
  * Modo de arranque. Se lee de `process.argv` Y de `process.env`, y el
@@ -739,12 +744,98 @@ function createWindow(): void {
   win.on("resize", layout);
 }
 
+/**
+ * ENVÍO CONFIABLE — para proveedores cuyo editor rico ignora la entrada
+ * sintética inyectada por DOM (`envioConfiable: true` en su spec).
+ *
+ * MEDIDO en kimi, 2026-08-23 (`diagnostico-kimi.cjs`, sin enviar nada): tras
+ * escribir por DOM con `beforeinput` + `textContent` (el método de
+ * `writePrompt`), el contenedor del compositor seguía con la clase
+ * `is-empty` — el editor se seguía viendo a sí mismo VACÍO aunque el DOM
+ * mostrara el texto. Eso explica de una vez los dos síntomas: el Enter
+ * sintético que no enviaba (el editor cree que no hay nada que enviar) y la
+ * limpieza que reponía texto (el editor re-renderiza desde un modelo que
+ * nunca se enteró del cambio).
+ *
+ * La única entrada que Chromium marca `isTrusted: true` sin ser un clic o
+ * tecla REAL de un humano es `webContents.sendInputEvent()` — inyecta al
+ * nivel del proceso de render, no como un evento de JS despachado desde la
+ * página. Por eso este camino vive ACÁ, en el proceso principal, y no en
+ * `preload/provider.ts`: `sendInputEvent` no existe del lado de la página.
+ *
+ * REGLA DURA (objetivo de esta tarea): el `webContents` destino es SIEMPRE
+ * `v.view.webContents` —la vista que YA correspondía a este proveedor, sin
+ * búsquedas nuevas—, y antes de despachar el Enter se VERIFICA que el
+ * compositor contiene el texto esperado. Si esa verificación falla, no se
+ * despacha nada: mejor un resultado vacío que un Enter a ciegas sobre una
+ * cuenta real.
+ *
+ * Aplica en principio a cualquier compositor `contenteditable` que resulte
+ * tener el mismo problema — no es un parche de kimi, es una ESTRATEGIA que
+ * la spec elige declarando `envioConfiable: true`.
+ */
+async function difundirConfiable(
+  v: { id: string; view: WebContentsView },
+  prompt: string,
+): Promise<Omit<ResultadoEnvio, "id">> {
+  const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS];
+  const specJson = JSON.stringify(spec);
+
+  const prep = (await v.view.webContents.executeJavaScript(
+    `window.__ccProvider.prepararConfiable(${specJson})`,
+    true,
+  )) as { ok: boolean; error?: string; antesLen?: number };
+  if (!prep.ok) return { ok: false, error: prep.error ?? "no se pudo preparar el compositor" };
+
+  // Escribir CARÁCTER POR CARÁCTER con `sendInputEvent`: cada uno llega al
+  // editor como si lo hubiera tecleado una persona. Un salto de línea se
+  // manda como Mayús+Enter —salto de línea en casi cualquier editor de
+  // chat—, nunca como Enter solo, que en estos editores ENVÍA.
+  for (const ch of prompt) {
+    if (v.view.webContents.isDestroyed()) return { ok: false, error: "la vista se destruyó mientras se escribía" };
+    if (ch === "\n") {
+      v.view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter", modifiers: ["shift"] });
+      v.view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter", modifiers: ["shift"] });
+    } else {
+      v.view.webContents.sendInputEvent({ type: "char", keyCode: ch });
+    }
+    await new Promise((r) => setTimeout(r, 8));
+  }
+
+  // VERIFICACIÓN DURA antes de enviar: si el compositor no tiene el texto
+  // esperado, no se manda Enter. Sin esto, un Enter a ciegas sobre un
+  // compositor que no recibió el texto (por ejemplo, si perdió el foco a
+  // mitad de la escritura) dispara una acción no pedida en la cuenta real.
+  const textoOk = (await v.view.webContents.executeJavaScript(
+    `window.__ccProvider.verificarTextoEscrito(${specJson}, ${JSON.stringify(prompt)})`,
+    true,
+  )) as boolean;
+  if (!textoOk) {
+    return {
+      ok: false,
+      error:
+        "el compositor no reflejó el texto esperado tras escribir con eventos de entrada confiables: NO se envió nada",
+    };
+  }
+  if (v.view.webContents.isDestroyed()) return { ok: false, error: "la vista se destruyó antes de enviar" };
+
+  v.view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
+  v.view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
+
+  return (await v.view.webContents.executeJavaScript(
+    `window.__ccProvider.confirmarEfecto(${specJson}, ${prep.antesLen ?? 0})`,
+    true,
+  )) as Omit<ResultadoEnvio, "id">;
+}
+
 async function difundir(prompt: string): Promise<ResultadoEnvio[]> {
   const resultados = await Promise.allSettled(
     vistas.map((v) => {
-      const spec = JSON.stringify(PROVIDER_SPECS[v.id]);
+      const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS] as { envioConfiable?: boolean };
+      if (spec.envioConfiable) return difundirConfiable(v, prompt);
+      const specJson = JSON.stringify(spec);
       return v.view.webContents.executeJavaScript(
-        `window.__ccProvider.run(${spec}, ${JSON.stringify(prompt)})`,
+        `window.__ccProvider.run(${specJson}, ${JSON.stringify(prompt)})`,
         true,
       );
     }),

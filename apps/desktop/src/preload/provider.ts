@@ -408,6 +408,98 @@ async function run(spec: PageSpec, prompt: string): Promise<RunResult> {
 }
 
 /**
+ * ENVÍO CONFIABLE — para proveedores cuyo compositor rico IGNORA la entrada
+ * sintética (medido en kimi, 2026-08-23: `dispatchEvent(beforeinput)` con
+ * `isTrusted: false` no actualiza el modelo interno del editor. La clase
+ * `is-empty` de su contenedor seguía marcada después de escribir por DOM,
+ * aunque el DOM mostrara el texto — el editor se seguía viendo a sí mismo
+ * vacío, y por eso ni el Enter sintético ni la limpieza posterior surtían
+ * efecto: ambos dependen de que el editor SEPA que hay contenido).
+ *
+ * La escritura de estos proveedores no puede resolverse desde ACÁ: requiere
+ * `webContents.sendInputEvent()`, que sólo existe en el proceso principal
+ * (inyecta al nivel de Chromium, con `isTrusted: true`; ver
+ * `difundirConfiable` en `main/index.ts`). Esto sólo expone las tres piezas
+ * de SOLO LECTURA/preparación que sí corren del lado de la página:
+ *  1. `prepararConfiable`: encuentra el compositor, confirma que no tiene un
+ *     borrador de Juan, lo enfoca y devuelve cuántos caracteres tiene el
+ *     asistente ANTES (para medir efecto después).
+ *  2. `verificarTextoEscrito`: después de que el proceso principal escribió
+ *     con eventos de teclado confiables, confirma que el compositor
+ *     REALMENTE tiene ese texto — es la comprobación dura antes de enviar
+ *     Enter: si esto da `false`, no se envía nada.
+ *  3. `confirmarEfecto`: la MISMA lógica de confirmación de `run()` (efecto
+ *     observable tras el envío), factorizada para no duplicarla.
+ *
+ * Ninguna de las tres hace clic ni despacha una tecla: eso vive en
+ * `sendInputEvent`, del lado del proceso principal.
+ */
+interface PreparacionConfiable {
+  ok: boolean;
+  error?: string;
+  antesLen?: number;
+}
+
+async function prepararConfiable(spec: PageSpec): Promise<PreparacionConfiable> {
+  const esperaCompositor = spec.timeouts?.composerMs ?? 15_000;
+  const composer = await waitFor(spec.composer.selector, esperaCompositor);
+  if (!composer) {
+    const genericos = contarCompositoresGenericos();
+    return {
+      ok: false,
+      error:
+        genericos === 0
+          ? "compositor no encontrado: la pagina no monto su interfaz (tiempo o contencion)"
+          : `compositor no encontrado, pero hay ${genericos} cuadro/s de texto genericos: otro layout, otro idioma, o el selector caduco`,
+    };
+  }
+  const previo = (composer.textContent ?? "").trim();
+  if (previo.length > 0) {
+    return { ok: false, error: "el compositor ya tenia texto: no se escribe encima de un borrador de Juan" };
+  }
+  (composer as HTMLElement).focus();
+  return { ok: true, antesLen: readAssistant(spec).length };
+}
+
+/**
+ * Confirma que el compositor tiene el texto esperado DESPUÉS de que el
+ * proceso principal escribió con `sendInputEvent`. Es la comprobación dura
+ * antes de enviar Enter: si esto da `false`, el llamador NO tiene que
+ * despachar ningún envío.
+ */
+function verificarTextoEscrito(spec: PageSpec, textoEsperado: string): boolean {
+  let composer: Element | null;
+  try {
+    composer = document.querySelector(spec.composer.selector);
+  } catch {
+    return false;
+  }
+  if (!composer) return false;
+  const actual = (composer.textContent ?? "").trim();
+  // Comparación por PREFIJO, no igualdad exacta: algunos editores normalizan
+  // saltos de línea o espacios al renderizar. Un prefijo largo (30 caracteres
+  // o el texto entero si es más corto) alcanza para descartar que el
+  // compositor haya quedado vacío o con basura, sin exigir un byte a byte
+  // que ningún editor rico garantiza.
+  const prefijo = textoEsperado.trim().slice(0, Math.min(30, textoEsperado.trim().length));
+  return prefijo.length > 0 && actual.includes(prefijo);
+}
+
+/** Misma lógica de confirmación que la cola de `run()`, factorizada. */
+async function confirmarEfecto(spec: PageSpec, antesLen: number): Promise<RunResult> {
+  const composer = document.querySelector(spec.composer.selector) as HTMLElement | null;
+  const until = Date.now() + (spec.timeouts?.submitConfirmMs ?? 12_000);
+  for (;;) {
+    const vacio = composer ? (composer.textContent ?? "").trim() === "" : false;
+    const generando = estaGenerando(spec) === true;
+    if (vacio || generando || readAssistant(spec).length > antesLen) break;
+    if (Date.now() > until) return { ok: false, error: "el envío no produjo ningún cambio observable" };
+    await sleep(100);
+  }
+  return { ok: true, modelLabel: readModelLabel(spec), modelLabelDesglose: readModelLabelDesglose(spec) };
+}
+
+/**
  * Se expone en el mundo principal para que el proceso principal lo invoque
  * con `executeJavaScript` —que corre en el mundo principal de la página, no
  * en el mundo aislado del preload—. Con `contextIsolation` activo,
@@ -419,6 +511,9 @@ async function run(spec: PageSpec, prompt: string): Promise<RunResult> {
  */
 contextBridge.exposeInMainWorld("__ccProvider", {
   run: (spec: PageSpec, prompt: string) => run(spec, prompt),
+  prepararConfiable: (spec: PageSpec) => prepararConfiable(spec),
+  verificarTextoEscrito: (spec: PageSpec, texto: string) => verificarTextoEscrito(spec, texto),
+  confirmarEfecto: (spec: PageSpec, antesLen: number) => confirmarEfecto(spec, antesLen),
   read: (spec: PageSpec) => ({
     text: readAssistant(spec),
     generating: estaGenerando(spec),

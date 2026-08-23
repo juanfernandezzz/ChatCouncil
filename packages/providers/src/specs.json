@@ -233,6 +233,7 @@
     },
     "kimi": {
       "newConversationUrl": "https://kimi.ai/",
+      "envioConfiable": true,
       "composer": {
         "selector": "div.chat-input-editor",
         "kind": "contenteditable"
@@ -263,7 +264,37 @@
       },
       "_notaModelo": "Sin modelLabel. Cuatro corridas de sondeo (tres antes de tener conversacion real, una el 2026-08-23 con conversacion viva) dieron CERO candidatos en las tres vias de deteccion, con controlesNivelesArriba:9 en las cuatro: el arbol del compositor de kimi es mas profundo que el resto y ninguna via estructural encuentra un selector de etiqueta de modelo. No es un problema de ancho de panel ni de estado de la pagina. Tres hipotesis agotadas (ver BLUEPRINT C0b): no hay una cuarta pendiente de probar.",
       "_notaFin": "kimi: sin indicador de generacion conocido en su DOM. El fin se INFIERE por quiescencia, mismo piso provisional que el resto.",
-      "_notaEnvio": "submit.kind='key' (Enter) en vez de 'click', PORQUE NO HAY selector de envio derivado (ver _notaModelo: mismo bloqueo estructural). Juan confirmo Enter funcionando MANUALMENTE, tecleando el en la app real (2026-08-13, misma confirmacion para qwen); el envio SINTETICO de esta spec -el evento de teclado sintetico con keyCode/which que dispara difundir()- TODAVIA NO SE MIDIO en kimi. Hay precedente de que la via importa: a gemini un evento de teclado sintetico simple no le disparaba el envio y hubo que pasar a click (Fase 1); la version actual de ese evento SI incluye keyCode/which, que es la correccion que faltaba entonces, pero eso no es lo mismo que haberlo medido en kimi. PENDIENTE: confirmar en la primera ronda real que este envio sintetico efectivamente despacha el mensaje."
+      "_notaEnvio": "submit.kind='key' (Enter), PORQUE NO HAY selector de envio derivado (ver _notaModelo: mismo bloqueo estructural). RESUELTO el 2026-08-23: el Enter sintetico por dispatchEvent no enviaba porque el editor de kimi (contenteditable rico) ignora la entrada NO CONFIABLE -medido sin enviar nada: tras escribir por DOM, el contenedor seguia con la clase is-empty, el editor se veia a si mismo vacio-. La solucion es envioConfiable:true (ver arriba): difundirConfiable() en main/index.ts escribe con webContents.sendInputEvent() -entrada real a nivel de Chromium, isTrusted:true- caracter por caracter y despacha el Enter de la misma forma. Confirmado por Juan en su app real, con 'Enviar a todos': el mensaje se escribe y se envia solo, sin intervencion manual."
+    },
+    "deepseek": {
+      "newConversationUrl": "https://chat.deepseek.com/sign_in",
+      "composer": {
+        "selector": "textarea._27c9245.ds-scroll-area",
+        "kind": "textarea"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "div.ds-button.ds-button--primary"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "div.ds-markdown.ds-assistant-message-main-content",
+        "pick": "last"
+      },
+      "completion": {
+        "kind": "quiescence",
+        "quiescenceMs": 20000
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 10000,
+        "emptyResponseMs": 90000
+      },
+      "_notaModelo": "Sin modelLabel. Sondeo con conversacion real (2026-08-23) dio cero candidatos en las tres vias de deteccion: deepseek no expone un selector de etiqueta de modelo visible en esta cuenta.",
+      "_notaFin": "deepseek: sin indicador de generacion conocido en su DOM. El fin se INFIERE por quiescencia, mismo piso provisional que el resto.",
+      "_notaEnvio": "submit es un div[role=\"button\"] (clase ds-button--primary), NO un <button>: el metodo de clic nativo sobre un HTMLElement funciona igual, y a diferencia de kimi el compositor es un TEXTAREA (kind:\"textarea\"), no un contenteditable rico -la misma categoria que qwen, donde el clic con escritura por DOM ya funciona-. No se le puso envioConfiable:true por eso: el corte medido entre kimi y el resto es el TIPO de compositor (contenteditable vs. textarea), no el proveedor (ver BLUEPRINT, regla de compositor). Sin confirmar todavia con un envio real en esta cuenta -promovido a INVESTIGADORES el 2026-08-23 sin haber gastado un envio de verificacion; se confirma en la primera ronda real."
     }
   }
 }

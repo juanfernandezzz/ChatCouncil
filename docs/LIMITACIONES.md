@@ -93,21 +93,20 @@ en este repositorio.
   pendiente de probar. *MEDIDA, última vez 2026-08-23, con conversación
   real.*
 
-- **BLOQUEO CONFIRMADO — en kimi, el envío AUTOMÁTICO no funciona.** No hay
-  selector de envío derivable en el DOM de kimi, así que su spec usa
-  `submit.kind: "key"` (Enter sintético) en vez de `"click"`. Juan probó la
-  difusión automática sobre el pool de 8 el 2026-08-23: kimi recibió el
-  texto en el compositor, pero el Enter sintético **no lo envió** — tuvo
-  que apretar Enter él mismo para que saliera. Es la misma familia de falla
-  que ya se había registrado como riesgo (Fase 1, Gemini): un evento de
-  teclado generado por código no siempre dispara lo que un editor rico
-  escucha, aunque incluya `keyCode`/`which`. **Hoy, kimi sólo puede
-  investigar si Juan escribe el mensaje y lo envía él mismo** — la difusión
-  por botón no lo alcanza. Es una decisión de diseño pendiente (¿kimi
-  queda con envío manual permanente, sale del pool automático, o se busca
-  otra vía de envío?), no algo que se resuelva adivinando un método más.
-  *MEDIDA, 2026-08-23: Enter manual funciona, Enter sintético de
-  `difundir()` NO funciona, reportado por Juan sobre la app real.*
+- **RESUELTO — en kimi, el envío automático necesitaba entrada CONFIABLE,
+  no un evento sintético.** El compositor de kimi (`contenteditable` rico)
+  ignora la entrada despachada por JS (`isTrusted: false`): tras escribir
+  por DOM, el editor se seguía viendo a sí mismo vacío (medido: la clase
+  `is-empty` de su contenedor no se quitaba), y por eso ni el Enter
+  sintético enviaba ni la limpieza del sondeo lograba borrar. La solución
+  —`envioConfiable: true` en la spec de kimi— escribe con
+  `webContents.sendInputEvent()`, que inyecta al nivel de Chromium con
+  `isTrusted: true`, y sólo entonces despacha el Enter por la misma vía.
+  Confirmado por Juan con la app real ("Enviar a todos"): kimi escribe y
+  envía solo. El corte medido es el TIPO de compositor
+  (`contenteditable` rico vs. `textarea`), no el proveedor — vale para
+  cualquier otro que resulte tener el mismo problema.
+  *MEDIDA, 2026-08-23, confirmado por Juan sobre la app real.*
 
 - **qwen: el botón de envío y el de chat de voz son controles DISTINTOS**,
   no el mismo elemento cambiando de rol según el estado del compositor —
@@ -118,6 +117,18 @@ en este repositorio.
   clic con el compositor vacío. Enter manual confirmado por Juan; el envío
   real de la spec usa clic sobre el botón (ya con texto presente), no
   Enter — a diferencia de kimi. *MEDIDA, 2026-08-23.*
+
+- **deepseek entró a `INVESTIGADORES` (2026-08-23, decisión de Juan) sin
+  confirmar todavía un envío automático real.** Su spec se derivó de la
+  misma ronda de sondeo que los demás (composer, submit y
+  `assistantMessage` medidos con conversación real), pero a diferencia de
+  grok/mistral/qwen/kimi no se gastó un envío de verificación sobre esta
+  cuenta — se promovió confiando en que su compositor es un `textarea`
+  (misma categoría que qwen, que sí funciona), no un `contenteditable`
+  rico como kimi. **No hay `modelLabel`** para deepseek (cero candidatos en
+  tres corridas de sondeo): mismo hueco que kimi, sin detección de deriva
+  de versión posible ahí. *Spec: MEDIDA, 2026-08-23. Envío automático:
+  PENDIENTE de la primera ronda real que lo incluya.*
 
 ## Sobre qué es y qué no es
 

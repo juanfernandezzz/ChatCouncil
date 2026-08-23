@@ -1116,6 +1116,73 @@ Corregido agregando `backgroundThrottling: false` a las vistas de
 proveedor. Sin remedir todavía con una corrida real — es un fix razonado
 por causa identificada, no una corrida de verificación posterior.
 
+#### El bloqueo de kimi, resuelto — entrada CONFIABLE para compositores contenteditable
+
+Diagnosticado sin gastar cuota, 2026-08-23: tras escribir en el compositor
+de kimi por DOM (`dispatchEvent(beforeinput)`, el método de `writePrompt`),
+el contenedor del editor seguía marcado con la clase `is-empty` — el editor
+se veía a sí mismo VACÍO aunque el DOM mostrara el texto. Eso explica de una
+sola vez los dos síntomas: el Enter sintético que no enviaba (el editor cree
+que no hay nada que enviar) y la limpieza del sondeo que reponía texto (el
+editor re-renderiza desde un modelo que nunca se enteró del cambio).
+
+La causa raíz es `isTrusted`: un evento despachado con `dispatchEvent()`
+llega a la página con `isTrusted: false`, y los editores ricos (kimi usa
+uno propio sobre un `contenteditable`) lo descartan. Un `<textarea>` no
+tiene ese problema porque su valor se puede fijar con el setter nativo del
+prototipo, que el framework SÍ escucha — por eso qwen (`textarea`) ya
+funcionaba y kimi (`contenteditable`) no. **El corte es el TIPO de
+compositor, no el proveedor.**
+
+La solución: `webContents.sendInputEvent()`, que inyecta al nivel de
+Chromium —no como JS despachado desde la página— y llega con
+`isTrusted: true`. Sólo existe en el proceso principal, así que el envío de
+un proveedor con este problema no puede resolverse enteramente en
+`preload/provider.ts`: `difundirConfiable()` (`main/index.ts`) escribe
+carácter por carácter con `sendInputEvent({type:"char", ...})`, verifica con
+una lectura de la página que el compositor REALMENTE tiene el texto antes
+de mandar nada más, y sólo entonces despacha el Enter con la misma vía.
+
+**Se declara por SPEC** (`envioConfiable: true`, sólo en kimi hoy), no por
+una rama de código atada al id del proveedor: cualquier compositor
+`contenteditable` con el mismo problema puede pedir esta estrategia
+declarándolo, sin tocar `difundir()`.
+
+**Verificado por Juan en su app real**, con "Enviar a todos": kimi escribe
+y envía solo, sin que haga falta apretar Enter a mano. Es la confirmación
+que faltaba — las pruebas de un agente en un script suelto, aunque usen la
+misma partición nominal, no equivalen a probar con la app tal como el
+usuario la abre; una corrida de scripts sueltos en sucesión rápida contra
+`persist:kimi` degradó el almacenamiento local de esa partición (quedó
+registrado en la salida de Chromium: `quota_database` y
+`sandbox_origin_database` fallando por `LOCK`) sin tocar las cookies —
+mismo patrón de riesgo que el §10 regla "60" ya tenía documentado, esta vez
+sin pérdida de sesión pero sí evidencia de que **la única prueba válida es
+la app real, abierta como la abre Juan.**
+
+#### DeepSeek entra a `INVESTIGADORES` — el rol de "noveno" deja de estar atado a un proveedor
+
+Decisión de Juan, 2026-08-23: deepseek pasa a difundir y leer igual que el
+resto del pool. **El rol de "noveno / informe" ya NO es un proveedor fijo**:
+cualquiera del pool puede cumplirlo si se configura así — de momento eso
+significa que `INVESTIGADORES` no distingue entre "pool de 8" y "noveno",
+los nueve están en la misma lista con la misma capacidad de difundir. Qué
+proveedor arma el informe final queda como decisión de la CAPA DE ANÁLISIS
+(todavía no construida, Fase 3/4 superseded — ver §1), no de esta lista.
+
+Spec derivada de la ronda del 2026-08-23 (conversación real): composer
+`textarea._27c9245.ds-scroll-area` (TEXTAREA, misma categoría que qwen —
+no necesita `envioConfiable`), submit `div.ds-button.ds-button--primary`
+(un `div[role="button"]`, no un `<button>`, pero el clic nativo sobre
+cualquier `HTMLElement` funciona igual), `assistantMessage`
+`div.ds-markdown.ds-assistant-message-main-content`. Sin `modelLabel`
+(cero candidatos en tres corridas). **Sin confirmar todavía con un envío
+real** — promovido sin gastar cuota de verificación; se confirma en la
+primera ronda real que lo incluya.
+
+`CANDIDATOS_SONDEO` queda VACÍA: los nueve tienen spec completa. El
+mecanismo sigue existiendo para el próximo candidato.
+
 ### Fase 4 — Operador y herramientas ⏳ **DESCRIPCIÓN SUPERSEDIDA (2026-08-13)**
 
 > DeepSeek deja de ser "el operador" y pasa a ser el noveno que sólo informa

@@ -80,42 +80,43 @@ en este repositorio.
   antes de la primera ronda en que ocurre. Ver `docs/BLUEPRINT.md` §5/§10
   para el estado medido de la detección de etiqueta por proveedor.
 
-- **kimi y deepseek no exponen `modelLabel` a ningún ancho.** Barrido
-  400–1920 px: en ninguno de los dos hay, en esta cuenta, un selector de
-  etiqueta de modelo que devuelva un valor. Consecuencia directa: en estos
-  dos proveedores **no hay detección de deriva de versión del modelo** —el
-  mecanismo que la Fase 2 existe para dar no puede operar ahí, no por un
-  defecto del código sino porque la interfaz no expone el dato. *MEDIDA,
-  2026-08-13, `--cc-barrido` (`docs/BLUEPRINT.md` §5, C0e/C0f).*
+- **kimi no expone `modelLabel` a ningún ancho ni con conversación real.**
+  Cuatro corridas de sondeo (dos antes de tener conversación, una a ancho
+  variable, una con conversación viva el 2026-08-23), CERO candidatos las
+  cuatro veces, con `controlesNivelesArriba: 9` en las cuatro — el árbol del
+  compositor de kimi es más profundo que el resto y ninguna vía estructural
+  encuentra un selector de etiqueta de modelo. Consecuencia: **en kimi no
+  hay detección de deriva de versión del modelo** — el mecanismo que la
+  Fase 2 existe para dar no puede operar ahí, no por un defecto del código
+  sino porque la interfaz no expone el dato de forma detectable. Tres
+  hipótesis agotadas (ver `docs/BLUEPRINT.md`, C0b): no queda una cuarta
+  pendiente de probar. *MEDIDA, última vez 2026-08-23, con conversación
+  real.*
 
-- **RESUELTO A MEDIAS — qwen: el control de envío no queda visible a ningún
-  ancho probado** (400 a 1920 px). El botón que `--cc-barrido` buscaba
-  (`button[aria-label="Send"]`) sólo existe cuando el compositor tiene
-  texto, y cuando está vacío el MISMO lugar lo ocupa un botón de **chat de
-  voz** — no es que el botón se esconda por ancho, es un cambio de control
-  según el estado del compositor. Para el uso MANUAL de Juan esto ya no
-  bloquea nada: Enter envía sin necesidad de que ningún botón sea visible ni
-  clickeable, confirmado por él en su ronda real. qwen sigue en el pool de
-  8 para ese caso.
+- **kimi: el envío usa Enter, no clic — y sólo el Enter MANUAL está
+  medido.** No hay selector de envío derivable en el DOM de kimi (mismo
+  bloqueo estructural que el ítem anterior), así que su spec usa
+  `submit.kind: "key"` en vez de `"click"`. Juan confirmó que Enter
+  tecleado por él en la app real envía. **El envío SINTÉTICO** —el que
+  `difundir()` dispara con un evento de teclado generado por código, no por
+  una persona— **no está medido.** Hay precedente en este mismo repositorio
+  de que la vía importa: a Gemini, un evento de teclado sintético simple no
+  le disparaba el envío y hubo que pasar a clic (Fase 1); la versión actual
+  de ese evento sí incluye los campos que le faltaban entonces
+  (`keyCode`/`which`), pero eso no es lo mismo que haberlo medido en kimi.
+  Se confirma en la primera ronda real que use la difusión automática sobre
+  kimi. *Enter manual: MEDIDO, 2026-08-23, reportado por Juan. Enter
+  sintético: PENDIENTE.*
 
-  **PENDIENTE, no medido:** si un Enter SINTÉTICO —el que mandaría el
-  instrumento de difusión, no el de una persona tecleando— produce el mismo
-  resultado. Hay un precedente en este mismo repositorio de que NO se puede
-  asumir: a Gemini, un `KeyboardEvent` sintético no le disparaba el envío y
-  hubo que usar `click` en su lugar (Fase 1). No hay spec de qwen todavía,
-  así que esto no bloquea nada hoy, pero se anota para no cerrarlo dos veces
-  cuando se derive.
-
-  **RIESGO A EVITAR cuando se implemente el envío de qwen:** un clic en
-  `button[aria-label="Send"]` con el compositor VACÍO abre el chat de voz en
-  la cuenta real de Juan, no en una de prueba. Regla dura: nunca clic sin
-  confirmar texto no vacío primero, y preferir Enter para qwen en cualquier
-  caso.
-
-  *Observado de paso (el porqué del botón de voz) y confirmado (Enter manual
-  envía), 2026-08-13, reportado por Juan tras probar la app — no medido por
-  el sondeo, que tiene prohibido enviar. El caso del Enter SINTÉTICO sigue
-  sin medir.*
+- **qwen: el botón de envío y el de chat de voz son controles DISTINTOS**,
+  no el mismo elemento cambiando de rol según el estado del compositor —
+  corregido tras medir con conversación real (2026-08-23): el botón de
+  envío existe en reposo, sólo que deshabilitado. El riesgo que se había
+  anotado ("un clic con el compositor vacío abre el chat de voz") no aplica
+  tal como se había descrito, aunque sigue siendo buena práctica no hacer
+  clic con el compositor vacío. Enter manual confirmado por Juan; el envío
+  real de la spec usa clic sobre el botón (ya con texto presente), no
+  Enter — a diferencia de kimi. *MEDIDA, 2026-08-23.*
 
 ## Sobre qué es y qué no es
 

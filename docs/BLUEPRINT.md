@@ -1045,6 +1045,51 @@ para verificar esto, es una lectura, no una escritura ni un envío. Regla
 específica para qwen cuando se implemente su envío: NUNCA clic con el
 compositor vacío; preferir Enter siempre.
 
+#### Tarea 3.a cerrada — el pool de 8 en `INVESTIGADORES`, con datos reales de una ronda de medición
+
+Juan corrió el prompt de medición en los 9 paneles (4 investigadores por
+"Enviar a todos", 5 candidatos a mano), apretó "Leer" y "Sondear" antes de
+cerrar. Con eso:
+
+**A. VOLUMEN, medido** (`--cc-historial`, los 4 que ya pasaban por `leer`):
+
+| proveedor | caracteres |
+|---|---|
+| chatgpt | 2585 |
+| glm | 3374 |
+| claude | 3458 |
+| gemini | 5173 |
+| **suma** | **14590** |
+
+Los cinco que en ese momento eran candidatos sólo dejaron una MUESTRA de 80
+caracteres en el archivo de sondeo (`sondear()` no captura el texto
+completo, es un instrumento estructural) — el volumen completo de esos
+cinco queda pendiente de la próxima vez que Juan apriete "Leer" con ellos ya
+promovidos.
+
+**B. FORMA, medida con `--cc-sondear` sobre conversación real**
+(`sondeo-2026-08-23T20-47-47-790Z.json`): confirmó `assistantMessage` para
+los cinco candidatos (ver specs abajo) y reveló un dato nuevo — deepseek
+estructura sus citas en un nodo propio (`span.ds-markdown-cite`), y qwen
+mostró deriva de versión EN VIVO ("Qwen3.8-Max" en la derivación de C0c →
+"Qwen3.7-Plus" en esta ronda).
+
+**Promovidos a `INVESTIGADORES`**, en el orden fijado por Juan (chatgpt,
+gemini, claude, grok, mistral, glm, kimi, qwen): grok, mistral, qwen y kimi.
+Specs completas en `packages/providers/src/specs.json`; detalle del defecto
+corregido sobre qwen (se creía que el botón de envío y el de voz eran el
+MISMO elemento cambiando de rol — medido con conversación real: son dos
+controles DISTINTOS que conviven, el de envío empieza deshabilitado) y el
+bloqueo de kimi (sin `modelLabel` tras cuatro corridas, tres hipótesis
+agotadas; `submit.kind: "key"` porque no hay selector de envío derivable) en
+el commit `e123b66`.
+
+**PENDIENTE, con esa palabra:** el envío SINTÉTICO de kimi (el que
+`difundir()` dispara vía evento de teclado, no el Enter manual que Juan
+tecleó) no está medido. Se confirma en la primera ronda real que use el
+envío automático — no antes, porque medirlo ahora exigiría que el
+instrumento enviara, y eso está prohibido fuera de una ronda real de Juan.
+
 ### Fase 4 — Operador y herramientas ⏳ **DESCRIPCIÓN SUPERSEDIDA (2026-08-13)**
 
 > DeepSeek deja de ser "el operador" y pasa a ser el noveno que sólo informa

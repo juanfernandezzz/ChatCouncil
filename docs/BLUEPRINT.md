@@ -1266,19 +1266,49 @@ aparte, no la vista de Electron con partición `persist:qwen`. Queda
 Juan ejecutando el envío él mismo — y **no se gasta cuota de qwen ni de kimi
 desde este entorno.**
 
-#### Hipótesis de "panel al frente antes de escribir" para kimi: sin probar, mismo motivo
+#### Hipótesis de "panel al frente antes de escribir" para kimi: CONFIRMADA por Juan (2026-08-25)
 
-La hipótesis viva de esta corrida —Chromium pausa el `requestAnimationFrame`
-del editor de kimi mientras el panel está oculto, y por eso el modelo
-interno del editor nunca se entera del texto escrito— **no se implementó ni
-se descartó.** Probarla exige la misma acción bloqueada arriba: traer la
-ventana real al frente, escribir, verificar el compositor y recién ahí
-enviar, contra la cuenta real de kimi y dentro del techo de 4 envíos. Nada
-de eso es ejecutable desde este entorno. Instrucciones para que Juan corra
-la prueba él mismo, y la regla de decisión ya fijada (cuatro intentos, si no
-funciona kimi sale del pool documentado en `docs/LIMITACIONES.md`), quedan
-en el informe de esta corrida — no en este documento, porque no hay todavía
-un resultado medido que registrar.
+Juan corrió la prueba él mismo: con el panel de kimi al frente, Enter
+funciona "de forma inmediata y repetida". Confirma la hipótesis viva —el
+compositor de kimi sí recibe y envía el texto cuando el panel está visible y
+con foco; el fallo medido en corridas anteriores era de VISIBILIDAD, no del
+mecanismo `sendInputEvent`/`envioConfiable` en sí.
+
+Con esto la regla de decisión fijada arriba resuelve a la primera rama: el
+mecanismo automático (`difundirConfiable`, `apps/desktop/src/main/index.ts`)
+sigue sin poder llevar el panel al frente por sí solo — `difundir()` escribe
+en los ocho a la vez y sólo uno puede estar al frente en un momento dado —
+así que **kimi (y cualquier proveedor con compositor `contenteditable` rico
+declarado por TIPO, no por parche) queda pendiente de que la difusión
+automática incorpore un paso de enfoque secuencial antes de escribir en esa
+categoría de compositor.** No se implementó todavía: es un cambio de forma
+de `difundir()` (de "escribir en los ocho en paralelo" a "enfocar, escribir
+y verificar uno por uno para los de compositor rico"), y tocar esa función
+sin gastar un envío real de verificación contra kimi violaría "medir antes
+de arreglar". Queda para la próxima corrida con cuota disponible.
+
+#### Bug reportado por Juan (2026-08-25): la ventana vuelve a ChatGPT al cambiar de ventana
+
+Al hacer alt-tab fuera de ChatCouncil y volver, el teclado quedaba enfocado
+en el panel de `chatgpt` sin importar qué proveedor estuviera al frente.
+Causa: `BaseWindow` no elige solo qué `WebContentsView` hijo recupera el
+foco al recibir el foco del sistema operativo, y sin ese cálculo cae en el
+primero agregado por orden de construcción (`chatgpt`, primero en
+`INVESTIGADORES`). **Corregido**: `vistaEnFrente()` calcula el panel visible
+a partir de `scrollX` y `win.on("focus", ...)` le devuelve el foco a ESE
+panel, no al primero. `apps/desktop/src/main/index.ts`. Typecheck, los cinco
+gates y build verdes tras el cambio. Sin verificar todavía en la app real —
+pendiente de que Juan confirme con alt-tab.
+
+#### Preferencias de Juan (2026-08-25), registradas — NO implementadas todavía
+
+1. Que el botón con el nombre de cada proveedor se ilumine cuando ese panel
+   está al frente, para saber cuál se está viendo sin mirar el contenido.
+2. Que la ventana de ChatCouncil arranque siempre MAXIMIZADA por defecto.
+
+Quedan para una fase de interfaz (relacionado con la Fase 6, rediseño
+estético) — no se tocan ahora porque no son parte de los Objetivos 1/2 de
+esta corrida y el pedido de Juan fue "sólo incluir en informe".
 
 ### Fase 4 — Operador y herramientas ⏳ **DESCRIPCIÓN SUPERSEDIDA (2026-08-13)**
 

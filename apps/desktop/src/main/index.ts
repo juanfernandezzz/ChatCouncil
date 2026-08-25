@@ -671,6 +671,26 @@ function layout(): void {
   });
 }
 
+/**
+ * La vista cuyo panel está realmente EN FRENTE, según `scrollX` — no la
+ * primera de la lista.
+ *
+ * Reportado por Juan el 2026-08-25: al cambiar de ventana (alt-tab) y volver,
+ * ChatCouncil "vuelve a ChatGPT" — el teclado queda enfocado en el primer
+ * panel agregado (`chatgpt`, primero en `INVESTIGADORES`) aunque Juan hubiera
+ * desplazado la fila a otro proveedor antes de salir. `BaseWindow` no elige
+ * solo qué `WebContentsView` hijo recupera el foco al recibir el foco del
+ * sistema operativo; sin este cálculo, cae en el primero agregado por orden
+ * de construcción, que es justo `chatgpt`.
+ */
+function vistaEnFrente(): WebContentsView | undefined {
+  const abiertas = todas();
+  const ancho = anchoPanel();
+  if (abiertas.length === 0 || ancho === 0) return undefined;
+  const indice = Math.min(abiertas.length - 1, Math.max(0, Math.round(scrollX / ancho)));
+  return abiertas[indice]?.view;
+}
+
 function estadoDesplazamiento(): { scrollX: number; anchoTotal: number; ventanaAncho: number } {
   const anchoTotal = anchoPanel() * todas().length;
   return { scrollX, anchoTotal, ventanaAncho: anchoPanel() };
@@ -803,6 +823,10 @@ function createWindow(): void {
 
   layout();
   win.on("resize", layout);
+  // Ver el comentario de `vistaEnFrente`: sin esto, recuperar el foco del
+  // sistema operativo (alt-tab de vuelta a ChatCouncil) deja el teclado en
+  // el primer panel agregado en vez del que está visible.
+  win.on("focus", () => vistaEnFrente()?.webContents.focus());
 }
 
 /**

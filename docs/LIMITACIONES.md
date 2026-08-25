@@ -108,6 +108,19 @@ en este repositorio.
   cualquier otro que resulte tener el mismo problema.
   *MEDIDA, 2026-08-23, confirmado por Juan sobre la app real.*
 
+- **kimi necesita además el panel AL FRENTE (visible y con foco) para que el
+  envío funcione**, no sólo `sendInputEvent`. Con el panel al frente, Juan
+  confirmó Enter funcionando "de forma inmediata y repetida". La difusión
+  automática (`difundir()`) escribe en los ocho paneles a la vez y no puede
+  tener a todos al frente simultáneamente, así que el envío automático a
+  kimi dentro de una ronda de ocho **sigue sin confirmar** — el mecanismo
+  que sí funciona es manual, un panel a la vez. Cambiar `difundir()` para
+  enfocar-escribir-verificar secuencialmente en los compositores ricos queda
+  pendiente de una corrida con cuota disponible contra la cuenta real.
+  *MEDIDA, 2026-08-25, confirmado por Juan sobre la app real (uso manual,
+  panel al frente); el caso de difusión automática con ocho paneles a la
+  vez no está medido.*
+
 - **qwen: el botón de envío y el de chat de voz son controles DISTINTOS**,
   no el mismo elemento cambiando de rol según el estado del compositor —
   corregido tras medir con conversación real (2026-08-23): el botón de

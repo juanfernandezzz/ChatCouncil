@@ -108,18 +108,16 @@ en este repositorio.
   cualquier otro que resulte tener el mismo problema.
   *MEDIDA, 2026-08-23, confirmado por Juan sobre la app real.*
 
-- **kimi necesita además el panel AL FRENTE (visible y con foco) para que el
-  envío funcione**, no sólo `sendInputEvent`. Con el panel al frente, Juan
-  confirmó Enter funcionando "de forma inmediata y repetida". La difusión
-  automática (`difundir()`) escribe en los ocho paneles a la vez y no puede
-  tener a todos al frente simultáneamente, así que el envío automático a
-  kimi dentro de una ronda de ocho **sigue sin confirmar** — el mecanismo
-  que sí funciona es manual, un panel a la vez. Cambiar `difundir()` para
-  enfocar-escribir-verificar secuencialmente en los compositores ricos queda
-  pendiente de una corrida con cuota disponible contra la cuenta real.
-  *MEDIDA, 2026-08-25, confirmado por Juan sobre la app real (uso manual,
-  panel al frente); el caso de difusión automática con ocho paneles a la
-  vez no está medido.*
+- **RESUELTO — kimi necesitaba además el panel AL FRENTE (visible y con
+  foco) para que el envío funcione**, no sólo `sendInputEvent`. Con el panel
+  al frente, Juan confirmó Enter funcionando "de forma inmediata y
+  repetida" (uso manual, 2026-08-25). `difundir()` se corrigió para traer al
+  frente, secuencial, a cualquier proveedor con `envioConfiable: true` antes
+  de escribirle (`difundirConEnfoque`, `apps/desktop/src/main/index.ts`).
+  Juan confirmó con un envío real de "Enviar a todos" que kimi mandó el
+  mensaje en la ronda de ocho. kimi queda en el pool de 8 con envío
+  automático confirmado. *MEDIDA, 2026-08-25, confirmado por Juan sobre la
+  app real, en difusión automática de los ocho.*
 
 - **qwen: el botón de envío y el de chat de voz son controles DISTINTOS**,
   no el mismo elemento cambiando de rol según el estado del compositor —

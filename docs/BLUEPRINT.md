@@ -1285,13 +1285,13 @@ apilado, le da foco, escribe con `difundirConfiable`, y restaura su posición
 original con `finally` (si algo falla, el layout no queda roto). Typecheck,
 los cinco gates y build verdes.
 
-**No verificado con un envío real todavía.** Igual que el resto de esta
-corrida: mover paneles con `WebContentsView.setBounds` y verificar que la
-escritura confiable de verdad funciona sobre la cuenta real de kimi exige
-correr la app de Electron, algo que este entorno no puede hacer. Queda
-dentro del techo de 4 envíos reales a kimi, sin gastar ninguno todavía —
-pendiente de que Juan lo pruebe con "Enviar a todos" (difusión real de los
-ocho, no el uso manual de un panel que ya confirmó el mecanismo de fondo).
+**VERIFICADO por Juan, 2026-08-25, con un envío real de "Enviar a todos":
+kimi mandó el mensaje en la ronda.** Objetivo 1 CERRADO: kimi queda en el
+pool de 8, con envío automático confirmado tanto manual (panel al frente,
+2026-08-23/25) como en difusión real de los ocho (2026-08-25). 1 de 4
+envíos reales del techo usado; 3 disponibles si hiciera falta más adelante.
+La hipótesis de visibilidad/RAF pausado queda confirmada como causa y
+`difundirConEnfoque` como su arreglo, no sólo como hipótesis.
 
 #### Bug reportado por Juan (2026-08-25): la ventana vuelve a ChatGPT al cambiar de ventana
 

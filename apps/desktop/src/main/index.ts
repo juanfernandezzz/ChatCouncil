@@ -1723,7 +1723,16 @@ async function modoVisibilidad(): Promise<void> {
       boundsX: number;
       boundsWidth: number;
       dentroDelViewport: boolean;
-      composerFueraDeViewport: boolean;
+      /**
+       * Si el composer está PRESENTE en el DOM en este momento —con el panel
+       * tal como quedó tras la carga (la mayoría, fuera del rango visible).
+       * Nombre corregido: se llamaba `composerFueraDeViewport` y ese nombre
+       * decía lo contrario del dato — un lector de `true` habría concluido
+       * "está fuera" cuando el campo dice "está presente". El registro que
+       * emite este modo es append-only por archivo de salida; se corrige
+       * ahora, antes de que se escriban más corridas con el nombre viejo.
+       */
+      composerPresente: boolean;
     }[] = [];
     for (const v of objetivos) {
       const b = v.view.getBounds();
@@ -1745,7 +1754,7 @@ async function modoVisibilidad(): Promise<void> {
         boundsX: b.x,
         boundsWidth: b.width,
         dentroDelViewport: dentro,
-        composerFueraDeViewport: composerOk,
+        composerPresente: composerOk,
       });
     }
 

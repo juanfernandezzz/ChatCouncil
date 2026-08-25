@@ -1183,6 +1183,47 @@ primera ronda real que lo incluya.
 `CANDIDATOS_SONDEO` queda VACÍA: los nueve tienen spec completa. El
 mecanismo sigue existiendo para el próximo candidato.
 
+#### Diagnóstico de visibilidad vs. contención (2026-08-23) — qué se midió, y qué no
+
+Con el diseño de panel a ancho completo + paginado (`cdbccee`), 8 de 9
+paneles quedan fuera del rango visible de la ventana en cualquier momento.
+Hipótesis a separar: **A** (contención de carga — 9 páginas a la vez, se
+arregla con más tiempo) vs. **B** (visibilidad — Chromium no renderiza
+contenido oculto, ningún timeout lo arregla).
+
+`--cc-test-visibilidad` (cuota cero, sin escribir ni enviar) midió, por
+proveedor: `document.visibilityState`/`hidden`, el rect del panel contra la
+ventana, y **si el `composer` está presente en el DOM** — oculto y al
+frente. Resultado real: 7 de 9 (gemini, claude, mistral, glm, kimi, qwen,
+deepseek) con `hidden: true` y el composer presente igual, oculto y al
+frente. Sólo grok, ausente en los dos estados.
+
+**Lo que esto mide, y sólo esto: presencia del composer.** No mide
+ESCRITURA (¿el texto insertado llega al modelo interno del editor?) ni
+GENERACIÓN (¿la respuesta se completa y se lee entera?) — son mecanismos
+distintos, y un editor rico puede tener su composer presente en el DOM
+mientras Chromium sigue pausando el `requestAnimationFrame` que ese editor
+usa para procesar la entrada, oculto. **B queda refutada para PRESENCIA,
+sin medir para escritura y generación** — eso es el pie del reintento de
+abajo.
+
+**Reintento, sólo grok/kimi/qwen (los tres que fallaron), con
+`composerMs`/`submitConfirmMs` ya subidos.** Criterio fijado ANTES de correrlo
+—para que el resultado no se interprete después de verlo—:
+- Los tres funcionan → era contención. Cerrado.
+- grok sí, kimi y/o qwen no → contención explica grok; los otros dos sin
+  causa identificada, y la visibilidad vuelve a estar en juego, ahora sobre
+  ESCRITURA y GENERACIÓN, no sobre presencia.
+- Ninguno funciona → A refutada del todo; hay que medir escritura y
+  generación con el panel al frente.
+
+**Resultado real:** grok, `ok:true`, 590 caracteres — contención explicaba
+su falla. kimi, `ok:false`, mismo error que antes ("el compositor no
+reflejó el texto esperado" — no se envió nada, cuota intacta). qwen,
+`ok:true` con 3 caracteres ("Dem", truncado). **Cae en la segunda rama: la
+visibilidad queda abierta como hipótesis para kimi (escritura) y para qwen
+(generación/lectura), sin cerrar.** No se investigó más en esta ronda.
+
 ### Fase 4 — Operador y herramientas ⏳ **DESCRIPCIÓN SUPERSEDIDA (2026-08-13)**
 
 > DeepSeek deja de ser "el operador" y pasa a ser el noveno que sólo informa

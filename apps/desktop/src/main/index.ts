@@ -20,7 +20,13 @@ import type { Server } from "node:http";
 import { PROVIDER_SPECS } from "@chatcouncil/providers";
 import type { Procedencia } from "@chatcouncil/domain";
 
-import { correrPruebaFase1, esperarQuietud, type LecturaProveedor, type ResultadoEnvio } from "./test-runner";
+import {
+  correrPruebaFase1,
+  esperarQuietud,
+  UMBRAL_LECTURA_MINIMO,
+  type LecturaProveedor,
+  type ResultadoEnvio,
+} from "./test-runner";
 import { sondear } from "./probe";
 import {
   crearConversacion,
@@ -544,15 +550,17 @@ async function difundirConRegistro(prompt: string, esPrueba: boolean): Promise<R
  * la lectura igual.
  */
 /**
- * UNA LECTURA DE 0 CARACTERES NUNCA SE GUARDA COMO UNA RESPUESTA BUENA.
+ * UNA LECTURA POR DEBAJO DE `UMBRAL_LECTURA_MINIMO` NUNCA SE GUARDA COMO UNA
+ * RESPUESTA BUENA.
  *
  * Medido el 2026-08-23: `esperarQuietud` (ver `test-runner.ts`) declaró
  * TERMINADA la respuesta de qwen con 0 caracteres —quieta en 0 durante toda
  * la ventana de quiescencia—, y ese resultado se guardó en el registro sin
- * ningún `error`, indistinguible de una respuesta corta y real. Quietud en 0
- * no es "terminó": es "nunca empezó" — es la misma familia de defecto que ya
- * costó la Fase 1 (BLUEPRINT §7.16 y afines): un valor que colapsa dos
- * estados distintos.
+ * ningún `error`, indistinguible de una respuesta corta y real. Corregido
+ * eso, qwen volvió a devolver `ok:true` con TRES caracteres: "no vacío" no
+ * es "es una respuesta". Es la misma familia de defecto que ya costó la
+ * Fase 1 (BLUEPRINT §7.16 y afines): un valor que colapsa dos estados
+ * distintos. El umbral y su justificación viven en `test-runner.ts`.
  *
  * Se corrige ACÁ, en un solo lugar para los NUEVE proveedores —no es un
  * parche de qwen—, porque todos los caminos que escriben al registro
@@ -561,8 +569,11 @@ async function difundirConRegistro(prompt: string, esPrueba: boolean): Promise<R
  */
 function marcarLecturasVacias(lecturas: readonly LecturaProveedor[]): LecturaProveedor[] {
   return lecturas.map((l) =>
-    l.text.length === 0 && !l.error
-      ? { ...l, error: "lectura vacia (0 caracteres): no genero ninguna respuesta observable, no se guarda como valida" }
+    l.text.length < UMBRAL_LECTURA_MINIMO && !l.error
+      ? {
+          ...l,
+          error: `lectura por debajo del umbral (${l.text.length} de ${UMBRAL_LECTURA_MINIMO} caracteres): no genero una respuesta observable, no se guarda como valida`,
+        }
       : l,
   );
 }

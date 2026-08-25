@@ -89,6 +89,25 @@ const PASO_MS = 1500;
 const QUIETUD_POR_DEFECTO_MS = 4_500;
 
 /**
+ * UMBRAL MINIMO DE CARACTERES para que una lectura cuente como respuesta.
+ *
+ * Medido el 2026-08-23: corregido que 0 caracteres nunca sea "quieto" (ver
+ * comentario de `esperarQuietud` abajo), qwen igual devolvio `ok:true` con
+ * TRES caracteres — mismo defecto, un escalon mas arriba: "no vacio" no es
+ * "es una respuesta". Una lectura de investigacion nunca es mas corta que la
+ * palabra de prueba del arnes: `PALABRA_CLAVE` ("LISTO", 5 caracteres) viaja
+ * dentro de una respuesta LARGA por diseno (ver Fase 2, "el arnes pasa a un
+ * prompt LARGO"), nunca sola. Se fija el piso en 20: por encima de cualquier
+ * eco de una palabra clave o de un fragmento truncado por contencion, y muy
+ * por debajo de cualquier oracion real en espanol. No es un valor medido
+ * contra el limite exacto del defecto -eso exigiria reproducir el corte de
+ * qwen caracter por caracter, y no hay una segunda corrida de ese incidente
+ * disponible para no gastar mas cuota- pero SI esta elegido para no colapsar
+ * con `PALABRA_CLAVE` ni con el caso medido de 3 caracteres.
+ */
+export const UMBRAL_LECTURA_MINIMO = 20;
+
+/**
  * Espera a que TODOS terminen, **con la ventana de quietud de cada uno**.
  *
  * La versión anterior usaba un único criterio fijo —tres lecturas iguales cada
@@ -105,15 +124,17 @@ const QUIETUD_POR_DEFECTO_MS = 4_500;
  *    el `quiescenceMs` COMPLETO que declara su spec.
  * Se devuelve cuando todos están quietos, o al vencer el techo global.
  *
- * **CERO CARACTERES NUNCA CUENTA COMO QUIETO.** Medido el 2026-08-23: qwen
- * quedó en 0 caracteres toda la espera y el ciclo lo dio por TERMINADO
- * —quieto en 0 durante `quiescenceMs`—, y ese resultado se guardó como una
- * respuesta válida. Quietud en 0 no es "terminó": es "nunca empezó". Un
- * proveedor que se queda en 0 sigue esperando hasta el TECHO GLOBAL
- * (`techoMs`), nunca antes — es la única forma de que el llamador pueda
- * distinguir "no generó nada en toda la ventana" (ausencia real) de "hay
- * contenido y dejó de crecer" (fin real). Es la misma familia de defecto
- * que costó la Fase 1: un valor que colapsa dos estados distintos.
+ * **MENOS DE `UMBRAL_LECTURA_MINIMO` CARACTERES NUNCA CUENTA COMO QUIETO.**
+ * Medido el 2026-08-23: qwen quedó en 0 caracteres toda la espera y el ciclo
+ * lo dio por TERMINADO —quieto en 0 durante `quiescenceMs`—, y ese resultado
+ * se guardó como una respuesta válida. Corregido eso, qwen volvió a dar
+ * `ok:true` con TRES caracteres: mismo defecto, un escalón más arriba. Ni 0
+ * ni 3 son "terminó": son "nunca empezó de verdad". Un proveedor que se queda
+ * por debajo del umbral sigue esperando hasta el TECHO GLOBAL (`techoMs`),
+ * nunca antes — es la única forma de que el llamador pueda distinguir "no
+ * generó nada real en toda la ventana" (ausencia real) de "hay contenido y
+ * dejó de crecer" (fin real). Es la misma familia de defecto que costó la
+ * Fase 1: un valor que colapsa dos estados distintos.
  */
 export async function esperarQuietud(
   leer: () => Promise<LecturaProveedor[]>,
@@ -134,9 +155,9 @@ export async function esperarQuietud(
         reloj.set(l.id, { largo: l.text.length, desde: ahora });
         return false;
       }
-      // Ver comentario arriba: 0 caracteres nunca es "quieto". Sigue en el
-      // bucle hasta el techo global, no hasta la ventana de quiescencia.
-      if (l.text.length === 0) return false;
+      // Ver comentario arriba: menos del umbral nunca es "quieto". Sigue en
+      // el bucle hasta el techo global, no hasta la ventana de quiescencia.
+      if (l.text.length < UMBRAL_LECTURA_MINIMO) return false;
       if (l.generating === true) return false;
       // Fin observado: el indicador ya dijo que terminó y el texto no crece.
       if (l.generating === false) return true;

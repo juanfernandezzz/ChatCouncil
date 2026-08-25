@@ -1224,6 +1224,62 @@ reflejó el texto esperado" — no se envió nada, cuota intacta). qwen,
 visibilidad queda abierta como hipótesis para kimi (escritura) y para qwen
 (generación/lectura), sin cerrar.** No se investigó más en esta ronda.
 
+#### Umbral de lectura corregido de 0 a 20 caracteres (2026-08-25)
+
+El defecto de "quietud en 0 cuenta como terminado" (§ arriba, medido
+2026-08-23) se había corregido para 0 caracteres exactos. Pero qwen, en el
+reintento inmediatamente anterior, ya había mostrado el mismo defecto un
+escalón más arriba: `ok:true` con 3 caracteres ("Dem", truncado). "No vacío"
+no es "es una respuesta" — es la misma familia de defecto con el número
+cambiado.
+
+Se sube el piso a **`UMBRAL_LECTURA_MINIMO = 20`** caracteres, en un solo
+lugar (`apps/desktop/src/main/test-runner.ts`), consumido tanto por
+`esperarQuietud` (para no dar por quieto algo por debajo del umbral, igual
+que hacía con 0) como por `marcarLecturasVacias`
+(`apps/desktop/src/main/index.ts`), que es el punto único por el que pasan
+los tres caminos que escriben al registro (`cc:leer`, `--cc-difundir`,
+`--cc-test`). Corrige a los NUEVE proveedores, no sólo a qwen.
+
+**Justificación del número, con lo que no se pudo medir.** No es un valor
+medido contra el límite exacto del defecto — reproducirlo dígito por dígito
+habría exigido gastar una cuota más de envío contra qwen sólo para acotar el
+umbral, y el techo de envíos reales de esta corrida está para el diagnóstico
+de la causa, no para calibrar una constante. Lo que sí está verificado: 20
+está por encima del caso medido (3, "Dem") y de cualquier eco de
+`PALABRA_CLAVE` ("LISTO", 5 caracteres, que además viaja siempre dentro de
+una respuesta larga por diseño de la Fase 2 — nunca sola), y muy por debajo
+de cualquier oración real en español. Si una corrida real futura devuelve un
+`ok:true` genuino de entre 6 y 19 caracteres, ese caso hay que investigarlo
+antes de subir el número — no se ajusta el umbral por sospecha.
+
+**Investigación de la causa de la lectura truncada de qwen: no se pudo
+completar en esta corrida.** El paso siguiente que exige la tarea —enviar de
+nuevo a qwen (dentro del techo de 4 envíos reales) y comparar la lectura
+completa contra lo que queda en pantalla— requiere accionar el compositor y
+el botón de envío de la ventana real de Electron con la sesión de Juan ya
+logueada. Ninguna herramienta de esta sesión puede llevar esa ventana al
+frente, escribir en su compositor ni hacer clic en su botón de envío: las
+herramientas de navegador disponibles controlan una pestaña de navegador web
+aparte, no la vista de Electron con partición `persist:qwen`. Queda
+**PENDIENTE**, condición (a) de `AGENTES.md` — técnicamente imposible sin
+Juan ejecutando el envío él mismo — y **no se gasta cuota de qwen ni de kimi
+desde este entorno.**
+
+#### Hipótesis de "panel al frente antes de escribir" para kimi: sin probar, mismo motivo
+
+La hipótesis viva de esta corrida —Chromium pausa el `requestAnimationFrame`
+del editor de kimi mientras el panel está oculto, y por eso el modelo
+interno del editor nunca se entera del texto escrito— **no se implementó ni
+se descartó.** Probarla exige la misma acción bloqueada arriba: traer la
+ventana real al frente, escribir, verificar el compositor y recién ahí
+enviar, contra la cuenta real de kimi y dentro del techo de 4 envíos. Nada
+de eso es ejecutable desde este entorno. Instrucciones para que Juan corra
+la prueba él mismo, y la regla de decisión ya fijada (cuatro intentos, si no
+funciona kimi sale del pool documentado en `docs/LIMITACIONES.md`), quedan
+en el informe de esta corrida — no en este documento, porque no hay todavía
+un resultado medido que registrar.
+
 ### Fase 4 — Operador y herramientas ⏳ **DESCRIPCIÓN SUPERSEDIDA (2026-08-13)**
 
 > DeepSeek deja de ser "el operador" y pasa a ser el noveno que sólo informa

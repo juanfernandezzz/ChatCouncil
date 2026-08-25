@@ -1274,18 +1274,24 @@ compositor de kimi sí recibe y envía el texto cuando el panel está visible y
 con foco; el fallo medido en corridas anteriores era de VISIBILIDAD, no del
 mecanismo `sendInputEvent`/`envioConfiable` en sí.
 
-Con esto la regla de decisión fijada arriba resuelve a la primera rama: el
-mecanismo automático (`difundirConfiable`, `apps/desktop/src/main/index.ts`)
-sigue sin poder llevar el panel al frente por sí solo — `difundir()` escribe
-en los ocho a la vez y sólo uno puede estar al frente en un momento dado —
-así que **kimi (y cualquier proveedor con compositor `contenteditable` rico
-declarado por TIPO, no por parche) queda pendiente de que la difusión
-automática incorpore un paso de enfoque secuencial antes de escribir en esa
-categoría de compositor.** No se implementó todavía: es un cambio de forma
-de `difundir()` (de "escribir en los ocho en paralelo" a "enfocar, escribir
-y verificar uno por uno para los de compositor rico"), y tocar esa función
-sin gastar un envío real de verificación contra kimi violaría "medir antes
-de arreglar". Queda para la próxima corrida con cuota disponible.
+Con esto la regla de decisión fijada arriba resuelve a la primera rama:
+**implementado.** `difundir()` (`apps/desktop/src/main/index.ts`) ahora
+separa los proveedores con `envioConfiable: true` en su spec (compositor
+`contenteditable` rico, hoy sólo kimi) del resto: esos siguen en paralelo
+como antes, y los de compositor rico pasan por `difundirConEnfoque()`,
+SECUENCIAL entre ellos —nunca dos al frente a la vez—, que mueve el panel a
+`{x:0, y:UI_HEIGHT}` dentro del área visible, lo sube al tope del orden de
+apilado, le da foco, escribe con `difundirConfiable`, y restaura su posición
+original con `finally` (si algo falla, el layout no queda roto). Typecheck,
+los cinco gates y build verdes.
+
+**No verificado con un envío real todavía.** Igual que el resto de esta
+corrida: mover paneles con `WebContentsView.setBounds` y verificar que la
+escritura confiable de verdad funciona sobre la cuenta real de kimi exige
+correr la app de Electron, algo que este entorno no puede hacer. Queda
+dentro del techo de 4 envíos reales a kimi, sin gastar ninguno todavía —
+pendiente de que Juan lo pruebe con "Enviar a todos" (difusión real de los
+ocho, no el uso manual de un panel que ya confirmó el mecanismo de fondo).
 
 #### Bug reportado por Juan (2026-08-25): la ventana vuelve a ChatGPT al cambiar de ventana
 

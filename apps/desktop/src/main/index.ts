@@ -913,11 +913,54 @@ async function difundirConfiable(
   )) as Omit<ResultadoEnvio, "id">;
 }
 
+/**
+ * Trae UN panel al frente —bounds dentro del área visible, tope del orden
+ * de apilado— escribe con `difundirConfiable`, y restaura su posición al
+ * terminar (con `finally`: si algo falla, el layout no queda roto).
+ *
+ * Existe porque `difundir()` escribía en los ocho paneles EN PARALELO, y
+ * casi todos quedan fuera del área visible por el diseño de fila horizontal
+ * con paginado (§5, Fase 3, "diagnóstico de visibilidad"). Confirmado por
+ * Juan el 2026-08-25: con el panel de kimi al frente, Enter funciona de
+ * inmediato y repetido — el fallo medido antes era de VISIBILIDAD (Chromium
+ * no procesa la entrada del editor en una página fuera de pantalla), no del
+ * mecanismo `sendInputEvent` en sí, que ya estaba bien.
+ *
+ * Se aplica a TODO proveedor con `envioConfiable: true` en su spec —hoy sólo
+ * kimi—, por TIPO de compositor y no como parche de un proveedor. Corre
+ * SECUENCIAL entre ellos (nunca dos a la vez al frente) porque "al frente"
+ * es una posición única.
+ */
+async function difundirConEnfoque(
+  v: { id: string; view: WebContentsView },
+  prompt: string,
+): Promise<Omit<ResultadoEnvio, "id">> {
+  if (!win) return difundirConfiable(v, prompt);
+  const previo = v.view.getBounds();
+  const { width, height } = win.getContentBounds();
+  const h = Math.max(0, height - UI_HEIGHT);
+  v.view.setBounds({ x: 0, y: UI_HEIGHT, width, height: h });
+  win.contentView.addChildView(v.view); // re-agregar lo sube al tope del orden de apilado
+  v.view.webContents.focus();
+  try {
+    return await difundirConfiable(v, prompt);
+  } finally {
+    if (win && !v.view.webContents.isDestroyed()) v.view.setBounds(previo);
+    layout();
+  }
+}
+
 async function difundir(prompt: string): Promise<ResultadoEnvio[]> {
-  const resultados = await Promise.allSettled(
-    vistas.map((v) => {
-      const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS] as { envioConfiable?: boolean };
-      if (spec.envioConfiable) return difundirConfiable(v, prompt);
+  const conFrente: typeof vistas = [];
+  const enParalelo: typeof vistas = [];
+  for (const v of vistas) {
+    const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS] as { envioConfiable?: boolean };
+    (spec.envioConfiable ? conFrente : enParalelo).push(v);
+  }
+
+  const resultadosParalelo = await Promise.allSettled(
+    enParalelo.map((v) => {
+      const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS];
       const specJson = JSON.stringify(spec);
       return v.view.webContents.executeJavaScript(
         `window.__ccProvider.run(${specJson}, ${JSON.stringify(prompt)})`,
@@ -925,8 +968,24 @@ async function difundir(prompt: string): Promise<ResultadoEnvio[]> {
       );
     }),
   );
-  return vistas.map((v, i) => {
-    const r = resultados[i]!;
+
+  // SECUENCIAL a propósito: cada uno pasa por "al frente" antes del
+  // siguiente, nunca dos compositores ricos al frente a la vez.
+  const resultadosConFrente: PromiseSettledResult<Omit<ResultadoEnvio, "id">>[] = [];
+  for (const v of conFrente) {
+    try {
+      resultadosConFrente.push({ status: "fulfilled", value: await difundirConEnfoque(v, prompt) });
+    } catch (e) {
+      resultadosConFrente.push({ status: "rejected", reason: e });
+    }
+  }
+
+  const porId = new Map<string, PromiseSettledResult<Omit<ResultadoEnvio, "id"> | ResultadoEnvio>>();
+  enParalelo.forEach((v, i) => porId.set(v.id, resultadosParalelo[i]!));
+  conFrente.forEach((v, i) => porId.set(v.id, resultadosConFrente[i]!));
+
+  return vistas.map((v) => {
+    const r = porId.get(v.id)!;
     // El `id` va DESPUÉS del spread, igual que en `leer`: el preload no lo
     // conoce, y si algún día viniera con uno, el nuestro es el bueno.
     return r.status === "fulfilled"

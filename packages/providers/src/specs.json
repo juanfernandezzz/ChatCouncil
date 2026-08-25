@@ -158,8 +158,9 @@
       },
       "timeouts": {
         "submitReadyMs": 8000,
-        "submitConfirmMs": 10000,
-        "emptyResponseMs": 90000
+        "submitConfirmMs": 30000,
+        "emptyResponseMs": 90000,
+        "composerMs": 45000
       },
       "modelLabel": {
         "selector": "#model-select-trigger"
@@ -190,8 +191,9 @@
       },
       "timeouts": {
         "submitReadyMs": 8000,
-        "submitConfirmMs": 10000,
-        "emptyResponseMs": 90000
+        "submitConfirmMs": 30000,
+        "emptyResponseMs": 90000,
+        "composerMs": 45000
       },
       "modelLabel": {
         "selector": "button[aria-label=\"Rápido\"]"
@@ -222,8 +224,9 @@
       },
       "timeouts": {
         "submitReadyMs": 8000,
-        "submitConfirmMs": 10000,
-        "emptyResponseMs": 90000
+        "submitConfirmMs": 30000,
+        "emptyResponseMs": 90000,
+        "composerMs": 45000
       },
       "modelLabel": {
         "selector": "div[aria-label=\"Select Model\"]"
@@ -259,8 +262,9 @@
       },
       "timeouts": {
         "submitReadyMs": 8000,
-        "submitConfirmMs": 10000,
-        "emptyResponseMs": 90000
+        "submitConfirmMs": 30000,
+        "emptyResponseMs": 90000,
+        "composerMs": 45000
       },
       "_notaModelo": "Sin modelLabel. Cuatro corridas de sondeo (tres antes de tener conversacion real, una el 2026-08-23 con conversacion viva) dieron CERO candidatos en las tres vias de deteccion, con controlesNivelesArriba:9 en las cuatro: el arbol del compositor de kimi es mas profundo que el resto y ninguna via estructural encuentra un selector de etiqueta de modelo. No es un problema de ancho de panel ni de estado de la pagina. Tres hipotesis agotadas (ver BLUEPRINT C0b): no hay una cuarta pendiente de probar.",
       "_notaFin": "kimi: sin indicador de generacion conocido en su DOM. El fin se INFIERE por quiescencia, mismo piso provisional que el resto.",
@@ -289,8 +293,9 @@
       },
       "timeouts": {
         "submitReadyMs": 8000,
-        "submitConfirmMs": 10000,
-        "emptyResponseMs": 90000
+        "submitConfirmMs": 30000,
+        "emptyResponseMs": 90000,
+        "composerMs": 45000
       },
       "_notaModelo": "Sin modelLabel. Sondeo con conversacion real (2026-08-23) dio cero candidatos en las tres vias de deteccion: deepseek no expone un selector de etiqueta de modelo visible en esta cuenta.",
       "_notaFin": "deepseek: sin indicador de generacion conocido en su DOM. El fin se INFIERE por quiescencia, mismo piso provisional que el resto.",

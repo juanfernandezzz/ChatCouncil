@@ -20,7 +20,7 @@ import type { Server } from "node:http";
 import { PROVIDER_SPECS } from "@chatcouncil/providers";
 import type { Procedencia } from "@chatcouncil/domain";
 
-import { correrPruebaFase1, type LecturaProveedor, type ResultadoEnvio } from "./test-runner";
+import { correrPruebaFase1, esperarQuietud, type LecturaProveedor, type ResultadoEnvio } from "./test-runner";
 import { sondear } from "./probe";
 import {
   crearConversacion,
@@ -148,7 +148,28 @@ app.setName("ChatCouncil");
 app.setPath("userData", join(app.getPath("appData"), "ChatCouncil"));
 
 const ARGV = process.argv.slice(1);
-type Modo = "normal" | "test" | "probe" | "login" | "sesion" | "historial" | "barrido" | "test-scroll";
+type Modo =
+  | "normal"
+  | "test"
+  | "probe"
+  | "login"
+  | "sesion"
+  | "historial"
+  | "barrido"
+  | "test-scroll"
+  | "difundir"
+  | "test-visibilidad";
+
+/**
+ * `--cc-difundir=<texto>`: dispara UNA ronda real —`difundir()` + espera de
+ * quietud + `leer()`, el mismo camino que "Enviar a todos" + "Leer" en la
+ * interfaz— sin que Juan tenga que tocar la ventana. Existe para el caso en
+ * que Juan mismo pide que el agente disparé el envío (decisión suya, no
+ * default): "el sondeo nunca envía" sigue rigiendo — esto no es sondeo, es
+ * el mismo camino de producción que usa la interfaz, invocado sin clics
+ * porque no hay forma de clickear una `BaseWindow` desde estas herramientas.
+ */
+const DIFUNDIR_TEXTO = (ARGV.find((a) => a.startsWith("--cc-difundir=")) ?? "").slice("--cc-difundir=".length);
 
 /**
  * `--cc-historial=<id>` vuelca UNA conversación por stdout como JSON, leída
@@ -199,7 +220,11 @@ const MODO: Modo = HISTORIAL_ID
         ? "barrido"
         : ARGV.includes("--cc-test-scroll") || process.env["CC_TEST_SCROLL"] === "1"
           ? "test-scroll"
-          : "normal";
+          : ARGV.includes("--cc-test-visibilidad") || process.env["CC_TEST_VISIBILIDAD"] === "1"
+            ? "test-visibilidad"
+            : DIFUNDIR_TEXTO.length > 0
+              ? "difundir"
+              : "normal";
 
 /**
  * `--cc-probe-escribe`: el sondeo escribe un marcador neutro antes de mirar,
@@ -518,7 +543,32 @@ async function difundirConRegistro(prompt: string, esPrueba: boolean): Promise<R
  * enganchar la respuesta, así que se omite la escritura — sigue devolviendo
  * la lectura igual.
  */
-function registrarRespuestasDeRondaActual(lecturas: readonly LecturaProveedor[]): void {
+/**
+ * UNA LECTURA DE 0 CARACTERES NUNCA SE GUARDA COMO UNA RESPUESTA BUENA.
+ *
+ * Medido el 2026-08-23: `esperarQuietud` (ver `test-runner.ts`) declaró
+ * TERMINADA la respuesta de qwen con 0 caracteres —quieta en 0 durante toda
+ * la ventana de quiescencia—, y ese resultado se guardó en el registro sin
+ * ningún `error`, indistinguible de una respuesta corta y real. Quietud en 0
+ * no es "terminó": es "nunca empezó" — es la misma familia de defecto que ya
+ * costó la Fase 1 (BLUEPRINT §7.16 y afines): un valor que colapsa dos
+ * estados distintos.
+ *
+ * Se corrige ACÁ, en un solo lugar para los NUEVE proveedores —no es un
+ * parche de qwen—, porque todos los caminos que escriben al registro
+ * (`cc:leer` de la interfaz, `--cc-difundir`, el arnés de `--cc-test`) pasan
+ * por esta función antes de tocar el archivo.
+ */
+function marcarLecturasVacias(lecturas: readonly LecturaProveedor[]): LecturaProveedor[] {
+  return lecturas.map((l) =>
+    l.text.length === 0 && !l.error
+      ? { ...l, error: "lectura vacia (0 caracteres): no genero ninguna respuesta observable, no se guarda como valida" }
+      : l,
+  );
+}
+
+function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProveedor[]): void {
+  const lecturas = marcarLecturasVacias(lecturasCrudas);
   // El diagnóstico se escribe SIEMPRE, aunque no haya ronda abierta a la que
   // enganchar la respuesta: es un archivo aparte y su valor no depende del
   // registro. Justo la lectura huérfana —leer sin haber difundido en este
@@ -1581,6 +1631,151 @@ function modoHistorial(): void {
 }
 
 /**
+ * Modo de difusión disparada (`--cc-difundir=<texto>`). Corre el MISMO
+ * camino que "Enviar a todos" + "Leer" en la interfaz —`difundirConRegistro`,
+ * `esperarQuietud`, `registrarRespuestasDeRondaActual`—, no una reimplementación
+ * aparte: es la única forma de no repetir el riesgo de los scripts sueltos
+ * que se usaron para probar el mecanismo de kimi.
+ *
+ * Existe SÓLO porque Juan lo pidió explícitamente para esta ronda ("ya
+ * podés enviar el prompt de medición"). No es el default: el resto de esta
+ * base de código sigue asumiendo que el envío real lo hace Juan desde la
+ * ventana.
+ */
+async function modoDifundir(): Promise<void> {
+  try {
+    // 35s, no 20s: MEDIDO el 2026-08-23 con los 9 paneles cargando a la vez
+    // -grok dio "compositor no encontrado tras 17025 ms, la pagina no tiene
+    // ningun cuadro de texto" con la espera vieja, y gemini/deepseek dieron
+    // ok:false con la respuesta YA generada (chars:1578 y 486) porque
+    // submitConfirmMs vencia antes de que la pagina reaccionara bajo la
+    // misma contencion. Mismo patron que ya justifico el composerMs de 45s
+    // de gemini en la Fase 2: 9 paginas cargando a la vez tardan mas que
+    // una sola.
+    await new Promise((r) => setTimeout(r, 35_000));
+    const envios = await difundirConRegistro(DIFUNDIR_TEXTO, false);
+    const lecturas = await esperarQuietud(leer, 90_000);
+    registrarRespuestasDeRondaActual(lecturas);
+    emitir("CC_DIFUNDIR_JSON", {
+      prompt: DIFUNDIR_TEXTO,
+      envios,
+      lecturas: lecturas.map((l) => ({
+        id: l.id,
+        chars: l.text.length,
+        generating: l.generating,
+        muestra: l.text.slice(0, 200),
+        error: l.error,
+      })),
+    });
+  } catch (e) {
+    decirPorSalida(`\n===CC_DIFUNDIR_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+  } finally {
+    app.quit();
+  }
+}
+
+/**
+ * Modo de diagnóstico de visibilidad (`--cc-test-visibilidad`). CUOTA CERO:
+ * no escribe, no envía, no navega. Existe para separar dos causas de la
+ * corrida del 2026-08-23 que se venían confundiendo bajo "contención":
+ *
+ *  A. CONTENCIÓN de carga — 9 páginas a la vez, se arregla con más tiempo.
+ *  B. VISIBILIDAD — con cada panel a ancho completo (`cdbccee`) y paginado,
+ *     de los 9 sólo UNO está dentro del viewport en cualquier momento; los
+ *     otros ocho viven en coordenadas `x` fuera de la ventana. Si Chromium
+ *     no renderiza contenido ahí (`document.hidden`, `visibilityState`,
+ *     `IntersectionObserver`, o la propia app pausándose por
+ *     `visibilitychange`), ningún timeout lo arregla.
+ *
+ * Mide, por proveedor: `document.visibilityState`/`hidden`, el rect de su
+ * `WebContentsView` contra el contenido de la ventana, y si el `composer`
+ * de su spec aparece — TODO con el layout tal como quedó tras la carga
+ * inicial (los otros ocho fuera de rango). Después repite SÓLO la última
+ * comprobación (composer) con cada panel llevado al frente uno por uno
+ * —`scrollX` puesto para que ese panel ocupe el rango visible—, sin
+ * escribir ni enviar nada.
+ */
+async function modoVisibilidad(): Promise<void> {
+  try {
+    await new Promise((r) => setTimeout(r, 35_000));
+    const objetivos = vistas; // los 9 INVESTIGADORES, spec conocida.
+    const w = win!.getContentBounds().width;
+
+    const composerPresente = async (v: (typeof vistas)[number]): Promise<boolean> => {
+      const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS] as { composer?: { selector: string } };
+      if (!spec.composer) return false;
+      try {
+        return (await v.view.webContents.executeJavaScript(
+          `!!document.querySelector(${JSON.stringify(spec.composer.selector)})`,
+          true,
+        )) as boolean;
+      } catch {
+        return false;
+      }
+    };
+
+    // PASO 1 — estado tal como quedó el layout inicial (scrollX en 0: sólo
+    // el primero está en rango; los otros ocho, fuera).
+    const filas: {
+      id: string;
+      visibilityState: string;
+      hidden: boolean;
+      boundsX: number;
+      boundsWidth: number;
+      dentroDelViewport: boolean;
+      composerFueraDeViewport: boolean;
+    }[] = [];
+    for (const v of objetivos) {
+      const b = v.view.getBounds();
+      const dentro = b.x + b.width > 0 && b.x < w;
+      let visibility: { visibilityState: string; hidden: boolean };
+      try {
+        visibility = (await v.view.webContents.executeJavaScript(
+          `({ visibilityState: document.visibilityState, hidden: document.hidden })`,
+          true,
+        )) as { visibilityState: string; hidden: boolean };
+      } catch {
+        visibility = { visibilityState: "error", hidden: true };
+      }
+      const composerOk = await composerPresente(v);
+      filas.push({
+        id: v.id,
+        visibilityState: visibility.visibilityState,
+        hidden: visibility.hidden,
+        boundsX: b.x,
+        boundsWidth: b.width,
+        dentroDelViewport: dentro,
+        composerFueraDeViewport: composerOk,
+      });
+    }
+
+    // PASO 2 — cada panel AL FRENTE, uno por uno (scrollX = su posición),
+    // repitiendo SÓLO el chequeo de composer. Nunca escribe ni envía.
+    const alFrente: { id: string; composerAlFrente: boolean }[] = [];
+    for (let i = 0; i < objetivos.length; i++) {
+      scrollX = i * w;
+      layout();
+      await new Promise((r) => setTimeout(r, 1200));
+      const v = objetivos[i]!;
+      alFrente.push({ id: v.id, composerAlFrente: await composerPresente(v) });
+    }
+    scrollX = 0;
+    layout();
+
+    const tabla = filas.map((f) => ({
+      ...f,
+      composerAlFrente: alFrente.find((a) => a.id === f.id)?.composerAlFrente ?? null,
+    }));
+
+    emitir("CC_VISIBILIDAD_JSON", { ventanaAncho: w, tabla });
+  } catch (e) {
+    decirPorSalida(`\n===CC_VISIBILIDAD_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+  } finally {
+    app.quit();
+  }
+}
+
+/**
  * Servidor HTTP efímero en loopback, sólo para el banco de pruebas de
  * `localStorage`. `about:blank` tiene origen opaco y Chromium deshabilita
  * `localStorage` ahí ("Storage is disabled", medido) — hace falta un origen
@@ -1717,6 +1912,8 @@ void app.whenReady().then(() => {
   if (MODO === "test-scroll") void modoTestScroll();
   if (MODO === "sesion") void modoSesion();
   if (MODO === "historial") modoHistorial();
+  if (MODO === "difundir") void modoDifundir();
+  if (MODO === "test-visibilidad") void modoVisibilidad();
   app.on("activate", () => {
     if (BaseWindow.getAllWindows().length === 0) createWindow();
   });

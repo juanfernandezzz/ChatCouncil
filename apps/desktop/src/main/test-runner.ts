@@ -104,8 +104,18 @@ const QUIETUD_POR_DEFECTO_MS = 4_500;
  *  · Si es `null` —fin INFERIDO—, el texto tiene que quedarse quieto durante
  *    el `quiescenceMs` COMPLETO que declara su spec.
  * Se devuelve cuando todos están quietos, o al vencer el techo global.
+ *
+ * **CERO CARACTERES NUNCA CUENTA COMO QUIETO.** Medido el 2026-08-23: qwen
+ * quedó en 0 caracteres toda la espera y el ciclo lo dio por TERMINADO
+ * —quieto en 0 durante `quiescenceMs`—, y ese resultado se guardó como una
+ * respuesta válida. Quietud en 0 no es "terminó": es "nunca empezó". Un
+ * proveedor que se queda en 0 sigue esperando hasta el TECHO GLOBAL
+ * (`techoMs`), nunca antes — es la única forma de que el llamador pueda
+ * distinguir "no generó nada en toda la ventana" (ausencia real) de "hay
+ * contenido y dejó de crecer" (fin real). Es la misma familia de defecto
+ * que costó la Fase 1: un valor que colapsa dos estados distintos.
  */
-async function esperarQuietud(
+export async function esperarQuietud(
   leer: () => Promise<LecturaProveedor[]>,
   techoMs: number,
 ): Promise<LecturaProveedor[]> {
@@ -124,6 +134,9 @@ async function esperarQuietud(
         reloj.set(l.id, { largo: l.text.length, desde: ahora });
         return false;
       }
+      // Ver comentario arriba: 0 caracteres nunca es "quieto". Sigue en el
+      // bucle hasta el techo global, no hasta la ventana de quiescencia.
+      if (l.text.length === 0) return false;
       if (l.generating === true) return false;
       // Fin observado: el indicador ya dijo que terminó y el texto no crece.
       if (l.generating === false) return true;

@@ -1253,18 +1253,41 @@ de cualquier oración real en español. Si una corrida real futura devuelve un
 `ok:true` genuino de entre 6 y 19 caracteres, ese caso hay que investigarlo
 antes de subir el número — no se ajusta el umbral por sospecha.
 
-**Investigación de la causa de la lectura truncada de qwen: no se pudo
-completar en esta corrida.** El paso siguiente que exige la tarea —enviar de
-nuevo a qwen (dentro del techo de 4 envíos reales) y comparar la lectura
-completa contra lo que queda en pantalla— requiere accionar el compositor y
-el botón de envío de la ventana real de Electron con la sesión de Juan ya
-logueada. Ninguna herramienta de esta sesión puede llevar esa ventana al
-frente, escribir en su compositor ni hacer clic en su botón de envío: las
-herramientas de navegador disponibles controlan una pestaña de navegador web
-aparte, no la vista de Electron con partición `persist:qwen`. Queda
-**PENDIENTE**, condición (a) de `AGENTES.md` — técnicamente imposible sin
-Juan ejecutando el envío él mismo — y **no se gasta cuota de qwen ni de kimi
-desde este entorno.**
+#### Investigación de la causa, con envío real de Juan (2026-08-25)
+
+Juan escribió y envió a qwen un mensaje que pedía una respuesta larga, y
+reportó: la respuesta se ve completa cuando termina de generar, no se
+cortó; pero la generación fue lenta y **pausó a ratos antes de seguir** —y
+Juan notó él mismo que eso "podría dar un falso positivo de que ya terminó
+de generar", que es exactamente el mecanismo que truncó a qwen en 3
+caracteres el 2026-08-23.
+
+**Con eso se puede cerrar la causa sin ambigüedad**, leyendo el código de
+los dos caminos que existen:
+
+- **`cc:leer`** (el botón "Leer" de la interfaz, línea 1084 de
+  `apps/desktop/src/main/index.ts`) llama a `leer()` UNA vez —una foto del
+  DOM en ese instante— y nunca a `esperarQuietud`. No hay inferencia de fin
+  de generación en este camino: el criterio de "terminó" lo pone **Juan**,
+  mirando la pantalla, antes de clickear. Es justo el rol que Juan describe
+  al decir "ahí es donde entro yo como humano".
+- **`esperarQuietud`** —el que se equivocó con las pausas de qwen— sólo
+  corre en `modoDifundir()` (`--cc-difundir`, un modo de diagnóstico
+  automático pedido puntualmente por Juan para esta corrida, línea 1739) y
+  en el arnés `--cc-test` (`correrPruebaFase1`). Ninguno de los dos es el
+  camino que usa Juan en uso normal.
+
+**Conclusión, MEDIDA sobre el código y confirmada por el reporte de Juan:**
+el defecto de truncado por pausas largas es real y queda documentado como
+limitación del modo automático de diagnóstico/arnés — no del producto en
+uso normal, porque ahí el fin de la respuesta lo declara Juan, no una
+inferencia de quietud. Es la misma distinción que ya fijó la decisión 10 de
+la Fase 3 para las corridas de investigación profunda
+("`finDe: declarado-por-usuario`"), aplicada acá al camino que ya existe.
+**No se necesita ningún cambio de código para cerrar este objetivo**: el
+umbral de 20 caracteres ya blindado arriba cubre el caso en que el modo
+automático SÍ se use (agarra el falso positivo antes de que se guarde), y
+el uso normal de Juan no pasa por el mecanismo que falla.
 
 #### Hipótesis de "panel al frente antes de escribir" para kimi: CONFIRMADA por Juan (2026-08-25)
 

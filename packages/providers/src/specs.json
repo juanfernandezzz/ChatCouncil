@@ -111,7 +111,7 @@
         "selector": "infinite-scroller[data-test-id=\"chat-history-container\"]"
       },
       "assistantMessage": {
-        "selector": "structured-content-container.model-response-text",
+        "selector": "structured-content-container.model-response-text, #extended-response-markdown-content",
         "pick": "last",
         "exclude": [
           "[class*=\"thought\"]"
@@ -133,7 +133,8 @@
       "modelLabel": {
         "selector": "div[data-test-id=\"logo-pill-label-container\"]"
       },
-      "_notaModelo": "Derivado por medicion el 2026-08-09 (sondeo, via estructural). El boton hermano lleva la version DENTRO del aria-label (\"...actualmente 3.5 Flash-Lite\"), asi que se rompe justo cuando el modelo cambia: por eso se usa el div, que es estable y deja la version en el texto."
+      "_notaModelo": "Derivado por medicion el 2026-08-09 (sondeo, via estructural). El boton hermano lleva la version DENTRO del aria-label (\"...actualmente 3.5 Flash-Lite\"), asi que se rompe justo cuando el modelo cambia: por eso se usa el div, que es estable y deja la version en el texto.",
+      "_notaInforme": "Medido el 2026-08-26: con Deep Research, gemini abre el informe real en un panel APARTE del stream de chat (deep-research-immersive-panel), y structured-content-container.model-response-text solo capturaba el mensaje procedural del chat (\"He completado su investigacion\", 138 caracteres) -el informe entero se perdia. Derivado por sondeo (contenedoresDeTextoLargo, busqueda sin depender de clase): el contenido limpio del informe vive en #extended-response-markdown-content, un id estable. Se agrega como segunda opcion del selector separada por coma; pick:last lo prefiere cuando esta presente porque aparece despues en el orden de documento, y cae al selector de chat normal cuando no hay Deep Research. No se probo con una conversacion sin Deep Research tras este cambio: falta confirmar que pick:last sigue eligiendo bien el mensaje de chat normal cuando el id nuevo no existe."
     },
     "grok": {
       "newConversationUrl": "https://grok.com/",

@@ -1329,7 +1329,47 @@ panel, no al primero. `apps/desktop/src/main/index.ts`. Typecheck, los cinco
 gates y build verdes tras el cambio. Sin verificar todavía en la app real —
 pendiente de que Juan confirme con alt-tab.
 
-#### Preferencias de Juan (2026-08-25), registradas — NO implementadas todavía
+##### Objetivo 3B — defecto MEDIDO y corregido: gemini perdía el informe de Deep Research (2026-08-26)
+
+Con el registro real de una corrida de Juan (prompt personal, no el de
+medición — ver más abajo), se leyó `assistantMessage` de gemini con **138
+caracteres**: "I've completed your research. Feel free to ask...". El
+informe real de Deep Research —miles de caracteres— no estaba.
+
+Diagnóstico con la ventana viva, cuota cero, sin adivinar el nombre de
+clase: se agregó `contenedoresDeTextoLargo` al sondeo (ver abajo) y con eso
+se encontró la cadena real: `deep-research-immersive-panel` →
+`div.response-container-content` → `div.markdown...#extended-response-markdown-content`
+(61938 → 61873 → 30284 caracteres, este último ya sin la chrome de
+compartir/exportar). Es un **panel aparte del stream de chat**, con `id`
+estable.
+
+**Corregido**: `assistantMessage.selector` de gemini
+(`packages/providers/src/specs.json`) ahora es
+`"structured-content-container.model-response-text, #extended-response-markdown-content"`
+— `pick: "last"` prefiere el informe cuando existe (aparece después en el
+orden de documento) y cae al mensaje de chat normal cuando no hay Deep
+Research. Typecheck, los cinco gates y build verdes.
+
+**No verificado todavía con una lectura real post-cambio.** Falta que Juan
+dispare una respuesta de Deep Research nueva (o normal, sin Deep Research,
+para confirmar que el selector viejo sigue funcionando) y presione "Leer"
+para comparar el largo contra lo medido acá.
+
+#### Herramienta nueva: `contenedoresDeTextoLargo` en el sondeo
+
+Se agregó a `probe.ts` un campo que recorre TODO el documento buscando el
+elemento HOJA (ningún hijo repite el mismo largo de texto) con más de 300
+caracteres, **sin depender de ningún nombre de clase conocido** — la forma
+de encontrar el contenedor real de un proveedor nuevo (o de un modo nuevo,
+como Deep Research) sin tener que adivinar. Primera corrida: script, style
+y head llenaron el cupo de 20 con puro JSON de configuración de la
+página —un caso más de "cupo compartido convierte 'no lo vi' en 'no está'"
+(BLUEPRINT #63)—, corregido excluyendo esas etiquetas y exigiendo
+visibilidad real. Mismo límite de seguridad que el resto del sondeo: lista
+blanca de atributos, texto recortado a 100 caracteres, sin clics.
+
+### Preferencias de Juan (2026-08-25), registradas — NO implementadas todavía
 
 1. Que el botón con el nombre de cada proveedor se ilumine cuando ese panel
    está al frente, para saber cuál se está viendo sin mirar el contenido.

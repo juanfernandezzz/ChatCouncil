@@ -923,17 +923,28 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
      * atributos, texto recortado a 100 caracteres, sin clics.
      */
     contenedoresDeTextoLargo: (() => {
+      // No-contenido: su textContent es codigo o metadatos, nunca la
+      // respuesta de un proveedor. Medido: sin esta lista, script/style/head
+      // llenaban el cupo de 20 antes de llegar a cualquier elemento real
+      // -uno de ellos con largoTexto: 1898999, puro JSON de configuracion.
+      const IGNORAR = new Set(["script", "style", "head", "html", "noscript", "template", "svg", "path"]);
       const out = [];
       try {
         const todos = document.querySelectorAll("*");
         for (const el of todos) {
           if (out.length >= 20) break;
+          const tag = el.tagName.toLowerCase();
+          if (IGNORAR.has(tag)) continue;
+          // offsetParent es null en elementos con display:none (no en
+          // position:fixed, que es aceptable: un panel de informe puede
+          // estar posicionado fijo y seguir siendo lo que se busca).
+          if (el.offsetParent === null && getComputedStyle(el).position !== "fixed") continue;
           const total = (el.textContent || "").trim();
           if (total.length < 300) continue;
           const algunHijoIgual = Array.from(el.children).some((c) => (c.textContent || "").trim().length === total.length);
           if (algunHijoIgual) continue;
           out.push({
-            tag: el.tagName.toLowerCase(),
+            tag: tag,
             clase: String(el.className || "").slice(0, 150),
             id: el.id || "",
             largoTexto: total.length,

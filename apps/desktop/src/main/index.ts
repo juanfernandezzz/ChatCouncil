@@ -10,7 +10,8 @@
  * con 72 cookies sobreviviendo al cierre completo de la app.
  */
 
-import { app, BaseWindow, WebContentsView, ipcMain, screen, session } from "electron";
+import { app, BaseWindow, Menu, WebContentsView, ipcMain, screen, session } from "electron";
+import type { MenuItemConstructorOptions } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -2001,7 +2002,62 @@ async function modoSesion(): Promise<void> {
   }
 }
 
+/**
+ * MENÚ PROPIO — el "Reload" / "Force Reload" del menú por defecto de
+ * Electron no hacían nada.
+ *
+ * Reportado por Juan el 2026-08-25: sin forma de refrescar un panel con
+ * problemas. Causa: los roles `reload` / `forceReload` / `toggleDevTools`
+ * de Electron operan sobre `BrowserWindow.getFocusedWindow()`, y esta app
+ * usa `BaseWindow` con varios `WebContentsView` hijos — no hay un
+ * `BrowserWindow` enfocado que esos roles puedan encontrar, así que quedan
+ * mudos en silencio. Se reemplazan por ítems propios que apuntan al panel
+ * que `vistaEnFrente()` ya sabe identificar — el mismo cálculo que arregló
+ * el foco al volver de alt-tab.
+ *
+ * El resto del menú (`editMenu`, `windowMenu`) se deja con el role nativo:
+ * cortar/copiar/pegar/deshacer sí funcionan porque esos roles se resuelven
+ * contra el `webContents` con foco de teclado, no contra la ventana.
+ */
+function construirMenu(): void {
+  const recargarPanelActual = (forzar: boolean): void => {
+    const v = vistaEnFrente();
+    if (!v || v.webContents.isDestroyed()) return;
+    if (forzar) v.webContents.reloadIgnoringCache();
+    else v.webContents.reload();
+  };
+  const template: MenuItemConstructorOptions[] = [
+    ...(process.platform === "darwin" ? [{ role: "appMenu" as const }] : []),
+    { role: "editMenu" },
+    {
+      label: "Ver",
+      submenu: [
+        { label: "Recargar panel actual", accelerator: "CmdOrCtrl+R", click: () => recargarPanelActual(false) },
+        {
+          label: "Forzar recarga del panel actual",
+          accelerator: "CmdOrCtrl+Shift+R",
+          click: () => recargarPanelActual(true),
+        },
+        {
+          label: "Herramientas de desarrollo del panel actual",
+          accelerator: "CmdOrCtrl+Shift+I",
+          click: () => vistaEnFrente()?.webContents.toggleDevTools(),
+        },
+        { type: "separator" },
+        { role: "resetZoom" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { type: "separator" },
+        { role: "togglefullscreen" },
+      ],
+    },
+    { role: "windowMenu" },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 void app.whenReady().then(() => {
+  construirMenu();
   registrarIpc();
   // `sesion` no abre ninguna página de proveedor —ni falta le hace: sólo
   // toca cookies y `localStorage` propios— así que se salta `createWindow()`

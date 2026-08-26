@@ -1351,10 +1351,14 @@ estable.
 orden de documento) y cae al mensaje de chat normal cuando no hay Deep
 Research. Typecheck, los cinco gates y build verdes.
 
-**No verificado todavía con una lectura real post-cambio.** Falta que Juan
-dispare una respuesta de Deep Research nueva (o normal, sin Deep Research,
-para confirmar que el selector viejo sigue funcionando) y presione "Leer"
-para comparar el largo contra lo medido acá.
+**VERIFICADO por Juan, 2026-08-26: "Leer" devolvió 30.287 caracteres** sobre
+el mismo informe —contra los 30.284 medidos en el DOM vía sondeo, la
+diferencia mínima es de recorte de espacios—. El defecto queda CERRADO: de
+138 caracteres de aviso a los ~30.000 del informe real. Falta todavía
+confirmar que el selector de chat NORMAL (sin Deep Research) sigue
+funcionando sin regresión — no se rompió por este cambio en la teoría
+(`pick: "last"` cae ahí cuando el id nuevo no existe), pero no está medido
+con una lectura real post-cambio.
 
 #### Herramienta nueva: `contenedoresDeTextoLargo` en el sondeo
 

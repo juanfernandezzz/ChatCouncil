@@ -907,6 +907,42 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
       '[role="button"][aria-label*="nvia"]',
     ], null, 30),
     asistente: juntar(['[data-message-author-role="assistant"]', '[class*="assistant"]', '[class*="model-response"]', '[class*="markdown"]']),
+    /**
+     * CONTENEDORES DE TEXTO LARGO, sin depender de nombre de clase.
+     *
+     * Medido el 2026-08-26: en gemini, la respuesta de Deep Research se abre
+     * en un panel/informe APARTE del stream de chat, y ninguna de las clases
+     * de "asistente" (model-response, assistant, markdown) lo alcanza
+     * -el sondeo devolvió sólo el mensaje procedural del chat ("He completado
+     * su investigación"), 138 caracteres, nunca el informe real. En vez de
+     * adivinar el nombre de clase del panel de un proveedor nuevo cada vez,
+     * este campo recorre TODO el documento buscando el elemento HOJA (que
+     * ningún hijo suyo repita el mismo largo de texto, o sea que el texto es
+     * SUYO y no heredado) con más de 300 caracteres — sin importar su clase.
+     * Mismo límite de seguridad que el resto del sondeo: sólo lista blanca de
+     * atributos, texto recortado a 100 caracteres, sin clics.
+     */
+    contenedoresDeTextoLargo: (() => {
+      const out = [];
+      try {
+        const todos = document.querySelectorAll("*");
+        for (const el of todos) {
+          if (out.length >= 20) break;
+          const total = (el.textContent || "").trim();
+          if (total.length < 300) continue;
+          const algunHijoIgual = Array.from(el.children).some((c) => (c.textContent || "").trim().length === total.length);
+          if (algunHijoIgual) continue;
+          out.push({
+            tag: el.tagName.toLowerCase(),
+            clase: String(el.className || "").slice(0, 150),
+            id: el.id || "",
+            largoTexto: total.length,
+            muestra: total.slice(0, 100),
+          });
+        }
+      } catch (e) { /* estructura inesperada: se informa vacio, no se rompe el sondeo */ }
+      return out;
+    })(),
     etiquetaModeloPorAtributo: etiquetaModeloPorAtributo,
     etiquetaModeloPorTexto: etiquetaModeloPorTexto,
     etiquetaModeloPorForma: etiquetaModeloPorForma,

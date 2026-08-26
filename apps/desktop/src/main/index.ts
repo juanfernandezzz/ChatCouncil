@@ -10,7 +10,7 @@
  * con 72 cookies sobreviviendo al cierre completo de la app.
  */
 
-import { app, BaseWindow, Menu, WebContentsView, ipcMain, screen, session } from "electron";
+import { app, BaseWindow, clipboard, Menu, WebContentsView, ipcMain, screen, session } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -873,29 +873,67 @@ async function difundirConfiable(
   )) as { ok: boolean; error?: string; antesLen?: number };
   if (!prep.ok) return { ok: false, error: prep.error ?? "no se pudo preparar el compositor" };
 
-  // Escribir CARÁCTER POR CARÁCTER con `sendInputEvent`: cada uno llega al
-  // editor como si lo hubiera tecleado una persona. Un salto de línea se
-  // manda como Mayús+Enter —salto de línea en casi cualquier editor de
-  // chat—, nunca como Enter solo, que en estos editores ENVÍA.
-  for (const ch of prompt) {
-    if (v.view.webContents.isDestroyed()) return { ok: false, error: "la vista se destruyó mientras se escribía" };
-    if (ch === "\n") {
-      v.view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter", modifiers: ["shift"] });
-      v.view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter", modifiers: ["shift"] });
-    } else {
-      v.view.webContents.sendInputEvent({ type: "char", keyCode: ch });
+  const verificar = (): Promise<boolean> =>
+    v.view.webContents.executeJavaScript(
+      `window.__ccProvider.verificarTextoEscrito(${specJson}, ${JSON.stringify(prompt)})`,
+      true,
+    ) as Promise<boolean>;
+
+  /**
+   * INTENTO 1 — pegar con Ctrl+V CONFIABLE.
+   *
+   * Reportado por Juan el 2026-08-25: ver el texto tecleándose letra por
+   * letra en kimi es molesto, sobre todo con un prompt largo. `paste` con
+   * `DataTransfer` despachado por JS ya se había probado y descartado —es
+   * la misma familia que `dispatchEvent`, `isTrusted: false`, y el editor
+   * rico de kimi lo ignora igual que ignoraba el Enter sintético. La
+   * diferencia acá es que `Ctrl+V` vía `sendInputEvent` SÍ es confiable
+   * (`isTrusted: true`, mismo mecanismo que ya funciona para el Enter): es
+   * el atajo de teclado real, no un evento de portapapeles simulado. Si el
+   * editor lo procesa como pegado nativo, es instantáneo en vez de un
+   * carácter cada 8 ms.
+   *
+   * No es una apuesta a ciegas: se verifica con la MISMA función que ya
+   * exige el resto de este camino, y si no dejó el texto esperado se cae al
+   * método carácter por carácter de abajo, sin haber gastado ningún Enter.
+   * El portapapeles de Juan se restaura siempre, haya funcionado o no.
+   */
+  const portapapelesPrevio = clipboard.readText();
+  let pegoOk = false;
+  try {
+    clipboard.writeText(prompt);
+    if (!v.view.webContents.isDestroyed()) {
+      v.view.webContents.sendInputEvent({ type: "keyDown", keyCode: "v", modifiers: ["control"] });
+      v.view.webContents.sendInputEvent({ type: "keyUp", keyCode: "v", modifiers: ["control"] });
+      await new Promise((r) => setTimeout(r, 300));
+      pegoOk = !v.view.webContents.isDestroyed() && (await verificar());
     }
-    await new Promise((r) => setTimeout(r, 8));
+  } finally {
+    clipboard.writeText(portapapelesPrevio);
+  }
+
+  if (!pegoOk) {
+    // INTENTO 2 — CARÁCTER POR CARÁCTER con `sendInputEvent`: cada uno llega
+    // al editor como si lo hubiera tecleado una persona. Un salto de línea
+    // se manda como Mayús+Enter —salto de línea en casi cualquier editor de
+    // chat—, nunca como Enter solo, que en estos editores ENVÍA.
+    for (const ch of prompt) {
+      if (v.view.webContents.isDestroyed()) return { ok: false, error: "la vista se destruyó mientras se escribía" };
+      if (ch === "\n") {
+        v.view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter", modifiers: ["shift"] });
+        v.view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter", modifiers: ["shift"] });
+      } else {
+        v.view.webContents.sendInputEvent({ type: "char", keyCode: ch });
+      }
+      await new Promise((r) => setTimeout(r, 8));
+    }
   }
 
   // VERIFICACIÓN DURA antes de enviar: si el compositor no tiene el texto
   // esperado, no se manda Enter. Sin esto, un Enter a ciegas sobre un
   // compositor que no recibió el texto (por ejemplo, si perdió el foco a
   // mitad de la escritura) dispara una acción no pedida en la cuenta real.
-  const textoOk = (await v.view.webContents.executeJavaScript(
-    `window.__ccProvider.verificarTextoEscrito(${specJson}, ${JSON.stringify(prompt)})`,
-    true,
-  )) as boolean;
+  const textoOk = pegoOk || (await verificar());
   if (!textoOk) {
     return {
       ok: false,

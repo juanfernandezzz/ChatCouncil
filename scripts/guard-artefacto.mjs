@@ -205,7 +205,11 @@ const EXIGIDO = {
     "data-test-id",
   ],
   "preload/ui.cjs": ["cc:investigadores", "cc:difundir", "cc:leer", "cc:sesiones", "cc:sondear"],
-  "renderer/index.html": ["no-preguntar", "confirmacion", "paneles", "sondear"],
+  // "sondear" salio de la barra principal (decision de Juan, 2026-09-01: un
+  // solo boton, "Capturar", fusiona lo que hacian "Leer" y "Sondear"; el
+  // sondeo de derivacion de specs sigue existiendo pero como modo de
+  // diagnostico por bandera de linea de comando, no como paso del flujo).
+  "renderer/index.html": ["no-preguntar", "confirmacion", "paneles", "capturar"],
 };
 
 /**

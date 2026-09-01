@@ -115,6 +115,30 @@ export function escribirIntentos(
  * proveedor, lo que sólo el proceso principal sabe: la continuidad (un
  * hecho de navegación, no del texto) y el tamaño de panel al leer.
  */
+/**
+ * Normaliza para comparar EL MISMO prompt entre proveedores, no el mismo
+ * byte: espacios de más y mayúsculas no son la señal que este chequeo busca.
+ */
+function normalizarPrompt(t: string): string {
+  return t.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/**
+ * `true` si TODOS los `promptUsuarioLeido` no nulos de esta captura son el
+ * mismo prompt normalizado; `false` si hay al menos dos distintos; `null` si
+ * hay menos de dos valores no nulos para comparar. Ver `Respuesta.promptCoincideEnPool`
+ * en `@chatcouncil/domain` para el porqué: cobertura del riesgo de "sin
+ * historial", informativo, nunca bloquea.
+ */
+function calcularCoincidenciaDePrompt(lecturas: readonly LecturaProveedor[]): boolean | null {
+  const normalizados = lecturas
+    .map((l) => l.userText)
+    .filter((t): t is string => typeof t === "string" && t.length > 0)
+    .map(normalizarPrompt);
+  if (normalizados.length < 2) return null;
+  return normalizados.every((t) => t === normalizados[0]);
+}
+
 export function escribirRespuestas(
   userData: string,
   conversacionId: string,
@@ -123,6 +147,7 @@ export function escribirRespuestas(
   contexto: (proveedorId: string) => { continuidad: Procedencia["continuidad"]; panel: string | null },
 ): void {
   const ahora = new Date().toISOString();
+  const promptCoincideEnPool = calcularCoincidenciaDePrompt(lecturas);
   for (const l of lecturas) {
     const ctx = contexto(l.id);
     const procedencia = derivarProcedencia(
@@ -152,6 +177,8 @@ export function escribirRespuestas(
       leidaEn: ahora,
       error: l.error ?? null,
       procedencia,
+      promptUsuarioLeido: l.userText ?? null,
+      promptCoincideEnPool,
     };
     escribir(userData, conversacionId, hecho);
   }

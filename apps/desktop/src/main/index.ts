@@ -579,6 +579,31 @@ function marcarLecturasVacias(lecturas: readonly LecturaProveedor[]): LecturaPro
   );
 }
 
+/**
+ * MARCADOR de ronda cuando se captura SIN haber pasado por `difundir()` en
+ * este proceso — por ejemplo, Juan reabre la app con conversaciones ya
+ * escritas a mano en cada proveedor y aprieta "Leer"/"Capturar" directo.
+ *
+ * Decisión de Juan, 2026-08-26/09-01: la app YA NO encadena rondas ni
+ * mantiene historial — "Enviar a todos" y "Capturar" son independientes, y
+ * nada obliga a que exista una ronda abierta para poder guardar lo que ya
+ * está en pantalla. Antes, sin `conversacionActual`/`rondaActualId`, la
+ * escritura se OMITÍA en silencio: una respuesta real quedaba sólo en el
+ * diagnóstico (que no guarda `textoOriginal`), nunca en el registro append-
+ * only que es el dato de investigación de Juan. Con el pool de 9 conversaciones
+ * reales abiertas y sin ronda activa, ese hueco perdía exactamente el dato que
+ * había que guardar.
+ */
+const PROMPT_SIN_RONDA = "(capturado sin ronda de envio: el texto ya estaba en pantalla al presionar Leer/Capturar)";
+
+function asegurarRondaAbierta(): { conv: string; ronda: string } {
+  const conv = asegurarConversacion(false);
+  if (!rondaActualId) {
+    rondaActualId = escribirRonda(app.getPath("userData"), conv, indiceRonda++, PROMPT_SIN_RONDA, null);
+  }
+  return { conv, ronda: rondaActualId };
+}
+
 function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProveedor[]): void {
   const lecturas = marcarLecturasVacias(lecturasCrudas);
   // El diagnóstico se escribe SIEMPRE, aunque no haya ronda abierta a la que
@@ -586,8 +611,8 @@ function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProvee
   // registro. Justo la lectura huérfana —leer sin haber difundido en este
   // proceso— es un estado que interesa poder mirar.
   registrarDiagnosticoEtiqueta("lectura", lecturas);
-  if (!conversacionActual || !rondaActualId) return;
-  escribirRespuestas(app.getPath("userData"), conversacionActual, rondaActualId, lecturas, (id) => ({
+  const { conv } = asegurarRondaAbierta();
+  escribirRespuestas(app.getPath("userData"), conv, rondaActualId as string, lecturas, (id) => ({
     continuidad: continuidadDe(id),
     panel: panelDe(id),
   }));

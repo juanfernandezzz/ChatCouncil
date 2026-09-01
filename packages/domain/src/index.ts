@@ -92,6 +92,23 @@ export interface Respuesta {
   leidaEn: string;
   error: string | null;
   procedencia: Procedencia;
+  /**
+   * Último mensaje del usuario en el panel, leído EN LA MISMA captura que
+   * `textoOriginal`. `null` si el proveedor no tiene `userMessage.selector`
+   * en su spec (todavía no derivado para los nueve) o no se pudo leer.
+   */
+  promptUsuarioLeido: string | null;
+  /**
+   * Cobertura del riesgo de "sin historial" (decisión de Juan,
+   * 2026-08-26/09-01): sin rondas encadenadas, un panel intervenido a mano
+   * puede tener la respuesta a OTRO prompt, y nada fallaría en rojo. Se
+   * compara `promptUsuarioLeido` contra el resto del pool EN ESTA MISMA
+   * captura. `true` = coincide con todos los demás no-nulos; `false` = no
+   * coincide con al menos uno; `null` = no hay con qué comparar (menos de
+   * dos proveedores con `promptUsuarioLeido` no nulo en la captura).
+   * INFORMATIVO: nunca bloquea la captura, sólo se guarda como hecho.
+   */
+  promptCoincideEnPool: boolean | null;
 }
 
 export type Hecho = Conversacion | Ronda | Intento | Respuesta;

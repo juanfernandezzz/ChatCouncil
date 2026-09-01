@@ -17,6 +17,8 @@ interface Resultado {
 interface Lectura {
   id: string;
   text: string;
+  /** Último mensaje del usuario, capturado junto con `text`. Ver `userMessage` de la spec. */
+  userText?: string | null;
   /** `true` generando, `false` terminado, **`null` no observable**. */
   generating: boolean | null;
   completionKind?: "element-gone" | "quiescence";
@@ -143,7 +145,16 @@ $("confirmar").addEventListener("click", () => {
   if (prompt) void difundir(prompt);
 });
 
-$("leer").addEventListener("click", () => {
+/**
+ * CAPTURAR — botón único que reemplaza a "Leer" y "Sondear" (decisión de
+ * Juan, 2026-08-26/09-01: sin historial, la app lee el texto que YA está en
+ * pantalla, nada más). Por cada panel: último mensaje del usuario, respuesta
+ * completa, modelLabel. No navega, no recarga, no escribe en ningún
+ * compositor, cuota cero. El sondeo de derivación de specs sigue existiendo
+ * pero como modo de diagnóstico por bandera de línea de comando, fuera de
+ * esta barra.
+ */
+$("capturar").addEventListener("click", () => {
   void window.cc.leer().then((ls) => {
     for (const l of ls) {
       if (l.error) marcar(l.id, l.error, "mal");
@@ -157,7 +168,20 @@ $("leer").addEventListener("click", () => {
           : `  ${l.id}: ${l.text.length} caracteres${estadoLectura(l)}`,
       )
       .join("\n");
-    decir(`Lectura para análisis:\n${detalle}`);
+    // Aviso de la cobertura del riesgo de "sin historial": si los prompts de
+    // usuario capturados no coinciden entre proveedores, se informa acá —
+    // nunca bloquea, pero Juan tiene que verlo antes de comparar respuestas.
+    const conPrompt = ls.filter((l) => typeof l.userText === "string" && l.userText.length > 0);
+    let avisoPrompt = "";
+    if (conPrompt.length >= 2) {
+      const normalizado = (t: string): string => t.trim().replace(/\s+/g, " ").toLowerCase();
+      const distintos = new Set(conPrompt.map((l) => normalizado(l.userText as string)));
+      avisoPrompt =
+        distintos.size > 1
+          ? `\n\n⚠ Los prompts de usuario capturados NO coinciden entre proveedores (${distintos.size} versiones distintas) — revisar antes de comparar respuestas.`
+          : `\n\nPrompt de usuario: coincide en los ${conPrompt.length} proveedores donde se pudo leer.`;
+    }
+    decir(`Captura:\n${detalle}${avisoPrompt}`, avisoPrompt.startsWith("\n\n⚠") ? "mal" : "ok");
   });
 });
 
@@ -170,35 +194,6 @@ $("sesiones").addEventListener("click", () => {
       .join("\n");
     decir(`Sesiones persistentes:\n${detalle}`, ss.every((s) => s.cookies > 0) ? "ok" : undefined);
   });
-});
-
-/**
- * SONDEAR — mira el DOM de los paneles TAL COMO ESTAN AHORA.
- *
- * Es el unico camino que puede observar un panel con conversacion viva o con
- * una respuesta a medio generar. `--cc-probe` arranca un proceso, navega y
- * mira a los 20 s: la pantalla en la que varios fallos NO ocurren.
- *
- * No navega, no recarga y no escribe en ningun compositor. Deja el informe
- * crudo en un archivo y muestra la ruta: un crudo transcrito a mano no es una
- * salida real (§7.39).
- */
-$("sondear").addEventListener("click", () => {
-  const boton = $<HTMLButtonElement>("sondear");
-  boton.disabled = true;
-  decir("Sondeando los paneles tal como estan ahora… (solo lectura, no envia nada)");
-  void window.cc
-    .sondear()
-    .then((s) => {
-      if (!s.ok) {
-        decir(`El sondeo fallo: ${s.error ?? "sin detalle"}`, "mal");
-        return;
-      }
-      decir(`Sondeo de ${s.paneles} panel/es guardado en:\n  ${s.ruta ?? "(sin ruta)"}`, "ok");
-    })
-    .finally(() => {
-      boton.disabled = false;
-    });
 });
 
 /**

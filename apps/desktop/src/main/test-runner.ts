@@ -48,6 +48,18 @@ export interface LecturaProveedor {
    * registro append-only.
    */
   modelLabelDesglose?: unknown;
+  /**
+   * Último mensaje del usuario, leído del panel EN EL MOMENTO de capturar.
+   *
+   * Decisión de Juan (2026-08-26/09-01): sin historial encadenado, nada
+   * impide que un panel muestre la respuesta a OTRO prompt —Juan lo
+   * reenvió a mano porque algo salió mal, o el compositor tenía otra cosa—
+   * y que la comparación entre proveedores lo trate como si fuera la misma
+   * pregunta sin que nada falle en rojo. Este campo es la cobertura: se
+   * compara entre proveedores de la misma captura y se avisa si no
+   * coincide, pero NUNCA bloquea — informa, no impide.
+   */
+  userText?: string | null;
   error?: string;
 }
 

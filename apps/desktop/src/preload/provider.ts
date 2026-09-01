@@ -46,6 +46,14 @@ interface PageSpec {
   completion: CompletionSpec;
   timeouts?: { composerMs?: number; submitReadyMs?: number; submitConfirmMs?: number };
   modelLabel?: { selector: string };
+  /**
+   * Último mensaje del USUARIO en el panel, no del asistente. Opcional
+   * porque no está derivado para los nueve todavía (ver BLUEPRINT, Objetivo
+   * 1 de la corrida "sin historial") — un proveedor sin este campo
+   * simplemente no aporta dato de comparación, y eso se informa, no se
+   * simula con un selector inventado.
+   */
+  userMessage?: { selector: string; pick: "last" };
 }
 
 /**
@@ -174,6 +182,24 @@ function readAssistant(spec: PageSpec): string {
     }
   }
   return copy.textContent ?? "";
+}
+
+/**
+ * Lee el ÚLTIMO mensaje del usuario, igual que `readAssistant` pero sin
+ * `exclude` (todavía no hizo falta). `null` si la spec no declara
+ * `userMessage` o si el selector no matchea nada — nunca inventa un texto.
+ */
+function readUserMessage(spec: PageSpec): string | null {
+  const sel = spec.userMessage?.selector;
+  if (!sel) return null;
+  let nodes: Element[];
+  try {
+    nodes = Array.from(document.querySelectorAll(sel));
+  } catch {
+    return null;
+  }
+  const node = nodes[nodes.length - 1];
+  return node ? (node.textContent ?? "").trim() || null : null;
 }
 
 function readModelLabel(spec: PageSpec): string | null {
@@ -516,6 +542,7 @@ contextBridge.exposeInMainWorld("__ccProvider", {
   confirmarEfecto: (spec: PageSpec, antesLen: number) => confirmarEfecto(spec, antesLen),
   read: (spec: PageSpec) => ({
     text: readAssistant(spec),
+    userText: readUserMessage(spec),
     generating: estaGenerando(spec),
     // Viaja con la lectura para que quien la consuma sepa si el fin se OBSERVA
     // o se INFIERE, sin tener que volver a mirar la spec.

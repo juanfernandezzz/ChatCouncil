@@ -53,7 +53,16 @@ interface PageSpec {
    * simplemente no aporta dato de comparación, y eso se informa, no se
    * simula con un selector inventado.
    */
-  userMessage?: { selector: string; pick: "last" };
+  /**
+   * `pick: "first"` existe PORQUE "el último mensaje del usuario" no es
+   * necesariamente "el prompt original" — medido en gemini el 2026-09-06:
+   * con Deep Research, el clic en "Empezar la investigación" queda
+   * registrado como un turno de usuario más, y "last" lo elegía a él en vez
+   * de la pregunta real. Para COMPARAR el prompt original entre
+   * proveedores, "first" es la elección correcta salvo que se mida lo
+   * contrario para un proveedor puntual.
+   */
+  userMessage?: { selector: string; pick: "last" | "first" };
 }
 
 /**
@@ -159,15 +168,45 @@ function writePrompt(el: Element, kind: PageSpec["composer"]["kind"], text: stri
   return (host.textContent ?? "").includes(text);
 }
 
+/**
+ * Cuenta enlaces `<a href="http...">` REALES en el DOM, dentro del nodo de
+ * la respuesta y en los hermanos de su padre (para alcanzar un panel de
+ * fuentes que viva AL LADO del cuerpo, no adentro).
+ *
+ * Existe porque `textContent` —lo que usa `readAssistant`— NUNCA incluye el
+ * atributo `href`: un `<a href="...">texto visible</a>` deja sólo "texto
+ * visible" en el texto leído, exista o no el link. Contar URLs dentro del
+ * TEXTO leído no distingue "no hay fuentes" de "las fuentes son links y el
+ * texto no las arrastra" — son dos causas distintas del mismo síntoma
+ * (0 apariciones de "http" en `textoOriginal`), y sólo mirando el DOM se
+ * puede saber cuál es.
+ */
+function contarEnlacesDeFuente(node: Element | null): number {
+  if (!node) return 0;
+  const propios = node.querySelectorAll('a[href^="http"]').length;
+  let hermanos = 0;
+  const padre = node.parentElement;
+  if (padre) {
+    for (const h of Array.from(padre.children)) {
+      if (h === node) continue;
+      hermanos += h.querySelectorAll('a[href^="http"]').length;
+    }
+  }
+  return propios + hermanos;
+}
+
+function ultimoNodoAsistente(spec: PageSpec): Element | null {
+  try {
+    const nodes = Array.from(document.querySelectorAll(spec.assistantMessage.selector));
+    return nodes[nodes.length - 1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Lee el texto del asistente restando los subárboles que sobran, sobre una COPIA. */
 function readAssistant(spec: PageSpec): string {
-  let nodes: Element[];
-  try {
-    nodes = Array.from(document.querySelectorAll(spec.assistantMessage.selector));
-  } catch {
-    return "";
-  }
-  const node = nodes[nodes.length - 1];
+  const node = ultimoNodoAsistente(spec);
   if (!node) return "";
   const exclude = spec.assistantMessage.exclude ?? [];
   if (exclude.length === 0) return node.textContent ?? "";
@@ -198,7 +237,7 @@ function readUserMessage(spec: PageSpec): string | null {
   } catch {
     return null;
   }
-  const node = nodes[nodes.length - 1];
+  const node = spec.userMessage?.pick === "first" ? nodes[0] : nodes[nodes.length - 1];
   return node ? (node.textContent ?? "").trim() || null : null;
 }
 
@@ -543,6 +582,10 @@ contextBridge.exposeInMainWorld("__ccProvider", {
   read: (spec: PageSpec) => ({
     text: readAssistant(spec),
     userText: readUserMessage(spec),
+    // Ver contarEnlacesDeFuente: cuenta <a href> REALES en el DOM, nunca en
+    // el texto extraido. Decide si "no hay URLs en textoOriginal" es (a) un
+    // selector que pierde las fuentes o (b) una respuesta sin busqueda web.
+    fuentesHref: contarEnlacesDeFuente(ultimoNodoAsistente(spec)),
     generating: estaGenerando(spec),
     // Viaja con la lectura para que quien la consuma sepa si el fin se OBSERVA
     // o se INFIERE, sin tener que volver a mirar la spec.

@@ -60,6 +60,14 @@ export interface LecturaProveedor {
    * coincide, pero NUNCA bloquea — informa, no impide.
    */
   userText?: string | null;
+  /**
+   * `<a href="http...">` REALES en el DOM del cuerpo de la respuesta (y en
+   * los hermanos de su contenedor). Nunca se cuenta sobre `text`: ver
+   * `contarEnlacesDeFuente` en `preload/provider.ts` para el porqué —
+   * `textContent` no arrastra atributos, así que 0 apariciones de "http" en
+   * `text` no dice si hubo fuentes o no.
+   */
+  fuentesHref?: number;
   error?: string;
 }
 

@@ -109,6 +109,14 @@ export interface Respuesta {
    * INFORMATIVO: nunca bloquea la captura, sólo se guarda como hecho.
    */
   promptCoincideEnPool: boolean | null;
+  /**
+   * `<a href="http...">` REALES en el DOM del cuerpo, contados en la MISMA
+   * captura que `textoOriginal`. Decide entre las dos causas de "no hay URL
+   * en el texto": (a) el selector pierde una fuente que sí está en el DOM
+   * como link, o (b) no hubo búsqueda web / no se citó nada. `null` si no
+   * se pudo contar (lectura fallida antes de llegar al DOM).
+   */
+  fuentesHref: number | null;
 }
 
 export type Hecho = Conversacion | Ronda | Intento | Respuesta;

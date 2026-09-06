@@ -928,6 +928,26 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
       // llenaban el cupo de 20 antes de llegar a cualquier elemento real
       // -uno de ellos con largoTexto: 1898999, puro JSON de configuracion.
       const IGNORAR = new Set(["script", "style", "head", "html", "noscript", "template", "svg", "path"]);
+      // Medido el 2026-09-06 sobre un sondeo de kimi: spans de la barra
+      // lateral aparecian con largoTexto de miles de caracteres, muestra
+      // "#LeftBarAnimatedIcon-enter-rs-...{transform-box:...}" -CSS, no
+      // texto. Causa: esos spans tienen un <style> ANIDADO adentro (patron
+      // de librerias de iconos con CSS-in-JS), y textContent de un
+      // ancestro SUMA el texto de sus descendientes sin importar el tag.
+      // Ignorar script/style como candidatos no alcanza si su texto sigue
+      // inflando a quien los contiene. textoVisible arma el texto propio
+      // recorriendo el arbol y saltando esos subarboles enteros.
+      const textoVisible = (nodo) => {
+        let out = "";
+        for (const hijo of Array.from(nodo.childNodes)) {
+          if (hijo.nodeType === 3) { out += hijo.nodeValue || ""; continue; }
+          if (hijo.nodeType !== 1) continue;
+          const tagHijo = hijo.tagName.toLowerCase();
+          if (IGNORAR.has(tagHijo)) continue;
+          out += textoVisible(hijo);
+        }
+        return out;
+      };
       const out = [];
       try {
         const todos = document.querySelectorAll("*");
@@ -939,9 +959,9 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
           // position:fixed, que es aceptable: un panel de informe puede
           // estar posicionado fijo y seguir siendo lo que se busca).
           if (el.offsetParent === null && getComputedStyle(el).position !== "fixed") continue;
-          const total = (el.textContent || "").trim();
+          const total = textoVisible(el).trim();
           if (total.length < 300) continue;
-          const algunHijoIgual = Array.from(el.children).some((c) => (c.textContent || "").trim().length === total.length);
+          const algunHijoIgual = Array.from(el.children).some((c) => textoVisible(c).trim().length === total.length);
           if (algunHijoIgual) continue;
           out.push({
             tag: tag,

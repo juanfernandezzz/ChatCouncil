@@ -179,6 +179,7 @@ export function escribirRespuestas(
       procedencia,
       promptUsuarioLeido: l.userText ?? null,
       promptCoincideEnPool,
+      fuentesHref: typeof l.fuentesHref === "number" ? l.fuentesHref : null,
     };
     escribir(userData, conversacionId, hecho);
   }

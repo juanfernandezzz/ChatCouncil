@@ -586,6 +586,17 @@ contextBridge.exposeInMainWorld("__ccProvider", {
     // el texto extraido. Decide si "no hay URLs en textoOriginal" es (a) un
     // selector que pierde las fuentes o (b) una respuesta sin busqueda web.
     fuentesHref: contarEnlacesDeFuente(ultimoNodoAsistente(spec)),
+    // EL CRUDO ES EL DATO CANONICO (regla ya vigente para las extracciones
+    // del analista, aplicada acá al DOM): si la captura sólo guarda texto
+    // derivado, cualquier selector nuevo -contar links, encontrar un panel
+    // de fuentes, lo que sea- exige una corrida real nueva contra la cuenta
+    // de Juan. Con el HTML del subárbol al lado, esas correcciones se
+    // re-derivan OFFLINE sobre capturas viejas, sin gastar cuota ni pedirle
+    // nada a Juan. Sin `exclude`: es el crudo, no la vista recortada que ve
+    // `readAssistant`. Nueve subárboles por corrida es un costo irrelevante
+    // para el volumen que ya se mide acá (BLUEPRINT, decisión de la marca
+    // canaria).
+    html: ultimoNodoAsistente(spec)?.outerHTML ?? null,
     generating: estaGenerando(spec),
     // Viaja con la lectura para que quien la consuma sepa si el fin se OBSERVA
     // o se INFIERE, sin tener que volver a mirar la spec.

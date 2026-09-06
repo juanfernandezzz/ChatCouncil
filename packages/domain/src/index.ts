@@ -117,6 +117,14 @@ export interface Respuesta {
    * se pudo contar (lectura fallida antes de llegar al DOM).
    */
   fuentesHref: number | null;
+  /**
+   * HTML crudo (`outerHTML`) del nodo de la respuesta, SIN recortes de
+   * `exclude` — el DATO CANÓNICO del DOM, la misma regla que ya rige para
+   * `textoOriginal` respecto del texto. Un selector nuevo derivado después
+   * (contar links, aislar un panel de fuentes) se puede re-aplicar sobre
+   * esto sin volver a capturar. `null` si no se pudo leer.
+   */
+  html: string | null;
 }
 
 export type Hecho = Conversacion | Ronda | Intento | Respuesta;

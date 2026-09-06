@@ -2107,6 +2107,25 @@ function construirMenu(): void {
           click: () => vistaEnFrente()?.webContents.toggleDevTools(),
         },
         { type: "separator" },
+        {
+          // Repuesto acá el 2026-09-06: "Sondear" salió de la barra
+          // principal (fusionado en "Capturar") sin dejar reemplazo, y una
+          // corrida de diagnóstico sobre la ventana viva sigue haciendo
+          // falta para derivar selectores nuevos sin gastar cuota. Vive en
+          // el menú, no en la barra, para que no se vea como paso del flujo
+          // normal — exactamente la distinción que pidió Juan.
+          label: "Sondear (diagnóstico, cuota cero)",
+          click: () => {
+            void sondeoVivo().then((r) => {
+              decirPorSalida(
+                r.ok
+                  ? `\n[cc] sondeo guardado en: ${r.ruta} (${r.paneles} panel/es)\n`
+                  : `\n[cc] el sondeo fallo: ${r.error ?? "sin detalle"}\n`,
+              );
+            });
+          },
+        },
+        { type: "separator" },
         { role: "resetZoom" },
         { role: "zoomIn" },
         { role: "zoomOut" },

@@ -68,6 +68,13 @@ export interface LecturaProveedor {
    * `text` no dice si hubo fuentes o no.
    */
   fuentesHref?: number;
+  /**
+   * HTML crudo (`outerHTML`) del nodo de la respuesta, SIN `exclude` — es el
+   * dato canónico del DOM, igual que `textoOriginal` lo es del texto. Con
+   * esto, un selector nuevo (contar links, encontrar un panel de fuentes)
+   * se re-deriva OFFLINE sobre una captura vieja, sin gastar cuota.
+   */
+  html?: string | null;
   error?: string;
 }
 

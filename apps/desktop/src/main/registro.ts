@@ -180,6 +180,7 @@ export function escribirRespuestas(
       promptUsuarioLeido: l.userText ?? null,
       promptCoincideEnPool,
       fuentesHref: typeof l.fuentesHref === "number" ? l.fuentesHref : null,
+      html: l.html ?? null,
     };
     escribir(userData, conversacionId, hecho);
   }

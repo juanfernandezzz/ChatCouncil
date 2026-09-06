@@ -1373,6 +1373,150 @@ página —un caso más de "cupo compartido convierte 'no lo vi' en 'no está'"
 visibilidad real. Mismo límite de seguridad que el resto del sondeo: lista
 blanca de atributos, texto recortado a 100 caracteres, sin clics.
 
+### Arquitectura vigente: SIN HISTORIAL (decisión de Juan, 2026-09-01/06)
+
+**Esto REEMPLAZA todo lo que sigue sobre encadenamiento de rondas y
+detección de deriva de modelo ENTRE rondas.** ChatCouncil no mantiene
+historial ni encadena conversaciones: lee el texto que YA está en las
+ventanas visibles, en el momento en que Juan lo pide. "Enviar a todos"
+sigue existiendo; nada entre "Enviar a todos" y "Capturar" es automático.
+
+**Descartado, no se re-discute:**
+- `continuidad` y el contador de navegaciones **como dato de investigación**
+  (el contador sigue existiendo para probar que el scroll horizontal no
+  navega — eso es una garantía de armazón, no un hallazgo).
+- Detección de deriva de modelo entre rondas N y N+1: no hay rondas
+  encadenadas que comparar. `modelLabel` se sigue leyendo AL CAPTURAR y se
+  guarda como condición de esa captura puntual, no como serie.
+- Encadenamiento por conversación y coordinación de versiones entre rondas.
+- `esperarQuietud` en el camino principal: Juan mira los paneles y decide
+  cuándo capturar. Sigue existiendo para diagnóstico (`--cc-test`,
+  `--cc-difundir`).
+
+**Riesgo nuevo que esto introduce, y su cobertura.** Sin ronda que
+encadene, un panel intervenido a mano por Juan (por ejemplo porque no
+activó búsqueda web y lo reenvía) puede tener la respuesta a OTRO prompt, y
+el instrumento compararía respuestas a preguntas distintas creyendo que son
+la misma — nada fallaría en rojo. Cobertura: `userMessage` (nuevo campo
+opcional de spec) captura el último — o el primero, ver más abajo — mensaje
+del usuario de cada panel; `promptCoincideEnPool` (en `Respuesta`,
+`packages/domain`) compara los prompts capturados entre proveedores de la
+MISMA captura y avisa si no coinciden. Es informativo, nunca bloquea.
+
+**Un solo botón, "Capturar".** Fusiona lo que hacían "Leer" y "Sondear": lee
+de cada panel el último mensaje del usuario, la respuesta completa, las
+fuentes citadas y `modelLabel`, todo a la vez. El sondeo de derivación de
+specs (`--cc-probe`) sigue existiendo, pero como modo de diagnóstico por
+bandera de línea de comando — no es un paso del flujo y no debe verse como
+tal.
+
+**El hueco que dejaba "Leer" sin ronda abierta, cerrado.** Antes, si no
+había una `conversacionActual`/`rondaActualId` abierta en el proceso —el
+caso exacto de reabrir la app con conversaciones ya existentes en cada
+proveedor—, `registrarRespuestasDeRondaActual` OMITÍA la escritura al
+registro en silencio: el texto completo se perdía para siempre, y sólo
+quedaba el `modelLabel` en el diagnóstico. `asegurarRondaAbierta()`
+(`apps/desktop/src/main/index.ts`) abre una conversación y ronda marcador
+si hace falta, así que "Capturar" SIEMPRE persiste. **VERIFICADO,
+2026-09-06**: los nueve entraron al registro real en la primera corrida con
+el botón nuevo, sin haber usado "Enviar a todos" en el proceso.
+
+#### Objetivo 1 — captura real, números medidos (2026-09-06)
+
+Tabla de la primera captura real (conversación de Juan sobre evaluación de
+un prompt de sistema, ya existente en los nueve paneles):
+
+| Proveedor | Caracteres | modelLabel | userMessage |
+|---|---:|---|---|
+| chatgpt | 19.684 | (null — sin selector, ver spec) | no derivado en esta captura |
+| gemini | 30.287 | ProExtendido | derivado, pero agarraba el TURNO EQUIVOCADO — ver abajo |
+| claude | 2.549 | Haiku 4.5 | no derivado |
+| grok | 6.394 | Fast | no derivado |
+| mistral | 1.909 | Rápido | no derivado |
+| glm | 7.479 | GLM-4.7 | no derivado |
+| kimi | 11.199 | (null) | no derivado |
+| qwen | 42.890 | Qwen3.7-Plus | no derivado |
+| deepseek | 7.991 | (null) | no derivado |
+
+Suma del pool de 8 (sin deepseek, noveno): **122.391 caracteres** (~30.600
+tokens, regla general ~4 car/token). Es un piso: este prompt no es el uso
+real más extenso de Juan.
+
+**Defecto encontrado y corregido en la misma pasada: "0 URLs en el texto"
+NO distingue "no hubo búsqueda web" de "el selector pierde una fuente que
+SÍ es un link".** `textContent` —lo que mide cualquier conteo de "http" en
+`textoOriginal`— nunca arrastra el atributo `href` de un `<a>`, exista o no
+el enlace. Es un vicio metodológico propio, no un hallazgo sobre los
+proveedores: la tabla de la corrida anterior que decía "fuentes
+capturadas: No" en los nueve estaba midiendo algo que no podía responder
+esa pregunta. Corregido con `fuentesHref` (cuenta `<a href="http...">`
+reales en el DOM del cuerpo y de los hermanos de su contenedor,
+`preload/provider.ts` → `Respuesta.fuentesHref` en el dominio). Requiere
+una captura nueva post-build para tener el número real; **pendiente**.
+
+**Defecto de `userMessage` en gemini, corregido:** `pick: "last"` traía
+"Empezar la investigación" —el clic que confirma el plan de Deep
+Research, que gemini registra como un turno de usuario más—, no la
+pregunta original. Se agregó `pick: "first"` (además de `"last"`) al
+esquema de `userMessage`, y gemini pasa a usarlo. `chatgpt` suma
+`userMessage` con `[data-message-author-role="user"]`, simétrico al
+selector de `assistantMessage` ya confirmado por sondeo — confianza alta
+por ser la MISMA familia estructural, no una derivación nueva.
+
+**Los `userMessage` de claude/grok/mistral/glm/kimi/qwen/deepseek siguen
+SIN derivar.** No se completan por simetría de nombre de clase sin
+medirlos: adivinar un selector por parecido de nombre es exactamente lo que
+`AGENTES.md` prohíbe ("el reconocimiento es del agente", vía sondeo, no
+suposición). Requieren una corrida de sondeo en vivo sobre esos paneles —
+bloqueada en esta sesión porque el botón "Sondear" salió de la barra
+principal (ver arriba) y no hay un disparador de diagnóstico accesible sin
+reiniciar la app. Queda para la próxima vez que se abra con
+`--cc-probe`.
+
+**Defecto de instrumento encontrado y corregido de paso:** `probe.ts`
+excluía `script`/`style` de la lista de candidatos, pero su TEXTO seguía
+sumando al largo de cualquier ancestro vía `textContent` — medido en kimi,
+donde `span`s de la barra lateral aparecían con miles de caracteres de CSS
+de iconos (`#LeftBarAnimatedIcon-enter-rs-...`), porque esos `span`
+contienen un `<style>` anidado. `textoVisible()` reemplaza el uso de
+`textContent` recorriendo el árbol y saltando esos subárboles enteros, no
+sólo excluyéndolos de la lista final.
+
+#### Tres decisiones derivadas del volumen medido (2026-09-06)
+
+**1. El volumen decide pegado vs. archivo, y decide ARCHIVO — vuelve la
+MARCA CANARIA.** 122.391 caracteres el pool de 8 (~30.600 tokens). Cada
+operador de la Parte 2 recibe 7 de 8 —no el suyo, exclusión de
+autoevaluación—: ~107.092 caracteres, ~26.800 tokens. No entra pegado en un
+compositor de chat: tiene que ir como archivo adjunto. **Consecuencia
+directa:** la MARCA CANARIA —un token único al final del cuerpo que el
+operador tiene que devolver en su respuesta para demostrar que leyó el
+archivo entero— vuelve al diseño. Se había archivado en una versión
+anterior del plan porque el volumen parecía chico; con el número medido
+deja de ser opcional: sin ella, un archivo truncado por el pipeline de
+ingesta de un proveedor (recorte silencioso al subir un adjunto grande) pasa
+en verde y nadie se entera. Pendiente de implementar en la Parte 2 (todavía
+no construida).
+
+**2. Dispersión de 22,5x entre proveedores — declarada, no corregida.**
+qwen (42.890) contra mistral (1.909): 42.890 / 1.909 ≈ 22,5. qwen ocupa
+~35% del cuerpo de 7 que lee cada operador de la Parte 2; mistral ~1,6%. Un
+evaluador expuesto a esa asimetría de longitud está sujeto al sesgo de
+verbosidad ya documentado en la literatura de modelo-como-evaluador (LLM-
+as-judge). Es una amenaza a la comparabilidad entre lo que produce cada
+proveedor, y se DECLARA en `docs/LIMITACIONES.md`, no se corrige recortando
+—recortar una respuesta real sería alterar el dato de investigación, la
+regla más dura del proyecto.
+
+**3. Los nueve NO son comparables entre sí en esta corrida — es volumen, no
+resultado.** `claude` corrió como "Haiku 4.5" (2.549 caracteres) contra
+`gemini` como "ProExtendido" (30.287): el modelo más chico de una familia
+contra uno de los más grandes de otra. Estos números sirven para
+DIMENSIONAR el volumen que va a manejar la Parte 2 (decisión 1, arriba), NO
+para comparar qué proveedor "responde más" o "mejor". Se escribe esto al
+lado de cualquier tabla de esta corrida que se reutilice, para que nadie la
+lea dentro de seis meses como si fuera un resultado.
+
 ### Preferencias de Juan (2026-08-25), registradas — NO implementadas todavía
 
 1. Que el botón con el nombre de cada proveedor se ilumine cuando ese panel

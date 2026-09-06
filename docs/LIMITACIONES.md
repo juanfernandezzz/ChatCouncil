@@ -57,6 +57,28 @@ nunca solo ni redondeado, nunca como propiedad de ChatCouncil:
 No se agrega ninguna otra cifra a este documento salvo que se haya medido
 en este repositorio.
 
+- **Dispersión de volumen de 22,5x entre proveedores, sobre el mismo
+  prompt.** qwen devolvió 42.890 caracteres, mistral 1.909, en la misma
+  captura (nueve conversaciones reales respondiendo la misma pregunta de
+  Juan). 42.890 / 1.909 ≈ 22,5. En la Parte 2 (round-robin, exclusión de
+  autoevaluación), qwen ocupa ~35% del cuerpo de 7 respuestas que lee cada
+  operador; mistral ~1,6%. Es una amenaza real a la comparabilidad: un
+  evaluador expuesto a esa asimetría de longitud está sujeto al sesgo de
+  verbosidad ya documentado en la literatura de modelo-como-evaluador
+  (LLM-as-judge). **No se corrige recortando** — alterar una respuesta real
+  para emparejar longitudes sería alterar el dato de investigación, y esa
+  es la regla más dura del proyecto. Se declara, nada más.
+  *MEDIDO, 2026-09-06, sobre una captura real de los nueve.*
+
+- **Las tablas de volumen de una corrida de prueba NO comparan
+  proveedores entre sí — sólo dimensionan cuánto texto va a manejar la
+  Parte 2.** Ejemplo medido el 2026-09-06: claude corrió como "Haiku 4.5"
+  (2.549 caracteres) contra gemini como "ProExtendido" (30.287) — el modelo
+  más chico de una familia contra uno de los más grandes de otra. Leer esa
+  diferencia como "gemini responde mejor" o "más" que claude sería un error
+  de interpretación: el modelo elegido en el panel lo decide Juan (o quedó
+  de una sesión anterior), no el instrumento. *MEDIDO, 2026-09-06.*
+
 ## Sobre lo que el instrumento no puede ver
 
 - **La anonimización no sobrevive a las fuentes citadas.** Dominios propios

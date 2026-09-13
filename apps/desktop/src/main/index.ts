@@ -852,7 +852,16 @@ function createWindow(): void {
   // Ver el comentario de `vistaEnFrente`: sin esto, recuperar el foco del
   // sistema operativo (alt-tab de vuelta a ChatCouncil) deja el teclado en
   // el primer panel agregado en vez del que está visible.
-  win.on("focus", () => vistaEnFrente()?.webContents.focus());
+  //
+  // REPRODUCIDO por Juan el 2026-09-13: seguía pasando SÓLO con alt-tab a
+  // otra aplicación (no con el menú ni con DevTools) incluso con este
+  // handler puesto. `setImmediate` es la corrección: Electron todavía está
+  // resolviendo A QUÉ vista de la ventana le da el foco por defecto —el
+  // primer `WebContentsView` agregado— en el mismo tick que dispara
+  // "focus"; llamar `.focus()` en ese momento compite con esa asignación
+  // interna y pierde. Encolarlo para el tick siguiente deja que Electron
+  // termine su propia asignación antes de que la sobreescribamos.
+  win.on("focus", () => setImmediate(() => vistaEnFrente()?.webContents.focus()));
 }
 
 /**

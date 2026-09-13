@@ -885,6 +885,75 @@ function crearVista(id: string, url: string): WebContentsView {
   return view;
 }
 
+/**
+ * Corre la fuente del sondeo en el frame PRINCIPAL y, si ahí no encontró
+ * nada usable, en cada SUBFRAME de la página.
+ *
+ * MEDIDO en grok, 2026-09-13: su compositor vive dentro de un `<iframe>`
+ * (`iframes: 1` en el informe del sondeo), invisible a
+ * `document.querySelectorAll` del documento de arriba sin importar cuánta
+ * área en pantalla tenga el panel — el precalentamiento en grilla no lo
+ * alcanza porque ahí el problema no es de VISIBILIDAD, es de FRONTERA de
+ * documento. `document.querySelector` no cruza a un `<iframe>`, igual que no
+ * cruza a un shadow root cerrado.
+ *
+ * Sigue siendo de sólo lectura y sigue sin enviar: es la MISMA fuente
+ * (`FUENTE_SONDEO`), ya auditada entera por `guard:sondeo`, corriendo una vez
+ * por frame en vez de una vez por página — no hay código nuevo que inyectar,
+ * sólo un destino nuevo para inyectar el mismo. Si el frame principal
+ * encuentra algo usable, no se toca ningún subframe: sondear el `<iframe>` de
+ * un tercero (un widget, un anuncio) más de lo necesario no aporta nada y
+ * sólo agrega superficie de error.
+ *
+ * `tieneAlgo` decide "usable" mirando las mismas listas que ya informa
+ * `SondeoProveedor` — compositor, escritura, envío, asistente—: si alguna
+ * tiene contenido, ESE es el frame que importa. Un frame sin nada de eso no
+ * se descarta por sospecha: puede ser, de verdad, un iframe de análisis sin
+ * interfaz visible.
+ */
+async function ejecutarSondeo(view: WebContentsView, fuente: string): Promise<unknown> {
+  const tieneAlgo = (r: unknown): boolean => {
+    if (!r || typeof r !== "object") return false;
+    const o = r as Record<string, unknown>;
+    return (["compositor", "escrituraPorMetodo", "envio", "asistente"] as const).some(
+      (k) => Array.isArray(o[k]) && (o[k] as unknown[]).length > 0,
+    );
+  };
+
+  // El frame principal SIEMPRE se ejecuta sin atajar errores: si falla, tiene
+  // que verse en el informe como error de esa vista, no perderse en un catch
+  // silencioso mientras se prueban subframes que tampoco van a servir.
+  const principal = await view.webContents.mainFrame.executeJavaScript(fuente, true);
+  if (tieneAlgo(principal)) return principal;
+
+  const subframes = view.webContents.mainFrame.framesInSubtree.filter(
+    (f) => f !== view.webContents.mainFrame,
+  );
+  // DIAGNÓSTICO de sólo lectura: por qué subframe se pasó y con qué
+  // resultado. Va DENTRO del objeto que ya se devuelve —nunca a un canal
+  // aparte— para que quede en el mismo informe que Juan ya mira, y sólo
+  // cuando ningún subframe sirvió: si uno sirvió, el resultado ES ese frame y
+  // no hace falta explicar por qué se descartaron los demás.
+  const diagnostico: { url: string; resultado: "sin-contenido" | "error"; error?: string }[] = [];
+  for (const f of subframes) {
+    try {
+      const r = await f.executeJavaScript(fuente, true);
+      if (tieneAlgo(r)) return r;
+      diagnostico.push({ url: f.url, resultado: "sin-contenido" });
+    } catch (e) {
+      // Cross-origin, el frame se destruyó a mitad de camino, o cualquier
+      // otra causa: se prueba el subframe siguiente. Que un <iframe> de un
+      // tercero no deje inyectar no es un fallo del sondeo, es una propiedad
+      // de esa página.
+      diagnostico.push({ url: f.url, resultado: "error", error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  if (principal && typeof principal === "object") {
+    (principal as Record<string, unknown>).subframesSondeados = diagnostico;
+  }
+  return principal;
+}
+
 function createWindow(): void {
   win = new BaseWindow({ width: VENTANA_W, height: VENTANA_H, title: "ChatCouncil" });
   // El pedido es sobre el CONTENIDO. `setContentSize` descuenta el marco; la
@@ -1373,7 +1442,7 @@ async function sondeoVivo(): Promise<{
           return {
             id: v.id,
             panel: `${b.width}x${b.height}`,
-            ejecutar: (fuente: string) => v.view.webContents.executeJavaScript(fuente, true),
+            ejecutar: (fuente: string) => ejecutarSondeo(v.view, fuente),
             ...(spec?.modelLabel ? { modelLabelSelector: spec.modelLabel.selector } : {}),
           };
         }),
@@ -1583,7 +1652,7 @@ async function modoSondeo(): Promise<void> {
           return {
             id: v.id,
             panel: `${b.width}x${b.height}`,
-            ejecutar: (fuente: string) => v.view.webContents.executeJavaScript(fuente, true),
+            ejecutar: (fuente: string) => ejecutarSondeo(v.view, fuente),
             // Va SIEMPRE, escriba o no el sondeo: consultar el selector de la
             // spec directo es lo unico que separa "el selector dejo de
             // matchear" de "matchea y el texto se degrado".
@@ -1764,7 +1833,7 @@ async function modoBarrido(): Promise<void> {
           {
             id: v.id,
             panel: `${ancho}x${alto}`,
-            ejecutar: (fuente: string) => v.view.webContents.executeJavaScript(fuente, true),
+            ejecutar: (fuente: string) => ejecutarSondeo(v.view, fuente),
             ...(modelSel ? { modelLabelSelector: modelSel } : {}),
           },
         ]);

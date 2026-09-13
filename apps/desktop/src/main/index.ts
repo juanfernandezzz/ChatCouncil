@@ -966,13 +966,14 @@ function createWindow(): void {
   const util = screen.getPrimaryDisplay().workAreaSize;
   win.setContentSize(Math.min(VENTANA_W, util.width), Math.min(VENTANA_H, util.height));
 
-  // MAXIMIZADA POR DEFECTO, pedido de Juan (2026-09-13). Sólo en los modos
-  // que él realmente USA a ojo — no en los de MEDICIÓN, donde el tamaño del
-  // panel es variable de la prueba (§7.29): maximizar ahí ataría un número
-  // medido al monitor de quien corra el arnés, en vez de al `--cc-ventana=`
-  // explícito o al default reproducible. Y sólo si NO pidió un tamaño
-  // explícito: `--cc-ventana=` sigue ganando siempre.
-  if (!VENTANA && (MODO === "normal" || MODO === "login" || MODO === "difundir")) {
+  // MAXIMIZADA SIEMPRE, pedido de Juan (2026-09-13): normal, login, sondeo
+  // (`--cc-probe`) y difusión. Los modos de MEDICIÓN que quedan afuera
+  // (`test`, `barrido`, `test-scroll`, `test-visibilidad`, `sesion`,
+  // `historial`) siguen sin maximizar: ahí el tamaño de panel es variable de
+  // la prueba (§7.29) y maximizar ataría un número medido al monitor de quien
+  // corra el arnés. `--cc-ventana=` explícito sigue ganando siempre, en
+  // cualquier modo.
+  if (!VENTANA && (MODO === "normal" || MODO === "login" || MODO === "difundir" || MODO === "probe")) {
     win.maximize();
   }
 
@@ -1026,10 +1027,19 @@ function createWindow(): void {
   // `PRECALENTAMIENTO_MS`: es lo que hace automático lo que Juan venía
   // haciendo a mano, cambiando de proveedor uno por uno.
   layoutGrid();
-  win.on("resize", () => {
+  const relayout = (): void => {
     if (precalentando) layoutGrid();
     else layout();
-  });
+  };
+  win.on("resize", relayout);
+  // `maximize()` es ASINCRÓNICO respecto de la llamada: en Windows, el resize
+  // nativo que agranda la ventana llega en un evento aparte, no en el mismo
+  // tick que `win.maximize()`. Sin este handler, `layoutGrid()`/`layout()` de
+  // más abajo podían correr todavía con el `getContentBounds()` de ANTES de
+  // maximizar, y el ancho de panel quedaba atado al tamaño chico hasta el
+  // primer resize manual. `unmaximize` cubre el camino inverso.
+  win.on("maximize", relayout);
+  win.on("unmaximize", relayout);
   setTimeout(() => {
     precalentando = false;
     layout();
@@ -1938,6 +1948,41 @@ async function modoTestScroll(): Promise<void> {
     const antes: Record<string, number> = {};
     for (const v of objetivos) antes[v.id] = contadorNavegaciones.get(v.id) ?? 0;
 
+    // 0. MAXIMIZAR y VOLVER, antes de tocar el scroll. Pedido de Juan
+    // (2026-09-13): el ancho de panel tiene que derivar de
+    // `getContentBounds()` real, y maximizar/desmaximizar NO puede navegar
+    // ninguna vista — es un `setBounds`, igual que el scroll (§ comentario de
+    // arriba). Se espera al evento nativo en vez de un timeout fijo: en
+    // Windows el resize que produce `maximize()` llega en un tick aparte, y
+    // medir antes de que llegue mediría el tamaño VIEJO.
+    const esperarMaximizar = (): Promise<void> => new Promise((resolve) => win!.once("maximize", () => resolve()));
+    const esperarDesmaximizar = (): Promise<void> =>
+      new Promise((resolve) => win!.once("unmaximize", () => resolve()));
+    const anchoVentanaAntesDeMax = win!.getContentBounds().width;
+    const yaMaximizada = win!.isMaximized();
+    if (!yaMaximizada) {
+      const espera = esperarMaximizar();
+      win!.maximize();
+      await espera;
+    }
+    const anchoTrasMaximizar = win!.getContentBounds().width;
+    // El ancho de CADA panel tiene que coincidir con el ancho real de la
+    // ventana ya maximizada — no con la constante `VENTANA_W`, y no con el
+    // ancho de ANTES de maximizar.
+    const anchoPanelesTrasMaximizar = objetivos.map((v) => ({ id: v.id, ancho: v.view.getBounds().width }));
+    if (!yaMaximizada) {
+      const espera = esperarDesmaximizar();
+      win!.unmaximize();
+      await espera;
+      // Se deja como estaba: si el modo la abrió sin maximizar (test-scroll
+      // no está en la lista que maximiza por defecto), vuelve a maximizarse
+      // para que el resto de la corrida —y quien mire la ventana— la vea
+      // consistente con el pedido de Juan.
+      const vuelta = esperarMaximizar();
+      win!.maximize();
+      await vuelta;
+    }
+
     // 1. Las FLECHAS: recorrer con desplazar(1) hasta el tope, y de vuelta
     // con desplazar(-1) hasta 0. `estadoDesplazamiento()` after each paso
     // dice cuándo se llegó al máximo (scrollX deja de crecer).
@@ -1979,6 +2024,15 @@ async function modoTestScroll(): Promise<void> {
       despues,
       diferencias,
       intacto: diferencias.length === 0,
+      maximizado: {
+        anchoVentanaAntesDeMax,
+        anchoTrasMaximizar,
+        anchoPanelesTrasMaximizar,
+        // El criterio real: cada panel, ya maximizada la ventana, mide
+        // exactamente el ancho de contenido de la ventana — no la constante
+        // `VENTANA_W`, no el ancho de antes.
+        panelesCoinciden: anchoPanelesTrasMaximizar.every((p) => p.ancho === anchoTrasMaximizar),
+      },
     });
   } catch (e) {
     decirPorSalida(`\n===CC_TEST_SCROLL_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);

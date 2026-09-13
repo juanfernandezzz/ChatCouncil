@@ -861,6 +861,8 @@ function createWindow(): void {
   // "focus"; llamar `.focus()` en ese momento compite con esa asignación
   // interna y pierde. Encolarlo para el tick siguiente deja que Electron
   // termine su propia asignación antes de que la sobreescribamos.
+  // VERIFICADO por Juan, 2026-09-13: varios alt-tab seguidos, ya no vuelve
+  // a chatgpt.
   win.on("focus", () => setImmediate(() => vistaEnFrente()?.webContents.focus()));
 }
 

@@ -1639,7 +1639,18 @@ async function modoSondeo(): Promise<void> {
     // hidratar su interfaz — más que cualquier otro de los nueve medidos
     // hasta ahora. 35s da margen sobre el piso de 20s que sí alcanza para el
     // resto, sin llegar al techo de 45s que sólo se probó una vez.
-    await new Promise((r) => setTimeout(r, 35_000));
+    // MEDIDO 2026-09-13, segunda vuelta: 35s alcanzó para 8/9 en una corrida
+    // de los NUEVE EN PARALELO, pero grok volvió a dar compositor ausente por
+    // su selector real —encontraba OTRO nodo genérico (un buscador de un
+    // panel de cookies, `#vendor-search-handler`, presente igual en la
+    // página), no `div[aria-label="Ask Grok anything"]`—, mientras que en una
+    // corrida SOLO (sin los otros ocho compitiendo por CPU/red) 45s le
+    // alcanzaban de sobra. La contención entre nueve páginas pesadas
+    // difundidas a la vez es real y ya está documentada para otros síntomas
+    // (`--cc-solo` existe justamente para separarla de un defecto
+    // estructural). No tiene sentido perseguir el número exacto: se sube a
+    // 50s, con margen sobre el peor caso medido hasta ahora.
+    await new Promise((r) => setTimeout(r, 50_000));
     emitir("CC_PROBE_JSON", {
       sesiones: await sesiones(),
       modo: SONDEO_ESCRIBE ? "con-texto" : "reposo",

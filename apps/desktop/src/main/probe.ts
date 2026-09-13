@@ -175,6 +175,8 @@ export interface SondeoProveedor {
   /** Ancho x alto REAL del panel al tomar la muestra. §7.29: es variable de la prueba. */
   panel: string;
   shadowRootsAbiertos: number;
+  /** Cuántos <iframe> hay en la página. Un candidato adentro de uno no aparece nunca en un querySelectorAll desde arriba. */
+  iframes: number;
   compositor: Candidato[];
   envio: Candidato[];
   asistente: Candidato[];
@@ -884,6 +886,12 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
     url: location.origin + location.pathname,
     titulo: document.title.slice(0, 120),
     shadowRootsAbiertos: shadowAbiertos,
+    // DIAGNÓSTICO estructural, sólo lectura: cuántos <iframe> hay en la
+    // página. Un candidato a compositor que vive DENTRO de un iframe no
+    // aparece nunca en un querySelectorAll desde el document de arriba —
+    // igual que un shadow root, pero sin la vía de acceso que shadowAbiertos
+    // ya cubre para shadow DOM. Cuenta nodos, no entra a mirar adentro.
+    iframes: document.querySelectorAll("iframe").length,
     compositor: juntar(['textarea', 'div[contenteditable="true"]', '[role="textbox"]']),
     // Cupo PROPIO y grande para el envio. MEDIDO el 2026-08-10: con el cupo
     // comun de 6, en kimi los seis lugares se llenaron con botones de la BARRA
@@ -1076,6 +1084,7 @@ export async function sondear(
         titulo: "",
         panel: v.panel,
         shadowRootsAbiertos: 0,
+        iframes: 0,
         compositor: [],
         envio: [],
         asistente: [],

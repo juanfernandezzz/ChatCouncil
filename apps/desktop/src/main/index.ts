@@ -37,6 +37,32 @@ import {
   leerRegistroDeArchivo,
 } from "./registro";
 
+/**
+ * DEJAR DE OCLUIR LOS PANELES QUE NO ESTÁN EN PANTALLA.
+ *
+ * MEDIDO por Juan: las páginas sólo terminan de cargar (compositor incluido)
+ * cuando él va cambiando de proveedor a mano. La causa es la disposición en
+ * FILA HORIZONTAL (decisión 8, Fase 2): con `scrollX = 0` sólo el panel en
+ * `x: 0` cae dentro del rectángulo visible de la ventana; los otros ocho
+ * quedan con `x` fuera de esos límites. Chromium trata a un `WebContentsView`
+ * sin píxeles compuestos en pantalla como OCLUIDO, y ahí sí aplica el
+ * "backgrounding" de renderer completo —no sólo el de temporizadores que
+ * `backgroundThrottling: false` ya desactiva—: `document.visibilityState`
+ * pasa a `"hidden"` y varias SPA (React con virtualización, montaje diferido
+ * por `IntersectionObserver`) directamente NO TERMINAN DE MONTAR su propio
+ * compositor mientras se las ve así. Cambiar de proveedor a mano "cura" el
+ * síntoma porque de paso pone ESE panel en `x: 0`, visible, y recién ahí
+ * Chromium deja de ocluirlo.
+ *
+ * Estos dos switches de Chromium desactivan el backgrounding por oclusión a
+ * nivel de proceso, para TODAS las vistas: un panel ocluido sigue
+ * renderizando y ejecutando JS como si estuviera al frente. Tienen que
+ * fijarse ANTES de `app.whenReady()` — una vez arrancado el proceso de
+ * Chromium ya no se pueden cambiar.
+ */
+app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+app.commandLine.appendSwitch("disable-renderer-backgrounding");
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
@@ -678,6 +704,74 @@ function anchoPanel(): number {
  */
 let scrollX = 0;
 
+/**
+ * Verdadero mientras los paneles están en la grilla de precalentamiento y
+ * todavía no pasaron a la fila horizontal. Sólo lo consulta el handler de
+ * `resize`, para no reflowar en fila horizontal a medio precalentamiento.
+ */
+let precalentando = true;
+
+/**
+ * PRECALENTAMIENTO: cuánto dura la disposición en GRILLA antes de pasar a la
+ * fila horizontal definitiva.
+ *
+ * Existe porque los dos switches de Chromium de arriba (que sí valen la pena
+ * y quedan puestos) NO alcanzaron para grok y qwen — medido: con los switches
+ * puestos, siguieron dando CERO candidatos de compositor en tres corridas
+ * seguidas, igual que sin ellos. La causa entonces no es sólo el backgrounding
+ * de renderer que esos switches cubren: es que esas dos SPA no montan su
+ * propia interfaz de chat mientras su panel nunca estuvo con píxeles reales
+ * en pantalla, ni una vez — un gate de la PÁGINA, no de Chromium, y ningún
+ * flag de proceso puede alcanzar el código de un tercero.
+ *
+ * La fila horizontal (decisión 8, Fase 2) dijo `scrollX = 0` desde el
+ * arranque, así que sólo el panel en `x: 0` llegó a pintarse alguna vez; los
+ * otros ocho, nunca. Lo que replicaba manualmente Juan al ir cambiando de
+ * proveedor era exactamente ESO: ponerlos, uno por uno, en pantalla real.
+ *
+ * La solución no reemplaza la fila horizontal: la RETRASA. Al arrancar, todos
+ * los paneles pasan un rato en una GRILLA que los pone a todos con área
+ * visible real y simultánea — ninguna superposición, así que ninguno queda
+ * tapado por otro y todos pintan de verdad — y recién después se reacomodan
+ * en la fila horizontal de siempre. El montaje de una SPA no se deshace
+ * porque el panel se mueva después: una vez que la interfaz ya se montó,
+ * moverla fuera de pantalla no la desmonta (medido en los siete proveedores
+ * que sí cargaban incluso fuera de pantalla).
+ *
+ * 6 s de margen: el más lento de los ya medidos habilitaba su envío a los
+ * ~363 ms; con eso sobra margen para dos SPA más pesadas y sigue dejando
+ * franja de sobra dentro de los 20 s que `--cc-probe` ya espera antes de
+ * medir.
+ */
+const PRECALENTAMIENTO_MS = 6_000;
+
+/**
+ * Disposición temporal en GRILLA — sólo para el precalentamiento. Cada panel
+ * ocupa una celda propia, sin superposición, así que TODOS quedan con área
+ * real en pantalla al mismo tiempo — a diferencia de la fila horizontal, que
+ * sólo pinta uno.
+ */
+function layoutGrid(): void {
+  if (!win || !uiView) return;
+  const { width, height } = win.getContentBounds();
+  uiView.setBounds({ x: 0, y: 0, width, height: UI_HEIGHT });
+
+  const abiertas = todas();
+  const h = Math.max(0, height - UI_HEIGHT);
+  if (abiertas.length === 0) return;
+
+  const cols = Math.max(1, Math.ceil(Math.sqrt(abiertas.length)));
+  const rows = Math.max(1, Math.ceil(abiertas.length / cols));
+  const cellW = Math.floor(width / cols);
+  const cellH = Math.floor(h / rows);
+
+  abiertas.forEach((v, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    v.view.setBounds({ x: col * cellW, y: UI_HEIGHT + row * cellH, width: cellW, height: cellH });
+  });
+}
+
 function layout(): void {
   if (!win || !uiView) return;
   const { width, height } = win.getContentBounds();
@@ -847,8 +941,20 @@ function createWindow(): void {
     );
   }
 
-  layout();
-  win.on("resize", layout);
+  // PRECALENTAMIENTO: todos los paneles arrancan en grilla —todos con área
+  // real en pantalla, ninguno tapado— y recién a los `PRECALENTAMIENTO_MS`
+  // pasan a la fila horizontal definitiva. Ver el comentario de
+  // `PRECALENTAMIENTO_MS`: es lo que hace automático lo que Juan venía
+  // haciendo a mano, cambiando de proveedor uno por uno.
+  layoutGrid();
+  win.on("resize", () => {
+    if (precalentando) layoutGrid();
+    else layout();
+  });
+  setTimeout(() => {
+    precalentando = false;
+    layout();
+  }, PRECALENTAMIENTO_MS);
   // Ver el comentario de `vistaEnFrente`: sin esto, recuperar el foco del
   // sistema operativo (alt-tab de vuelta a ChatCouncil) deja el teclado en
   // el primer panel agregado en vez del que está visible.

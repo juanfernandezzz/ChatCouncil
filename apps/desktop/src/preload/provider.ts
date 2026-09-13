@@ -142,30 +142,40 @@ async function waitForEnabled(sel: string, timeoutMs: number): Promise<EsperaCon
 }
 
 /**
- * Escribe en el compositor. Los editores controlados por un framework ignoran
- * la asignación directa de `value` porque mantienen su propio estado: hay que
- * usar el setter nativo del prototipo y despachar el evento que el framework
- * escucha. Falla ruidosamente si el texto no quedó.
+ * Escribe en el compositor con `document.execCommand('insertText')` — CAMINO
+ * COMPARTIDO para los nueve, promovido el 2026-09-13 (ronda de camino de
+ * entrada portable, Objetivo 1 y 2, ver `docs/BLUEPRINT.md`).
+ *
+ * `execCommand` está deprecado pero sigue siendo la única vía que dispara
+ * `beforeinput`/`input` NATIVOS — el mismo camino que usa el propio navegador
+ * al pegar—, y por eso los editores ricos (ProseMirror, Lexical, el
+ * `contenteditable` de kimi) lo procesan de verdad, a diferencia de un
+ * `InputEvent` construido a mano y despachado con `dispatchEvent`, que varios
+ * editores ignoran a nivel de su MODELO INTERNO aunque el DOM visible cambie
+ * (medido en kimi: la clase `is-empty` de su contenedor no se quitaba).
+ *
+ * `execCommand('insertText')` INSERTA en el cursor, no reemplaza el nodo
+ * entero — a diferencia del método anterior (asignación directa de `value` /
+ * `textContent`). Por eso se selecciona todo el contenido antes de insertar:
+ * mismo comportamiento de "reemplazar", medido como necesario para no dejar
+ * basura de una escritura previa concatenada por delante.
  */
 function writePrompt(el: Element, kind: PageSpec["composer"]["kind"], text: string): boolean {
   (el as HTMLElement).focus();
   if (kind === "textarea") {
     const ta = el as HTMLTextAreaElement;
-    const desc = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ta) as object, "value");
-    if (desc?.set) desc.set.call(ta, text);
-    else ta.value = text;
-    ta.dispatchEvent(new Event("input", { bubbles: true }));
+    ta.select();
+    document.execCommand("insertText", false, text);
     return ta.value === text;
   }
   const host = el as HTMLElement;
-  host.dispatchEvent(
-    new InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType: "insertText", data: text }),
-  );
-  if (!host.textContent?.includes(text)) {
-    host.textContent = text;
-    host.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
-  }
-  return (host.textContent ?? "").includes(text);
+  const sel = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(host);
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+  document.execCommand("insertText", false, text);
+  return (host.textContent ?? "").trim() === text.trim();
 }
 
 /**
@@ -582,6 +592,132 @@ async function confirmarEfecto(spec: PageSpec, antesLen: number): Promise<RunRes
 }
 
 /**
+ * PRUEBA DE ENVÍO POR VÍA JS — Objetivo 2 de la ronda de camino de entrada
+ * portable. Existe SÓLO para esta medición puntual, con techo de cuota
+ * (cuatro envíos reales en total, ver `docs/BLUEPRINT.md`): confirma si
+ * `execCommand('insertText')` —la vía que el Objetivo 1 midió registrada en
+ * los nueve— sirve también para ENVIAR, sin depender de
+ * `webContents.sendInputEvent()` (una primitiva de Chromium que no existe en
+ * WKWebView y que por eso excluye a iOS si el transporte depende de ella).
+ *
+ * NO reemplaza `run()` ni `prepararConfiable()`/`confirmarEfecto()`: viven
+ * las tres intactas. Esto es una CUARTA vía, separada, que sólo se invoca
+ * desde el modo scriptable `--cc-prueba-envio-js=<id>` y nunca desde
+ * `difundir()`. La promoción a camino compartido —si la medición sale en
+ * verde— es un cambio de spec posterior y deliberado, no un efecto lateral
+ * de esta función.
+ *
+ * CRITERIO DE ÉXITO, y es más estricto que "el envío ocurrió": un `click()`
+ * sintético puede disparar el envío con el compositor a medio poblar. Acá se
+ * exige que el MENSAJE QUE QUEDÓ EN EL HILO coincida, byte a byte, con el
+ * marcador escrito — nunca sólo que el compositor se vació o que algo generó.
+ */
+export interface ResultadoEnvioJS {
+  ok: boolean;
+  error?: string;
+  /** El compositor tenía el marcador EXACTO (no un prefijo) antes de intentar el envío. */
+  escrituraExacta: boolean;
+  /** Se encontró en el documento, fuera del compositor, un nodo cuyo texto es EXACTAMENTE el marcador. */
+  mensajeExactoEnHilo: boolean;
+}
+
+async function probarEnvioJS(spec: PageSpec, marcador: string): Promise<ResultadoEnvioJS> {
+  const FALLO = (error: string): ResultadoEnvioJS => ({ ok: false, error, escrituraExacta: false, mensajeExactoEnHilo: false });
+
+  const composer = await waitFor(spec.composer.selector, spec.timeouts?.composerMs ?? 15_000);
+  if (!composer) return FALLO("compositor no encontrado: no se escribe ni se envía nada");
+
+  const leer = (): string =>
+    spec.composer.kind === "textarea" ? (composer as HTMLTextAreaElement).value : (composer.textContent ?? "");
+
+  // Nunca se escribe encima de un borrador de Juan.
+  if (leer().trim().length > 0) return FALLO("el compositor ya tenía texto: no se escribe encima de un borrador de Juan");
+
+  (composer as HTMLElement).focus();
+  const antesLen = readAssistant(spec).length;
+
+  // ESCRITURA por execCommand — la vía que el Objetivo 1 confirmó registrada
+  // en los nueve. `document.execCommand` está deprecado pero sigue siendo la
+  // única vía que dispara `beforeinput`/`input` NATIVOS que los editores
+  // ricos (ProseMirror, Lexical, el de kimi) escuchan de verdad.
+  document.execCommand("insertText", false, marcador);
+  await sleep(300);
+  const escrituraExacta = leer().trim() === marcador;
+  if (!escrituraExacta) {
+    return { ok: false, error: `execCommand dejó "${leer().trim()}" en vez del marcador exacto: no se envía`, escrituraExacta: false, mensajeExactoEnHilo: false };
+  }
+
+  // ENVÍO por la vía que declara la spec — nunca una que la spec no declare.
+  if (spec.submit.kind === "click") {
+    const r = await waitForEnabled(spec.submit.selector, spec.timeouts?.submitReadyMs ?? 8_000);
+    if (!r.ok) {
+      return {
+        ok: false,
+        error:
+          r.motivo === "ausente"
+            ? "el control de envío nunca apareció tras escribir con execCommand"
+            : "el control de envío apareció pero siguió deshabilitado tras escribir con execCommand",
+        escrituraExacta: true,
+        mensajeExactoEnHilo: false,
+      };
+    }
+    (r.el as HTMLElement).click();
+  } else {
+    const o = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      key: "Enter",
+      code: "Enter",
+      keyCode: 13,
+      which: 13,
+    } as const;
+    composer.dispatchEvent(new KeyboardEvent("keydown", o));
+    composer.dispatchEvent(new KeyboardEvent("keypress", o));
+    composer.dispatchEvent(new KeyboardEvent("keyup", o));
+  }
+
+  // Confirmar efecto observable, misma lógica que `confirmarEfecto`.
+  const until = Date.now() + (spec.timeouts?.submitConfirmMs ?? 12_000);
+  for (;;) {
+    const vacio = leer().trim() === "";
+    const generando = estaGenerando(spec) === true;
+    if (vacio || generando || readAssistant(spec).length > antesLen) break;
+    if (Date.now() > until) {
+      return {
+        ok: false,
+        error: "el envío no produjo ningún cambio observable (compositor con texto, sin generación ni respuesta nueva)",
+        escrituraExacta: true,
+        mensajeExactoEnHilo: false,
+      };
+    }
+    await sleep(100);
+  }
+
+  // EL CRITERIO DURO: buscar, FUERA del compositor, un nodo cuyo texto sea
+  // EXACTAMENTE el marcador — nunca "lo contiene", nunca "el compositor se
+  // vació". Margen de 500ms para que el burbuja del usuario termine de
+  // montarse antes de mirar.
+  await sleep(500);
+  const mensajeExactoEnHilo = Array.from(document.querySelectorAll("*")).some((el) => {
+    if (el === composer || composer.contains(el) || el.contains(composer)) return false;
+    return (el.textContent ?? "").trim() === marcador;
+  });
+
+  return {
+    ok: mensajeExactoEnHilo,
+    ...(mensajeExactoEnHilo
+      ? {}
+      : {
+          error:
+            "el envío tuvo efecto observable pero ningún nodo del hilo tiene el marcador EXACTO: posible truncado o corrupción de transporte",
+        }),
+    escrituraExacta: true,
+    mensajeExactoEnHilo,
+  };
+}
+
+/**
  * Se expone en el mundo principal para que el proceso principal lo invoque
  * con `executeJavaScript` —que corre en el mundo principal de la página, no
  * en el mundo aislado del preload—. Con `contextIsolation` activo,
@@ -596,6 +732,7 @@ contextBridge.exposeInMainWorld("__ccProvider", {
   prepararConfiable: (spec: PageSpec) => prepararConfiable(spec),
   verificarTextoEscrito: (spec: PageSpec, texto: string) => verificarTextoEscrito(spec, texto),
   confirmarEfecto: (spec: PageSpec, antesLen: number) => confirmarEfecto(spec, antesLen),
+  probarEnvioJS: (spec: PageSpec, marcador: string) => probarEnvioJS(spec, marcador),
   read: (spec: PageSpec) => ({
     text: readAssistant(spec),
     userText: readUserMessage(spec),

@@ -153,6 +153,29 @@ en este repositorio.
   automático confirmado. *MEDIDA, 2026-08-25, confirmado por Juan sobre la
   app real, en difusión automática de los ocho.*
 
+- **SUPERADO — kimi ya NO depende de `webContents.sendInputEvent()`.** Las
+  dos entradas anteriores describen la solución que hizo falta hasta acá; la
+  ronda de camino de entrada portable (2026-09-13) probó la hipótesis de que
+  el problema real nunca fue `isTrusted`, sino que el texto insertado por DOM
+  no llegaba al MODELO INTERNO del editor. Escribiendo con
+  `document.execCommand('insertText')` —que dispara `beforeinput`/`input`
+  NATIVOS, la misma vía que usa el navegador al pegar— y enviando con el
+  mismo Enter sintético de siempre (`dispatchEvent`, `isTrusted: false`),
+  UN envío real de verificación en kimi dejó el mensaje en el hilo IDÉNTICO
+  carácter a carácter al marcador escrito. `envioConfiable: true` se retiró
+  de la spec de kimi (`packages/providers/src/specs.json`): kimi pasa por el
+  mismo camino compartido (`run()`, `writePrompt` con `execCommand`) que los
+  otros ocho, sin ninguna excepción de proveedor.
+  **Consecuencia para portabilidad**: el transporte de escritura y envío deja
+  de depender de una primitiva exclusiva de Electron/Chromium
+  (`sendInputEvent` no existe en WKWebView, el único motor permitido en
+  iOS). `sendInputEvent`/`difundirConfiable` quedan en el código como
+  respaldo declarado, sin usarse hoy en ningún proveedor: se reactivarían
+  sólo si un proveedor futuro, medido, lo exige.
+  *MEDIDO, 2026-09-13: un envío real en kimi (vía JS, sin sendInputEvent) y
+  uno en qwen, los dos con coincidencia exacta del mensaje en el hilo,
+  primer intento en los dos casos.*
+
 - **qwen: el botón de envío y el de chat de voz son controles DISTINTOS**,
   no el mismo elemento cambiando de rol según el estado del compositor —
   corregido tras medir con conversación real (2026-08-23): el botón de

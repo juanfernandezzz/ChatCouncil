@@ -247,7 +247,6 @@
     },
     "kimi": {
       "newConversationUrl": "https://kimi.ai/",
-      "envioConfiable": true,
       "composer": {
         "selector": "div.chat-input-editor",
         "kind": "contenteditable"
@@ -279,7 +278,7 @@
       },
       "_notaModelo": "Sin modelLabel. Cuatro corridas de sondeo (tres antes de tener conversacion real, una el 2026-08-23 con conversacion viva) dieron CERO candidatos en las tres vias de deteccion, con controlesNivelesArriba:9 en las cuatro: el arbol del compositor de kimi es mas profundo que el resto y ninguna via estructural encuentra un selector de etiqueta de modelo. No es un problema de ancho de panel ni de estado de la pagina. Tres hipotesis agotadas (ver BLUEPRINT C0b): no hay una cuarta pendiente de probar.",
       "_notaFin": "kimi: sin indicador de generacion conocido en su DOM. El fin se INFIERE por quiescencia, mismo piso provisional que el resto.",
-      "_notaEnvio": "submit.kind='key' (Enter), PORQUE NO HAY selector de envio derivado (ver _notaModelo: mismo bloqueo estructural). RESUELTO el 2026-08-23: el Enter sintetico por dispatchEvent no enviaba porque el editor de kimi (contenteditable rico) ignora la entrada NO CONFIABLE -medido sin enviar nada: tras escribir por DOM, el contenedor seguia con la clase is-empty, el editor se veia a si mismo vacio-. La solucion es envioConfiable:true (ver arriba): difundirConfiable() en main/index.ts escribe con webContents.sendInputEvent() -entrada real a nivel de Chromium, isTrusted:true- caracter por caracter y despacha el Enter de la misma forma. Confirmado por Juan en su app real, con 'Enviar a todos': el mensaje se escribe y se envia solo, sin intervencion manual."
+      "_notaEnvio": "submit.kind='key' (Enter), PORQUE NO HAY selector de envio derivado (ver _notaModelo: mismo bloqueo estructural). HISTORICO (2026-08-23): el Enter sintetico por dispatchEvent no enviaba porque el editor de kimi (contenteditable rico) ignoraba entrada por 'beforeinput'/'textContent' construida a mano -medido sin enviar nada: tras escribir asi, el contenedor seguia con la clase is-empty-. La solucion de entonces fue envioConfiable:true: escribir y enviar con webContents.sendInputEvent() desde el proceso principal, entrada real a nivel de Chromium (isTrusted:true). SUPERADO, MEDIDO el 2026-09-13: la hipotesis de la ronda de camino de entrada portable era que el editor de kimi no fallaba por isTrusted sino porque el texto insertado por DOM no llegaba a su MODELO INTERNO. Confirmado: escribiendo con document.execCommand('insertText') -que dispara beforeinput/input NATIVOS, el mismo camino que usa el navegador al pegar- y enviando con el MISMO Enter sintetico de siempre (dispatchEvent, isTrusted:false) sobre el compositor asi escrito, el mensaje aparece en el hilo IDENTICO caracter a caracter al marcador enviado. Un envio real de verificacion, sin sendInputEvent. envioConfiable:true se retira de esta spec: la via JS (execCommand + Enter sintetico) es ahora el camino compartido con los otros ocho. sendInputEvent/difundirConfiable quedan en el codigo como respaldo declarado, sin usarse hoy en ningun proveedor -se reactivarian solo si un proveedor futuro medido asi lo exige."
     },
     "deepseek": {
       "newConversationUrl": "https://chat.deepseek.com/sign_in",

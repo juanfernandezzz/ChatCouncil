@@ -191,7 +191,8 @@ type Modo =
   | "barrido"
   | "test-scroll"
   | "difundir"
-  | "test-visibilidad";
+  | "test-visibilidad"
+  | "prueba-envio-js";
 
 /**
  * `--cc-difundir=<texto>`: dispara UNA ronda real —`difundir()` + espera de
@@ -203,6 +204,19 @@ type Modo =
  * porque no hay forma de clickear una `BaseWindow` desde estas herramientas.
  */
 const DIFUNDIR_TEXTO = (ARGV.find((a) => a.startsWith("--cc-difundir=")) ?? "").slice("--cc-difundir=".length);
+
+/**
+ * `--cc-prueba-envio-js=<id>`: Objetivo 2 de la ronda de camino de entrada
+ * portable — UN envío real, por la vía JS (`execCommand` + el `submit` que
+ * declare la spec), con techo de cuota de cuatro en TOTAL entre todos los
+ * proveedores probados (ver `docs/BLUEPRINT.md`). Exige además
+ * `--cc-solo=<el mismo id>`: no abre nueve páginas para probar una, y evita
+ * que un typo entre los dos flags dispare el envío en el proveedor
+ * equivocado sin que nada lo note.
+ */
+const PRUEBA_ENVIO_JS_ID = (ARGV.find((a) => a.startsWith("--cc-prueba-envio-js=")) ?? "").slice(
+  "--cc-prueba-envio-js=".length,
+);
 
 /**
  * `--cc-historial=<id>` vuelca UNA conversación por stdout como JSON, leída
@@ -243,6 +257,8 @@ const MODO: Modo = HISTORIAL_ID
   ? "historial"
   : SESION
   ? "sesion"
+  : PRUEBA_ENVIO_JS_ID.length > 0
+  ? "prueba-envio-js"
   : ARGV.includes("--cc-test") || process.env["CC_TEST"] === "1"
   ? "test"
   : ARGV.includes("--cc-probe") || process.env["CC_PROBE"] === "1"
@@ -2124,6 +2140,82 @@ async function modoDifundir(): Promise<void> {
  * —`scrollX` puesto para que ese panel ocupe el rango visible—, sin
  * escribir ni enviar nada.
  */
+/**
+ * Modo de prueba de envío por vía JS (`--cc-prueba-envio-js=<id>`). Objetivo
+ * 2 de la ronda de camino de entrada portable, con techo de cuota de CUATRO
+ * envíos reales EN TOTAL (`docs/BLUEPRINT.md`): UN envío real por corrida,
+ * escribiendo con `execCommand` —la vía que el Objetivo 1 confirmó
+ * registrada en los nueve— y enviando por el `submit` que declare la spec
+ * del proveedor. Nunca usa `webContents.sendInputEvent()` acá, aunque la
+ * spec de producción de ese proveedor lo pida para su transporte real: eso
+ * es justo lo que esta medición decide si sigue haciendo falta.
+ *
+ * El criterio de éxito vive en `probarEnvioJS` (`preload/provider.ts`): el
+ * mensaje que queda EN EL HILO tiene que coincidir EXACTO con el marcador
+ * escrito, no sólo "el envío ocurrió".
+ */
+async function modoPruebaEnvioJS(): Promise<void> {
+  try {
+    // Exige --cc-solo=<mismo id>: no abre nueve páginas para probar una, y
+    // un typo entre los dos flags no puede disparar el envío en el
+    // proveedor equivocado sin que nada lo note.
+    if (ACTIVOS.length !== 1 || ACTIVOS[0] !== PRUEBA_ENVIO_JS_ID) {
+      decirPorSalida(
+        `\n===CC_PRUEBA_ENVIO_JS_ERROR===\nHace falta "--cc-solo=${PRUEBA_ENVIO_JS_ID}" exacto junto con ` +
+          `"--cc-prueba-envio-js=${PRUEBA_ENVIO_JS_ID}". ACTIVOS: ${ACTIVOS.join(", ") || "(vacío)"}. No se abrió ni se escribió nada.\n`,
+      );
+      return;
+    }
+    const v = vistas[0]!;
+    // Contención medida en el Objetivo 1 (BLUEPRINT): con las nueve páginas a
+    // la vez hacían falta 50s; con UNA sola abierta, sin las otras ocho
+    // compitiendo por CPU/red, 35s es margen de sobra sobre lo medido.
+    await new Promise((r) => setTimeout(r, 35_000));
+
+    const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS];
+    // VERIFICAR DESTINO antes de escribir nada (límite duro de esta ronda):
+    // el origen real de la página tiene que coincidir con el de la spec del
+    // proveedor pedido.
+    // Comparación por HOSTNAME sin "www.", no por origen exacto. MEDIDO:
+    // kimi.ai redirige a www.kimi.ai — mismo proveedor, mismo origen real,
+    // pero `origin` exacto no coincide y esta verificación (con toda razón)
+    // se negó a mandar. El proveedor correcto sigue siendo el mismo; lo que
+    // cambia es un subdominio que el propio proveedor antepone.
+    const sinWww = (h: string): string => h.replace(/^www\./, "");
+    const origenEsperado = new URL(spec.newConversationUrl).origin;
+    const hostEsperado = sinWww(new URL(spec.newConversationUrl).hostname);
+    let origenReal = "";
+    let hostReal = "";
+    try {
+      const u = new URL(v.view.webContents.getURL());
+      origenReal = u.origin;
+      hostReal = sinWww(u.hostname);
+    } catch {
+      /* deja "" -> falla la comparación de abajo, nunca se manda a ciegas */
+    }
+    if (hostReal !== hostEsperado) {
+      emitir("CC_PRUEBA_ENVIO_JS_JSON", {
+        id: v.id,
+        ok: false,
+        error: `destino incorrecto: la vista de "${v.id}" está en "${origenReal}", se esperaba "${origenEsperado}". No se escribió ni se envió nada.`,
+      });
+      return;
+    }
+
+    const marcador = `CC-ENVIO-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    const specJson = JSON.stringify(spec);
+    const resultado = await v.view.webContents.executeJavaScript(
+      `window.__ccProvider.probarEnvioJS(${specJson}, ${JSON.stringify(marcador)})`,
+      true,
+    );
+    emitir("CC_PRUEBA_ENVIO_JS_JSON", { id: v.id, marcador, ...(resultado as Record<string, unknown>) });
+  } catch (e) {
+    decirPorSalida(`\n===CC_PRUEBA_ENVIO_JS_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+  } finally {
+    app.quit();
+  }
+}
+
 async function modoVisibilidad(): Promise<void> {
   try {
     await new Promise((r) => setTimeout(r, 35_000));
@@ -2426,6 +2518,7 @@ void app.whenReady().then(() => {
   if (MODO === "historial") modoHistorial();
   if (MODO === "difundir") void modoDifundir();
   if (MODO === "test-visibilidad") void modoVisibilidad();
+  if (MODO === "prueba-envio-js") void modoPruebaEnvioJS();
   app.on("activate", () => {
     if (BaseWindow.getAllWindows().length === 0) createWindow();
   });

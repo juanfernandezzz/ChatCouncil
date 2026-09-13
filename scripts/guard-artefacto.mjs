@@ -185,7 +185,17 @@ const EXIGIDO = {
   // primera corrida, que es exactamente para lo que está.
   "preload/provider.cjs": [
     "__ccProvider",
-    "beforeinput",
+    // "beforeinput" SALIÓ de esta lista el 2026-09-13 (ronda de camino de
+    // entrada portable, Objetivo 1 y 2). Ya no se construye ese evento a
+    // mano: `writePrompt` escribe con `document.execCommand('insertText')`,
+    // que dispara `beforeinput`/`input` NATIVOS como efecto del navegador,
+    // no como código nuestro — la capacidad que el marcador protegía
+    // (que el editor se entere de la escritura) sigue existiendo, MEDIDA
+    // mejor que antes: es la misma vía confirmada registrando escritura en
+    // los nueve proveedores y enviando de verdad en kimi y qwen. Mantener el
+    // marcador viejo habría bloqueado en rojo un cambio ya autorizado y
+    // medido, por el motivo equivocado — exactamente lo que este gate existe
+    // para evitar en la dirección contraria.
     "insertText",
     "aria-disabled",
     "cuadro/s de texto",

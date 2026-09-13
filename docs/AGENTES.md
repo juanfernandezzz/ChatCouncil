@@ -145,6 +145,21 @@ Antes de iterar sobre un arreglo, **separá el mecanismo bajo prueba de todo lo
 que exija a una persona**. Un ciclo de verificación que necesita a alguien no
 se puede iterar.
 
+### Skills que Juan tiene instaladas, y que aplican acá
+
+`systematic-debugging`, `verification-before-completion`,
+`incremental-implementation`, `planning-and-task-breakdown` y
+`writing-plans` cubren, con más detalle del que este archivo repite, la
+disciplina de medir antes de arreglar, verificar con salida real antes de
+declarar algo resuelto, avanzar en cambios chicos y verificables, y
+descomponer trabajo en tareas con criterio de éxito medible. **Donde una de
+esas skills dice lo mismo que este archivo, la skill manda y este archivo
+NO repite el texto** — duplicar una regla en dos lugares garantiza que se
+desincronicen (es la misma razón por la que `docs/BLUEPRINT.md` es la única
+fuente de verdad del plan). Lo que este archivo aporta y las skills no: las
+reglas duras específicas de ChatCouncil (BYOA, gates, `git add` por ruta,
+cuándo escalar) y cómo se le presentan decisiones a Juan.
+
 ## Cómo se le presentan decisiones a Juan
 
 Preguntas **numeradas**, opciones por **letra**, con lo que se gana y lo que se

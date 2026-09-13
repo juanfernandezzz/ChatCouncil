@@ -1536,6 +1536,60 @@ esta corrida y el pedido de Juan fue "sólo incluir en informe".
 DeepSeek sobre el output unificado. Herramienta por defecto: **convergencia
 y divergencia**, no resumen. Herramientas editables con defaults inmutables.
 
+### Fase 3 (vigente, 2026-09-13) — Parte 1, Parte 2 y el Noveno
+
+Reemplaza la Fase 3 y la Fase 4 supersedidas de arriba (que quedan como
+registro histórico, no se borran). Se escribe DESPUÉS de la corrida de
+captura de esta sesión, no antes: los números medidos ahí —§ "Objetivo 1 —
+captura real, números medidos" y las tres decisiones derivadas del volumen,
+arriba— determinan el diseño que sigue, en particular la decisión 1 (marca
+canaria) y la decisión 2 (dispersión declarada).
+
+**Arquitectura, en corto** (detalle completo en §1, "Arquitectura vigente:
+DOS partes"): 8 en el pool investigan con búsqueda web (Parte 1); el código
+extrae, verifica, anonimiza y baraja; los mismos 8 operan sobre ese cuerpo
+sin ver su propia respuesta (Parte 2, round-robin con exclusión de
+autoevaluación); `deepseek`, noveno fuera del pool, lee la matriz y produce
+el informe, cada afirmación referenciando una celda.
+
+**Ya no hace falta la interfaz de checklist por panel.** La Fase 3 original
+(supersedida) preveía que Juan marcara un checkbox por proveedor y un botón
+"Consolidar respuestas" que se habilitaba con los ocho marcados. Con
+"Capturar" ya construido y verificado esta sesión, ese rol queda cumplido
+sin superficie nueva: Juan mira los paneles, decide cuándo están listos —
+exactamente el criterio que evita el falso positivo de quietud que costó la
+Fase 1 y la corrida de qwen— y aprieta "Capturar". Agregar un checklist
+encima sería una segunda forma de decir lo mismo que el dato ya dice: la
+respuesta tiene texto y no tiene error en el registro.
+
+#### Tareas, en orden de dependencia
+
+Cada una es un cambio chico y verificable (principio de
+`incremental-implementation`): no se empieza la siguiente sin que la
+anterior tenga su criterio de éxito medido, y "medido" significa una salida
+real pegada, no una suposición de que compiló.
+
+| # | Tarea | Depende de | Criterio de éxito medible |
+|---|---|---|---|
+| T1 | **Extracción de fuentes desde el HTML crudo.** Ya existe `Respuesta.html` (outerHTML sin recortar) y `fuentesHref` (conteo). Falta la extracción real: de cada `<a href>` encontrado, guardar `{ url, textoVisible, dondeVive: "cuerpo" \| "panel-ancestro" }` como un hecho nuevo append-only (`Cita`, en `packages/domain`). | Captura real ya hecha (VERIFICADO, ver Objetivo 1 arriba) | Una corrida de `--cc-probe` o `Capturar` sobre una captura con fuentes conocidas (ej. la de esta sesión: chatgpt 23, kimi 17, deepseek 26) produce exactamente esa cantidad de hechos `Cita`, con URL no vacía en el 100% de ellos. |
+| T2 | **Verificación mecánica de la fuente citada**, tri-estado (`cumple` / `no cumple` / `no se pudo comprobar`, nunca booleano — decisión 12 de la Fase 3 histórica, sigue vigente). Sale a la red SÓLO a las URL de T1, nunca a buscar respaldo no citado (declaración de salida a la red, §1). | T1 | Contra un conjunto de prueba de 10 URLs conocidas (5 que responden 200, 3 que dan 404, 2 inalcanzables por timeout), el resultado clasifica las 10 en el estado correcto, con el tercer estado usado en las 2 de timeout — nunca colapsado a `no cumple`. |
+| T3 | **Anonimización y barajado con semilla**, reutilizando el builder sellado (`guard:sellado`) ya verificado. Persistir la semilla en la `Ronda` (el campo `semilla` del dominio ya existe, sin usar). | T1 (necesita el cuerpo de las 8 respuestas + citas para anonimizar) | Dos corridas con la MISMA semilla producen el MISMO orden barajado (determinismo); dos corridas con semilla distinta producen órdenes distintos en al menos 6 de 8 posiciones (no-degenerado). Verificado con una prueba automatizada, no a ojo. |
+| T4 | **Marca canaria.** Antes de armar el archivo por operador, insertar un token único (UUID) al final del cuerpo, y exigir que la respuesta del operador lo repita. Decisión ya tomada con el número que la justifica: ver "El volumen decide pegado vs. archivo" arriba (~26.800 tokens por operador, no entra pegado). | T3 (la marca va DENTRO del cuerpo ya anonimizado y barajado) | Una prueba con un archivo TRUNCADO a propósito (le falta la marca) hace que el código marque esa respuesta como `no confiable: archivo truncado`, sin que el operador haya tenido que decirlo — el criterio de éxito es que el CÓDIGO lo detecte, no que el operador lo reporte. |
+| T5 | **Armar y entregar el archivo por operador** (7 de 8, exclusión de autoevaluación), como adjunto — nunca pegado en el compositor, por el volumen medido (decisión 1). Reutiliza la difusión existente (`difundir()`) pero con un archivo en vez de texto, y el prompt de la herramienta (biblioteca de Parte 2) como mensaje. | T4 | Con el pool de 8, se generan exactamente 8 archivos, cada uno con 7 respuestas (nunca la propia), verificado contando los `proveedorId` presentes en cada archivo contra la lista de `INVESTIGADORES` menos el operador. |
+| T6 | **Capturar la operación** (Parte 2): reutiliza el mismo mecanismo de "Capturar" ya construido, sobre los paneles de operación en vez de los de investigación. Produce la matriz operador × respuesta (hecho nuevo append-only, `Adjudicacion` o equivalente — nombre a decidir sin repetir el vocabulario ya descartado de "juez"/"analista"). | T5 | La matriz tiene exactamente 8 × 7 = 56 celdas (o menos las que fallen, cada falla como hecho, nunca como ausencia silenciosa); cada celda referencia el `proveedorId` operador y el `proveedorId` (desanonimizado con el sello) de la respuesta evaluada. |
+| T7 | **El noveno (deepseek) y el informe.** Prompt 3 (instrucciones para leer la matriz, sin buscar, sin agregar, sin adjudicar). Regla dura: cada afirmación del informe referencia una celda de T6 — se verifica con un gate nuevo, probado en rojo antes de confiar en él (regla dura de `AGENTES.md`, aplicable a todo gate nuevo). | T6 | Un informe de prueba con una afirmación SIN referencia a ninguna celda hace que el gate nuevo falle; un informe con las mismas afirmaciones, cada una con su referencia, pasa. Probado en las dos direcciones antes de darlo por bueno. |
+
+**Lo que NO entra en esta lista porque ya está resuelto:** capturar el
+cuerpo de las 8 (Objetivo 1, esta sesión), la escritura al registro sin
+ronda abierta, el HTML crudo para re-derivar selectores sin gastar cuota, y
+`userMessage` para 2 de 9 (gemini, chatgpt) con el resto declarado
+pendiente en vez de adivinado.
+
+**Sobre la dispersión de 22,5x** (LIMITACIONES.md, medida): ninguna tarea
+de esta lista la corrige. Queda como una condición del turno que T6/T7
+tienen que poder mostrar, no resolver — es exactamente la distinción entre
+"declarar" y "corregir" que ya se fijó al medirla.
+
 ### Fase 5 — Exportación ⏳
 Salidas citables con el original, la vista derivada y la procedencia.
 

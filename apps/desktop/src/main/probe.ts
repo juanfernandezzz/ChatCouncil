@@ -177,6 +177,8 @@ export interface SondeoProveedor {
   shadowRootsAbiertos: number;
   /** Cuántos <iframe> hay en la página. Un candidato adentro de uno no aparece nunca en un querySelectorAll desde arriba. */
   iframes: number;
+  /** Elementos con tag personalizado (guion). Los que dan tieneShadowAbierto:false pueden alojar un shadow CERRADO, invisible por definición. */
+  elementosPersonalizados: { tag: string; tieneShadowAbierto: boolean }[];
   compositor: Candidato[];
   envio: Candidato[];
   asistente: Candidato[];
@@ -516,11 +518,39 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
     }
   }
 
+  // RECURSIVO: un shadow root abierto puede tener OTRO shadow root abierto
+  // adentro (frameworks de componentes que anidan), y la version anterior
+  // solo miraba un nivel desde document. Con cola en vez de recursion directa
+  // para no arrastrar limite de pila en un arbol inesperadamente hondo.
   const raices = [document];
   let shadowAbiertos = 0;
-  for (const el of document.querySelectorAll("*")) {
-    if (el.shadowRoot) { shadowAbiertos++; raices.push(el.shadowRoot); }
+  const porRecorrer = [document];
+  while (porRecorrer.length > 0) {
+    const raiz = porRecorrer.shift();
+    for (const el of raiz.querySelectorAll("*")) {
+      if (el.shadowRoot) {
+        shadowAbiertos++;
+        raices.push(el.shadowRoot);
+        porRecorrer.push(el.shadowRoot);
+      }
+    }
   }
+
+  // DIAGNOSTICO de solo lectura: elementos personalizados (tag con guion),
+  // que son los que suelen alojar un shadow root CERRADO -invisible incluso a
+  // este mismo sondeo, por definicion del spec. No entra a mirar adentro, solo
+  // cuenta y nombra el tag: si el compositor no aparece por ningun lado y acá
+  // hay varios elementos personalizados sin shadowRoot abierto, es evidencia
+  // -no sospecha- de que el contenido vive en un shadow CERRADO.
+  const elementosPersonalizados = [];
+  try {
+    for (const el of document.querySelectorAll("*")) {
+      if (elementosPersonalizados.length >= 20) break;
+      const tag = el.tagName.toLowerCase();
+      if (!tag.includes("-")) continue;
+      elementosPersonalizados.push({ tag: tag, tieneShadowAbierto: !!el.shadowRoot });
+    }
+  } catch (e) { /* se informa vacio, no se rompe el sondeo */ }
 
   const attrsDe = (el) => {
     const out = {};
@@ -650,7 +680,7 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
   try {
     compositorEl = SELECTOR_COMPOSITOR
       ? document.querySelector(SELECTOR_COMPOSITOR)
-      : document.querySelector('textarea, div[contenteditable="true"], [role="textbox"]');
+      : document.querySelector('textarea, [contenteditable]:not([contenteditable="false"]), [role="textbox"], input[type="text"], input[type="search"]');
   } catch (e) { compositorEl = null; }
 
   let descartadosPorFiltro = 0;
@@ -892,7 +922,21 @@ const FUENTE_SONDEO = `async (SELECTOR_COMPOSITOR, SELECTOR_ENVIO, MARCADOR, MAR
     // igual que un shadow root, pero sin la vía de acceso que shadowAbiertos
     // ya cubre para shadow DOM. Cuenta nodos, no entra a mirar adentro.
     iframes: document.querySelectorAll("iframe").length,
-    compositor: juntar(['textarea', 'div[contenteditable="true"]', '[role="textbox"]']),
+    elementosPersonalizados: elementosPersonalizados,
+    // Ensanchado: '[contenteditable="true"]' a secas dejaba afuera
+    // 'contenteditable=""' y 'contenteditable' sin valor —las dos formas
+    // válidas de marcar editable un nodo, y varios editores ricos las usan en
+    // vez del string "true" literal—, así como 'input[type=text]'. Grok dio
+    // CERO candidatos de compositor con el patrón angosto pese a que Juan
+    // confirmó que la página se ve normal: el patrón no alcanzaba al nodo
+    // real, no es que el nodo no exista.
+    compositor: juntar([
+      'textarea',
+      '[contenteditable]:not([contenteditable="false"])',
+      '[role="textbox"]',
+      'input[type="text"]',
+      'input[type="search"]',
+    ]),
     // Cupo PROPIO y grande para el envio. MEDIDO el 2026-08-10: con el cupo
     // comun de 6, en kimi los seis lugares se llenaron con botones de la BARRA
     // LATERAL —ocultar barra, crear proyecto, invitar a ganar— porque
@@ -1085,6 +1129,7 @@ export async function sondear(
         panel: v.panel,
         shadowRootsAbiertos: 0,
         iframes: 0,
+        elementosPersonalizados: [],
         compositor: [],
         envio: [],
         asistente: [],

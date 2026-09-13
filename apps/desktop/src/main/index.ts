@@ -966,6 +966,16 @@ function createWindow(): void {
   const util = screen.getPrimaryDisplay().workAreaSize;
   win.setContentSize(Math.min(VENTANA_W, util.width), Math.min(VENTANA_H, util.height));
 
+  // MAXIMIZADA POR DEFECTO, pedido de Juan (2026-09-13). Sólo en los modos
+  // que él realmente USA a ojo — no en los de MEDICIÓN, donde el tamaño del
+  // panel es variable de la prueba (§7.29): maximizar ahí ataría un número
+  // medido al monitor de quien corra el arnés, en vez de al `--cc-ventana=`
+  // explícito o al default reproducible. Y sólo si NO pidió un tamaño
+  // explícito: `--cc-ventana=` sigue ganando siempre.
+  if (!VENTANA && (MODO === "normal" || MODO === "login" || MODO === "difundir")) {
+    win.maximize();
+  }
+
   uiView = new WebContentsView({
     webPreferences: { preload: join(__dirname, "../preload/ui.cjs"), sandbox: true },
   });
@@ -1619,7 +1629,17 @@ async function modoSondeo(): Promise<void> {
     // 20s en vez de 12s: la etiqueta de modelo de Claude carga async DESPUÉS
     // del render inicial (compositor y envío ya estaban listos a los 12s,
     // pero la etiqueta con el nombre del modelo todavía no existía en el DOM).
-    await new Promise((r) => setTimeout(r, 20_000));
+    // 35s en vez de 20s. MEDIDO 2026-09-13: grok daba compositor, envío y
+    // asistente en CERO en tres corridas seguidas —ni la grilla de
+    // precalentamiento ni la traversal de subframes lo arreglaban—, y Juan
+    // confirmó visualmente que el panel se ve normal. Subiendo la espera a
+    // 45s (prueba puntual, no este valor) el mismo proveedor midió
+    // compositor, escritura y control de envío completos: no era oclusión ni
+    // un iframe ni un shadow root cerrado, era que grok tarda MÁS de 20s en
+    // hidratar su interfaz — más que cualquier otro de los nueve medidos
+    // hasta ahora. 35s da margen sobre el piso de 20s que sí alcanza para el
+    // resto, sin llegar al techo de 45s que sólo se probó una vez.
+    await new Promise((r) => setTimeout(r, 35_000));
     emitir("CC_PROBE_JSON", {
       sesiones: await sesiones(),
       modo: SONDEO_ESCRIBE ? "con-texto" : "reposo",

@@ -79,6 +79,18 @@ en este repositorio.
   de interpretación: el modelo elegido en el panel lo decide Juan (o quedó
   de una sesión anterior), no el instrumento. *MEDIDO, 2026-09-06.*
 
+- **Un panel de fuentes COLAPSADO no se distingue de "no hay fuentes".**
+  Medido el 2026-09-13: en claude, deepseek, grok y kimi las fuentes citadas
+  viven detrás de un chip o botón que, al hacer clic, abre un panel lateral
+  — varias de esas interfaces no montan el contenido del panel en el DOM
+  hasta ese clic. `fuentesHref` (cuenta `<a href>` reales, subiendo por los
+  ancestros del nodo de la respuesta) puede alcanzar el panel una vez
+  ABIERTO, pero "Capturar" nunca hace clic — misma regla que rige el
+  sondeo—, así que un panel sin abrir da `fuentesHref: 0` indistinguible de
+  una respuesta sin fuentes. Si Juan quiere que una captura incluya las
+  fuentes, tiene que abrir el panel él mismo ANTES de capturar.
+  *MEDIDO, 2026-09-13, confirmado por Juan sobre la app real.*
+
 ## Sobre lo que el instrumento no puede ver
 
 - **La anonimización no sobrevive a las fuentes citadas.** Dominios propios

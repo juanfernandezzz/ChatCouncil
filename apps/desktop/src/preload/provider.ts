@@ -169,9 +169,9 @@ function writePrompt(el: Element, kind: PageSpec["composer"]["kind"], text: stri
 }
 
 /**
- * Cuenta enlaces `<a href="http...">` REALES en el DOM, dentro del nodo de
- * la respuesta y en los hermanos de su padre (para alcanzar un panel de
- * fuentes que viva AL LADO del cuerpo, no adentro).
+ * Cuenta enlaces `<a href="http...">` REALES en el DOM, subiendo por los
+ * ANCESTROS del nodo de la respuesta hasta encontrar el primer nivel con
+ * al menos uno, o hasta agotar el techo de niveles.
  *
  * Existe porque `textContent` —lo que usa `readAssistant`— NUNCA incluye el
  * atributo `href`: un `<a href="...">texto visible</a>` deja sólo "texto
@@ -180,19 +180,36 @@ function writePrompt(el: Element, kind: PageSpec["composer"]["kind"], text: stri
  * texto no las arrastra" — son dos causas distintas del mismo síntoma
  * (0 apariciones de "http" en `textoOriginal`), y sólo mirando el DOM se
  * puede saber cuál es.
+ *
+ * SUBE POR NIVELES en vez de mirar sólo un hermano, PORQUE es genérico:
+ * medido el 2026-09-13 en cuatro proveedores (claude, deepseek, grok,
+ * kimi), Juan reportó un chip o botón que, al hacer clic, abre un PANEL
+ * LATERAL con las fuentes — un panel que no es hijo ni hermano directo del
+ * nodo de la respuesta, sino que cuelga varios niveles más arriba, junto a
+ * toda la conversación. Un solo nivel de hermanos alcanzaba para el patrón
+ * de gemini (respuesta y fuentes comparten padre) pero no para este otro,
+ * más común. El techo de niveles evita subir tanto que se termine contando
+ * la barra lateral de conversaciones —un ancestro común mucho más arriba—,
+ * cuyos enlaces de navegación NO son fuentes citadas.
+ *
+ * LÍMITE CONOCIDO, declarado y no resuelto acá: si el panel de fuentes está
+ * OCULTO/COLAPSADO y su contenido todavía no se montó en el DOM —varias
+ * interfaces no renderizan el panel hasta el clic—, esto sigue devolviendo
+ * 0 aunque el panel exista. "Capturar" nunca hace clic (misma regla que el
+ * sondeo): un panel colapsado sin abrir es indistinguible de que no haya
+ * fuentes, y ESO es una limitación declarada en `docs/LIMITACIONES.md`, no
+ * un defecto de esta función.
  */
 function contarEnlacesDeFuente(node: Element | null): number {
   if (!node) return 0;
-  const propios = node.querySelectorAll('a[href^="http"]').length;
-  let hermanos = 0;
-  const padre = node.parentElement;
-  if (padre) {
-    for (const h of Array.from(padre.children)) {
-      if (h === node) continue;
-      hermanos += h.querySelectorAll('a[href^="http"]').length;
-    }
+  const TECHO_NIVELES = 6;
+  let actual: Element | null = node;
+  for (let nivel = 0; actual && nivel <= TECHO_NIVELES; nivel++) {
+    const n = actual.querySelectorAll('a[href^="http"]').length;
+    if (n > 0) return n;
+    actual = actual.parentElement;
   }
-  return propios + hermanos;
+  return 0;
 }
 
 function ultimoNodoAsistente(spec: PageSpec): Element | null {

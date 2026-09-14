@@ -1,3 +1,5 @@
+import { anonymizeReplies } from "./anonymize";
+
 /**
  * cuerpo-operador.ts — T3, Fase 3: el cuerpo que llega a los operadores.
  * ------------------------------------------------------------------------
@@ -194,17 +196,140 @@ export function armarCuerpoConFuentes(texto: string, urlsCitadas: readonly strin
  *    armar el INFORME FINAL, después de que el análisis ciego terminó y
  *    fuera de ese camino — nunca se le muestra a un analista.
  *
- * PURA y sin persistencia a propósito: el orden del pool ya está declarado
- * en `docs/BLUEPRINT.md` §1 (chatgpt, gemini, claude, grok, mistral, glm,
- * kimi, qwen — deepseek fuera del pool, sólo informa) y es fijo. Guardar un
- * hecho para algo que se recalcula siempre igual, a partir de un dato que ya
- * vive en un solo lugar, sería una segunda fuente de verdad que se puede
- * desincronizar de la primera — el sello sí se persiste porque depende del
- * barajado aleatorio de esa ronda puntual, esto no depende de nada que
- * cambie ronda a ronda.
+ * CORRECCIÓN (revisión de T3, 2026-09-14): esta función SIGUE siendo pura
+ * —no toca red ni disco—, pero su resultado **SÍ se persiste**, dentro de
+ * cada `Sello` (`Sello.codigoEstable`, `packages/domain`). La primera
+ * versión de este comentario decía "sin persistencia a propósito, se
+ * recalcula del orden del pool" — eso rompe en cuanto el pool cambie, y
+ * el pool YA cambió tres veces en esta fase (deepseek salió del pool de
+ * operadores, kimi estuvo a punto de salir). Un informe archivado dice "P3
+ * convergió con P5"; si el orden del pool se lee de nuevo seis meses
+ * después para reconstruir qué es "P3", un pool distinto da una respuesta
+ * distinta y el informe queda MINTIENDO sin que nada falle. Por eso esta
+ * función sirve para GENERAR el código en el momento en que se arma el
+ * cuerpo de una ronda (`apps/desktop/src/main/operador.ts`), y lo que hace
+ * estable al código no es la función — es que, una vez generado, se
+ * escribe en un hecho append-only y nunca se vuelve a calcular para esa
+ * ronda.
  */
 export function codigosEstables(idsEnOrden: readonly string[]): ReadonlyMap<string, string> {
   const mapa = new Map<string, string>();
   idsEnOrden.forEach((id, i) => mapa.set(id, `P${i + 1}`));
   return mapa;
+}
+
+/**
+ * T4 — MARCA CANARIA. Un token único al final del cuerpo de CADA operador
+ * (uno por operador, no compartido: si el pipeline de un proveedor trunca
+ * SU adjunto, sólo esa respuesta se marca no confiable, no las de los
+ * demás). Justificación ya medida en T3 (ver "El volumen decide pegado vs.
+ * archivo" en `docs/BLUEPRINT.md`): ~26.800 tokens por operador no entran
+ * pegados en el compositor, van como archivo adjunto — y un archivo
+ * truncado por el pipeline de ingesta de un proveedor pasa en VERDE si
+ * nadie lo comprueba. El texto de la marca no importa mientras sea
+ * reconocible; lo que importa es que el token sea único y que el código,
+ * no el operador, sea quien note su ausencia.
+ */
+export function agregarMarcaCanaria(cuerpo: string, token: string): string {
+  return `${cuerpo}\n\n---\nMARCA DE INTEGRIDAD: repetí exactamente este token al final de tu respuesta, en su propia línea: ${token}`;
+}
+
+/**
+ * `true` si el token de la marca canaria de ESTE operador aparece en el
+ * texto que devolvió — `false` = el archivo llegó truncado (u operado sin
+ * seguir la instrucción), y la respuesta se marca no confiable. El criterio
+ * de éxito es que esta función lo detecte sola, sin que el operador lo haya
+ * reportado.
+ */
+export function marcaCanariaPresente(respuestaOperador: string, token: string): boolean {
+  return respuestaOperador.includes(token);
+}
+
+/**
+ * T5, LA MITAD PURA — armar los 8 cuerpos por operador. La otra mitad
+ * (entregar el archivo al panel) necesita la Parte 2 de la interfaz, que
+ * todavía no existe; ARMAR el cuerpo no necesita nada de eso, es código
+ * puro sobre datos que T1/T3 ya producen. Reutiliza `anonymizeReplies`
+ * (T3, sin tocar su lógica) para el barajado y las etiquetas.
+ */
+export interface RespuestaParaOperar {
+  proveedorId: string;
+  replyId: string;
+  attemptId: string;
+  texto: string;
+  urlsCitadas: readonly string[];
+}
+
+export interface EntradaSelloConCodigo {
+  label: string;
+  panelSourceId: string;
+  replyId: string;
+  attemptId: string;
+  codigoEstable: string;
+}
+
+export interface CuerpoOperador {
+  /** El proveedor que VA A OPERAR este cuerpo — quién lo recibe, no de quién habla el contenido. */
+  operadorId: string;
+  cuerpo: string;
+  tokenCanario: string;
+  /** Sólo para verificar el criterio de exclusión — nunca es lo que el operador lee. */
+  proveedoresIncluidos: string[];
+}
+
+export interface CuerposPorOperador {
+  cuerpos: CuerpoOperador[];
+  sello: EntradaSelloConCodigo[];
+}
+
+/**
+ * `respuestas` tiene que ser EXACTAMENTE el pool (8, un `proveedorId` cada
+ * una); `poolOrden` es el mismo conjunto de ids en el orden fijo declarado
+ * (BLUEPRINT §1) — de ahí sale `codigosEstables`. `generarToken` es
+ * INYECTADO, mismo motivo que `esperar` en T2 (`verificar-fuentes.ts`):
+ * `packages/analysis` no puede nombrar `crypto.randomUUID` sin dejar de ser
+ * portable, y una prueba necesita tokens PREDECIBLES para poder comparar.
+ */
+export function armarCuerposPorOperador(
+  respuestas: readonly RespuestaParaOperar[],
+  poolOrden: readonly string[],
+  shuffleSeedNumerica: number,
+  generarToken: () => string,
+): CuerposPorOperador {
+  const analizables = respuestas.map((r) => ({
+    panelSourceId: r.proveedorId,
+    replyId: r.replyId,
+    attemptId: r.attemptId,
+    displayName: r.proveedorId,
+    text: r.texto,
+  }));
+  const { labeled, seal } = anonymizeReplies(analizables, true, shuffleSeedNumerica);
+
+  const urlsPor = new Map(respuestas.map((r) => [r.proveedorId, r.urlsCitadas]));
+  const codigos = codigosEstables(poolOrden);
+  const selloConCodigo: EntradaSelloConCodigo[] = seal.map((s) => ({
+    ...s,
+    codigoEstable: codigos.get(s.panelSourceId) ?? "",
+  }));
+
+  const cuerpos: CuerpoOperador[] = poolOrden.map((operadorId) => {
+    const bloques: string[] = [];
+    const incluidos: string[] = [];
+    labeled.forEach((l, i) => {
+      const proveedorDeEsteLabel = seal[i]!.panelSourceId;
+      if (proveedorDeEsteLabel === operadorId) return; // exclusión de autoevaluación
+      const urls = urlsPor.get(proveedorDeEsteLabel) ?? [];
+      bloques.push(`### Respuesta ${l.label}\n${armarCuerpoConFuentes(l.text, urls)}`);
+      incluidos.push(proveedorDeEsteLabel);
+    });
+    const token = generarToken();
+    const cuerpo = agregarMarcaCanaria(bloques.join("\n\n"), token);
+    const fugas = fugasDeProveedorEnUrls(cuerpo);
+    if (fugas.length > 0) {
+      throw new Error(`cuerpo del operador ${operadorId} filtra identidad de proveedor por URL: ${fugas.join(" | ")}`);
+    }
+    return { operadorId, cuerpo, tokenCanario: token, proveedoresIncluidos: incluidos };
+  });
+
+  return { cuerpos, sello: selloConCodigo };
 }

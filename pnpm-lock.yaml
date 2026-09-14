@@ -14,6 +14,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@chatcouncil/analysis':
+        specifier: workspace:*
+        version: link:../../packages/analysis
       '@chatcouncil/domain':
         specifier: workspace:*
         version: link:../../packages/domain

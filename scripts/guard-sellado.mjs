@@ -122,8 +122,14 @@ for (const root of SCAN_ROOTS) {
 // directo sin depender de que haya un build previo — el mismo patrón que
 // ya usan las verificaciones offline de T1/T2 en esta ronda.
 const CUERPO_OPERADOR_PATH = join(ROOT, "packages/analysis/src/cuerpo-operador.ts");
+const LOADER_HOOKS_PATH = join(ROOT, "scripts/_ts-loader-hooks.mjs");
 const FIXTURE_RUNNER = `
+import { register } from "node:module";
 import { pathToFileURL } from "node:url";
+// cuerpo-operador.ts importa "./anonymize" SIN extension (moduleResolution
+// "bundler", como el resto del repo) -- el resolvedor nativo de Node no lo
+// sigue sin este hook. Ver scripts/_ts-loader-hooks.mjs.
+register(pathToFileURL(${JSON.stringify(LOADER_HOOKS_PATH)}).href, import.meta.url);
 const { armarCuerpoConFuentes } = await import(pathToFileURL(${JSON.stringify(CUERPO_OPERADOR_PATH)}).href);
 
 let limpioTiro = false;

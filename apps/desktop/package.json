@@ -15,6 +15,7 @@
     "login": "electron-vite build && electron out/main/index.js --cc-login"
   },
   "dependencies": {
+    "@chatcouncil/analysis": "workspace:*",
     "@chatcouncil/domain": "workspace:*",
     "@chatcouncil/providers": "workspace:*"
   },

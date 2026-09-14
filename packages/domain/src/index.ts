@@ -171,11 +171,20 @@ export interface Cita {
  * `Respuesta`, no un array embebido: append-only, nunca se reescribe.
  *
  * `label` es la etiqueta BARAJADA de esa ronda ("Modelo A"...) — nunca
- * estable entre rondas, es justo lo que blindea la posición. Distinto del
- * código estable por conversación (`P1`..`P8`, `packages/analysis`,
- * `codigosEstables`), que no se persiste porque es puramente derivable del
- * orden fijo del pool declarado en `docs/BLUEPRINT.md` §1 — no hace falta
- * guardar lo que se puede recalcular siempre igual.
+ * estable entre rondas, es justo lo que blindea la posición.
+ *
+ * `codigoEstable` ("P1".."P8") — CORREGIDO en la revisión de T3
+ * (2026-09-14): la primera versión de este campo NO EXISTÍA, con el
+ * argumento de que el código era "puramente derivable del orden fijo del
+ * pool" y no hacía falta guardarlo. Ese argumento estaba mal: el pool YA
+ * cambió tres veces en esta fase (deepseek salió del pool de operadores,
+ * kimi estuvo a punto de salir), y un informe archivado que dice "P3
+ * convergió con P5" queda MINTIENDO en silencio si el orden del pool usado
+ * para reconstruir "P3" cambia después. `codigosEstables`
+ * (`packages/analysis`) sigue siendo pura — GENERA el código a partir del
+ * orden del pool EN EL MOMENTO en que se arma el cuerpo de la ronda — pero
+ * lo que lo hace estable es que, una vez generado, viaja DENTRO de este
+ * hecho y nunca se vuelve a calcular para esta ronda.
  */
 export interface Sello {
   tipo: "sello";
@@ -183,6 +192,7 @@ export interface Sello {
   id: string;
   rondaId: string;
   label: string;
+  codigoEstable: string;
   panelSourceId: string;
   replyId: string;
   attemptId: string;

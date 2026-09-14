@@ -224,7 +224,7 @@ export function escribirSello(
   userData: string,
   conversacionId: string,
   rondaId: string,
-  entradas: readonly { label: string; panelSourceId: string; replyId: string; attemptId: string }[],
+  entradas: readonly { label: string; codigoEstable: string; panelSourceId: string; replyId: string; attemptId: string }[],
 ): void {
   for (const e of entradas) {
     const hecho: Sello = {
@@ -233,6 +233,7 @@ export function escribirSello(
       id: randomUUID(),
       rondaId,
       label: e.label,
+      codigoEstable: e.codigoEstable,
       panelSourceId: e.panelSourceId,
       replyId: e.replyId,
       attemptId: e.attemptId,

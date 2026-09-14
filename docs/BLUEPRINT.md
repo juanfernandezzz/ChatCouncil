@@ -1574,8 +1574,8 @@ real pegada, no una suposición de que compiló.
 | T1 | **Extracción de fuentes desde el HTML crudo.** Ya existe `Respuesta.html` (outerHTML sin recortar) y `fuentesHref` (conteo). Falta la extracción real: de cada `<a href>` encontrado, guardar `{ url, textoVisible, dondeVive: "cuerpo" \| "panel-ancestro" }` como un hecho nuevo append-only (`Cita`, en `packages/domain`). **✅ CERRADA, 2026-09-13 — ver "T1, cerrada" abajo, con el criterio de éxito CORREGIDO.** | Captura real ya hecha (VERIFICADO, ver Objetivo 1 arriba) | ~~Una corrida de `--cc-probe` o `Capturar` sobre una captura con fuentes conocidas (ej. la de esta sesión: chatgpt 23, kimi 17, deepseek 26) produce exactamente esa cantidad de hechos `Cita`, con URL no vacía en el 100% de ellos.~~ **CRITERIO MAL PUESTO, corregido:** `fuentesHref` sube por hasta 6 niveles de ancestros y puede contar links de navegación de la interfaz que no son citas — es un TECHO, no el número de citas esperado. Igualarlo en los nueve sería sospechoso, no exitoso. Criterio real: (a) `citas.length <= fuentesHref` en los nueve; (b) toda `Cita.url` es absoluta y no vacía (se descartan `javascript:`, `#`, `mailto:`, `tel:`, `data:` y rutas relativas, con el motivo de descarte contado); (c) revisión manual de una muestra sin fuente real descartada. |
 | T2 | **Verificación mecánica de la fuente citada**, tri-estado (`cumple` / `no cumple` / `no se pudo comprobar`, nunca booleano — decisión 12 de la Fase 3 histórica, sigue vigente). Sale a la red SÓLO a las URL de T1, nunca a buscar respaldo no citado (declaración de salida a la red, §1). **✅ CERRADA, 2026-09-14 — ver "T2, cerrada" abajo.** | T1 | Contra un conjunto de prueba de 10 URLs conocidas (5 que responden 200, 3 que dan 404, 2 inalcanzables por timeout), el resultado clasifica las 10 en el estado correcto, con el tercer estado usado en las 2 de timeout — nunca colapsado a `no cumple`. |
 | T3 | **Anonimización y barajado con semilla**, reutilizando el builder sellado (`guard:sellado`) ya verificado. Persistir la semilla en la `Ronda` (el campo `semilla` del dominio ya existe, sin usar). **✅ CERRADA, 2026-09-14 — ver "T3, cerrada" abajo.** | T1 (necesita el cuerpo de las 8 respuestas + citas para anonimizar) | Dos corridas con la MISMA semilla producen el MISMO orden barajado (determinismo); dos corridas con semilla distinta producen órdenes distintos en al menos 6 de 8 posiciones (no-degenerado). Verificado con una prueba automatizada, no a ojo. |
-| T4 | **Marca canaria.** Antes de armar el archivo por operador, insertar un token único (UUID) al final del cuerpo, y exigir que la respuesta del operador lo repita. Decisión ya tomada con el número que la justifica: ver "El volumen decide pegado vs. archivo" arriba (~26.800 tokens por operador, no entra pegado). | T3 (la marca va DENTRO del cuerpo ya anonimizado y barajado) | Una prueba con un archivo TRUNCADO a propósito (le falta la marca) hace que el código marque esa respuesta como `no confiable: archivo truncado`, sin que el operador haya tenido que decirlo — el criterio de éxito es que el CÓDIGO lo detecte, no que el operador lo reporte. |
-| T5 | **Armar y entregar el archivo por operador** (7 de 8, exclusión de autoevaluación), como adjunto — nunca pegado en el compositor, por el volumen medido (decisión 1). Reutiliza la difusión existente (`difundir()`) pero con un archivo en vez de texto, y el prompt de la herramienta (biblioteca de Parte 2) como mensaje. | T4 | Con el pool de 8, se generan exactamente 8 archivos, cada uno con 7 respuestas (nunca la propia), verificado contando los `proveedorId` presentes en cada archivo contra la lista de `INVESTIGADORES` menos el operador. |
+| T4 | **Marca canaria.** Antes de armar el archivo por operador, insertar un token único (UUID) al final del cuerpo, y exigir que la respuesta del operador lo repita. Decisión ya tomada con el número que la justifica: ver "El volumen decide pegado vs. archivo" arriba (~26.800 tokens por operador, no entra pegado). **✅ CERRADA, 2026-09-14 — ver "T4, cerrada" abajo.** | T3 (la marca va DENTRO del cuerpo ya anonimizado y barajado) | Una prueba con un archivo TRUNCADO a propósito (le falta la marca) hace que el código marque esa respuesta como `no confiable: archivo truncado`, sin que el operador haya tenido que decirlo — el criterio de éxito es que el CÓDIGO lo detecte, no que el operador lo reporte. |
+| T5 | **Armar y entregar el archivo por operador** (7 de 8, exclusión de autoevaluación), como adjunto — nunca pegado en el compositor, por el volumen medido (decisión 1). Reutiliza la difusión existente (`difundir()`) pero con un archivo en vez de texto, y el prompt de la herramienta (biblioteca de Parte 2) como mensaje. **⏳ MITAD PURA (armar) CERRADA, 2026-09-14 — ver "T5, la mitad PURA" abajo; ENTREGAR sigue abierto, necesita la Parte 2 de la interfaz.** | T4 | Con el pool de 8, se generan exactamente 8 archivos, cada uno con 7 respuestas (nunca la propia), verificado contando los `proveedorId` presentes en cada archivo contra la lista de `INVESTIGADORES` menos el operador. |
 | T6 | **Capturar la operación** (Parte 2): reutiliza el mismo mecanismo de "Capturar" ya construido, sobre los paneles de operación en vez de los de investigación. Produce la matriz operador × respuesta (hecho nuevo append-only, `Adjudicacion` o equivalente — nombre a decidir sin repetir el vocabulario ya descartado de "juez"/"analista"). | T5 | La matriz tiene exactamente 8 × 7 = 56 celdas (o menos las que fallen, cada falla como hecho, nunca como ausencia silenciosa); cada celda referencia el `proveedorId` operador y el `proveedorId` (desanonimizado con el sello) de la respuesta evaluada. |
 | T7 | **El noveno (deepseek) y el informe.** Prompt 3 (instrucciones para leer la matriz, sin buscar, sin agregar, sin adjudicar). Regla dura: cada afirmación del informe referencia una celda de T6 — se verifica con un gate nuevo, probado en rojo antes de confiar en él (regla dura de `AGENTES.md`, aplicable a todo gate nuevo). | T6 | Un informe de prueba con una afirmación SIN referencia a ninguna celda hace que el gate nuevo falle; un informe con las mismas afirmaciones, cada una con su referencia, pasa. Probado en las dos direcciones antes de darlo por bueno. |
 
@@ -1886,21 +1886,66 @@ confiar en él** (Regla 4 nueva de `guard:sellado`, que ejecuta
 **DOS sistemas de identificador, implementados los dos:**
  · Etiqueta barajada por ronda: `anonymizeReplies` (ya existía, VERIFICADA
    de nuevo esta ronda, sin tocar su lógica — "reutilizando el builder
-   sellado" era el mandato). Determinismo probado con 8 respuestas
-   sintéticas: MISMA semilla → MISMO orden en dos corridas independientes
-   (igual, byte a byte); 45 pares de semillas DISTINTAS comparados (no un
-   par elegido a mano) → promedio **6,76/8** posiciones distintas, **39 de
-   45 pares (87%)** con 6 u 8 posiciones distintas — el resto cae en 4 o 5
-   por la varianza esperada de una permutación de 8 elementos, no por un
-   defecto del barajado (verificado que NINGUNA semilla reproduce por
-   casualidad el orden de panel sin barajar).
- · Código estable por conversación: `codigosEstables` (nuevo,
-   `packages/analysis`), PURO, sin persistencia — deriva `P1`..`P8` del
-   orden de pool YA declarado en §1, medido: `chatgpt→P1, gemini→P2,
-   claude→P3, grok→P4, mistral→P5, glm→P6, kimi→P7, qwen→P8`. No se
-   persiste porque no depende de nada que cambie ronda a ronda; guardarlo
-   sería una segunda fuente de verdad para un dato que ya vive en un solo
-   lugar.
+   sellado" era el mandato).
+ · Código estable por conversación: `codigosEstables` (`packages/analysis`),
+   PURO — deriva `P1`..`P8` del orden de pool. **CORREGIDO (revisión de T3):
+   sí se persiste**, dentro de cada `Sello` (`Sello.codigoEstable`). La
+   primera versión decía "sin persistencia a propósito, no depende de nada
+   que cambie ronda a ronda" — mal: el pool YA cambió tres veces en esta
+   fase (deepseek salió del pool de operadores, kimi estuvo a punto de
+   salir). Un informe archivado que dice "P3 convergió con P5" queda
+   MINTIENDO en silencio si el orden del pool usado para reconstruir "P3"
+   cambia después. Lo que hace estable al código no es la función — es que,
+   generado una vez, viaja dentro del hecho append-only y nunca se
+   recalcula para esa ronda. Medido con el pool actual:
+   `chatgpt→P1, gemini→P2, claude→P3, grok→P4, mistral→P5, glm→P6, kimi→P7,
+   qwen→P8`.
+
+#### El criterio de barajado ORIGINAL estaba mal formulado, y por qué
+
+El criterio que traía la tarea —"semilla distinta → al menos 6 de 8
+posiciones distintas"— pedía algo que un barajado CORRECTO no puede
+garantizar siempre. Entre dos permutaciones aleatorias independientes de
+`n` elementos, el número ESPERADO de posiciones que COINCIDEN es
+exactamente **1**, para cualquier `n` (es el número esperado de puntos
+fijos de una permutación aleatoria — resultado clásico, no una estimación).
+Un barajado que SIEMPRE difiera en ≥6/8 estaría **sesgado**: evitaría
+sistemáticamente ciertos reordenamientos, que es exactamente el tipo de
+patrón no aleatorio que un barajado con semilla tiene que NO tener. Pedir
+eso como criterio de éxito habría significado premiar un defecto.
+
+La primera corrida de esta revisión midió 39 de 45 pares con ≥6/8
+diferencias (87%) y reportó eso como si el 13% restante fuera casi una
+falla. No lo es: con `n=8`, 1 coincidencia esperada de media implica que
+`≥3` coincidencias (⟺ `≤5` diferencias) ocurre con una probabilidad nada
+despreciable bajo una distribución ~Poisson(1) — del orden del 8%, y sobre
+45 pares eso son ~3,6 casos esperados. Se observaron unos pocos: consistente
+con aleatoriedad honesta, no con nada raro.
+
+**Criterio reemplazado — mide lo que de verdad importa, no una superstición
+sobre "cuánto debe diferir":**
+
+1. **Determinismo** (igual que antes, esto SÍ era correcto): misma semilla
+   → mismo orden. Verificado: dos corridas independientes con la misma
+   semilla dan el orden idéntico, byte a byte.
+2. **Uniformidad**: sobre 200 semillas distintas (19.900 pares), el
+   promedio de posiciones que COINCIDEN entre pares tiene que rondar 1,00.
+   Tolerancia declarada: `1,00 ± 0,15` — generosa a propósito (el error
+   estándar del promedio sobre ~20.000 pares es de un orden mucho menor,
+   ~0,007; la tolerancia deja margen para que la aproximación Poisson no
+   sea exacta con `n=8`, no para tapar un sesgo real). **Medido: 1,003.**
+3. **El que de verdad importa para el sesgo de posición**: sobre 400
+   barajados con semillas distintas, cada proveedor tiene que caer en cada
+   una de las 8 posiciones con frecuencia ~pareja (esperado: 50 por
+   celda). Tolerancia declarada: `50 ± 26` (≈4 desvíos estándar de una
+   Binomial(400, 1/8), generosa sin ser vacía). **Medido: mínimo 32, máximo
+   63 — ninguna celda fuera de rango, ningún proveedor favorecido o
+   evitado en ninguna posición.**
+
+Se escribe esto para que nadie proponga el criterio viejo de nuevo dentro de
+seis meses: "difiere mucho" suena más seguro que "es uniforme", pero es la
+propiedad equivocada. Un barajado JUSTO se parece más a "en promedio casi no
+cambia nada" que a "siempre cambia todo".
 
 **Semilla, generada de verdad y persistida.** Las dos llamadas a
 `escribirRonda` en `apps/desktop/src/main/index.ts` pasaban `null` desde la
@@ -1911,22 +1956,75 @@ FNV-1a de 32 bits) la convierte al número que `anonymizeReplies` necesita —
 determinista: la misma semilla siempre da el mismo número, verificado en la
 prueba de arriba.
 
-**Sello, persistido como hecho propio.** Nuevo hecho `Sello` en
-`packages/domain` (append-only, un `Sello` por etiqueta por ronda, misma
-granularidad que `Intento`), y `escribirSello` en `registro.ts` que lo
-escribe. Sin esto, "el informe lo arma el código y desanonimiza con el
+**Sello, persistido como hecho propio, CON el código estable adentro.**
+Nuevo hecho `Sello` en `packages/domain` (append-only, un `Sello` por
+etiqueta por ronda, misma granularidad que `Intento`), con
+`codigoEstable: string` como campo propio (no un campo separado, no
+recalculado después — ver arriba), y `escribirSello` en `registro.ts` que
+lo escribe. Sin esto, "el informe lo arma el código y desanonimiza con el
 sello" no tenía mecanismo — la semilla sola no alcanza si el orden de
 entrada al barajado no es estable entre la ronda real y quien intente
 reproducirla, acoplamiento que se rompía en silencio (riesgo señalado en
 esta revisión, cerrado con este hecho).
 
-**ABIERTO, con esa palabra: `escribirSello` no tiene todavía un llamador
-real.** `anonymizeReplies` sigue sin invocarse desde `apps/desktop` —
-construir ESE camino (leer las respuestas de una `Ronda`, anonimizarlas,
-escribir el `Sello`, armar el cuerpo por operador) es trabajo de T5/T6, que
-necesitan además la Parte 2 de la interfaz (todavía no existe). T3 entrega
-el MECANISMO, verificado offline con datos sintéticos y con las 74 citas
-reales; conectarlo al flujo real de captura es la tarea que sigue, no ésta.
+#### T4, cerrada (2026-09-14) — marca canaria
+
+`agregarMarcaCanaria` / `marcaCanariaPresente`
+(`packages/analysis/src/cuerpo-operador.ts`): un token único al final de
+CADA cuerpo de operador — uno por operador, nunca compartido, para que un
+truncado en el pipeline de UN proveedor sólo invalide esa respuesta.
+Justificación ya medida en T3 ("El volumen decide pegado vs. archivo",
+~26.800 tokens por operador): el cuerpo va como adjunto, no pegado, y un
+archivo truncado por el pipeline de ingesta de un proveedor pasa en verde
+si nadie lo comprueba.
+
+**Verificado: el criterio es que el CÓDIGO lo detecte, no el operador.**
+Sobre un cuerpo real (armado con las 8 respuestas de T1, ver T5 abajo),
+recortado a la mitad a propósito: `marcaCanariaPresente` da `false` sin que
+nada externo se lo haya dicho — la ausencia de la marca ES la detección.
+Sobre el mismo cuerpo sin recortar, da `true`. Las 8 marcas de una ronda
+son, medido, únicas entre sí (un `Set` de los 8 tokens tiene tamaño 8).
+
+#### T5, la mitad PURA, cerrada (2026-09-14) — armado del cuerpo por operador
+
+**No estaba tan bloqueado como decía la versión anterior de este documento.**
+Esa versión decía que conectar `escribirSello` era "trabajo de T5/T6, que
+necesitan la Parte 2 de la interfaz" — mezclaba dos cosas: ARMAR el cuerpo
+(código puro, no necesita interfaz) y ENTREGAR el archivo al panel (sí la
+necesita). Lo primero se podía hacer ya, y es exactamente lo que se hizo.
+
+`armarCuerposPorOperador` (`packages/analysis/src/cuerpo-operador.ts`)
+recibe las 8 respuestas del pool, llama a `anonymizeReplies` una vez
+(reutilizado, sin tocar su lógica), arma los 8 cuerpos con exclusión de
+autoevaluación, agrega la marca canaria de T4 a cada uno, y devuelve
+también el `sello` con el `codigoEstable` ya adentro. `armarYPersistirCuerposDeRonda`
+(`apps/desktop/src/main/operador.ts`, nuevo) es el LLAMADOR real: junta
+`Respuesta` + `Cita` de una `Ronda`, arma los cuerpos, y **llama a
+`escribirSello`** — el hecho declarado en T3 ya tiene quién lo escriba.
+
+**Verificado contra las 8 respuestas REALES de T1** (la misma captura de
+siempre, `a92b22f2…`), no datos sintéticos:
+ · 8 cuerpos generados, uno por operador del pool.
+ · Cada uno incluye EXACTAMENTE los otros 7 `proveedorId` — nunca el
+   propio — verificado comparando el conjunto incluido contra "el pool
+   menos el operador", los 8 casos.
+ · 8 tokens canarios, medido ÚNICOS entre sí.
+ · El sello tiene 8 entradas, cada `codigoEstable` coincide con
+   `codigosEstables(POOL)` para ese `proveedorId` — `chatgpt→P1`, …,
+   `qwen→P8`.
+ · Cero throws de `armarCuerpoConFuentes`/`fugasDeProveedorEnUrls` sobre
+   los 8 cuerpos armados con datos reales (mismo resultado que la
+   verificación de T3, ahora sobre el camino completo de armado).
+
+**ABIERTO, con esa palabra: la ENTREGA sigue sin construir.** Armar el
+cuerpo no envía nada a ningún panel — eso es la otra mitad de T5 (adjuntar
+el archivo, reutilizar `difundir()`) y necesita la Parte 2 de la interfaz
+(el botón que dispara "operar" sobre una ronda ya capturada), que todavía
+no existe. Tampoco existe el CAMINO que lee la respuesta real de un
+operador y aplica `marcaCanariaPresente` sobre ella — eso es T6
+("Capturar la operación"). Lo que sí queda cerrado es que ninguna de las
+dos piezas está bloqueada por la otra: el mecanismo de T4/T5-puro es
+independiente y ya está verificado.
 
 **Lo que NO entra en esta lista porque ya está resuelto:** capturar el
 cuerpo de las 8 (Objetivo 1, esta sesión), la escritura al registro sin

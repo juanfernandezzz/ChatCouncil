@@ -20,6 +20,7 @@ import {
   derivarProcedencia,
   leerRegistro,
   VERSION_ESQUEMA,
+  type Cita,
   type Conversacion,
   type Intento,
   type Procedencia,
@@ -28,6 +29,7 @@ import {
   type Ronda,
 } from "@chatcouncil/domain";
 
+import { extraerCitas } from "./citas";
 import type { LecturaProveedor, ResultadoEnvio } from "./test-runner";
 
 function carpetaConversaciones(userData: string): string {
@@ -46,7 +48,7 @@ function rutaArchivo(userData: string, conversacionId: string): string {
  * de este registro, así que no hace falta cola ni cerrojo propio — el
  * contrato pide exactamente eso.
  */
-function escribir(userData: string, conversacionId: string, hecho: Conversacion | Ronda | Intento | Respuesta): void {
+function escribir(userData: string, conversacionId: string, hecho: Conversacion | Ronda | Intento | Respuesta | Cita): void {
   appendFileSync(rutaArchivo(userData, conversacionId), aLinea(hecho) + "\n", "utf8");
 }
 
@@ -183,6 +185,16 @@ export function escribirRespuestas(
       html: l.html ?? null,
     };
     escribir(userData, conversacionId, hecho);
+
+    // T1 (Fase 3): la extracción de citas es DERIVADA de `hecho.html`, nunca
+    // al revés — si la regla de extracción cambia, se vuelve a correr sobre
+    // el `html` ya guardado, sin tocar la Respuesta. Se deriva en la MISMA
+    // escritura para que cada captura deje su propio hecho `Cita`, igual que
+    // ya pasa con `Intento` y `Respuesta`.
+    if (hecho.html !== null) {
+      const { citas } = extraerCitas(hecho.html, hecho.id);
+      for (const cita of citas) escribir(userData, conversacionId, cita);
+    }
   }
 }
 

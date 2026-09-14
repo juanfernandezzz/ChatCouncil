@@ -1571,13 +1571,76 @@ real pegada, no una suposición de que compiló.
 
 | # | Tarea | Depende de | Criterio de éxito medible |
 |---|---|---|---|
-| T1 | **Extracción de fuentes desde el HTML crudo.** Ya existe `Respuesta.html` (outerHTML sin recortar) y `fuentesHref` (conteo). Falta la extracción real: de cada `<a href>` encontrado, guardar `{ url, textoVisible, dondeVive: "cuerpo" \| "panel-ancestro" }` como un hecho nuevo append-only (`Cita`, en `packages/domain`). | Captura real ya hecha (VERIFICADO, ver Objetivo 1 arriba) | Una corrida de `--cc-probe` o `Capturar` sobre una captura con fuentes conocidas (ej. la de esta sesión: chatgpt 23, kimi 17, deepseek 26) produce exactamente esa cantidad de hechos `Cita`, con URL no vacía en el 100% de ellos. |
+| T1 | **Extracción de fuentes desde el HTML crudo.** Ya existe `Respuesta.html` (outerHTML sin recortar) y `fuentesHref` (conteo). Falta la extracción real: de cada `<a href>` encontrado, guardar `{ url, textoVisible, dondeVive: "cuerpo" \| "panel-ancestro" }` como un hecho nuevo append-only (`Cita`, en `packages/domain`). **✅ CERRADA, 2026-09-13 — ver "T1, cerrada" abajo, con el criterio de éxito CORREGIDO.** | Captura real ya hecha (VERIFICADO, ver Objetivo 1 arriba) | ~~Una corrida de `--cc-probe` o `Capturar` sobre una captura con fuentes conocidas (ej. la de esta sesión: chatgpt 23, kimi 17, deepseek 26) produce exactamente esa cantidad de hechos `Cita`, con URL no vacía en el 100% de ellos.~~ **CRITERIO MAL PUESTO, corregido:** `fuentesHref` sube por hasta 6 niveles de ancestros y puede contar links de navegación de la interfaz que no son citas — es un TECHO, no el número de citas esperado. Igualarlo en los nueve sería sospechoso, no exitoso. Criterio real: (a) `citas.length <= fuentesHref` en los nueve; (b) toda `Cita.url` es absoluta y no vacía (se descartan `javascript:`, `#`, `mailto:`, `tel:`, `data:` y rutas relativas, con el motivo de descarte contado); (c) revisión manual de una muestra sin fuente real descartada. |
 | T2 | **Verificación mecánica de la fuente citada**, tri-estado (`cumple` / `no cumple` / `no se pudo comprobar`, nunca booleano — decisión 12 de la Fase 3 histórica, sigue vigente). Sale a la red SÓLO a las URL de T1, nunca a buscar respaldo no citado (declaración de salida a la red, §1). | T1 | Contra un conjunto de prueba de 10 URLs conocidas (5 que responden 200, 3 que dan 404, 2 inalcanzables por timeout), el resultado clasifica las 10 en el estado correcto, con el tercer estado usado en las 2 de timeout — nunca colapsado a `no cumple`. |
 | T3 | **Anonimización y barajado con semilla**, reutilizando el builder sellado (`guard:sellado`) ya verificado. Persistir la semilla en la `Ronda` (el campo `semilla` del dominio ya existe, sin usar). | T1 (necesita el cuerpo de las 8 respuestas + citas para anonimizar) | Dos corridas con la MISMA semilla producen el MISMO orden barajado (determinismo); dos corridas con semilla distinta producen órdenes distintos en al menos 6 de 8 posiciones (no-degenerado). Verificado con una prueba automatizada, no a ojo. |
 | T4 | **Marca canaria.** Antes de armar el archivo por operador, insertar un token único (UUID) al final del cuerpo, y exigir que la respuesta del operador lo repita. Decisión ya tomada con el número que la justifica: ver "El volumen decide pegado vs. archivo" arriba (~26.800 tokens por operador, no entra pegado). | T3 (la marca va DENTRO del cuerpo ya anonimizado y barajado) | Una prueba con un archivo TRUNCADO a propósito (le falta la marca) hace que el código marque esa respuesta como `no confiable: archivo truncado`, sin que el operador haya tenido que decirlo — el criterio de éxito es que el CÓDIGO lo detecte, no que el operador lo reporte. |
 | T5 | **Armar y entregar el archivo por operador** (7 de 8, exclusión de autoevaluación), como adjunto — nunca pegado en el compositor, por el volumen medido (decisión 1). Reutiliza la difusión existente (`difundir()`) pero con un archivo en vez de texto, y el prompt de la herramienta (biblioteca de Parte 2) como mensaje. | T4 | Con el pool de 8, se generan exactamente 8 archivos, cada uno con 7 respuestas (nunca la propia), verificado contando los `proveedorId` presentes en cada archivo contra la lista de `INVESTIGADORES` menos el operador. |
 | T6 | **Capturar la operación** (Parte 2): reutiliza el mismo mecanismo de "Capturar" ya construido, sobre los paneles de operación en vez de los de investigación. Produce la matriz operador × respuesta (hecho nuevo append-only, `Adjudicacion` o equivalente — nombre a decidir sin repetir el vocabulario ya descartado de "juez"/"analista"). | T5 | La matriz tiene exactamente 8 × 7 = 56 celdas (o menos las que fallen, cada falla como hecho, nunca como ausencia silenciosa); cada celda referencia el `proveedorId` operador y el `proveedorId` (desanonimizado con el sello) de la respuesta evaluada. |
 | T7 | **El noveno (deepseek) y el informe.** Prompt 3 (instrucciones para leer la matriz, sin buscar, sin agregar, sin adjudicar). Regla dura: cada afirmación del informe referencia una celda de T6 — se verifica con un gate nuevo, probado en rojo antes de confiar en él (regla dura de `AGENTES.md`, aplicable a todo gate nuevo). | T6 | Un informe de prueba con una afirmación SIN referencia a ninguna celda hace que el gate nuevo falle; un informe con las mismas afirmaciones, cada una con su referencia, pasa. Probado en las dos direcciones antes de darlo por bueno. |
+
+#### T1, cerrada (2026-09-13) — extracción OFFLINE, cuota cero
+
+Implementada en `apps/desktop/src/main/citas.ts` (tokenizador de `<a href>`
+sobre la CADENA de `Respuesta.html`, sin DOM real ni dependencia nueva —
+mismo motivo que la decisión 1 de la Fase 2: una dependencia nativa tipo
+jsdom es un riesgo de build que este dato no justifica). El hecho `Cita`
+vive en `packages/domain` (TypeScript puro, `guard:dominio` sigue en verde).
+Se deriva en la MISMA escritura que `Respuesta` (`registro.ts`), append-only,
+nunca reemplaza `html`.
+
+**Verificado OFFLINE contra la captura real ya existente** (conversación
+`a92b22f2…`, ronda del 2026-09-13, la misma que documentó los cuatro ceros en
+`docs/LIMITACIONES.md`) — sin abrir la app, sin enviar nada:
+
+| Proveedor | `fuentesHref` (techo) | `<a>` en `Respuesta.html` | `Cita` extraídas | Descartadas | Motivo |
+|---|---:|---:|---:|---:|---|
+| chatgpt | 23 | 23 | 23 | 0 | — |
+| gemini | 0 | 0 | 0 | 0 | panel colapsado, ver LIMITACIONES.md |
+| claude | 0 | 0 | 0 | 0 | panel colapsado, ver LIMITACIONES.md |
+| grok | 0 | 0 | 0 | 0 | panel colapsado, ver LIMITACIONES.md |
+| mistral | 7 | 7 | 7 | 0 | — |
+| glm | 6 | 6 | 6 | 0 | — |
+| kimi | 17 | 17 | 17 | 0 | — |
+| qwen | 0 | 0 | 0 | 0 | panel colapsado, ver LIMITACIONES.md |
+| deepseek | 26 | 21 | 21 | 0 | — |
+
+`citas.length <= fuentesHref` se cumple en los nueve, sin excepción — y en
+deepseek es ESTRICTAMENTE menor (21 < 26): la brecha de 5 son links que
+`contarEnlacesDeFuente` encontró subiendo a un ancestro que `Respuesta.html`
+NO captura (el `html` guardado es el nodo de la respuesta, nivel 0;
+`fuentesHref` puede subir hasta 6 niveles). Es la prueba directa, sobre un
+dato real, de que igualar el techo (como pedía el criterio original) habría
+significado colar ese ancestro entero —con lo que tenga adentro, medido o
+no— dentro de las citas.
+
+**Cero descartes en los nueve** porque el nodo capturado (`ultimoNodoAsistente`,
+sin `exclude`) ya es el subárbol de la respuesta: no incluye la navegación de
+la interfaz, que vive en ancestros que `html` no guarda. Las reglas de
+descarte (`sin-href`, `href-vacio`, `esquema-no-http`, `no-absoluta-http`)
+están implementadas y **probadas en rojo→verde con un fragmento sintético**
+(`#`, `javascript:void(0)`, un `<a>` sin `href`, una ruta relativa: las
+cuatro se descartan con su motivo correcto) porque los nueve casos reales no
+tenían ningún caso que las ejercitara — sin esa prueba, las cuatro ramas
+serían código sin correr. Mismo fragmento sintético probó `dondeVive:
+"panel-ancestro"` (un `<a>` anidado bajo `class="citation-list"` lo recibe;
+uno suelto en el texto recibe `"cuerpo"`) — en los nueve reales todas las
+citas cayeron en `"cuerpo"`, así que esa rama, aunque implementada y
+verificada por separado, **no está ejercitada por ningún dato real
+todavía**; se declara así en vez de darla por probada.
+
+**Revisión manual de una muestra (deepseek, la de mayor brecha):** las 21 URL
+extraídas son citas reales (arxiv, GitHub, blogs de prompt engineering,
+repetidas porque el modelo las cita varias veces en el cuerpo) — cero
+`javascript:`/`#`/navegación colada. Ninguna fuente real quedó descartada.
+
+**Consecuencia de diseño para gemini/claude/grok/qwen, para `LIMITACIONES.md`:**
+con el panel de fuentes colapsado por defecto en esas cuatro interfaces
+(medido, ver más abajo), `Respuesta.html` no contiene ningún `<a>` de fuente
+—ni siquiera colapsado: el contenido simplemente no está montado en el DOM—
+así que T1 extrae CERO `Cita` ahí, siempre, hasta que Juan abra el panel
+antes de capturar. No es un defecto de la extracción: es la misma limitación
+ya registrada, propagada un paso más allá de `fuentesHref`.
 
 **Lo que NO entra en esta lista porque ya está resuelto:** capturar el
 cuerpo de las 8 (Objetivo 1, esta sesión), la escritura al registro sin

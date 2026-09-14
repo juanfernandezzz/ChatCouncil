@@ -91,6 +91,19 @@ en este repositorio.
   fuentes, tiene que abrir el panel él mismo ANTES de capturar.
   *MEDIDO, 2026-09-13, confirmado por Juan sobre la app real.*
 
+- **Consecuencia del panel colapsado sobre T1 (extracción de citas):** si el
+  panel colapsado es el modo por defecto de la interfaz, la capa de
+  extracción de citas no tiene nada que verificar en esos proveedores.
+  `Respuesta.html` (el nodo de la respuesta, sin recortes) no contiene ni un
+  solo `<a>` de fuente cuando el panel no se abrió — no es que la regla de
+  extracción pierda algo que sí está: el contenido no llegó a montarse en el
+  DOM. T1 (`apps/desktop/src/main/citas.ts`) extrae CERO `Cita` en gemini,
+  claude, grok y qwen mientras el panel siga sin abrirse antes de capturar;
+  en chatgpt, mistral, glm, kimi y deepseek —donde el panel no colapsa— T1
+  extrajo 23, 7, 6, 17 y 21 citas respectivamente sobre la misma captura.
+  *MEDIDO, 2026-09-13, offline contra la captura real ya existente (ver
+  `docs/BLUEPRINT.md`, "T1, cerrada").*
+
 ## Sobre lo que el instrumento no puede ver
 
 - **La anonimización no sobrevive a las fuentes citadas.** Dominios propios

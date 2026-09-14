@@ -127,7 +127,37 @@ export interface Respuesta {
   html: string | null;
 }
 
-export type Hecho = Conversacion | Ronda | Intento | Respuesta;
+/**
+ * Una cita: un `<a href>` real encontrado en `Respuesta.html`, derivado
+ * OFFLINE del HTML crudo (T1, Fase 3). Append-only, como todo hecho: si la
+ * regla de extracción cambia, se vuelve a derivar del `html` original, que
+ * nunca se reemplaza (§2 de `docs/BLUEPRINT.md`).
+ *
+ * `dondeVive` distingue dos ubicaciones DENTRO del subárbol capturado:
+ * `"cuerpo"` cuando el `<a>` está en el flujo normal del texto, y
+ * `"panel-ancestro"` cuando está anidado bajo un contenedor que se reconoce
+ * estructuralmente como una lista de fuentes/citas (clase, id o
+ * `data-*` con "cita", "fuente", "source" o "referenc"). Esto NO cubre un
+ * panel de fuentes que viva fuera del nodo capturado (ver `fuentesHref`,
+ * que sí puede subir por ancestros no capturados en `html`): ese caso es
+ * indistinguible de "no hay más citas" con el dato que hoy se guarda, y por
+ * eso `citas.length` puede ser MENOR que `fuentesHref` — es el criterio de
+ * éxito corregido de T1, no un defecto de esta extracción.
+ */
+export interface Cita {
+  tipo: "cita";
+  esquema: number;
+  id: string;
+  /** La `Respuesta` de la que salió: sin esto una cita no es trazable. */
+  respuestaId: string;
+  /** Absoluta, nunca vacía: lo que no cumple esto se descarta antes de crear la Cita. */
+  url: string;
+  /** Texto visible del `<a>`, con las etiquetas internas removidas y recortado. */
+  textoVisible: string;
+  dondeVive: "cuerpo" | "panel-ancestro";
+}
+
+export type Hecho = Conversacion | Ronda | Intento | Respuesta | Cita;
 
 /** Serializa un hecho a su línea. Sin saltos adentro: una línea es un hecho. */
 export function aLinea(hecho: Hecho): string {
@@ -150,7 +180,7 @@ export interface RegistroLeido {
   ultimaLineaIncompleta: boolean;
 }
 
-const TIPOS = new Set(["conversacion", "ronda", "intento", "respuesta"]);
+const TIPOS = new Set(["conversacion", "ronda", "intento", "respuesta", "cita"]);
 
 export function leerRegistro(contenido: string): RegistroLeido {
   const lineas = contenido.split("\n");

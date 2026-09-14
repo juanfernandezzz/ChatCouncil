@@ -718,6 +718,147 @@ async function probarEnvioJS(spec: PageSpec, marcador: string): Promise<Resultad
 }
 
 /**
+ * MEDICIÓN DE ENTREGA PEGADA — Objetivo 1 de la ronda "medición de entrega
+ * del cuerpo" (`docs/BLUEPRINT.md`). Escribe el CUERPO REAL que
+ * `armarCuerposPorOperador` (T5) ya produce —no un texto sintético— con
+ * `execCommand`, el mismo camino compartido de `writePrompt`, y mide si
+ * entró ENTERO. Nunca envía: ni clic en un control de envío, ni tecla.
+ *
+ * "Entró entero" es una afirmación MÁS FUERTE que "la escritura no falló":
+ * exige que el LARGO leído coincida con el escrito y que la MARCA CANARIA
+ * del final esté presente — es justo el caso para el que la marca existe:
+ * si el compositor trunca por cualquier motivo (límite de caracteres,
+ * timeout del editor, lo que sea), la canaria es lo primero que se pierde
+ * porque vive al final del cuerpo.
+ */
+export interface ResultadoMedicionEntrega {
+  ok: boolean;
+  error?: string;
+  caracteresEscritos: number;
+  caracteresPresentes: number;
+  marcaCanariaPresente: boolean;
+  ms: number;
+  quedoLimpio: boolean;
+}
+
+/**
+ * Multi-vía, igual que el `vaciar` de `probe.ts` (Fase 2, decisión medida):
+ * un `textContent = ""` sin más no le avisa a un editor rico, que
+ * re-renderiza desde su modelo interno y repone el texto. Reintenta con
+ * espera porque el re-render es asincrónico.
+ */
+async function vaciarCompositorMedicion(composer: Element, kind: PageSpec["composer"]["kind"]): Promise<boolean> {
+  const leer = (): string =>
+    kind === "textarea" ? (composer as HTMLTextAreaElement).value : (composer.textContent ?? "");
+  for (let intento = 0; intento < 3; intento++) {
+    (composer as HTMLElement).focus();
+    if (kind === "textarea") {
+      (composer as HTMLTextAreaElement).value = "";
+      composer.dispatchEvent(new Event("input", { bubbles: true }));
+    } else {
+      try {
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(composer);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      } catch {
+        /* sin selección se sigue con las otras vías */
+      }
+      try {
+        composer.dispatchEvent(
+          new InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType: "deleteContentBackward" }),
+        );
+        composer.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+      } catch {
+        /* idem */
+      }
+      if (leer().length > 0) {
+        try {
+          document.execCommand("selectAll", false);
+          document.execCommand("delete", false);
+        } catch {
+          /* idem */
+        }
+      }
+      if (leer().length > 0) {
+        (composer as HTMLElement).innerHTML = "";
+        composer.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+      }
+    }
+    await sleep(250);
+    if (leer().trim().length === 0) return true;
+  }
+  return false;
+}
+
+async function medirEntregaPegado(
+  spec: PageSpec,
+  texto: string,
+  marcaCanaria: string,
+): Promise<ResultadoMedicionEntrega> {
+  const FALLO = (error: string): ResultadoMedicionEntrega => ({
+    ok: false,
+    error,
+    caracteresEscritos: texto.length,
+    caracteresPresentes: 0,
+    marcaCanariaPresente: false,
+    ms: 0,
+    quedoLimpio: true,
+  });
+
+  const composer = await waitFor(spec.composer.selector, spec.timeouts?.composerMs ?? 15_000);
+  if (!composer) return FALLO("compositor no encontrado: no se escribió nada");
+
+  const leer = (): string =>
+    spec.composer.kind === "textarea" ? (composer as HTMLTextAreaElement).value : (composer.textContent ?? "");
+
+  // Nunca se escribe encima de un borrador de Juan.
+  if (leer().trim().length > 0) {
+    return FALLO("el compositor ya tenía texto: no se escribe encima de un borrador de Juan");
+  }
+
+  (composer as HTMLElement).focus();
+  const t0 = performance.now();
+  writePrompt(composer, spec.composer.kind, texto);
+
+  // MEDICIÓN POR QUIETUD, no por una sola lectura instantánea: un editor con
+  // framework puede seguir committeando el texto en varios frames después de
+  // que `execCommand` retorna. Se espera a que el LARGO leído deje de crecer,
+  // con techo — igual que `probe.ts` mide cuánto tarda en aparecer un control.
+  let largoPrevio = -1;
+  let quietoDesde = 0;
+  const LIMITE_MS = 45_000;
+  for (;;) {
+    const largoActual = leer().length;
+    if (largoActual !== largoPrevio) {
+      largoPrevio = largoActual;
+      quietoDesde = performance.now();
+    } else if (performance.now() - quietoDesde >= 400) {
+      break;
+    }
+    if (performance.now() - t0 > LIMITE_MS) break;
+    await sleep(120);
+  }
+
+  const ms = Math.round(performance.now() - t0);
+  const final = leer();
+  const caracteresPresentes = final.length;
+  const marcaOk = final.includes(marcaCanaria);
+
+  const quedoLimpio = await vaciarCompositorMedicion(composer, spec.composer.kind);
+
+  return {
+    ok: true,
+    caracteresEscritos: texto.length,
+    caracteresPresentes,
+    marcaCanariaPresente: marcaOk,
+    ms,
+    quedoLimpio,
+  };
+}
+
+/**
  * Se expone en el mundo principal para que el proceso principal lo invoque
  * con `executeJavaScript` —que corre en el mundo principal de la página, no
  * en el mundo aislado del preload—. Con `contextIsolation` activo,
@@ -733,6 +874,8 @@ contextBridge.exposeInMainWorld("__ccProvider", {
   verificarTextoEscrito: (spec: PageSpec, texto: string) => verificarTextoEscrito(spec, texto),
   confirmarEfecto: (spec: PageSpec, antesLen: number) => confirmarEfecto(spec, antesLen),
   probarEnvioJS: (spec: PageSpec, marcador: string) => probarEnvioJS(spec, marcador),
+  medirEntregaPegado: (spec: PageSpec, texto: string, marcaCanaria: string) =>
+    medirEntregaPegado(spec, texto, marcaCanaria),
   read: (spec: PageSpec) => ({
     text: readAssistant(spec),
     userText: readUserMessage(spec),

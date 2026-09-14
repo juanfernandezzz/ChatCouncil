@@ -2026,6 +2026,89 @@ operador y aplica `marcaCanariaPresente` sobre ella — eso es T6
 dos piezas está bloqueada por la otra: el mecanismo de T4/T5-puro es
 independiente y ya está verificado.
 
+#### Medición de entrega del cuerpo (2026-09-14) — Objetivo 1, cuota cero
+
+Se midió ANTES de construir la Parte 2, porque el supuesto "107.000
+caracteres no entran pegados" salía de una conversión a tokens, nunca de una
+prueba contra un compositor real — la misma clase de error que ya costó dos
+veces ("kimi tiene investigación profunda", "el compositor de grok vive en
+un iframe"), las dos falsas al medirlas.
+
+**Método:** el cuerpo REAL de cada operador —el mismo que produce
+`armarCuerposPorOperador` (T5) sobre las 8 respuestas ya capturadas de la
+conversación `a92b22f2…`, con su marca canaria— se escribió en el
+compositor real con `execCommand('insertText')` (el camino compartido de
+`writePrompt`, sin ninguna API de Electron), se esperó a que el largo leído
+dejara de crecer, se midió el resultado, y se vació. **Nunca se envió
+nada**: ni clic, ni tecla, en ningún panel, en ninguna corrida.
+
+**Tabla de ocho filas — tres corridas, tasa, milisegundos, crudo:**
+
+| Proveedor | Corridas OK | Entero (char==) | Canaria OK | Quedó limpio | ms (min/mediana/max) |
+|---|---|---|---|---|---|
+| chatgpt | 3/3 | **0/3** (−165 c, siempre) | 3/3 | 3/3 | 48.236 / 51.581 / 61.538 |
+| gemini | **0/3** | 0/3 | 0/3 | 0/3 | — (timeout las 3) |
+| claude | 3/3 | **0/3** (−739 c, siempre) | 3/3 | 3/3 | 10.881 / 12.911 / 24.571 |
+| grok | 2/3 | 0/3 | 1/3 | 2/3 | 43.371 / 54.237 / 54.237 |
+| mistral | **0/3** | 0/3 | 0/3 | 0/3 | — (timeout las 3) |
+| glm | **3/3** | **3/3** | 3/3 | 3/3 | 20.908 / 27.987 / 37.201 |
+| kimi | 3/3 | **0/3** (−734 c, siempre) | 3/3 | 3/3 | 11.883 / 18.501 / 25.300 |
+| qwen | **3/3** | **3/3** | 3/3 | 3/3 | 19.451 / 24.797 / 30.318 |
+
+**Lectura, sin adornos — NO entra pegado en los ocho.** Tres categorías, no
+dos:
+
+1. **Entra pegado y EXACTO** (glm, qwen): carácter por carácter, las tres
+   corridas. Rápido (20-30 s).
+2. **Entra pegado pero pierde caracteres, SIEMPRE la misma cantidad, y la
+   canaria sobrevive** (chatgpt −165, claude −739, kimi −734 — el mismo
+   déficit en las tres corridas de cada uno, no aleatorio). Que la canaria
+   —al FINAL del cuerpo— esté presente prueba que la pérdida es en el
+   MEDIO, no un truncado por el final: probablemente normalización del
+   editor (colapso de saltos de línea repetidos, algún carácter que su
+   sanitizador descarta). **Más lento** (chatgpt 48-61 s; kimi/claude
+   10-25 s). Más grave que "más lento": si la canaria no detecta ESTE tipo
+   de pérdida —vive al final, y estos tres la conservan intacta— el CÓDIGO
+   de T4 no alcanza para garantizar que el operador vio el cuerpo completo.
+3. **No entra pegado, en ningún sentido usable** (gemini y mistral: timeout
+   en las tres corridas, sin escribir nada leíble en 90 s; grok: 1 timeout,
+   1 corrida que escribió CERO caracteres pese a no tirar error, 1 corrida
+   casi completa con pérdida — inconsistente, no confiable).
+
+**ABIERTO, con esa palabra — dos huecos, no uno:**
+ · **Qué se pierde exactamente en chatgpt/claude/kimi.** Se midió CUÁNTO
+   (165/739/734 caracteres, consistente) pero no QUÉ ni POR QUÉ — hace
+   falta un diff carácter a carácter entre el cuerpo armado y lo leído del
+   compositor, sobre una captura nueva, para identificar el patrón. Sin
+   eso, la marca canaria sola no basta como garantía de integridad para
+   estos tres: pasa aunque el cuerpo esté incompleto.
+ · **Objetivo 2 (entrega por archivo) no se corrió esta ronda.** Correspondía
+   —"sólo si el 1 falla en alguno", y falló en tres (gemini, mistral,
+   grok)— pero derivar el control de adjuntar por sondeo y probar si
+   acepta sin `sendInputEvent` es una medición nueva, con su propio riesgo
+   (ver el hallazgo de abajo), y quedó fuera del alcance de esta ronda por
+   presupuesto de sesión. Sin Objetivo 2, la Parte 2 no tiene decidida la
+   vía de entrega para gemini, mistral ni grok.
+
+**Hallazgo no pedido, y va a `LIMITACIONES.md` con esa claridad: un panel
+puede COLGARSE horas sin producir ningún error, y las sesiones sobreviven
+intactas mientras tanto.** La primera corrida de esta medición (sin el
+resguardo de abajo) se quedó **horas** sin emitir una sola línea de informe;
+forzar el cierre por la vía normal de la app confirmó que las nueve
+sesiones seguían con sus cookies intactas — no fue una sesión perdida, fue
+un panel que nunca volvió a responder a `executeJavaScript`, casi con
+certeza un editor rico (ProseMirror/Lexical/contenteditable) reprocesando
+un `insertText` de ~100.000 caracteres de una sola vez. El techo interno de
+45 s de `medirEntregaPegado` no protege contra esto: si el hilo del
+RENDERER se bloquea reprocesando el DOM, ni siquiera llega a correr el
+`setTimeout` que mide ese techo. Se corrigió con un `Promise.race` con
+techo de 90 s DESDE AFUERA (el proceso principal, que corre en su propio
+hilo) — sin eso, un solo panel colgado bloquea el informe de los otros
+siete indefinidamente. **Consecuencia para la Parte 2 real:** si el diseño
+final pega el cuerpo entero de una sola vez, tiene que tener el mismo
+resguardo — un techo externo al panel — o un operador con un editor lento
+puede colgar la sesión de Juan sin ningún aviso.
+
 **Lo que NO entra en esta lista porque ya está resuelto:** capturar el
 cuerpo de las 8 (Objetivo 1, esta sesión), la escritura al registro sin
 ronda abierta, el HTML crudo para re-derivar selectores sin gastar cuota, y

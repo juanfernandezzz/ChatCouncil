@@ -221,6 +221,46 @@ en este repositorio.
   real de la spec usa clic sobre el botón (ya con texto presente), no
   Enter — a diferencia de kimi. *MEDIDA, 2026-08-23.*
 
+- **Un cuerpo grande pegado con `execCommand('insertText')` puede COLGAR el
+  panel horas, sin ningún error, mientras la sesión sigue intacta.** Medido
+  el 2026-09-14, midiendo si el cuerpo real de un operador (~100.000
+  caracteres, T5) entra pegado: la primera corrida —sin resguardo externo—
+  se quedó horas sin producir ninguna línea de informe; forzar el cierre
+  por la vía normal de la app (que vuelca sesión) confirmó que las nueve
+  particiones seguían con sus cookies intactas — no fue una sesión perdida,
+  fue un panel (casi con certeza un editor rico: ProseMirror, Lexical, un
+  `contenteditable`) que nunca volvió a responder a `executeJavaScript`
+  tras recibir el `insertText` completo, probablemente reprocesando el DOM
+  de forma bloqueante en el hilo del renderer. Ningún techo INTERNO a la
+  medición (un `setTimeout` dentro de la función que corre en ese mismo
+  renderer) protege contra esto: si el hilo está bloqueado, ese `setTimeout`
+  tampoco corre. Sólo un techo EXTERNO —`Promise.race` desde el proceso
+  principal, que vive en su propio hilo— evita que un panel colgado
+  bloquee indefinidamente a los demás. **Consecuencia para cualquier
+  diseño futuro que pegue un cuerpo grande de una sola vez**: necesita ese
+  mismo resguardo externo, o un operador con editor lento puede colgar la
+  sesión de Juan sin ningún aviso ni error visible.
+  *MEDIDO, 2026-09-14, ver `docs/BLUEPRINT.md`, "Medición de entrega del
+  cuerpo".*
+
+- **De los 8 del pool, sólo 2 (glm, qwen) aceptan un cuerpo de ~100.000
+  caracteres pegado y EXACTO.** Tres (chatgpt, claude, kimi) lo aceptan
+  pero pierden una cantidad FIJA de caracteres en el medio del texto —165,
+  739 y 734 respectivamente, la misma cifra en las tres corridas de cada
+  uno— sin que la marca canaria (al final del cuerpo) lo detecte, porque la
+  canaria sobrevive intacta: la pérdida no es un truncado por el final.
+  Dos (gemini, mistral) directamente no aceptan el pegado dentro de 90 s en
+  ninguna de tres corridas. Uno (grok) es inconsistente: una corrida sin
+  responder, una que escribió CERO caracteres sin reportar error, una casi
+  completa. **Consecuencia**: la Parte 2 no puede asumir un único camino de
+  entrega para los ocho — necesita, por proveedor, o bien confiar en el
+  pegado (glm, qwen), o diagnosticar la pérdida en el medio antes de
+  confiar en él (chatgpt, claude, kimi), o usar otra vía —adjunto de
+  archivo, todavía sin medir— para los que no aceptan el pegado de forma
+  confiable (gemini, mistral, grok).
+  *MEDIDO, 2026-09-14, tres corridas, ver `docs/BLUEPRINT.md`, "Medición de
+  entrega del cuerpo".*
+
 - **deepseek entró a `INVESTIGADORES` (2026-08-23, decisión de Juan) sin
   confirmar todavía un envío automático real.** Su spec se derivó de la
   misma ronda de sondeo que los demás (composer, submit y

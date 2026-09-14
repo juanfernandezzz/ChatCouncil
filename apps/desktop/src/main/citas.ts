@@ -17,6 +17,21 @@
  * 0). Esta función sólo ve lo que `html` contiene: un panel de fuentes que
  * viva en un ancestro no capturado es indistinguible de "no hay más citas"
  * con el dato de hoy, y eso se declara, no se adivina.
+ *
+ * GRANULARIDAD DE `Cita`, decisión explícita (T1, revisión 2026-09-13): es
+ * POR APARICIÓN, no por fuente. Un investigador que cita la misma URL en el
+ * chip inline y de nuevo en la lista final del mensaje produce DOS `Cita`,
+ * cada una con su propio `textoVisible` y su propio `dondeVive` — fusionarlas
+ * perdería justo el dato que distingue una mención en el cuerpo de una en el
+ * panel. Medido sobre la captura real: chatgpt cae de 23 apariciones a 11 URL
+ * únicas (sin query ni fragmento), kimi de 17 a 4 — la interfaz repite la
+ * misma fuente varias veces con anclas de texto distintas. Por eso
+ * `anclasVistas` no basta como reporte: `extraerCitas` también devuelve
+ * `urlsUnicas`, la cardinalidad real de fuentes distintas, al lado.
+ * CONSECUENCIA PARA T2 (no implementada acá, sólo declarada para que T2 no
+ * la relitigue): la verificación mecánica tiene que iterar sobre
+ * `normalizarUrl(cita.url)` DEDUPLICADO antes de salir a la red — verificar
+ * una vez por `Cita` dispararía una petición por aparición, no por fuente.
  */
 
 import { randomUUID } from "node:crypto";
@@ -35,6 +50,32 @@ export interface ExtraccionCitas {
   /** Cuántos `<a>` se vieron en total, aceptados + descartados. */
   anclasVistas: number;
   descartados: { motivo: MotivoDescartado; href: string }[];
+  /**
+   * Cardinalidad de fuentes DISTINTAS entre `citas`, por `normalizarUrl`
+   * (sin query ni fragmento). `citas.length` es apariciones; esto es
+   * fuentes — la brecha entre los dos es la repetición de una misma URL en
+   * varios lugares del mensaje (chip inline + lista final, nota al pie
+   * repetida), medida y no asumida (ver comentario de cabecera).
+   */
+  urlsUnicas: number;
+}
+
+/**
+ * Normaliza para CONTAR y para que T2 dedupe antes de salir a la red: origen
+ * más ruta, sin query ni fragmento. Dos citas de la misma página con distinto
+ * `utm_source` o distinto `#:~:text=` son la misma fuente a los fines de
+ * "¿existe esta URL?" — no a los fines de qué pasaje sostiene qué afirmación,
+ * que es responsabilidad de `textoVisible`, no de esta normalización.
+ * Si `url` no parsea como URL válida, se devuelve tal cual: no absorbe un
+ * dato roto en un vacío silencioso.
+ */
+export function normalizarUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.origin + u.pathname;
+  } catch {
+    return url;
+  }
 }
 
 const REGEX_TAG = /<\/?([a-zA-Z][a-zA-Z0-9-]*)((?:\s+[^<>]*?)?)\/?>/g;
@@ -46,8 +87,26 @@ const ETIQUETAS_VACIAS = new Set([
   "link", "meta", "param", "source", "track", "wbr",
 ]);
 
-/** Reconoce, por nombre estructural, un contenedor que agrupa fuentes/citas. */
-const PATRON_CONTENEDOR_FUENTES = /cita|citation|fuente|source|referenc/i;
+/**
+ * Reconoce, por ATRIBUTO estructural (rol, `aria-label`), un contenedor que
+ * agrupa fuentes — nunca por `citation`/`cita` sueltos: ese patrón, probado
+ * contra la captura real de chatgpt, matcheaba `data-testid="webpage-
+ * citation-pill"` — el CHIP inline de una sola cita en medio del párrafo, no
+ * un panel. Sacarlo fue una corrección medida, no cautelar (ver "T1, revisión
+ * de dondeVive" en el BLUEPRINT). `\b` evita que "resource" cuente como
+ * "source".
+ */
+const PATRON_CONTENEDOR_FUENTES = /\b(fuentes?|sources?|referenc\w*|bibliograf\w*)\b/i;
+
+/**
+ * Reconoce, por TEXTO de un título (h1-h6), el inicio de una sección de
+ * fuentes ("Fuentes clave", "Referencias", "Sources"). Es la señal que de
+ * verdad separó la lista de fuentes del cuerpo en la captura real: ningún
+ * contenedor de chatgpt o deepseek llevaba una clase reconocible, pero los
+ * dos tenían un título de sección exacto.
+ */
+const PATRON_TITULO_FUENTES = /^(fuentes?( claves?)?|referencias?|sources?|references?|citas?|bibliograf[ií]a)\s*:?$/i;
+const ETIQUETAS_TITULO = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
 
 function atributosDe(attrsCrudo: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -104,6 +163,10 @@ export function extraerCitas(html: string, respuestaId: string, idGen: () => str
 
   const pila: Record<string, string>[] = [];
   let profundidadContenedorFuentes = -1;
+  // Distinto de la pila de ancestros: un título ya CERRADO ("<h2>Referencias
+  // </h2>") sigue marcando la sección de todo lo que viene después, aunque
+  // el título mismo ya no esté abierto en ningún ancestro.
+  let seccionFuentesActiva = false;
 
   REGEX_TAG.lastIndex = 0;
   let m: RegExpExecArray | null;
@@ -128,10 +191,19 @@ export function extraerCitas(html: string, respuestaId: string, idGen: () => str
     const attrs = atributosDe(m[2] ?? "");
     attrs["__tag__"] = nombre;
 
+    if (ETIQUETAS_TITULO.has(nombre) && !autoCerrada) {
+      // Mismo truco que en <a>: el título HTML no se anida, así que se
+      // resuelve su texto de una sola vez buscando el cierre correspondiente.
+      const restante = html.slice(REGEX_TAG.lastIndex);
+      const cierreIdx = restante.search(new RegExp(`</${nombre}\\s*>`, "i"));
+      const interno = cierreIdx === -1 ? "" : restante.slice(0, cierreIdx);
+      seccionFuentesActiva = PATRON_TITULO_FUENTES.test(textoVisibleDe(interno));
+    }
+
     if (nombre === "a") {
       anclasVistas++;
       const motivo = clasificarHref(attrs["href"]);
-      const dentroDeContenedor = profundidadContenedorFuentes >= 0;
+      const dentroDeContenedor = seccionFuentesActiva || profundidadContenedorFuentes >= 0;
       if (motivo !== null) {
         descartados.push({ motivo, href: attrs["href"] ?? "" });
       } else {
@@ -164,5 +236,6 @@ export function extraerCitas(html: string, respuestaId: string, idGen: () => str
     }
   }
 
-  return { citas, anclasVistas, descartados };
+  const urlsUnicas = new Set(citas.map((c) => normalizarUrl(c.url))).size;
+  return { citas, anclasVistas, descartados, urlsUnicas };
 }

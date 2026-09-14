@@ -1579,7 +1579,7 @@ real pegada, no una suposición de que compiló.
 | T6 | **Capturar la operación** (Parte 2): reutiliza el mismo mecanismo de "Capturar" ya construido, sobre los paneles de operación en vez de los de investigación. Produce la matriz operador × respuesta (hecho nuevo append-only, `Adjudicacion` o equivalente — nombre a decidir sin repetir el vocabulario ya descartado de "juez"/"analista"). | T5 | La matriz tiene exactamente 8 × 7 = 56 celdas (o menos las que fallen, cada falla como hecho, nunca como ausencia silenciosa); cada celda referencia el `proveedorId` operador y el `proveedorId` (desanonimizado con el sello) de la respuesta evaluada. |
 | T7 | **El noveno (deepseek) y el informe.** Prompt 3 (instrucciones para leer la matriz, sin buscar, sin agregar, sin adjudicar). Regla dura: cada afirmación del informe referencia una celda de T6 — se verifica con un gate nuevo, probado en rojo antes de confiar en él (regla dura de `AGENTES.md`, aplicable a todo gate nuevo). | T6 | Un informe de prueba con una afirmación SIN referencia a ninguna celda hace que el gate nuevo falle; un informe con las mismas afirmaciones, cada una con su referencia, pasa. Probado en las dos direcciones antes de darlo por bueno. |
 
-#### T1, cerrada (2026-09-13) — extracción OFFLINE, cuota cero
+#### T1, cerrada (2026-09-13, con una revisión el mismo día) — extracción OFFLINE, cuota cero
 
 Implementada en `apps/desktop/src/main/citas.ts` (tokenizador de `<a href>`
 sobre la CADENA de `Respuesta.html`, sin DOM real ni dependencia nueva —
@@ -1593,17 +1593,17 @@ nunca reemplaza `html`.
 `a92b22f2…`, ronda del 2026-09-13, la misma que documentó los cuatro ceros en
 `docs/LIMITACIONES.md`) — sin abrir la app, sin enviar nada:
 
-| Proveedor | `fuentesHref` (techo) | `<a>` en `Respuesta.html` | `Cita` extraídas | Descartadas | Motivo |
-|---|---:|---:|---:|---:|---|
-| chatgpt | 23 | 23 | 23 | 0 | — |
-| gemini | 0 | 0 | 0 | 0 | panel colapsado, ver LIMITACIONES.md |
-| claude | 0 | 0 | 0 | 0 | panel colapsado, ver LIMITACIONES.md |
-| grok | 0 | 0 | 0 | 0 | panel colapsado, ver LIMITACIONES.md |
-| mistral | 7 | 7 | 7 | 0 | — |
-| glm | 6 | 6 | 6 | 0 | — |
-| kimi | 17 | 17 | 17 | 0 | — |
-| qwen | 0 | 0 | 0 | 0 | panel colapsado, ver LIMITACIONES.md |
-| deepseek | 26 | 21 | 21 | 0 | — |
+| Proveedor | `fuentesHref` (techo) | `<a>` en `Respuesta.html` | `Cita` extraídas | `cuerpo` | `panel-ancestro` | Descartadas | URL únicas |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| chatgpt | 23 | 23 | 23 | 15 | 8 | 0 | 13 |
+| gemini | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| claude | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| grok | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| mistral | 7 | 7 | 7 | 7 | 0 | 0 | 6 |
+| glm | 6 | 6 | 6 | 6 | 0 | 0 | 5 |
+| kimi | 17 | 17 | 17 | 17 | 0 | 0 | 11 |
+| qwen | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| deepseek | 26 | 21 | 21 | 16 | 5 | 0 | 6 |
 
 `citas.length <= fuentesHref` se cumple en los nueve, sin excepción — y en
 deepseek es ESTRICTAMENTE menor (21 < 26): la brecha de 5 son links que
@@ -1614,25 +1614,92 @@ dato real, de que igualar el techo (como pedía el criterio original) habría
 significado colar ese ancestro entero —con lo que tenga adentro, medido o
 no— dentro de las citas.
 
-**Cero descartes en los nueve** porque el nodo capturado (`ultimoNodoAsistente`,
-sin `exclude`) ya es el subárbol de la respuesta: no incluye la navegación de
-la interfaz, que vive en ancestros que `html` no guarda. Las reglas de
-descarte (`sin-href`, `href-vacio`, `esquema-no-http`, `no-absoluta-http`)
-están implementadas y **probadas en rojo→verde con un fragmento sintético**
-(`#`, `javascript:void(0)`, un `<a>` sin `href`, una ruta relativa: las
-cuatro se descartan con su motivo correcto) porque los nueve casos reales no
-tenían ningún caso que las ejercitara — sin esa prueba, las cuatro ramas
-serían código sin correr. Mismo fragmento sintético probó `dondeVive:
-"panel-ancestro"` (un `<a>` anidado bajo `class="citation-list"` lo recibe;
-uno suelto en el texto recibe `"cuerpo"`) — en los nueve reales todas las
-citas cayeron en `"cuerpo"`, así que esa rama, aunque implementada y
-verificada por separado, **no está ejercitada por ningún dato real
-todavía**; se declara así en vez de darla por probada.
+**ABIERTO, con esa palabra.** La brecha de deepseek (26 vs. 21) es un hueco
+de la CAPTURA, no de T1: el `html` guardado (nivel 0, el nodo de la
+respuesta) no alcanza para reconstruir esas 5 apariciones que `fuentesHref`
+sí ve subiendo por ancestros. T1 no se puede completar sobre esa brecha con
+el dato de hoy — no es que la regla de extracción pierda algo que está en
+`html`: no está. Si algún día se decide ampliar `Respuesta.html` para
+capturar el ancestro donde vive ese resto, es un cambio de CAPTURA (Fase 2/3,
+`preload/provider.ts`), y hasta que ocurra esas 5 apariciones no existen para
+el instrumento. No se decide acá si vale la pena: se declara abierto.
 
-**Revisión manual de una muestra (deepseek, la de mayor brecha):** las 21 URL
-extraídas son citas reales (arxiv, GitHub, blogs de prompt engineering,
-repetidas porque el modelo las cita varias veces en el cuerpo) — cero
-`javascript:`/`#`/navegación colada. Ninguna fuente real quedó descartada.
+**Regla de descarte: cero disparos en los 74 `<a>` reales evaluados
+(23+7+6+17+21), comprobado por rule y CONTRA UN CONTEO INDEPENDIENTE del
+propio extractor** (grep directo sobre el HTML crudo de los cinco archivos,
+sin pasar por `citas.ts`, contando `href` ausente, `#`/`javascript:`/
+`mailto:`/`tel:`/`data:`, y rutas no-`http`): las cuatro reglas dan CERO en
+los cinco por las dos vías, no sólo por la del extractor mismo — descarta que
+"cero descartes" sea un bug del código confirmándose a sí mismo. Interpretación
+elegida entre las dos que planteaba la revisión: `Respuesta.html` (el nodo
+`ultimoNodoAsistente`, sin `exclude`) está bien acotado al cuerpo de la
+respuesta — no incluye la navegación de la interfaz, que vive en ancestros
+que `html` no guarda —, así que los 74 son externos legítimos. Las cuatro
+reglas se probaron **en rojo→verde con un fragmento sintético** (`#`,
+`javascript:void(0)`, un `<a>` sin `href`, una ruta relativa: las cuatro se
+descartan con su motivo correcto) porque los datos reales no traían ningún
+caso que las ejercitara — sin esa prueba, serían código sin correr en ninguna
+dirección.
+
+**`dondeVive`, corregido tras la revisión — la primera versión estaba mal.**
+La primera implementación matcheaba contenedores por atributo con el patrón
+`cita|citation|fuente|source|referenc`, y esa regla EJERCITÓ contra datos
+reales: le pegó `data-testid="webpage-citation-pill"` en chatgpt, el chip
+INLINE de una sola cita en medio del párrafo — lo contrario de un panel — y
+marcó como `panel-ancestro` justo lo que es `cuerpo`, mientras la lista real
+de fuentes al final del mensaje (`<h3>Fuentes clave</h3><ul>…`, sin ninguna
+clase reconocible) caía por default en `cuerpo`. Estaba invertido. Corregido
+a dos señales: (a) atributo `\b(fuentes?|sources?|referenc\w*|bibliograf\w*)\b`
+— ya sin `cita`/`citation`, que era la palabra que producía el falso
+positivo — y (b) el texto de un título `h1`-`h6` ("Fuentes clave",
+"Referencias") activa la sección para todo lo que sigue. Reverificado contra
+el mismo dato real: chatgpt separa 15 chips inline (`cuerpo`) de 8 en la
+lista "Fuentes clave" (`panel-ancestro`, confirmado contando a mano los `<a>`
+después de ese título: 8); deepseek separa 16 marcadores inline (`cuerpo`) de
+5 en su lista "Referencias" (`panel-ancestro`, confirmado igual: 5). Las dos
+ramas están ejercitadas por dato real, no sólo por el fragmento sintético.
+
+**Granularidad de `Cita`: decidida, POR APARICIÓN.** Un investigador que cita
+la misma URL en el chip inline y de nuevo en la lista final produce DOS
+`Cita`: fusionarlas perdería el dato que distingue una mención en el cuerpo
+de una en el panel — justo la distinción que acaba de corregirse arriba. La
+brecha es real y medida: chatgpt cae de 23 apariciones a 13 URL exactas y a
+**11** si además se descarta el query string (`utm_source`, `_bhlid`); kimi
+cae de 17 a **4** contando así, porque cita la misma página con distinto
+fragmento `#:~:text=`. `extraerCitas` devuelve `urlsUnicas` (por
+`normalizarUrl`: origen + ruta, sin query ni fragmento) al lado de
+`citas.length`, para que ningún consumidor confunda apariciones con fuentes.
+**Consecuencia declarada para T2, no implementada acá:** verificar tiene que
+iterar sobre `normalizarUrl(cita.url)` DEDUPLICADO — una petición por
+`Cita` dispararía una petición por aparición, no por fuente citada.
+
+**Redirectores: NO, en los cinco proveedores con datos — verificado por
+hostname, no asumido.** Los `<a href>` de chatgpt, mistral, glm, kimi y
+deepseek resuelven directo a un host de terceros (`developers.openai.com`,
+`www.anthropic.com`, `arxiv.org`, `github.com`, `coleoguy.github.io`, etc.);
+ninguno resuelve a un dominio del proveedor que reenvíe a otro lado. chatgpt
+agrega `?utm_source=chatgpt.com` como parámetro de tracking sobre la URL de
+destino real —no es un wrapper: el host de la URL sigue siendo el sitio
+citado, no chatgpt.com—, y una URL de `openai.com` citada por chatgpt es
+autocita legítima de la misma empresa, no un redirector. Con esto, T2 puede
+verificar directamente `cita.url` (normalizada) en estos cinco sin envolver
+nada. **NO VERIFICADO para gemini, claude, grok y qwen**: cero citas
+extraídas ahí (panel colapsado), así que no hay ni un hostname que mirar —
+esto queda genuinamente sin comprobar, no se asume limpio por semejanza con
+los otros cinco.
+
+**Revisión manual completa, chatgpt (23) y deepseek (21) — cero fuentes
+reales descartadas.** Las URL crudas quedan en el informe de esta ronda
+(no se duplican acá para no reescribir un documento de 2200+ líneas); el
+veredicto: en los dos, cada `<a>` resuelto es una cita real —arXiv, OpenAI,
+Anthropic, GitHub, blogs de prompt engineering—, sin un solo link de
+interfaz colado. En chatgpt, los primeros 15 son el mismo puñado de fuentes
+repetidas como chip inline (13 URL exactas, 11 sin tracking); los últimos 8
+son la lista "Fuentes clave" con descripción propia por entrada. En
+deepseek, los primeros 16 son marcadores `- N` repetidos de las mismas 6
+URL a lo largo del cuerpo; los últimos 5 son la lista "Referencias" (falta
+`supercharge.io`, citada sólo inline una vez, nunca en la lista — un hecho
+del proveedor, no un descarte de T1).
 
 **Consecuencia de diseño para gemini/claude/grok/qwen, para `LIMITACIONES.md`:**
 con el panel de fuentes colapsado por defecto en esas cuatro interfaces

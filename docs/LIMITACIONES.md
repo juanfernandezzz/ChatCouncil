@@ -104,6 +104,16 @@ en este repositorio.
   *MEDIDO, 2026-09-13, offline contra la captura real ya existente (ver
   `docs/BLUEPRINT.md`, "T1, cerrada").*
 
+- **No se sabe si gemini, claude, grok y qwen usan redirectores en sus
+  citas.** T1 verificó por hostname que chatgpt, mistral, glm, kimi y
+  deepseek citan URL que resuelven directo al sitio de terceros (nunca a un
+  dominio del proveedor que reenvíe a otro lado) — verificación real, no
+  supuesta, ver `docs/BLUEPRINT.md`, "T1, cerrada". Para los cuatro con panel
+  colapsado no hay ni una `Cita` extraída, así que no hay ningún hostname que
+  mirar: la pregunta queda genuinamente SIN COMPROBAR ahí, no se extiende la
+  conclusión de los otros cinco por semejanza. *MEDIDO 2026-09-13 para cinco
+  de nueve; los otros cuatro son un hueco declarado, no una suposición.*
+
 ## Sobre lo que el instrumento no puede ver
 
 - **La anonimización no sobrevive a las fuentes citadas.** Dominios propios

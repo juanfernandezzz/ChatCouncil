@@ -219,30 +219,104 @@ export function codigosEstables(idsEnOrden: readonly string[]): ReadonlyMap<stri
 }
 
 /**
- * T4 — MARCA CANARIA. Un token único al final del cuerpo de CADA operador
- * (uno por operador, no compartido: si el pipeline de un proveedor trunca
- * SU adjunto, sólo esa respuesta se marca no confiable, no las de los
- * demás). Justificación ya medida en T3 (ver "El volumen decide pegado vs.
- * archivo" en `docs/BLUEPRINT.md`): ~26.800 tokens por operador no entran
- * pegados en el compositor, van como archivo adjunto — y un archivo
- * truncado por el pipeline de ingesta de un proveedor pasa en VERDE si
- * nadie lo comprueba. El texto de la marca no importa mientras sea
- * reconocible; lo que importa es que el token sea único y que el código,
- * no el operador, sea quien note su ausencia.
+ * T4 — MARCAS CANARIA INTERCALADAS. Corrección de la revisión de la ronda
+ * de medición de entrega (2026-09-14): la versión original ponía UN token
+ * al FINAL del cuerpo. Esa marca tiene un punto ciego real, medido y no
+ * hipotético — la medición de entrega encontró que chatgpt/claude/kimi
+ * pierden una cantidad FIJA de caracteres EN EL MEDIO del cuerpo (165/739/
+ * 734, idéntica en tres corridas) mientras la marca del final llega
+ * intacta las tres veces. Una sola marca al final no puede distinguir "el
+ * cuerpo llegó completo" de "se perdió un tramo en el medio, pero no
+ * justo donde vive la marca".
+ *
+ * `INTERVALO_MARCA_CHARS = 1000`, declarado con su motivo: con cuerpos de
+ * ~80.000-110.000 caracteres (medido, T5/medición de entrega), eso da
+ * ~80-110 marcas por cuerpo. Denso alcanza para acotar cualquier bloque
+ * perdido a ~1.000 caracteres (~1% del cuerpo) en vez de "en algún lugar
+ * de 100.000"; disperso alcanza para que el overhead de texto instrumental
+ * quede bajo (marcas de ~30 caracteres × ~100 ≈ 3.000, ~3% del cuerpo) y
+ * para que una pérdida DISTRIBUIDA de pocos caracteres cada vez (el patrón
+ * medido: NBSP, espacios dobles, sueltos por el cuerpo) tenga baja
+ * probabilidad de coincidir justo con el texto corto de una marca.
+ *
+ * FORMATO inocuo a propósito: `[[CC-MARCA-<índice>-<token>]]`, en su
+ * propia línea, con un prefijo (`CC-MARCA`) que ningún texto de respuesta
+ * real va a producir por azar — el operador (otro modelo de lenguaje,
+ * leyendo el cuerpo para evaluarlo) tiene que poder reconocerlo como
+ * instrumentación y no como parte del contenido a criticar.
  */
-export function agregarMarcaCanaria(cuerpo: string, token: string): string {
-  return `${cuerpo}\n\n---\nMARCA DE INTEGRIDAD: repetí exactamente este token al final de tu respuesta, en su propia línea: ${token}`;
+export const INTERVALO_MARCA_CHARS = 1000;
+
+export interface MarcasIntercaladas {
+  textoConMarcas: string;
+  /** Una por marca insertada, en orden — lo que hay que buscar después. */
+  marcas: string[];
+}
+
+function textoMarca(indice: number, token: string): string {
+  return `[[CC-MARCA-${String(indice).padStart(4, "0")}-${token}]]`;
+}
+
+export function insertarMarcasIntercaladas(
+  texto: string,
+  token: string,
+  intervaloChars: number = INTERVALO_MARCA_CHARS,
+): MarcasIntercaladas {
+  const marcas: string[] = [];
+  const partes: string[] = [];
+  let indice = 0;
+  for (let pos = 0; pos < texto.length; pos += intervaloChars) {
+    partes.push(texto.slice(pos, pos + intervaloChars));
+    const marca = textoMarca(indice, token);
+    marcas.push(marca);
+    partes.push(`\n${marca}\n`);
+    indice++;
+  }
+  return { textoConMarcas: partes.join(""), marcas };
+}
+
+export type EstadoIntegridad = "completo" | "truncado" | "indeterminado";
+
+export interface ResultadoIntegridad {
+  estado: EstadoIntegridad;
+  marcasEsperadas: number;
+  marcasPresentes: number;
+  /** Índices (0-based) de las marcas ausentes, en orden. */
+  faltantes: number[];
 }
 
 /**
- * `true` si el token de la marca canaria de ESTE operador aparece en el
- * texto que devolvió — `false` = el archivo llegó truncado (u operado sin
- * seguir la instrucción), y la respuesta se marca no confiable. El criterio
- * de éxito es que esta función lo detecte sola, sin que el operador lo haya
- * reportado.
+ * Clasifica lo que devolvió el operador contra las marcas que se le
+ * insertaron. La distinción que motiva esta función (revisión de T4):
+ *
+ *  · Todas presentes → `"completo"`: no hay evidencia de pérdida en
+ *    ninguna posición marcada. Una pérdida DISTRIBUIDA de caracteres que
+ *    nunca cae sobre el texto corto de una marca es indistinguible de
+ *    "completo" con este instrumento — límite declarado, no escondido.
+ *  · Faltantes en un TRAMO CONTIGUO de índices → `"truncado"`: un bloque
+ *    real desapareció, y la posición del tramo dice DÓNDE.
+ *  · Faltantes dispersos, no contiguos → `"indeterminado"`: no encaja
+ *    limpio en ninguna de las dos lecturas; se declara así en vez de
+ *    forzarlo a una de las dos categorías sin evidencia.
  */
-export function marcaCanariaPresente(respuestaOperador: string, token: string): boolean {
-  return respuestaOperador.includes(token);
+export function evaluarIntegridad(respuestaOperador: string, marcas: readonly string[]): ResultadoIntegridad {
+  const presentes = marcas.map((m) => respuestaOperador.includes(m));
+  const faltantes: number[] = [];
+  presentes.forEach((p, i) => {
+    if (!p) faltantes.push(i);
+  });
+
+  if (faltantes.length === 0) {
+    return { estado: "completo", marcasEsperadas: marcas.length, marcasPresentes: marcas.length, faltantes };
+  }
+
+  const esContiguo = faltantes.every((idx, i) => i === 0 || idx === faltantes[i - 1]! + 1);
+  return {
+    estado: esContiguo ? "truncado" : "indeterminado",
+    marcasEsperadas: marcas.length,
+    marcasPresentes: marcas.length - faltantes.length,
+    faltantes,
+  };
 }
 
 /**
@@ -272,7 +346,8 @@ export interface CuerpoOperador {
   /** El proveedor que VA A OPERAR este cuerpo — quién lo recibe, no de quién habla el contenido. */
   operadorId: string;
   cuerpo: string;
-  tokenCanario: string;
+  /** Una por marca insertada, para pasarle a `evaluarIntegridad` sobre lo que el operador devuelva. */
+  marcas: string[];
   /** Sólo para verificar el criterio de exclusión — nunca es lo que el operador lee. */
   proveedoresIncluidos: string[];
 }
@@ -323,12 +398,13 @@ export function armarCuerposPorOperador(
       incluidos.push(proveedorDeEsteLabel);
     });
     const token = generarToken();
-    const cuerpo = agregarMarcaCanaria(bloques.join("\n\n"), token);
+    const { textoConMarcas, marcas } = insertarMarcasIntercaladas(bloques.join("\n\n"), token);
+    const cuerpo = `${textoConMarcas}\n[[CC-MARCA-FIN-${token}]]\n`;
     const fugas = fugasDeProveedorEnUrls(cuerpo);
     if (fugas.length > 0) {
       throw new Error(`cuerpo del operador ${operadorId} filtra identidad de proveedor por URL: ${fugas.join(" | ")}`);
     }
-    return { operadorId, cuerpo, tokenCanario: token, proveedoresIncluidos: incluidos };
+    return { operadorId, cuerpo, marcas: [...marcas, `[[CC-MARCA-FIN-${token}]]`], proveedoresIncluidos: incluidos };
   });
 
   return { cuerpos, sello: selloConCodigo };

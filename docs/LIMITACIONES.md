@@ -243,23 +243,43 @@ en este repositorio.
   *MEDIDO, 2026-09-14, ver `docs/BLUEPRINT.md`, "Medición de entrega del
   cuerpo".*
 
-- **De los 8 del pool, sólo 2 (glm, qwen) aceptan un cuerpo de ~100.000
-  caracteres pegado y EXACTO.** Tres (chatgpt, claude, kimi) lo aceptan
-  pero pierden una cantidad FIJA de caracteres en el medio del texto —165,
+- **SUPERADA — la entrada de datos de abajo describía un fallo de
+  VISIBILIDAD, no de los proveedores.** Medido primero escribiendo los 8
+  cuerpos EN PARALELO (7 de 8 fuera del área visible por el diseño de fila
+  horizontal con paginado): gemini y mistral daban timeout siempre, grok
+  era inconsistente, y chatgpt/claude/kimi perdían una cantidad fija de
+  caracteres en el medio del texto. Repetido SECUENCIAL, con cada panel
+  llevado al FRENTE antes de escribir (hipótesis de Juan: un `insertText`
+  de ~100.000 caracteres fuerza un re-layout masivo, justo lo que Chromium
+  degrada en una página oculta) — **los 8 de 8 entran pegados, en las 3 de
+  3 corridas**, con el 100% de las marcas de integridad intercaladas
+  presentes en todos los casos. La brecha de caracteres en seis de los
+  ocho (todos menos glm y qwen) sigue midiéndose, pero con las marcas
+  intactas queda confirmado que es una pérdida DISTRIBUIDA (normalización
+  del editor), nunca un truncado — un bloque contiguo perdido habría roto
+  al menos una marca. **Consecuencia**: la Parte 2 se diseña SECUENCIAL,
+  con el panel al frente, para los ocho por igual — no hace falta una vía
+  de entrega distinta por proveedor, y el adjunto de archivo (Objetivo 2)
+  queda cerrado como innecesario mientras el pegado secuencial siga
+  midiendo 8/8. *MEDIDO, 2026-09-14, tres corridas, panel al frente, ver
+  `docs/BLUEPRINT.md`, "Objetivo 1, REPETIDO con el panel al frente".*
+
+  <details><summary>Registro histórico — la medición EN PARALELO que quedó superada</summary>
+
+  De los 8 del pool, sólo 2 (glm, qwen) aceptaban un cuerpo de ~100.000
+  caracteres pegado y EXACTO. Tres (chatgpt, claude, kimi) lo aceptaban
+  pero perdían una cantidad FIJA de caracteres en el medio del texto —165,
   739 y 734 respectivamente, la misma cifra en las tres corridas de cada
-  uno— sin que la marca canaria (al final del cuerpo) lo detecte, porque la
-  canaria sobrevive intacta: la pérdida no es un truncado por el final.
-  Dos (gemini, mistral) directamente no aceptan el pegado dentro de 90 s en
-  ninguna de tres corridas. Uno (grok) es inconsistente: una corrida sin
-  responder, una que escribió CERO caracteres sin reportar error, una casi
-  completa. **Consecuencia**: la Parte 2 no puede asumir un único camino de
-  entrega para los ocho — necesita, por proveedor, o bien confiar en el
-  pegado (glm, qwen), o diagnosticar la pérdida en el medio antes de
-  confiar en él (chatgpt, claude, kimi), o usar otra vía —adjunto de
-  archivo, todavía sin medir— para los que no aceptan el pegado de forma
-  confiable (gemini, mistral, grok).
-  *MEDIDO, 2026-09-14, tres corridas, ver `docs/BLUEPRINT.md`, "Medición de
-  entrega del cuerpo".*
+  uno— sin que la marca canaria (al final del cuerpo, versión anterior de
+  T4) lo detectara, porque la canaria sobrevivía intacta: la pérdida no
+  era un truncado por el final. Dos (gemini, mistral) directamente no
+  aceptaban el pegado dentro de 90 s en ninguna de tres corridas. Uno
+  (grok) era inconsistente: una corrida sin responder, una que escribió
+  CERO caracteres sin reportar error, una casi completa. *MEDIDO,
+  2026-09-14, tres corridas, EN PARALELO — condición ahora identificada
+  como la causa del fallo, no un dato sobre los proveedores.*
+
+  </details>
 
 - **deepseek entró a `INVESTIGADORES` (2026-08-23, decisión de Juan) sin
   confirmar todavía un envío automático real.** Su spec se derivó de la

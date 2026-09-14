@@ -724,19 +724,25 @@ async function probarEnvioJS(spec: PageSpec, marcador: string): Promise<Resultad
  * `execCommand`, el mismo camino compartido de `writePrompt`, y mide si
  * entró ENTERO. Nunca envía: ni clic en un control de envío, ni tecla.
  *
- * "Entró entero" es una afirmación MÁS FUERTE que "la escritura no falló":
- * exige que el LARGO leído coincida con el escrito y que la MARCA CANARIA
- * del final esté presente — es justo el caso para el que la marca existe:
- * si el compositor trunca por cualquier motivo (límite de caracteres,
- * timeout del editor, lo que sea), la canaria es lo primero que se pierde
- * porque vive al final del cuerpo.
+ * CORREGIDO (revisión 2026-09-14): antes devolvía sólo si UNA marca al
+ * final estaba presente. La primera ronda de medición encontró pérdidas
+ * DETERMINISTAS —mismo número exacto en tres corridas— en tres de ocho
+ * proveedores, con la marca del final siempre intacta: una marca sola no
+ * distingue "completo" de "faltó un tramo en el medio". Ahora devuelve el
+ * TEXTO FINAL completo, sin recortar — quien llama corre
+ * `evaluarIntegridad` (`packages/analysis`) contra las marcas intercaladas
+ * que `armarCuerposPorOperador` ya insertó en el cuerpo, y además queda el
+ * texto real para diffear carácter a carácter si hace falta (lo que la
+ * versión anterior, que sólo devolvía el LARGO, no permitía reconstruir
+ * después).
  */
 export interface ResultadoMedicionEntrega {
   ok: boolean;
   error?: string;
   caracteresEscritos: number;
   caracteresPresentes: number;
-  marcaCanariaPresente: boolean;
+  /** El texto tal como quedó en el compositor, ANTES de vaciarlo. Sin recortar. */
+  textoFinal: string;
   ms: number;
   quedoLimpio: boolean;
 }
@@ -792,17 +798,13 @@ async function vaciarCompositorMedicion(composer: Element, kind: PageSpec["compo
   return false;
 }
 
-async function medirEntregaPegado(
-  spec: PageSpec,
-  texto: string,
-  marcaCanaria: string,
-): Promise<ResultadoMedicionEntrega> {
+async function medirEntregaPegado(spec: PageSpec, texto: string): Promise<ResultadoMedicionEntrega> {
   const FALLO = (error: string): ResultadoMedicionEntrega => ({
     ok: false,
     error,
     caracteresEscritos: texto.length,
     caracteresPresentes: 0,
-    marcaCanariaPresente: false,
+    textoFinal: "",
     ms: 0,
     quedoLimpio: true,
   });
@@ -844,7 +846,6 @@ async function medirEntregaPegado(
   const ms = Math.round(performance.now() - t0);
   const final = leer();
   const caracteresPresentes = final.length;
-  const marcaOk = final.includes(marcaCanaria);
 
   const quedoLimpio = await vaciarCompositorMedicion(composer, spec.composer.kind);
 
@@ -852,7 +853,7 @@ async function medirEntregaPegado(
     ok: true,
     caracteresEscritos: texto.length,
     caracteresPresentes,
-    marcaCanariaPresente: marcaOk,
+    textoFinal: final,
     ms,
     quedoLimpio,
   };
@@ -874,8 +875,7 @@ contextBridge.exposeInMainWorld("__ccProvider", {
   verificarTextoEscrito: (spec: PageSpec, texto: string) => verificarTextoEscrito(spec, texto),
   confirmarEfecto: (spec: PageSpec, antesLen: number) => confirmarEfecto(spec, antesLen),
   probarEnvioJS: (spec: PageSpec, marcador: string) => probarEnvioJS(spec, marcador),
-  medirEntregaPegado: (spec: PageSpec, texto: string, marcaCanaria: string) =>
-    medirEntregaPegado(spec, texto, marcaCanaria),
+  medirEntregaPegado: (spec: PageSpec, texto: string) => medirEntregaPegado(spec, texto),
   read: (spec: PageSpec) => ({
     text: readAssistant(spec),
     userText: readUserMessage(spec),

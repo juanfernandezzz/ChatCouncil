@@ -21,7 +21,7 @@ import { randomUUID } from "node:crypto";
 
 import { PROVIDER_SPECS } from "@chatcouncil/providers";
 import type { Cita, Procedencia, Respuesta } from "@chatcouncil/domain";
-import { armarCuerposPorOperador, hashSemilla } from "@chatcouncil/analysis";
+import { armarCuerposPorOperador, evaluarIntegridad, hashSemilla } from "@chatcouncil/analysis";
 
 import {
   correrPruebaFase1,
@@ -2237,6 +2237,28 @@ async function modoPruebaEnvioJS(): Promise<void> {
 }
 
 /**
+ * Trae UNA vista al frente (mismo mecanismo que `difundirConEnfoque`,
+ * generalizado: acá no hay que enviar nada, sólo escribir con el panel
+ * visible), corre `fn`, y restaura el layout — con `finally`, así que un
+ * error en `fn` no deja el layout roto.
+ */
+async function alFrente<T>(v: { id: string; view: WebContentsView }, fn: () => Promise<T>): Promise<T> {
+  if (!win) return fn();
+  const previo = v.view.getBounds();
+  const { width, height } = win.getContentBounds();
+  const h = Math.max(0, height - UI_HEIGHT);
+  v.view.setBounds({ x: 0, y: UI_HEIGHT, width, height: h });
+  win.contentView.addChildView(v.view);
+  v.view.webContents.focus();
+  try {
+    return await fn();
+  } finally {
+    if (win && !v.view.webContents.isDestroyed()) v.view.setBounds(previo);
+    layout();
+  }
+}
+
+/**
  * Modo de medición de entrega (`--cc-medir-entrega=<conversacionId>`).
  * Objetivo 1 de la ronda "medición de entrega del cuerpo": ¿el cuerpo REAL
  * de un operador entra PEGADO en el compositor? Lee las `Respuesta`/`Cita`
@@ -2244,6 +2266,18 @@ async function modoPruebaEnvioJS(): Promise<void> {
  * ningún proveedor), arma los 8 cuerpos con `armarCuerposPorOperador` (T5,
  * sin tocar su lógica), y escribe cada uno en el compositor del panel que
  * corresponde — NUNCA envía. Tres corridas, tabla cruda por `stdout`.
+ *
+ * SECUENCIAL Y CON EL PANEL AL FRENTE — corregido tras la primera ronda de
+ * medición (que escribía los 8 EN PARALELO, todos menos uno fuera del área
+ * visible por el diseño de fila horizontal con paginado). Hipótesis de
+ * Juan: los timeouts de gemini/mistral y la inconsistencia de grok eran de
+ * VISIBILIDAD, no del mecanismo — un `insertText` de ~100.000 caracteres
+ * fuerza un re-layout/re-render masivo, justo lo que Chromium degrada en
+ * una página oculta. No contradice la medición de "diagnóstico de
+ * visibilidad" anterior (esa refutó la visibilidad para la PRESENCIA del
+ * compositor; ésta es escritura de un volumen que esa medición no probó).
+ * `alFrente` reutiliza el mecanismo ya verificado de `difundirConEnfoque`
+ * (confirmado por Juan el 2026-08-25 con kimi).
  */
 async function modoMedirEntrega(): Promise<void> {
   try {
@@ -2287,11 +2321,15 @@ async function modoMedirEntrega(): Promise<void> {
     type Fila = {
       operadorId: string;
       corrida: number;
+      panelAlFrente: boolean;
       ok: boolean;
       error?: string;
       caracteresEscritos: number;
       caracteresPresentes: number;
-      marcaCanariaPresente: boolean;
+      estadoIntegridad: string;
+      marcasEsperadas: number;
+      marcasPresentes: number;
+      faltantes: number[];
       ms: number;
       quedoLimpio: boolean;
     };
@@ -2307,40 +2345,49 @@ async function modoMedirEntrega(): Promise<void> {
         () => randomUUID(),
       );
 
-      await Promise.all(
-        resultado.cuerpos.map(async (cuerpoOperador) => {
-          const v = vistas.find((x) => x.id === cuerpoOperador.operadorId);
-          if (!v) {
-            filas.push({
-              operadorId: cuerpoOperador.operadorId,
-              corrida,
-              ok: false,
-              error: "panel no abierto (¿faltó --cc-solo con los 8 del pool?)",
-              caracteresEscritos: cuerpoOperador.cuerpo.length,
-              caracteresPresentes: 0,
-              marcaCanariaPresente: false,
-              ms: 0,
-              quedoLimpio: true,
-            });
-            return;
-          }
-          const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS];
-          const specJson = JSON.stringify(spec);
-          // RELOJ PROPIO, fuera de `medirEntregaPegado`: esa función tiene un
-          // techo interno de 45s para la espera de quietud, pero un `paste`
-          // gigante en un editor rico (ProseMirror/Lexical) puede colgar el
-          // RENDERER entero re-procesando el DOM, y ahí adentro ni siquiera
-          // llega a correr el `setTimeout` que mediría el techo — medido: la
-          // primera corrida de esta ronda se quedó horas sin producir NINGÚN
-          // resultado, con las sesiones intactas (no fue un cierre de sesión,
-          // fue un panel que nunca volvió). `Promise.race` con un techo desde
-          // afuera es lo único que garantiza que UN panel colgado no bloquee
-          // el informe de los otros siete.
-          const TECHO_EXTERNO_MS = 90_000;
-          try {
-            const r = (await Promise.race([
+      // SECUENCIAL, no Promise.all: cada panel pasa por "al frente" antes
+      // del siguiente — "al frente" es una posición única, nunca dos a la
+      // vez (mismo motivo que `difundir()` ya aplicaba a `envioConfiable`).
+      for (const cuerpoOperador of resultado.cuerpos) {
+        const v = vistas.find((x) => x.id === cuerpoOperador.operadorId);
+        if (!v) {
+          filas.push({
+            operadorId: cuerpoOperador.operadorId,
+            corrida,
+            panelAlFrente: false,
+            ok: false,
+            error: "panel no abierto (¿faltó --cc-solo con los 8 del pool?)",
+            caracteresEscritos: cuerpoOperador.cuerpo.length,
+            caracteresPresentes: 0,
+            estadoIntegridad: "indeterminado",
+            marcasEsperadas: cuerpoOperador.marcas.length,
+            marcasPresentes: 0,
+            faltantes: [],
+            ms: 0,
+            quedoLimpio: true,
+          });
+          continue;
+        }
+        const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS];
+        const specJson = JSON.stringify(spec);
+        // RELOJ PROPIO, fuera de `medirEntregaPegado`: esa función tiene un
+        // techo interno de 45s para la espera de quietud, pero un `paste`
+        // gigante en un editor rico (ProseMirror/Lexical) puede colgar el
+        // RENDERER entero re-procesando el DOM, y ahí adentro ni siquiera
+        // llega a correr el `setTimeout` que mediría el techo — medido: la
+        // primera corrida de esta ronda se quedó horas sin producir NINGÚN
+        // resultado, con las sesiones intactas (no fue un cierre de sesión,
+        // fue un panel que nunca volvió). `Promise.race` con un techo desde
+        // afuera es lo único que garantiza que UN panel colgado no bloquee
+        // el informe de los otros siete. SE MANTIENE con el panel al frente:
+        // convirtió horas de cuelgue silencioso en un dato, y eso no se
+        // negocia aunque la hipótesis de visibilidad se confirme.
+        const TECHO_EXTERNO_MS = 90_000;
+        try {
+          const r = (await alFrente(v, () =>
+            Promise.race([
               v.view.webContents.executeJavaScript(
-                `window.__ccProvider.medirEntregaPegado(${specJson}, ${JSON.stringify(cuerpoOperador.cuerpo)}, ${JSON.stringify(cuerpoOperador.tokenCanario)})`,
+                `window.__ccProvider.medirEntregaPegado(${specJson}, ${JSON.stringify(cuerpoOperador.cuerpo)})`,
                 true,
               ),
               new Promise((_, reject) =>
@@ -2349,58 +2396,80 @@ async function modoMedirEntrega(): Promise<void> {
                   TECHO_EXTERNO_MS,
                 ),
               ),
-            ])) as {
-              ok: boolean;
-              error?: string;
-              caracteresEscritos: number;
-              caracteresPresentes: number;
-              marcaCanariaPresente: boolean;
-              ms: number;
-              quedoLimpio: boolean;
-            };
-            filas.push({ operadorId: cuerpoOperador.operadorId, corrida, ...r });
-            decirPorSalida(
-              `[cc-medir-entrega] corrida ${corrida} · ${cuerpoOperador.operadorId}: ok=${r.ok} ${r.caracteresPresentes}/${r.caracteresEscritos}c ${r.ms}ms canaria=${r.marcaCanariaPresente}\n`,
-            );
-          } catch (e) {
-            const error = e instanceof Error ? e.message : String(e);
-            filas.push({
-              operadorId: cuerpoOperador.operadorId,
-              corrida,
-              ok: false,
-              error,
-              caracteresEscritos: cuerpoOperador.cuerpo.length,
-              caracteresPresentes: 0,
-              marcaCanariaPresente: false,
-              ms: 0,
-              quedoLimpio: true,
-            });
-            decirPorSalida(`[cc-medir-entrega] corrida ${corrida} · ${cuerpoOperador.operadorId}: ERROR ${error}\n`);
-          }
-        }),
-      );
+            ]),
+          )) as {
+            ok: boolean;
+            error?: string;
+            caracteresEscritos: number;
+            caracteresPresentes: number;
+            textoFinal: string;
+            ms: number;
+            quedoLimpio: boolean;
+          };
+          const integridad = evaluarIntegridad(r.textoFinal, cuerpoOperador.marcas);
+          filas.push({
+            operadorId: cuerpoOperador.operadorId,
+            corrida,
+            panelAlFrente: true,
+            ok: r.ok,
+            ...(r.error ? { error: r.error } : {}),
+            caracteresEscritos: r.caracteresEscritos,
+            caracteresPresentes: r.caracteresPresentes,
+            estadoIntegridad: integridad.estado,
+            marcasEsperadas: integridad.marcasEsperadas,
+            marcasPresentes: integridad.marcasPresentes,
+            faltantes: integridad.faltantes,
+            ms: r.ms,
+            quedoLimpio: r.quedoLimpio,
+          });
+          decirPorSalida(
+            `[cc-medir-entrega] corrida ${corrida} · ${cuerpoOperador.operadorId} (al frente): ok=${r.ok} ${r.caracteresPresentes}/${r.caracteresEscritos}c ${r.ms}ms integridad=${integridad.estado} (${integridad.marcasPresentes}/${integridad.marcasEsperadas} marcas)\n`,
+          );
+        } catch (e) {
+          const error = e instanceof Error ? e.message : String(e);
+          filas.push({
+            operadorId: cuerpoOperador.operadorId,
+            corrida,
+            panelAlFrente: true,
+            ok: false,
+            error,
+            caracteresEscritos: cuerpoOperador.cuerpo.length,
+            caracteresPresentes: 0,
+            estadoIntegridad: "indeterminado",
+            marcasEsperadas: cuerpoOperador.marcas.length,
+            marcasPresentes: 0,
+            faltantes: [],
+            ms: 0,
+            quedoLimpio: true,
+          });
+          decirPorSalida(`[cc-medir-entrega] corrida ${corrida} · ${cuerpoOperador.operadorId} (al frente): ERROR ${error}\n`);
+        }
+      }
     }
 
     // Tabla cruda, una fila por proveedor con la TASA sobre las corridas —
     // "tres corridas y tasa", no el último resultado (AGENTES.md).
     const lineas: string[] = [];
-    lineas.push("proveedor\tcorridas_ok\tentero(char==)\tcanaria_ok\tquedoLimpio_ok\tms(min/mediana/max)\tdetalle");
+    lineas.push(
+      "proveedor\tpanelAlFrente\tcorridas_ok\tentero(char==)\tintegridad(marcas)\tquedoLimpio_ok\tms(min/mediana/max)\tdetalle",
+    );
     for (const id of POOL_OPERADORES) {
       const propias = filas.filter((f) => f.operadorId === id);
       const ok = propias.filter((f) => f.ok);
       const entero = ok.filter((f) => f.caracteresPresentes === f.caracteresEscritos);
-      const canaria = ok.filter((f) => f.marcaCanariaPresente);
+      const completos = ok.filter((f) => f.estadoIntegridad === "completo");
       const limpio = ok.filter((f) => f.quedoLimpio);
       const mss = ok.map((f) => f.ms).sort((a, b) => a - b);
       const mediana = mss.length > 0 ? mss[Math.floor(mss.length / 2)] : null;
+      const alFrenteSiempre = propias.every((f) => f.panelAlFrente);
       const detalle = propias
         .map(
           (f) =>
-            `c${f.corrida}:${f.ok ? `${f.caracteresPresentes}/${f.caracteresEscritos}c,${f.ms}ms,canaria=${f.marcaCanariaPresente}` : `ERROR(${f.error})`}`,
+            `c${f.corrida}:${f.ok ? `${f.caracteresPresentes}/${f.caracteresEscritos}c,${f.ms}ms,${f.estadoIntegridad}(${f.marcasPresentes}/${f.marcasEsperadas}${f.faltantes.length > 0 ? `,faltan:${f.faltantes.join(",")}` : ""})` : `ERROR(${f.error})`}`,
         )
         .join(" | ");
       lineas.push(
-        `${id}\t${ok.length}/${NUM_CORRIDAS}\t${entero.length}/${NUM_CORRIDAS}\t${canaria.length}/${NUM_CORRIDAS}\t${limpio.length}/${NUM_CORRIDAS}\t${mss[0] ?? "-"}/${mediana ?? "-"}/${mss[mss.length - 1] ?? "-"}\t${detalle}`,
+        `${id}\t${alFrenteSiempre ? "si" : "no"}\t${ok.length}/${NUM_CORRIDAS}\t${entero.length}/${NUM_CORRIDAS}\t${completos.length}/${NUM_CORRIDAS}\t${limpio.length}/${NUM_CORRIDAS}\t${mss[0] ?? "-"}/${mediana ?? "-"}/${mss[mss.length - 1] ?? "-"}\t${detalle}`,
       );
     }
 

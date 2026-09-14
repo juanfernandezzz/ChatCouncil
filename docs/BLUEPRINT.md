@@ -2109,6 +2109,142 @@ final pega el cuerpo entero de una sola vez, tiene que tener el mismo
 resguardo — un techo externo al panel — o un operador con un editor lento
 puede colgar la sesión de Juan sin ningún aviso.
 
+#### Diagnóstico de la pérdida constante — offline, 2026-09-14
+
+La medición encontró que chatgpt/claude/kimi pierden una cantidad FIJA de
+caracteres (165/739/734) en las tres corridas — el mismo número exacto,
+pese a que los tiempos de escritura variaron mucho entre corridas
+(chatgpt: 48-61 s). Esa determinancia frente a timing variable es evidencia
+en contra de un truncado por recursos (que produciría pérdidas variables,
+correlacionadas con cuánto tardó cada corrida) y a favor de que el editor
+NORMALIZA el texto de forma dependiente del CONTENIDO, no del momento.
+
+**Se probó, offline, contra el cuerpo real reconstruido** (misma función
+`armarCuerposPorOperador`, mismos datos de T1, sin abrir la app) **si algún
+patrón de caracteres conocido explica el número exacto**: espacios
+múltiples colapsados a uno, saltos de línea múltiples colapsados a uno o a
+dos, retornos de carro, NBSP eliminado, caracteres de formato Unicode
+(categoría `Cf`: ancho cero, marcador de dirección, BOM), composición NFC y
+NFKC. **Ninguna hipótesis, sola ni combinada, reprodujo el número exacto**
+(165/739/734) — la tabla completa con los nueve candidatos por proveedor
+queda en el historial de esta sesión, no repetida acá para no inflar el
+documento con negativos.
+
+**ABIERTO, con esa palabra: el mecanismo exacto de la pérdida sigue sin
+identificarse.** La determinancia ya es evidencia fuerte de "normalización,
+no truncado" — pero identificar QUÉ carácter o patrón específico se pierde
+exige comparar el texto ESCRITO contra el texto REAL que quedó en el
+compositor, carácter a carácter, y esa comparación no se puede hacer con
+los datos que ya había: la primera ronda de medición sólo guardó el LARGO
+del resultado, nunca el texto. Corregido para la próxima corrida (ver
+abajo): `medirEntregaPegado` ahora devuelve el texto final completo, así
+que la próxima medición sí puede diferenciarlas sin adivinar.
+
+#### T4, corregida — marcas canaria INTERCALADAS, no una sola al final
+
+La marca única al final (versión original de T4) tiene un punto ciego que
+la medición de entrega demostró, no que se hipotetizó: mientras chatgpt,
+claude y kimi pierden caracteres en el MEDIO del cuerpo, la marca del
+FINAL llegó intacta las tres veces en los tres. Una marca sola no puede
+distinguir "completo" de "faltó un tramo en el medio, pero no donde vive
+la marca".
+
+**Reemplazada por `insertarMarcasIntercaladas`** (`packages/analysis/src/
+cuerpo-operador.ts`): una marca cada `INTERVALO_MARCA_CHARS = 1000`
+caracteres, más una marca final. Motivo del número, declarado: con cuerpos
+de ~80.000-110.000 caracteres (medido), 1.000 da ~80-110 marcas por
+cuerpo — denso alcanza para acotar cualquier bloque perdido a ~1% del
+cuerpo en vez de "en algún lugar de 100.000"; disperso alcanza para que el
+overhead de texto instrumental quede bajo (~3% del cuerpo) y para que una
+pérdida DISTRIBUIDA de pocos caracteres cada vez (el patrón medido: NBSP,
+espacios, sueltos) tenga baja probabilidad de coincidir justo con el texto
+corto de una marca. Formato `[[CC-MARCA-0042-<token>]]`, en su propia
+línea — un prefijo que ningún texto de respuesta real produce por azar, y
+que el operador (otro modelo de lenguaje leyendo el cuerpo) puede reconocer
+como instrumentación y no como contenido a evaluar.
+
+**`evaluarIntegridad`** clasifica lo que devolvió el operador contra las
+marcas insertadas en tres estados — nunca colapsa a booleano: `"completo"`
+(todas presentes), `"truncado"` (faltan índices en un TRAMO CONTIGUO — el
+tramo dice dónde), `"indeterminado"` (faltan índices dispersos, no
+contiguos — no se fuerza a ninguna de las otras dos categorías sin
+evidencia). Es también la herramienta que resuelve el diagnóstico de
+arriba en la próxima medición: si faltan caracteres pero TODAS las marcas
+están, la pérdida está distribuida (normalización); si falta un tramo de
+marcas, hay un bloque truncado real.
+
+**Probado en rojo→verde antes de confiar en él**, con datos sintéticos:
+texto completo → `"completo"`; recorte al 40% (tramo contiguo al final) →
+`"truncado"`, con el último índice entre los faltantes; quitar sólo la
+última marca → `"truncado"` (tramo contiguo de longitud 1); quitar dos
+marcas NO contiguas con una marca intacta en el medio → `"indeterminado"`.
+Las cuatro dieron el estado esperado. También verificado contra un cuerpo
+real armado con `armarCuerposPorOperador`, sin tocar: evalúa `"completo"`
+contra sus propias marcas, como tiene que ser.
+
+**`medirEntregaPegado` (preload) corregido en el mismo sentido**: ya no
+recibe una marca única ni devuelve un booleano — recibe el cuerpo completo
+y devuelve el TEXTO FINAL sin recortar. Quien llama corre
+`evaluarIntegridad` del lado del proceso principal.
+
+#### Objetivo 1, REPETIDO con el panel al frente (2026-09-14) — la hipótesis de Juan, CONFIRMADA
+
+La primera corrida de esta ronda escribía los 8 cuerpos EN PARALELO, con
+sólo un panel dentro del área visible por el diseño de fila horizontal con
+paginado — siete de ocho escribían ocultos. Juan planteó que los timeouts
+(gemini, mistral) y la inconsistencia (grok) eran de VISIBILIDAD: un
+`insertText` de ~100.000 caracteres fuerza un re-layout/re-render masivo,
+justo lo que Chromium degrada en una página oculta. Repetida la medición
+SECUENCIAL, trayendo cada panel al frente antes de escribir (`alFrente`,
+reutilizando el mecanismo ya verificado de `difundirConEnfoque`, confirmado
+por Juan el 2026-08-25 con kimi) — misma conversación, mismas 8 respuestas,
+tres corridas:
+
+| Proveedor | Panel al frente | Corridas OK | Integridad | ms (min/mediana/max) |
+|---|---|---|---|---|
+| chatgpt | sí | 3/3 | completo (91/91 marcas), 3/3 | 38.539 / 38.587 / 43.439 |
+| gemini | sí | **3/3** | completo (81/81 marcas), 3/3 | 29.893 / 30.488 / 34.684 |
+| claude | sí | 3/3 | completo (108/108 marcas), 3/3 | 7.771 / 8.564 / 8.922 |
+| grok | sí | **3/3** | completo (104/104 marcas), 3/3 | 24.063 / 24.147 / 24.772 |
+| mistral | sí | **3/3** | completo (110/110 marcas), 3/3 | 12.492 / 12.928 / 13.754 |
+| glm | sí | 3/3 | completo (104/104 marcas), 3/3 | 13.843 / 20.633 / 22.647 |
+| kimi | sí | 3/3 | completo (100/100 marcas), 3/3 | 5.548 / 5.562 / 5.652 |
+| qwen | sí | 3/3 | completo (80/80 marcas), 3/3 | 7.976 / 11.150 / 12.518 |
+
+**Hipótesis CONFIRMADA, sin ambigüedad.** Los tres que fallaban en paralelo
+—gemini y mistral con timeout las tres veces, grok inconsistente— entran
+pegados los 8/8 en los 8/8, con el panel al frente. La causa NO era el
+proveedor: era la visibilidad. Esto NO contradice el "diagnóstico de
+visibilidad" de la Fase 3 anterior (§ más arriba): aquella medición refutó
+la visibilidad para la PRESENCIA del compositor; ésta mide escritura de
+~100.000 caracteres, una carga de render que esa medición nunca probó.
+
+**Y resuelve, de paso, el diagnóstico del punto anterior (qué se pierde en
+chatgpt/claude/kimi).** Con las marcas intercaladas cada 1.000 caracteres,
+los TRES —y ahora también gemini, grok y mistral— muestran `integridad:
+completo` con el 100% de sus marcas presentes, mientras `caracteresPresentes`
+sigue siendo MENOR que `caracteresEscritos` en seis de los ocho (todos
+menos glm y qwen, que dan 0 de diferencia). Con TODAS las marcas intactas,
+un bloque contiguo perdido queda descartado por definición —
+`evaluarIntegridad` lo habría marcado `"truncado"` — así que la brecha de
+caracteres en esos seis SÓLO puede ser una pérdida DISTRIBUIDA, nunca un
+truncado. **Confirma la hipótesis de normalización de forma directa,
+aunque el mecanismo carácter por carácter siga sin identificarse**: el
+diagnóstico offline no encontró qué se colapsa, pero esta medición prueba
+estructuralmente que sea lo que sea, está esparcido y no concentrado.
+
+**Dato de diseño para la Parte 2, con el número medido:** sumando la
+mediana de cada proveedor, escribir los 8 cuerpos SECUENCIALES con el panel
+al frente toma **~152 s (~2,5 min)** — dentro del rango de 3 a 8 minutos
+que se había anticipado como aceptable, y mejor que el techo. La Parte 2 SE
+DISEÑA secuencial con el panel al frente: no es una opción entre varias, es
+el único camino medido que funciona en los 8.
+
+**Objetivo 2 (entrega por archivo) queda CERRADO como innecesario**, no
+sólo abierto: con el pegado secuencial funcionando 8/8, no hay proveedor
+que necesite una vía de entrega alternativa. Se reabre sólo si una medición
+futura sobre un cuerpo más grande (el pool puede crecer) vuelve a fallar.
+
 **Lo que NO entra en esta lista porque ya está resuelto:** capturar el
 cuerpo de las 8 (Objetivo 1, esta sesión), la escritura al registro sin
 ronda abierta, el HTML crudo para re-derivar selectores sin gastar cuota, y

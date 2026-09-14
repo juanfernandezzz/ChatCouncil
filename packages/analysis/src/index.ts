@@ -15,7 +15,12 @@
  *    dónde entrar al prompt que reciben los ANALISTAS. Verificado por
  *    `guard:sellado` en CI. Agregarle un import rompe la garantía, no sólo el
  *    estilo.
+ *  · `verificar-fuentes` (T2) — verificación mecánica de una `Cita`, función
+ *    PURA sobre un puerto HTTP inyectado. Nunca llama a la red por su cuenta:
+ *    `guard:dominio` lo verifica igual que verifica que `packages/domain` no
+ *    sabe de Electron.
  */
 export * from "./anonymize";
 export * from "./build-analyst-prompt";
 export * from "./provider-names";
+export * from "./verificar-fuentes";

@@ -15,6 +15,15 @@
  *  2. `packages/domain/` no importa NADA de Electron, del DOM ni de `node:*`.
  *     El modelo de datos es TypeScript puro: si empieza a saber de sistema de
  *     archivos, deja de ser un modelo y pasa a ser media aplicación.
+ *  3. `packages/analysis/` tampoco importa `node:*` — extendido en T2 (Fase
+ *     3): el verificador de fuentes tiene que poder correr ENTERO en pruebas
+ *     contra un puerto HTTP falso, y una dependencia de Node ahí sería la
+ *     puerta para que alguien metiera una llamada de red directa donde no
+ *     puede ir.
+ *  4. NINGÚN archivo bajo `packages/` llama a `fetch(` literal. El verificador
+ *     de fuentes (T2) recibe el puerto HTTP como parámetro; si `fetch`
+ *     apareciera adentro, ya no sería una función pura sobre un puerto
+ *     inyectado, sería la app hablándole a la red por atrás del gate.
  *
  * Cero dependencias, a propósito.
  */
@@ -64,6 +73,18 @@ const PROHIBIDO_EN_DOMINIO = [
   ["@chatcouncil/providers", "el dominio no depende de los proveedores; la flecha va al reves"],
 ];
 
+const PROHIBIDO_EN_ANALYSIS = [
+  ["node:", "el verificador de fuentes (T2) tiene que poder correr en pruebas sin Node real detras"],
+  ["electron", "packages/analysis sigue portable, sin Electron"],
+];
+
+// Llamada literal a `fetch(`: no una mencion en un comentario o string, sino
+// el identificador seguido de un parentesis, en codigo real. Una funcion
+// PURA sobre un puerto inyectado no puede tener esto en ningun lado bajo
+// packages/ — es la garantia que separa "recibe el puerto" de "llama a la
+// red por atras".
+const LLAMADA_FETCH = /(?<![.\w])fetch\s*\(/;
+
 for (const archivo of archivos) {
   const rel = relative(ROOT, archivo).replace(/\\/g, "/");
   const src = readFileSync(archivo, "utf8");
@@ -82,6 +103,18 @@ for (const archivo of archivos) {
       }
     }
   }
+
+  if (rel.startsWith("packages/analysis/")) {
+    for (const [prohibido, motivo] of PROHIBIDO_EN_ANALYSIS) {
+      if (specs.some((s) => s === prohibido || s.startsWith(prohibido))) {
+        fallos.push(`${rel} importa "${prohibido}": ${motivo}.`);
+      }
+    }
+  }
+
+  if (LLAMADA_FETCH.test(src)) {
+    fallos.push(`${rel} llama a fetch( directo: packages/ verifica sobre un puerto inyectado, nunca habla con la red por su cuenta.`);
+  }
 }
 
 if (fallos.length > 0) {
@@ -92,5 +125,6 @@ if (fallos.length > 0) {
 
 console.log(
   `[guard:dominio] OK — ${archivos.length} archivos bajo packages/; ninguno importa de apps/, ` +
-    `y packages/domain/ sigue sin Electron, sin DOM y sin node.`,
+    `packages/domain/ sigue sin Electron, sin DOM y sin node, packages/analysis/ sin node ni ` +
+    `electron, y ningun archivo llama a fetch( directo.`,
 );

@@ -1572,7 +1572,7 @@ real pegada, no una suposición de que compiló.
 | # | Tarea | Depende de | Criterio de éxito medible |
 |---|---|---|---|
 | T1 | **Extracción de fuentes desde el HTML crudo.** Ya existe `Respuesta.html` (outerHTML sin recortar) y `fuentesHref` (conteo). Falta la extracción real: de cada `<a href>` encontrado, guardar `{ url, textoVisible, dondeVive: "cuerpo" \| "panel-ancestro" }` como un hecho nuevo append-only (`Cita`, en `packages/domain`). **✅ CERRADA, 2026-09-13 — ver "T1, cerrada" abajo, con el criterio de éxito CORREGIDO.** | Captura real ya hecha (VERIFICADO, ver Objetivo 1 arriba) | ~~Una corrida de `--cc-probe` o `Capturar` sobre una captura con fuentes conocidas (ej. la de esta sesión: chatgpt 23, kimi 17, deepseek 26) produce exactamente esa cantidad de hechos `Cita`, con URL no vacía en el 100% de ellos.~~ **CRITERIO MAL PUESTO, corregido:** `fuentesHref` sube por hasta 6 niveles de ancestros y puede contar links de navegación de la interfaz que no son citas — es un TECHO, no el número de citas esperado. Igualarlo en los nueve sería sospechoso, no exitoso. Criterio real: (a) `citas.length <= fuentesHref` en los nueve; (b) toda `Cita.url` es absoluta y no vacía (se descartan `javascript:`, `#`, `mailto:`, `tel:`, `data:` y rutas relativas, con el motivo de descarte contado); (c) revisión manual de una muestra sin fuente real descartada. |
-| T2 | **Verificación mecánica de la fuente citada**, tri-estado (`cumple` / `no cumple` / `no se pudo comprobar`, nunca booleano — decisión 12 de la Fase 3 histórica, sigue vigente). Sale a la red SÓLO a las URL de T1, nunca a buscar respaldo no citado (declaración de salida a la red, §1). | T1 | Contra un conjunto de prueba de 10 URLs conocidas (5 que responden 200, 3 que dan 404, 2 inalcanzables por timeout), el resultado clasifica las 10 en el estado correcto, con el tercer estado usado en las 2 de timeout — nunca colapsado a `no cumple`. |
+| T2 | **Verificación mecánica de la fuente citada**, tri-estado (`cumple` / `no cumple` / `no se pudo comprobar`, nunca booleano — decisión 12 de la Fase 3 histórica, sigue vigente). Sale a la red SÓLO a las URL de T1, nunca a buscar respaldo no citado (declaración de salida a la red, §1). **✅ CERRADA, 2026-09-14 — ver "T2, cerrada" abajo.** | T1 | Contra un conjunto de prueba de 10 URLs conocidas (5 que responden 200, 3 que dan 404, 2 inalcanzables por timeout), el resultado clasifica las 10 en el estado correcto, con el tercer estado usado en las 2 de timeout — nunca colapsado a `no cumple`. |
 | T3 | **Anonimización y barajado con semilla**, reutilizando el builder sellado (`guard:sellado`) ya verificado. Persistir la semilla en la `Ronda` (el campo `semilla` del dominio ya existe, sin usar). | T1 (necesita el cuerpo de las 8 respuestas + citas para anonimizar) | Dos corridas con la MISMA semilla producen el MISMO orden barajado (determinismo); dos corridas con semilla distinta producen órdenes distintos en al menos 6 de 8 posiciones (no-degenerado). Verificado con una prueba automatizada, no a ojo. |
 | T4 | **Marca canaria.** Antes de armar el archivo por operador, insertar un token único (UUID) al final del cuerpo, y exigir que la respuesta del operador lo repita. Decisión ya tomada con el número que la justifica: ver "El volumen decide pegado vs. archivo" arriba (~26.800 tokens por operador, no entra pegado). | T3 (la marca va DENTRO del cuerpo ya anonimizado y barajado) | Una prueba con un archivo TRUNCADO a propósito (le falta la marca) hace que el código marque esa respuesta como `no confiable: archivo truncado`, sin que el operador haya tenido que decirlo — el criterio de éxito es que el CÓDIGO lo detecte, no que el operador lo reporte. |
 | T5 | **Armar y entregar el archivo por operador** (7 de 8, exclusión de autoevaluación), como adjunto — nunca pegado en el compositor, por el volumen medido (decisión 1). Reutiliza la difusión existente (`difundir()`) pero con un archivo en vez de texto, y el prompt de la herramienta (biblioteca de Parte 2) como mensaje. | T4 | Con el pool de 8, se generan exactamente 8 archivos, cada uno con 7 respuestas (nunca la propia), verificado contando los `proveedorId` presentes en cada archivo contra la lista de `INVESTIGADORES` menos el operador. |
@@ -1708,6 +1708,121 @@ con el panel de fuentes colapsado por defecto en esas cuatro interfaces
 así que T1 extrae CERO `Cita` ahí, siempre, hasta que Juan abra el panel
 antes de capturar. No es un defecto de la extracción: es la misma limitación
 ya registrada, propagada un paso más allá de `fuentesHref`.
+
+#### DECISIÓN DE T3, escrita ahora para que no se pierda (revisión de T1, 2026-09-14)
+
+`Cita.url` guarda la URL ORIGINAL, sin tocar — dato canónico, nunca se pisa.
+Pero el CUERPO ANONIMIZADO que arma T3 para los operadores lleva una versión
+LIMPIA de esa misma URL: `?utm_source=chatgpt.com` en las 23 citas de
+chatgpt le dice a cualquier operador exactamente cuál respuesta es de
+ChatGPT, y anula el barajado con semilla sin que nada falle en rojo — un
+canal MECÁNICO de fuga que `docs/LIMITACIONES.md` no cubría todavía (esa
+entrada habla de dominios propios e idioma de las fuentes, algo que no se
+puede limpiar; esto sí).
+
+**Regla, medida sobre los cinco proveedores con `Cita` reales:** se quita
+todo parámetro de query cuyo NOMBRE empiece con `utm_`, o cuyo VALOR
+contenga el id de algún proveedor del pool. Medido: sólo chatgpt trae query
+params (`utm_source`, `model`, `_bhlid`); mistral, glm, kimi y deepseek no
+traen ninguno. De los tres de chatgpt, sólo `utm_source=chatgpt.com` cae
+bajo la regla (nombra al proveedor Y empieza con `utm_`); `model=gpt-5.5`
+queda —es la página real que se pidió, no tracking— y `_bhlid=…` también
+queda —es un id de marketing del SITIO DESTINO (Anthropic), no algo que
+nombre al proveedor que citó—. La distinción es "delata al proveedor", no
+"es tracking feo": sólo lo primero se quita.
+
+Implementada YA como `limpiarUrlParaAnonimizar` en
+`apps/desktop/src/main/citas.ts`, verificada contra las tres formas reales
+de chatgpt (offline, sin red):
+
+```
+https://developers.openai.com/…/latest-model?utm_source=chatgpt.com
+  -> https://developers.openai.com/…/latest-model                        (queda limpia)
+https://developers.openai.com/…/latest-model?model=gpt-5.5&utm_source=chatgpt.com
+  -> https://developers.openai.com/…/latest-model?model=gpt-5.5          (model= queda)
+https://www.anthropic.com/…/effective-context-engineering-for-ai-agents?_bhlid=…&utm_source=chatgpt.com
+  -> https://www.anthropic.com/…/effective-context-engineering-for-ai-agents?_bhlid=…  (_bhlid queda)
+```
+
+**El campo de la `Cita` para la versión limpia se agrega recién en T3** —
+esta función es la herramienta lista para usar, no un cambio al hecho
+`Cita` en sí, que sigue siendo sólo lo que T1 declaró.
+
+#### T2, cerrada (2026-09-14) — verificación mecánica, función pura sobre un puerto inyectado
+
+Implementada en `packages/analysis/src/verificar-fuentes.ts`: `verificarCitas(entradas, puerto, opciones)`
+nunca llama a la red por su cuenta — recibe `puerto: PuertoHttp` como
+parámetro, y `guard:dominio` (extendido esta ronda) falla si aparece un
+`fetch(` literal o un import de `node:` bajo `packages/`. **Probado en
+rojo→verde antes de confiar en él**: se insertó temporalmente un `fetch(` y
+un `import "node:fs"` en el archivo nuevo, el gate falló con los dos
+mensajes esperados, se revirtió, y volvió a OK.
+
+**Verificado ENTERO contra un puerto FALSO, cero red real** (conjunto de
+prueba de 10 URL: 5×200, 3×404, 2×timeout persistente — el que pide el
+criterio original del BLUEPRINT):
+
+| Grupo | Resultado | Intentos |
+|---|---|---:|
+| 5× status 200 | `cumple` | 1 (sin reintentos) |
+| 3× status 404 | `no-cumple` | 1 (un 404 es un RESULTADO, no se reintenta) |
+| 2× timeout persistente | `no-se-pudo-comprobar` | 3 (agota `maxReintentos`=2, backoff 200ms→400ms, medido en las llamadas a `esperar`) |
+
+Los tres estados salen distintos y el tercero NUNCA colapsa contra
+`no-cumple` (verificado por igualdad estricta en la prueba, no a ojo).
+
+**Deduplicación, verificada de punta a punta:** 3 apariciones de la misma
+URL (una por T1 en `cuerpo`, otras en `panel-ancestro`) producen **1 sola**
+llamada al puerto — medido contando invocaciones reales del puerto falso,
+no el tamaño del resultado. Sin esto, T2 saldría a la red una vez por
+`Cita`: con la granularidad "por aparición" que fijó la revisión de T1,
+chatgpt saldría 23 veces por 11 fuentes reales, kimi 17 veces por 4 —
+más del doble de tráfico innecesario contra los mismos sitios.
+
+**Estado `"sin-titulo-citado"`, el que el BLUEPRINT original no tenía.**
+La revisión de T1 midió `textoVisible` real de los cinco proveedores con
+`Cita`: `deepseek` no publica NINGÚN título en las 21 (todo son marcadores
+`- N`); `mistral` tampoco en las 7 (nombre de sitio solo: "Tetrate",
+"Mirascope"); `kimi` en 16 de 17 el texto queda vacío (marcador sin texto
+alguno) y en 1 de 17 hay un título real; `chatgpt` tiene título real SÓLO
+en las 8 citas de `panel-ancestro` ("Fuentes clave"), no en las 15 de
+`cuerpo` (esas son chip con nombre de sitio); `glm` es el único que cita
+CON título real en el cuerpo mismo, en 5 de 6 (la sexta, "alucinaciones de
+error", es una anomalía sin separador, tratada igual que un chip). La
+función `pareceTitulo` (en `verificar-fuentes.ts`) decide esto por una
+señal ESTRUCTURAL medida, no supuesta: un título real, en los cinco
+proveedores, siempre separa "publicador" de "título" con un guión largo,
+un guión con espacios, o dos puntos seguidos de texto; un nombre de sitio
+solo o un marcador numérico nunca lo hace. Probada contra los 9 casos
+reales de arriba (uno por patrón observado) — los 9 clasifican como se
+esperaba, incluido el caso difícil "Centro de Ayuda de Anthropic +1" (6
+palabras, pero sin separador: correctamente NO es título).
+
+`EstadoTitulo` es un tri-estado EXTENDIDO a cuatro valores:
+`"coincide"` / `"no-coincide"` / `"sin-titulo-citado"` / `"no-se-pudo-comprobar"`
+(este último cuando la existencia falló, o cuando el puerto no devolvió
+título del destino). `"sin-titulo-citado"` nunca se colapsa contra
+`"no-coincide"`: comparar `"- 30"` contra el título real de una página
+inventaría un desacuerdo donde no hay dato para comparar.
+
+**Fragmentos malformados, confirmado que no afectan la deduplicación.**
+`normalizarUrl` (T1) usa `origin + pathname` de la API `URL`, que nunca
+incluye el fragmento —da igual que sea `#1` o el `#1#1` duplicado de
+`edenai.co` citado por deepseek—: verificado con las dos URL reales,
+las dos normalizan al mismo valor sin el fragmento, entero.
+
+**Lo que verifiqué y NO era sospechoso:** `coleoguy.github.io/tealc-prompt-design.html`,
+citada 6 veces por deepseek con `http` en un dominio que en la práctica
+fuerza `https`, es una fuente legítima (blog de laboratorio, Texas A&M) —
+el `http` es cómo lo citó el proveedor, no una cita fabricada; el puerto
+real de T2 sigue la redirección como cualquier otra.
+
+**ABIERTO, con esa palabra:** el puerto HTTP REAL (la implementación que
+usa `fetch`/`node:https` de verdad, con extracción de `<title>` del
+destino) no está construida todavía — sólo el contrato (`PuertoHttp`) y el
+verificador puro contra él. Vive en `apps/desktop`, fuera de
+`packages/analysis` a propósito, y es la próxima pieza antes de que T2
+pueda correr contra una `Ronda` real.
 
 **Lo que NO entra en esta lista porque ya está resuelto:** capturar el
 cuerpo de las 8 (Objetivo 1, esta sesión), la escritura al registro sin

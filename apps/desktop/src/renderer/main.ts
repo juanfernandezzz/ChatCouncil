@@ -46,6 +46,27 @@ interface Posicion {
   anchoTotal: number;
   ventanaAncho: number;
 }
+interface ResultadoConsolidarPanel {
+  operadorId: string;
+  ok: boolean;
+  error?: string;
+  estadoIntegridad: string;
+  marcasEsperadas: number;
+  marcasPresentes: number;
+  interrumpido: boolean;
+}
+interface ResultadoConsolidar {
+  ok: boolean;
+  error?: string;
+  paneles: ResultadoConsolidarPanel[];
+  navegacionesIntactas: boolean;
+}
+interface EstadoConsolidacion {
+  enCurso: boolean;
+  indice: number;
+  total: number;
+  operadorId: string | null;
+}
 interface CcBridge {
   investigadores: () => Promise<string[]>;
   difundir: (prompt: string) => Promise<Resultado[]>;
@@ -55,6 +76,8 @@ interface CcBridge {
   desplazar: (direccion: 1 | -1) => Promise<Posicion>;
   desplazarA: (x: number) => Promise<Posicion>;
   posicion: () => Promise<Posicion>;
+  consolidar: () => Promise<ResultadoConsolidar>;
+  consolidarEstado: () => Promise<EstadoConsolidacion>;
 }
 declare global {
   interface Window {
@@ -182,6 +205,64 @@ $("capturar").addEventListener("click", () => {
           : `\n\nPrompt de usuario: coincide en los ${conPrompt.length} proveedores donde se pudo leer.`;
     }
     decir(`Captura:\n${detalle}${avisoPrompt}`, avisoPrompt.startsWith("\n\n⚠") ? "mal" : "ok");
+  });
+});
+
+/**
+ * CONSOLIDAR RESPUESTAS — T5. Arma los 8 cuerpos, los escribe secuencial y
+ * al frente, sin enviar. Puede tardar minutos (medido: ~150s los 8), así
+ * que se sondea el progreso — sin señal de avance por dos minutos y medio
+ * se lee como cuelgue, y ya pasó en esta fase.
+ */
+const botonConsolidar = $<HTMLButtonElement>("consolidar");
+let sondeoProgreso: ReturnType<typeof setInterval> | null = null;
+
+function detenerSondeoProgreso(): void {
+  if (sondeoProgreso !== null) {
+    clearInterval(sondeoProgreso);
+    sondeoProgreso = null;
+  }
+}
+
+botonConsolidar.addEventListener("click", () => {
+  botonConsolidar.disabled = true;
+  decir("Consolidando: armando los 8 cuerpos…");
+
+  sondeoProgreso = setInterval(() => {
+    void window.cc.consolidarEstado().then((e) => {
+      if (e.enCurso) {
+        decir(`Consolidando: panel ${e.indice} de ${e.total} (${e.operadorId ?? "…"})…`);
+      }
+    });
+  }, 2000);
+
+  void window.cc.consolidar().then((r) => {
+    detenerSondeoProgreso();
+    botonConsolidar.disabled = false;
+
+    if (r.error) {
+      decir(`No se pudo consolidar: ${r.error}`, "mal");
+      return;
+    }
+    for (const p of r.paneles) {
+      if (p.interrumpido) marcar(p.operadorId, "interrumpido", "mal");
+      else if (!p.ok) marcar(p.operadorId, p.error ?? "falló", "mal");
+      else marcar(p.operadorId, `listo · ${p.estadoIntegridad} (${p.marcasPresentes}/${p.marcasEsperadas})`, p.estadoIntegridad === "completo" ? "ok" : "mal");
+    }
+    pintarPaneles();
+    const detalle = r.paneles
+      .map((p) =>
+        p.interrumpido
+          ? `  ${p.operadorId}: interrumpido — ${p.error ?? ""}`
+          : p.ok
+            ? `  ${p.operadorId}: listo, integridad ${p.estadoIntegridad} (${p.marcasPresentes}/${p.marcasEsperadas} marcas)`
+            : `  ${p.operadorId}: ${p.error ?? "falló"}`,
+      )
+      .join("\n");
+    const avisoNav = r.navegacionesIntactas
+      ? ""
+      : "\n\n⚠ El contador de navegaciones cambió durante la consolidación — alguna vista pudo haberse recargado.";
+    decir(`Consolidación:\n${detalle}${avisoNav}`, r.ok && r.navegacionesIntactas ? "ok" : "mal");
   });
 });
 

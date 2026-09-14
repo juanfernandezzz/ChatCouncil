@@ -20,7 +20,7 @@ import type { Server } from "node:http";
 import { randomUUID } from "node:crypto";
 
 import { PROVIDER_SPECS } from "@chatcouncil/providers";
-import type { Cita, Procedencia, Respuesta } from "@chatcouncil/domain";
+import type { Cita, Procedencia, Respuesta, Ronda } from "@chatcouncil/domain";
 import { armarCuerposPorOperador, evaluarIntegridad, hashSemilla } from "@chatcouncil/analysis";
 
 import {
@@ -39,7 +39,7 @@ import {
   generarSemilla,
   leerRegistroDeArchivo,
 } from "./registro";
-import { POOL_OPERADORES } from "./operador";
+import { armarYPersistirCuerposDeRonda, POOL_OPERADORES } from "./operador";
 
 /**
  * DEJAR DE OCLUIR LOS PANELES QUE NO ESTÁN EN PANTALLA.
@@ -197,7 +197,8 @@ type Modo =
   | "difundir"
   | "test-visibilidad"
   | "prueba-envio-js"
-  | "medir-entrega";
+  | "medir-entrega"
+  | "consolidar";
 
 /**
  * `--cc-difundir=<texto>`: dispara UNA ronda real —`difundir()` + espera de
@@ -234,6 +235,18 @@ const PRUEBA_ENVIO_JS_ID = (ARGV.find((a) => a.startsWith("--cc-prueba-envio-js=
  */
 const MEDIR_ENTREGA_CONV_ID = (ARGV.find((a) => a.startsWith("--cc-medir-entrega=")) ?? "").slice(
   "--cc-medir-entrega=".length,
+);
+
+/**
+ * `--cc-consolidar=<conversacionId>`: corre `consolidarRespuestas()` —el
+ * mismo camino que dispara el botón "Consolidar respuestas"— sin que nadie
+ * haga clic. Fija `conversacionActual`/`rondaActualId` a la ÚLTIMA ronda de
+ * esa conversación antes de llamarlo, porque el camino real los toma del
+ * estado que dejó "Enviar a todos" + "Capturar", y un modo scriptable no
+ * pasa por ahí. Mismo patrón que `--cc-difundir` para "Enviar a todos".
+ */
+const CONSOLIDAR_CONV_ID = (ARGV.find((a) => a.startsWith("--cc-consolidar=")) ?? "").slice(
+  "--cc-consolidar=".length,
 );
 
 /**
@@ -279,6 +292,8 @@ const MODO: Modo = HISTORIAL_ID
   ? "prueba-envio-js"
   : MEDIR_ENTREGA_CONV_ID.length > 0
   ? "medir-entrega"
+  : CONSOLIDAR_CONV_ID.length > 0
+  ? "consolidar"
   : ARGV.includes("--cc-test") || process.env["CC_TEST"] === "1"
   ? "test"
   : ARGV.includes("--cc-probe") || process.env["CC_PROBE"] === "1"
@@ -1416,6 +1431,15 @@ function registrarIpc(): void {
    * barra de scroll (mínimo, máximo, posición) sin tener que moverse primero.
    */
   ipcMain.handle("cc:posicion", () => estadoDesplazamiento());
+
+  /**
+   * T5 — "Consolidar respuestas". El renderer llama esto UNA vez (botón) y
+   * recibe el resultado final; mientras tanto puede sondear
+   * `cc:consolidar-estado` para saber en qué panel va (2,5 min sin señal se
+   * lee como cuelgue — medido, ya pasó en esta fase).
+   */
+  ipcMain.handle("cc:consolidar", async () => consolidarRespuestas());
+  ipcMain.handle("cc:consolidar-estado", () => estadoConsolidacion);
 }
 
 /**
@@ -2259,6 +2283,207 @@ async function alFrente<T>(v: { id: string; view: WebContentsView }, fn: () => P
 }
 
 /**
+ * T5 — CONSOLIDAR RESPUESTAS (Parte 2 de la interfaz). El flujo, medido y
+ * decidido en la ronda de medición de entrega:
+ *
+ *   Juan aprieta "Consolidar respuestas" → arma los 8 cuerpos, anonimiza,
+ *   baraja, persiste el sello → escribe cada cuerpo en su panel, SECUENCIAL
+ *   Y AL FRENTE → Juan mira y envía.
+ *
+ * NADA entre consolidar y enviar es automático — `entregarCuerpoOperador`
+ * (preload) escribe y NUNCA vacía, a diferencia de `medirEntregaPegado`:
+ * Juan tiene que poder revisar cada panel antes de mandarlo, igual que en
+ * la Parte 1.
+ *
+ * DOS SALVAGUARDAS que no estaban en la medición (que corría sola, sin
+ * nadie tocando la ventana):
+ *  1. INTERRUPCIÓN: si Juan desplaza la fila de paneles (`cc:desplazar` /
+ *     `cc:desplazarA`) mientras la secuencia está en curso, `scrollX`
+ *     cambia por debajo — se detecta ANTES de escribir en el siguiente
+ *     panel, la secuencia se DETIENE (no sigue escribiendo encima de lo que
+ *     Juan esté mirando) y los paneles restantes quedan marcados
+ *     `interrumpido`, nunca en verde por casualidad.
+ *  2. CONTADOR DE NAVEGACIONES: se compara antes y después, por proveedor.
+ *     Es la prueba MECÁNICA de "ninguna vista se recargó" — no una
+ *     impresión visual, un número que ya existe en el código desde la
+ *     Fase 1 (`contadorNavegaciones`, `did-navigate`).
+ *
+ * El techo externo de 90s por panel (`Promise.race`) se mantiene: convirtió
+ * un cuelgue de horas en un dato durante la medición, y eso no se negocia
+ * aunque la hipótesis de visibilidad esté confirmada.
+ */
+export interface ResultadoConsolidarPanel {
+  operadorId: string;
+  ok: boolean;
+  error?: string;
+  estadoIntegridad: string;
+  marcasEsperadas: number;
+  marcasPresentes: number;
+  interrumpido: boolean;
+}
+
+export interface ResultadoConsolidar {
+  ok: boolean;
+  error?: string;
+  paneles: ResultadoConsolidarPanel[];
+  navegacionesIntactas: boolean;
+}
+
+/** Progreso legible por `cc:consolidar-estado` (polling, no push — ver preload/ui.ts). */
+let estadoConsolidacion: { enCurso: boolean; indice: number; total: number; operadorId: string | null } = {
+  enCurso: false,
+  indice: 0,
+  total: 0,
+  operadorId: null,
+};
+
+async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
+  if (!conversacionActual || !rondaActualId) {
+    return {
+      ok: false,
+      error: "no hay una ronda activa: capturá las 8 respuestas del pool antes de consolidar",
+      paneles: [],
+      navegacionesIntactas: true,
+    };
+  }
+  const userData = app.getPath("userData");
+  const registro = leerRegistroDeArchivo(userData, conversacionActual);
+  const ronda = registro.hechos.find((h): h is Ronda => h.tipo === "ronda" && h.id === rondaActualId);
+  if (!ronda) {
+    return { ok: false, error: "no se encontró la ronda actual en el registro", paneles: [], navegacionesIntactas: true };
+  }
+
+  const respuestasDeLaRonda = new Map<string, Respuesta>();
+  for (const h of registro.hechos) {
+    if (h.tipo === "respuesta" && h.rondaId === rondaActualId && (POOL_OPERADORES as readonly string[]).includes(h.proveedorId)) {
+      respuestasDeLaRonda.set(h.proveedorId, h);
+    }
+  }
+  const faltantes = POOL_OPERADORES.filter((id) => !respuestasDeLaRonda.has(id));
+  if (faltantes.length > 0) {
+    return {
+      ok: false,
+      error: `faltan respuestas capturadas en esta ronda: ${faltantes.join(", ")} — usá "Capturar" antes de consolidar`,
+      paneles: [],
+      navegacionesIntactas: true,
+    };
+  }
+  const citas = registro.hechos.filter((h): h is Cita => h.tipo === "cita");
+
+  let resultadoArmado;
+  try {
+    resultadoArmado = armarYPersistirCuerposDeRonda(userData, conversacionActual, ronda, [...respuestasDeLaRonda.values()], citas);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e), paneles: [], navegacionesIntactas: true };
+  }
+
+  const navAntes = new Map(POOL_OPERADORES.map((id) => [id, contadorNavegaciones.get(id) ?? 0]));
+  const scrollXInicial = scrollX;
+
+  estadoConsolidacion = { enCurso: true, indice: 0, total: resultadoArmado.cuerpos.length, operadorId: null };
+  const paneles: ResultadoConsolidarPanel[] = [];
+  let interrumpidoGlobal = false;
+
+  try {
+    for (let i = 0; i < resultadoArmado.cuerpos.length; i++) {
+      const cuerpoOperador = resultadoArmado.cuerpos[i]!;
+      estadoConsolidacion = { enCurso: true, indice: i + 1, total: resultadoArmado.cuerpos.length, operadorId: cuerpoOperador.operadorId };
+
+      if (interrumpidoGlobal) {
+        paneles.push({
+          operadorId: cuerpoOperador.operadorId,
+          ok: false,
+          error: "secuencia detenida antes de llegar a este panel",
+          estadoIntegridad: "indeterminado",
+          marcasEsperadas: cuerpoOperador.marcas.length,
+          marcasPresentes: 0,
+          interrumpido: true,
+        });
+        continue;
+      }
+      if (scrollX !== scrollXInicial) {
+        interrumpidoGlobal = true;
+        paneles.push({
+          operadorId: cuerpoOperador.operadorId,
+          ok: false,
+          error: "el usuario desplazó la fila de paneles durante la consolidación: secuencia detenida",
+          estadoIntegridad: "indeterminado",
+          marcasEsperadas: cuerpoOperador.marcas.length,
+          marcasPresentes: 0,
+          interrumpido: true,
+        });
+        continue;
+      }
+
+      const v = vistas.find((x) => x.id === cuerpoOperador.operadorId);
+      if (!v) {
+        paneles.push({
+          operadorId: cuerpoOperador.operadorId,
+          ok: false,
+          error: "panel no abierto",
+          estadoIntegridad: "indeterminado",
+          marcasEsperadas: cuerpoOperador.marcas.length,
+          marcasPresentes: 0,
+          interrumpido: false,
+        });
+        continue;
+      }
+      const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS];
+      const specJson = JSON.stringify(spec);
+      const TECHO_EXTERNO_MS = 90_000;
+      try {
+        const r = (await alFrente(v, () =>
+          Promise.race([
+            v.view.webContents.executeJavaScript(
+              `window.__ccProvider.entregarCuerpoOperador(${specJson}, ${JSON.stringify(cuerpoOperador.cuerpo)})`,
+              true,
+            ),
+            new Promise((_, reject) =>
+              setTimeout(
+                () => reject(new Error(`sin respuesta del panel tras ${TECHO_EXTERNO_MS}ms (techo externo)`)),
+                TECHO_EXTERNO_MS,
+              ),
+            ),
+          ]),
+        )) as { ok: boolean; error?: string; textoFinal: string };
+        const integridad = evaluarIntegridad(r.textoFinal, cuerpoOperador.marcas);
+        paneles.push({
+          operadorId: cuerpoOperador.operadorId,
+          ok: r.ok,
+          ...(r.error ? { error: r.error } : {}),
+          estadoIntegridad: integridad.estado,
+          marcasEsperadas: integridad.marcasEsperadas,
+          marcasPresentes: integridad.marcasPresentes,
+          interrumpido: false,
+        });
+      } catch (e) {
+        paneles.push({
+          operadorId: cuerpoOperador.operadorId,
+          ok: false,
+          error: e instanceof Error ? e.message : String(e),
+          estadoIntegridad: "indeterminado",
+          marcasEsperadas: cuerpoOperador.marcas.length,
+          marcasPresentes: 0,
+          interrumpido: false,
+        });
+      }
+    }
+  } finally {
+    estadoConsolidacion = { enCurso: false, indice: 0, total: 0, operadorId: null };
+  }
+
+  const navegacionesIntactas = POOL_OPERADORES.every(
+    (id) => (navAntes.get(id) ?? 0) === (contadorNavegaciones.get(id) ?? 0),
+  );
+
+  return {
+    ok: !interrumpidoGlobal && paneles.every((p) => p.ok),
+    paneles,
+    navegacionesIntactas,
+  };
+}
+
+/**
  * Modo de medición de entrega (`--cc-medir-entrega=<conversacionId>`).
  * Objetivo 1 de la ronda "medición de entrega del cuerpo": ¿el cuerpo REAL
  * de un operador entra PEGADO en el compositor? Lee las `Respuesta`/`Cita`
@@ -2477,6 +2702,37 @@ async function modoMedirEntrega(): Promise<void> {
     decirPorSalida(`\n===CC_MEDIR_ENTREGA_TABLA===\n${lineas.join("\n")}\n`);
   } catch (e) {
     decirPorSalida(`\n===CC_MEDIR_ENTREGA_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+  } finally {
+    app.quit();
+  }
+}
+
+/**
+ * Modo scriptable de "Consolidar respuestas" (`--cc-consolidar=<id>`) — ver
+ * `consolidarRespuestas()`. Verifica el camino REAL sin que nadie haga
+ * clic: fija el estado que la UI dejaría (`conversacionActual`,
+ * `rondaActualId` en la última ronda de esa conversación) y llama a la
+ * MISMA función que expone `cc:consolidar`.
+ */
+async function modoConsolidar(): Promise<void> {
+  try {
+    await new Promise((r) => setTimeout(r, 50_000));
+
+    const userData = app.getPath("userData");
+    const registro = leerRegistroDeArchivo(userData, CONSOLIDAR_CONV_ID);
+    const rondas = registro.hechos.filter((h): h is Ronda => h.tipo === "ronda");
+    const ultima = rondas[rondas.length - 1];
+    if (!ultima) {
+      decirPorSalida(`\n===CC_CONSOLIDAR_ERROR===\nLa conversacion "${CONSOLIDAR_CONV_ID}" no tiene ninguna ronda.\n`);
+      return;
+    }
+    conversacionActual = CONSOLIDAR_CONV_ID;
+    rondaActualId = ultima.id;
+
+    const resultado = await consolidarRespuestas();
+    emitir("CC_CONSOLIDAR_JSON", resultado);
+  } catch (e) {
+    decirPorSalida(`\n===CC_CONSOLIDAR_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
   } finally {
     app.quit();
   }
@@ -2786,6 +3042,7 @@ void app.whenReady().then(() => {
   if (MODO === "test-visibilidad") void modoVisibilidad();
   if (MODO === "prueba-envio-js") void modoPruebaEnvioJS();
   if (MODO === "medir-entrega") void modoMedirEntrega();
+  if (MODO === "consolidar") void modoConsolidar();
   app.on("activate", () => {
     if (BaseWindow.getAllWindows().length === 0) createWindow();
   });

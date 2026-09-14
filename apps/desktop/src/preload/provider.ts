@@ -798,26 +798,38 @@ async function vaciarCompositorMedicion(composer: Element, kind: PageSpec["compo
   return false;
 }
 
-async function medirEntregaPegado(spec: PageSpec, texto: string): Promise<ResultadoMedicionEntrega> {
-  const FALLO = (error: string): ResultadoMedicionEntrega => ({
-    ok: false,
-    error,
-    caracteresEscritos: texto.length,
-    caracteresPresentes: 0,
-    textoFinal: "",
-    ms: 0,
-    quedoLimpio: true,
-  });
+interface ResultadoEscritura {
+  ok: boolean;
+  error?: string;
+  ms: number;
+  textoFinal: string;
+  composer: Element | null;
+}
 
+/**
+ * El núcleo compartido de "escribir un cuerpo grande y esperar a que
+ * asiente" — factorizado de `medirEntregaPegado` para que T5 (entrega real
+ * a un operador, que NO vacía después) y la medición (que sí vacía) no
+ * repitan la misma espera por quietud. Nunca escribe encima de un borrador
+ * de Juan; nunca envía nada.
+ */
+async function escribirYEsperarQuietud(spec: PageSpec, texto: string): Promise<ResultadoEscritura> {
   const composer = await waitFor(spec.composer.selector, spec.timeouts?.composerMs ?? 15_000);
-  if (!composer) return FALLO("compositor no encontrado: no se escribió nada");
+  if (!composer) {
+    return { ok: false, error: "compositor no encontrado: no se escribió nada", ms: 0, textoFinal: "", composer: null };
+  }
 
   const leer = (): string =>
     spec.composer.kind === "textarea" ? (composer as HTMLTextAreaElement).value : (composer.textContent ?? "");
 
-  // Nunca se escribe encima de un borrador de Juan.
   if (leer().trim().length > 0) {
-    return FALLO("el compositor ya tenía texto: no se escribe encima de un borrador de Juan");
+    return {
+      ok: false,
+      error: "el compositor ya tenía texto: no se escribe encima de un borrador de Juan",
+      ms: 0,
+      textoFinal: "",
+      composer,
+    };
   }
 
   (composer as HTMLElement).focus();
@@ -843,19 +855,60 @@ async function medirEntregaPegado(spec: PageSpec, texto: string): Promise<Result
     await sleep(120);
   }
 
-  const ms = Math.round(performance.now() - t0);
-  const final = leer();
-  const caracteresPresentes = final.length;
+  return { ok: true, ms: Math.round(performance.now() - t0), textoFinal: leer(), composer };
+}
 
-  const quedoLimpio = await vaciarCompositorMedicion(composer, spec.composer.kind);
+async function medirEntregaPegado(spec: PageSpec, texto: string): Promise<ResultadoMedicionEntrega> {
+  const r = await escribirYEsperarQuietud(spec, texto);
+  if (!r.ok) {
+    return {
+      ok: false,
+      ...(r.error ? { error: r.error } : {}),
+      caracteresEscritos: texto.length,
+      caracteresPresentes: 0,
+      textoFinal: "",
+      ms: 0,
+      quedoLimpio: true,
+    };
+  }
+
+  const quedoLimpio = r.composer ? await vaciarCompositorMedicion(r.composer, spec.composer.kind) : false;
 
   return {
     ok: true,
     caracteresEscritos: texto.length,
-    caracteresPresentes,
-    textoFinal: final,
-    ms,
+    caracteresPresentes: r.textoFinal.length,
+    textoFinal: r.textoFinal,
+    ms: r.ms,
     quedoLimpio,
+  };
+}
+
+/**
+ * T5 — ENTREGA REAL a un operador. A diferencia de `medirEntregaPegado`
+ * (que vacía al terminar: es sólo una medición), esto DEJA el cuerpo en el
+ * compositor — es justo el punto: Juan tiene que poder revisar el panel
+ * antes de enviarlo, igual que en la Parte 1. Nunca envía nada por sí
+ * misma: ni clic, ni tecla.
+ */
+export interface ResultadoEntrega {
+  ok: boolean;
+  error?: string;
+  caracteresEscritos: number;
+  caracteresPresentes: number;
+  textoFinal: string;
+  ms: number;
+}
+
+async function entregarCuerpoOperador(spec: PageSpec, texto: string): Promise<ResultadoEntrega> {
+  const r = await escribirYEsperarQuietud(spec, texto);
+  return {
+    ok: r.ok,
+    ...(r.error ? { error: r.error } : {}),
+    caracteresEscritos: texto.length,
+    caracteresPresentes: r.textoFinal.length,
+    textoFinal: r.textoFinal,
+    ms: r.ms,
   };
 }
 
@@ -876,6 +929,7 @@ contextBridge.exposeInMainWorld("__ccProvider", {
   confirmarEfecto: (spec: PageSpec, antesLen: number) => confirmarEfecto(spec, antesLen),
   probarEnvioJS: (spec: PageSpec, marcador: string) => probarEnvioJS(spec, marcador),
   medirEntregaPegado: (spec: PageSpec, texto: string) => medirEntregaPegado(spec, texto),
+  entregarCuerpoOperador: (spec: PageSpec, texto: string) => entregarCuerpoOperador(spec, texto),
   read: (spec: PageSpec) => ({
     text: readAssistant(spec),
     userText: readUserMessage(spec),

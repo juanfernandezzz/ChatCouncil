@@ -70,6 +70,22 @@ en este repositorio.
   es la regla más dura del proyecto. Se declara, nada más.
   *MEDIDO, 2026-09-06, sobre una captura real de los nueve.*
 
+- **Los CUERPOS que arma T5 varían 38% en tamaño entre operadores — mismo
+  mecanismo que la dispersión de arriba, medido en la pieza siguiente del
+  pipeline.** Sobre la medición de entrega real (2026-09-14): el cuerpo más
+  chico (qwen, que excluye su propia respuesta larga) tiene 78.579
+  caracteres antes de las marcas; el más grande (mistral, que excluye su
+  propia respuesta corta) tiene 108.116. `(108.116 − 78.579) / 78.579 ≈
+  38%`. Es inherente al diseño de exclusión de autoevaluación: quien
+  excluye una respuesta larga lee menos: quien excluye una corta, lee más.
+  No es un error del armado —de hecho, es la comprobación cruzada que
+  valida que la exclusión funciona (ver `docs/BLUEPRINT.md`, "T5")— pero es
+  una segunda fuente de asimetría de CARGA DE LECTURA entre operadores,
+  distinta de la dispersión de contenido de arriba y con la misma
+  implicación: un operador que lee 108.000 caracteres no está en la misma
+  posición que uno que lee 78.000. *MEDIDO, 2026-09-14, ver
+  `docs/BLUEPRINT.md`, "Objetivo 1, REPETIDO con el panel al frente".*
+
 - **Las tablas de volumen de una corrida de prueba NO comparan
   proveedores entre sí — sólo dimensionan cuánto texto va a manejar la
   Parte 2.** Ejemplo medido el 2026-09-06: claude corrió como "Haiku 4.5"

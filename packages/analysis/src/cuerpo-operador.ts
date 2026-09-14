@@ -319,6 +319,60 @@ export function evaluarIntegridad(respuestaOperador: string, marcas: readonly st
   };
 }
 
+export interface SegmentoConDelta {
+  /** El segmento entre `marcas[indice-1]` y `marcas[indice]` (0 = antes de la primera marca). */
+  indice: number;
+  largoOriginal: number;
+  largoFinal: number;
+  delta: number;
+}
+
+/**
+ * Localiza DÓNDE difiere `final` de `original`, partiendo los dos por las
+ * mismas marcas — sólo tiene sentido cuando `evaluarIntegridad(final,
+ * marcas).estado === "completo"` (todas las marcas presentes: si faltara
+ * alguna, partir por ella no da segmentos comparables). Acota una pérdida
+ * DISTRIBUIDA a un tramo de ≤`INTERVALO_MARCA_CHARS` caracteres en vez de
+ * "en algún lugar del cuerpo entero" — la herramienta que el diagnóstico
+ * offline de la pérdida constante (chatgpt/claude/kimi, y después también
+ * gemini/grok/mistral) necesitaba y no tenía: comparar el texto ESCRITO
+ * contra el texto REAL, no sólo su longitud total.
+ */
+export function localizarPerdida(
+  original: string,
+  final: string,
+  marcas: readonly string[],
+): SegmentoConDelta[] {
+  function partir(texto: string): string[] {
+    const partes: string[] = [];
+    let resto = texto;
+    for (const m of marcas) {
+      const idx = resto.indexOf(m);
+      if (idx === -1) {
+        partes.push(resto);
+        return partes;
+      }
+      partes.push(resto.slice(0, idx));
+      resto = resto.slice(idx + m.length);
+    }
+    partes.push(resto);
+    return partes;
+  }
+
+  const segsOriginal = partir(original);
+  const segsFinal = partir(final);
+  const resultado: SegmentoConDelta[] = [];
+  const n = Math.max(segsOriginal.length, segsFinal.length);
+  for (let i = 0; i < n; i++) {
+    const largoOriginal = segsOriginal[i]?.length ?? 0;
+    const largoFinal = segsFinal[i]?.length ?? 0;
+    if (largoOriginal !== largoFinal) {
+      resultado.push({ indice: i, largoOriginal, largoFinal, delta: largoFinal - largoOriginal });
+    }
+  }
+  return resultado;
+}
+
 /**
  * T5, LA MITAD PURA — armar los 8 cuerpos por operador. La otra mitad
  * (entregar el archivo al panel) necesita la Parte 2 de la interfaz, que
@@ -381,6 +435,14 @@ export function armarCuerposPorOperador(
   const { labeled, seal } = anonymizeReplies(analizables, true, shuffleSeedNumerica);
 
   const urlsPor = new Map(respuestas.map((r) => [r.proveedorId, r.urlsCitadas]));
+  const textoLenPorProveedor = new Map(respuestas.map((r) => [r.proveedorId, r.texto.length]));
+  // Suma de TODOS los `texto` crudos del pool — independiente de a quién
+  // termine incluyendo cada cuerpo, a propósito: es la referencia contra la
+  // que se comprueba la exclusión más abajo, y una referencia que se
+  // calculara a partir de `incluidos` sería tautológica (nunca podría
+  // discrepar de sí misma). Verificado en rojo: calcularla desde `incluidos`
+  // fue la primera versión de esta comprobación, y no agarraba nada.
+  const sumaTotalPool = respuestas.reduce((s, r) => s + r.texto.length, 0);
   const codigos = codigosEstables(poolOrden);
   const selloConCodigo: EntradaSelloConCodigo[] = seal.map((s) => ({
     ...s,
@@ -397,9 +459,36 @@ export function armarCuerposPorOperador(
       bloques.push(`### Respuesta ${l.label}\n${armarCuerpoConFuentes(l.text, urls)}`);
       incluidos.push(proveedorDeEsteLabel);
     });
+    const textoBase = bloques.join("\n\n");
     const token = generarToken();
-    const { textoConMarcas, marcas } = insertarMarcasIntercaladas(bloques.join("\n\n"), token);
+    const { textoConMarcas, marcas } = insertarMarcasIntercaladas(textoBase, token);
     const cuerpo = `${textoConMarcas}\n[[CC-MARCA-FIN-${token}]]\n`;
+
+    // COMPROBACIÓN CRUZADA (revisión 2026-09-14, no diseñada a propósito para
+    // esto — salió de MIRAR los números de la medición de entrega real: el
+    // conteo de marcas caía siempre a ±2 del tamaño esperado, en los ocho, en
+    // el orden correcto). El tamaño esperado sale de `sumaTotalPool` MENOS el
+    // `texto` propio del operador — independiente de a quién `incluidos`
+    // termine listando, a propósito. Si la referencia se calculara a partir
+    // de `incluidos` sería tautológica: nunca podría discrepar de sí misma.
+    // PROBADO EN ROJO antes de confiar en ella: la primera versión SÍ se
+    // calculaba desde `incluidos`, y deshabilitando a mano la línea de
+    // exclusión de autoevaluación (un `<a>` que se incluye a sí mismo) esa
+    // versión NO tiraba — la referencia se corrompía junto con el bug que
+    // tenía que agarrar. Con `sumaTotalPool` como referencia, el mismo
+    // experimento SÍ tira.
+    const tamañoEsperado = sumaTotalPool - (textoLenPorProveedor.get(operadorId) ?? 0);
+    const marcasEsperadas = Math.max(1, Math.round(tamañoEsperado / INTERVALO_MARCA_CHARS));
+    const marcasReales = marcas.length; // sin contar la de FIN
+    const TOLERANCIA_MARCAS = 3;
+    if (Math.abs(marcasReales - marcasEsperadas) > TOLERANCIA_MARCAS) {
+      throw new Error(
+        `cuerpo de ${operadorId}: ${marcasReales} marcas, esperadas ~${marcasEsperadas} ` +
+          `(±${TOLERANCIA_MARCAS}) a partir de "pool menos la respuesta propia" — ` +
+          `posible fallo de exclusión de autoevaluación u otro cambio en qué se incluye.`,
+      );
+    }
+
     const fugas = fugasDeProveedorEnUrls(cuerpo);
     if (fugas.length > 0) {
       throw new Error(`cuerpo del operador ${operadorId} filtra identidad de proveedor por URL: ${fugas.join(" | ")}`);

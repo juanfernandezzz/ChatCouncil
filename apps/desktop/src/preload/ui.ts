@@ -23,7 +23,38 @@ contextBridge.exposeInMainWorld("cc", {
   desplazarA: (x: number): Promise<Posicion> => ipcRenderer.invoke("cc:desplazarA", x),
   /** Estado actual de desplazamiento, para dibujar la barra sin moverse primero. */
   posicion: (): Promise<Posicion> => ipcRenderer.invoke("cc:posicion"),
+  /**
+   * T5 — "Consolidar respuestas". Arma los 8 cuerpos, anonimiza, baraja,
+   * persiste el sello, y los escribe SECUENCIAL Y AL FRENTE en su panel —
+   * sin enviar nada. Puede tardar minutos (medido: ~150s para los 8); el
+   * renderer sondea `consolidarEstado` mientras tanto.
+   */
+  consolidar: (): Promise<ResultadoConsolidar> => ipcRenderer.invoke("cc:consolidar"),
+  /** Progreso de la consolidación en curso — sondeo, no evento empujado. */
+  consolidarEstado: (): Promise<EstadoConsolidacion> => ipcRenderer.invoke("cc:consolidar-estado"),
 });
+
+interface ResultadoConsolidarPanel {
+  operadorId: string;
+  ok: boolean;
+  error?: string;
+  estadoIntegridad: string;
+  marcasEsperadas: number;
+  marcasPresentes: number;
+  interrumpido: boolean;
+}
+interface ResultadoConsolidar {
+  ok: boolean;
+  error?: string;
+  paneles: ResultadoConsolidarPanel[];
+  navegacionesIntactas: boolean;
+}
+interface EstadoConsolidacion {
+  enCurso: boolean;
+  indice: number;
+  total: number;
+  operadorId: string | null;
+}
 
 interface Posicion {
   scrollX: number;

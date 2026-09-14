@@ -2245,6 +2245,156 @@ sólo abierto: con el pegado secuencial funcionando 8/8, no hay proveedor
 que necesite una vía de entrega alternativa. Se reabre sólo si una medición
 futura sobre un cuerpo más grande (el pool puede crecer) vuelve a fallar.
 
+#### Dos hallazgos que salieron de los números, sin que nadie los buscara (2026-09-14)
+
+**1. El conteo de marcas VALIDA el armado de cuerpos — convertido en
+comprobación cruzada.** Mirando la tabla de la medición: el tamaño
+esperado de cada cuerpo (pool completo menos la respuesta propia del
+operador) y el número de marcas medido caían siempre a ±2, en el orden
+correcto —qwen 78.579/80, gemini 79.138/81, chatgpt 89.741/91, kimi
+98.226/100, glm 102.268/104, grok 103.031/104, claude 106.876/108, mistral
+108.116/110—. Era una coincidencia OBSERVADA, no una prueba; agarraba el
+día que alguien la mirara, no el día que el armado se rompiera.
+Convertida en aserción dentro de `armarCuerposPorOperador`
+(`packages/analysis/src/cuerpo-operador.ts`): compara el número de marcas
+contra `sumaTotalPool - textoPropio`, calculado de forma INDEPENDIENTE de
+qué terminó incluido en el cuerpo, y TIRA si se van de rango (±3 marcas de
+tolerancia). **Probado en rojo→verde, y la primera versión no servía**: la
+primera implementación calculaba el "tamaño esperado" a partir de
+`incluidos` —la misma lista que la exclusión de autoevaluación puede
+corromper— así que, deshabilitando a mano esa exclusión, la comprobación
+NO disparaba: la referencia se rompía junto con el bug que tenía que
+agarrar (tautología). Corregida a una referencia independiente
+(`sumaTotalPool` del pool completo, fija, calculada antes del loop de
+armado); el mismo experimento de deshabilitar la exclusión SÍ dispara con
+la versión corregida.
+
+**2. Dispersión de 38% en el TAMAÑO DE LOS CUERPOS** — ver
+`docs/LIMITACIONES.md`, nueva entrada al lado de la dispersión de 22,5x de
+contenido: mismo mecanismo (exclusión de autoevaluación), midiendo otra
+cosa (cuánto lee cada operador, no cuánto produjo cada investigador).
+
+#### Localización de la pérdida — `localizarPerdida`, offline, cuota cero
+
+Herramienta que el diagnóstico offline de la pérdida constante necesitaba y
+no tenía: partir el texto ESCRITO y el texto FINAL por las mismas marcas y
+comparar longitud de cada segmento. Sólo tiene sentido cuando
+`evaluarIntegridad` ya dio `"completo"` (todas las marcas presentes, así
+que partir por ellas da segmentos comparables). Probada con datos
+sintéticos: un texto con una sola diferencia de 1 carácter en un segmento
+del medio (sin tocar ninguna marca) → `localizarPerdida` encuentra
+EXACTAMENTE ese segmento, delta −1; sin diferencia → cero segmentos.
+
+**ABIERTO, con esa palabra: no corrida todavía contra el cuerpo real.**
+`consolidarRespuestas` (T5, abajo) computa `evaluarIntegridad` pero
+descarta `textoFinal` después — no queda expuesto en el resultado, así que
+esta ronda no lo corrió contra un caso real de pérdida. La función está
+lista y probada con datos sintéticos; conectarla al informe de
+`consolidarRespuestas` (exponer los segmentos con delta cuando el estado
+es `"completo"` pero `caracteresPresentes != caracteresEscritos`) es la
+tarea que cierra el diagnóstico de la pérdida constante, y queda para la
+próxima ronda en vez de forzarse acá con un dato que no se midió.
+
+### T5, la Parte 2 de la interfaz — CERRADA (2026-09-14)
+
+**Flujo, decidido y no automático más allá de un paso:** Juan aprieta
+"Consolidar respuestas" → el código arma los 8 cuerpos, anonimiza, baraja,
+persiste el sello → escribe cada cuerpo en su panel, SECUENCIAL Y AL
+FRENTE → Juan mira y envía. Nada entre "consolidar" y "enviar" es
+automático: `entregarCuerpoOperador` (preload) escribe y **nunca vacía** —
+a diferencia de `medirEntregaPegado`, que existe sólo para medir. Juan
+tiene que poder revisar cada panel antes de mandarlo, igual que en la
+Parte 1.
+
+**Interrupción, decidida y con mecanismo, no sólo declarada.** Si Juan usa
+los controles de desplazamiento (`cc:desplazar`/`cc:desplazarA`) mientras
+la secuencia está en curso, el `scrollX` global cambia por debajo del
+proceso de consolidación — se detecta ANTES de escribir en el siguiente
+panel, la secuencia se DETIENE (nunca sigue escribiendo encima de lo que
+Juan esté mirando en ese momento) y todos los paneles restantes quedan
+marcados `interrumpido: true`, explícito, nunca en verde por casualidad.
+Es una señal indirecta —no hay forma de saber si un clic específico
+"rompió" una escritura en curso, Electron no expone eso— pero es una señal
+REAL y mecánica, no una suposición: el `scrollX` sólo cambia por una
+acción de Juan, nunca por `alFrente` (que manipula `bounds`/z-order de la
+vista, no el estado de desplazamiento global).
+
+**Barra de progreso, con número, no impresión.** `cc:consolidar-estado`
+(sondeado cada 2s por el renderer, no empujado por evento — la app no
+tenía infraestructura de eventos push hacia el renderer, y agregarla para
+esto habría sido más superficie que un `setInterval`) devuelve panel
+actual / total — "2,5 minutos sin señal de avance se lee como cuelgue" ya
+pasó en esta fase (la medición de entrega, antes del resguardo de 90s), y
+no se repite acá sin decirlo primero.
+
+**Watchdog de 90s por panel, CONSERVADO.** Convirtió un cuelgue de horas
+en un dato durante la medición; se mantiene en la entrega real aunque la
+hipótesis de visibilidad esté confirmada — un editor puede colgarse por
+otros motivos que la visibilidad no cubre, y perder esa protección sería
+repetir el mismo riesgo que ya costó una sesión entera.
+
+**Contador de navegaciones, la prueba MECÁNICA de "ninguna vista se
+recargó".** `contadorNavegaciones` (existe desde la Fase 1, incrementa en
+`did-navigate`) se compara antes y después de la secuencia completa, por
+proveedor — no una impresión visual, un número. Va en el resultado que
+recibe el renderer (`navegacionesIntactas`) y se avisa si cambió.
+
+**Decisión: NO se unifica la Parte 1 a secuencial-al-frente — con un
+número, no por simetría.** El mecanismo que falló en paralelo (gemini,
+mistral, grok) es específico de un `insertText` GRANDE: ~80.000-114.000
+caracteres fuerzan un re-layout masivo que Chromium degrada en una página
+oculta. La Parte 1 escribe un PROMPT —la pregunta de investigación de
+Juan—, órdenes de magnitud más chico (típicamente cientos a pocos miles de
+caracteres, nunca decenas de miles) y ya está verificada funcionando en
+paralelo desde la Fase 1, sin el síntoma que motivó este cambio. Unificar
+sin medir sería la misma superstición que ya se corrigió en el criterio de
+barajado: cambiar algo que funciona porque "parece más seguro", no porque
+un número lo pida. Si el volumen de los prompts de Parte 1 creciera
+sustancialmente en el futuro, esto se re-mide — no se decide hoy por
+adelantado.
+
+**Modo scriptable, `--cc-consolidar=<conversacionId>`**, mismo patrón que
+`--cc-difundir` para "Enviar a todos": corre la MISMA función
+(`consolidarRespuestas`) que expone `cc:consolidar`, fijando
+`conversacionActual`/`rondaActualId` a la última ronda de esa conversación
+antes de llamarla — para poder verificar el camino real sin que nadie haga
+clic.
+
+**Verificado contra una RONDA DE PRUEBA real** (`esPrueba: true`,
+excluida del análisis, cuota cero — reutiliza las 8 respuestas YA
+capturadas de `a92b22f2…`, re-etiquetadas con una `rondaId` y una
+`semilla` generadas de verdad, porque la única ronda real existente
+quedó de ANTES de la revisión que empezó a generar semilla y
+`armarYPersistirCuerposDeRonda` correctamente TIRA sobre una ronda sin
+semilla — no se simula ese dato), vía `--cc-consolidar=<id>`:
+
+ · **7 de 8 paneles `completo`** (chatgpt 91/91, claude 108/108, grok
+   104/104, mistral 110/110, glm 104/104, kimi 100/100, qwen 80/80).
+ · **gemini dio timeout** a los 90s del techo externo — una única corrida
+   (no tres), consistente con la variabilidad ya medida antes de confirmar
+   la hipótesis de visibilidad (una corrida individual puede fallar por
+   azar de red/render; la medición de 3 corridas de la sección anterior es
+   la que sostiene la conclusión de fondo, no ésta). No se repite la
+   corrida para forzar un 8/8: se informa el número real.
+ · **`navegacionesIntactas: true`** — el contador de navegaciones de los
+   8 paneles no cambió, confirmado, no supuesto.
+ · **8 `Sello` persistidos de verdad**, uno por proveedor, con
+   `codigoEstable` correcto (`chatgpt→P1` … `qwen→P8`) — confirmado
+   leyendo el archivo de la ronda de prueba después de la corrida, no
+   inferido del código.
+ · El resultado global es `ok: false` (por el timeout de gemini) — el
+   código NO simula éxito cuando un panel falla, que es exactamente el
+   comportamiento correcto: "todos" no es "casi todos".
+
+**ABIERTO, con esa palabra: no verificado contra una ronda real de Juan
+(con semilla real, `esPrueba: false`)** — porque no existe una todavía;
+la única forma de crearla es "Enviar a todos" real, que gasta cuota y no
+corresponde disparar sin que Juan lo pida. El mecanismo está verificado
+con datos reales (mismo texto, misma estructura) sobre una ronda marcada
+de prueba; falta la primera corrida sobre una ronda genuina, que llega
+sola la próxima vez que Juan use "Enviar a todos" + "Capturar" +
+"Consolidar respuestas" en su flujo normal.
+
 **Lo que NO entra en esta lista porque ya está resuelto:** capturar el
 cuerpo de las 8 (Objetivo 1, esta sesión), la escritura al registro sin
 ronda abierta, el HTML crudo para re-derivar selectores sin gastar cuota, y

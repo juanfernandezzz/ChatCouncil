@@ -1573,7 +1573,7 @@ real pegada, no una suposición de que compiló.
 |---|---|---|---|
 | T1 | **Extracción de fuentes desde el HTML crudo.** Ya existe `Respuesta.html` (outerHTML sin recortar) y `fuentesHref` (conteo). Falta la extracción real: de cada `<a href>` encontrado, guardar `{ url, textoVisible, dondeVive: "cuerpo" \| "panel-ancestro" }` como un hecho nuevo append-only (`Cita`, en `packages/domain`). **✅ CERRADA, 2026-09-13 — ver "T1, cerrada" abajo, con el criterio de éxito CORREGIDO.** | Captura real ya hecha (VERIFICADO, ver Objetivo 1 arriba) | ~~Una corrida de `--cc-probe` o `Capturar` sobre una captura con fuentes conocidas (ej. la de esta sesión: chatgpt 23, kimi 17, deepseek 26) produce exactamente esa cantidad de hechos `Cita`, con URL no vacía en el 100% de ellos.~~ **CRITERIO MAL PUESTO, corregido:** `fuentesHref` sube por hasta 6 niveles de ancestros y puede contar links de navegación de la interfaz que no son citas — es un TECHO, no el número de citas esperado. Igualarlo en los nueve sería sospechoso, no exitoso. Criterio real: (a) `citas.length <= fuentesHref` en los nueve; (b) toda `Cita.url` es absoluta y no vacía (se descartan `javascript:`, `#`, `mailto:`, `tel:`, `data:` y rutas relativas, con el motivo de descarte contado); (c) revisión manual de una muestra sin fuente real descartada. |
 | T2 | **Verificación mecánica de la fuente citada**, tri-estado (`cumple` / `no cumple` / `no se pudo comprobar`, nunca booleano — decisión 12 de la Fase 3 histórica, sigue vigente). Sale a la red SÓLO a las URL de T1, nunca a buscar respaldo no citado (declaración de salida a la red, §1). **✅ CERRADA, 2026-09-14 — ver "T2, cerrada" abajo.** | T1 | Contra un conjunto de prueba de 10 URLs conocidas (5 que responden 200, 3 que dan 404, 2 inalcanzables por timeout), el resultado clasifica las 10 en el estado correcto, con el tercer estado usado en las 2 de timeout — nunca colapsado a `no cumple`. |
-| T3 | **Anonimización y barajado con semilla**, reutilizando el builder sellado (`guard:sellado`) ya verificado. Persistir la semilla en la `Ronda` (el campo `semilla` del dominio ya existe, sin usar). | T1 (necesita el cuerpo de las 8 respuestas + citas para anonimizar) | Dos corridas con la MISMA semilla producen el MISMO orden barajado (determinismo); dos corridas con semilla distinta producen órdenes distintos en al menos 6 de 8 posiciones (no-degenerado). Verificado con una prueba automatizada, no a ojo. |
+| T3 | **Anonimización y barajado con semilla**, reutilizando el builder sellado (`guard:sellado`) ya verificado. Persistir la semilla en la `Ronda` (el campo `semilla` del dominio ya existe, sin usar). **✅ CERRADA, 2026-09-14 — ver "T3, cerrada" abajo.** | T1 (necesita el cuerpo de las 8 respuestas + citas para anonimizar) | Dos corridas con la MISMA semilla producen el MISMO orden barajado (determinismo); dos corridas con semilla distinta producen órdenes distintos en al menos 6 de 8 posiciones (no-degenerado). Verificado con una prueba automatizada, no a ojo. |
 | T4 | **Marca canaria.** Antes de armar el archivo por operador, insertar un token único (UUID) al final del cuerpo, y exigir que la respuesta del operador lo repita. Decisión ya tomada con el número que la justifica: ver "El volumen decide pegado vs. archivo" arriba (~26.800 tokens por operador, no entra pegado). | T3 (la marca va DENTRO del cuerpo ya anonimizado y barajado) | Una prueba con un archivo TRUNCADO a propósito (le falta la marca) hace que el código marque esa respuesta como `no confiable: archivo truncado`, sin que el operador haya tenido que decirlo — el criterio de éxito es que el CÓDIGO lo detecte, no que el operador lo reporte. |
 | T5 | **Armar y entregar el archivo por operador** (7 de 8, exclusión de autoevaluación), como adjunto — nunca pegado en el compositor, por el volumen medido (decisión 1). Reutiliza la difusión existente (`difundir()`) pero con un archivo en vez de texto, y el prompt de la herramienta (biblioteca de Parte 2) como mensaje. | T4 | Con el pool de 8, se generan exactamente 8 archivos, cada uno con 7 respuestas (nunca la propia), verificado contando los `proveedorId` presentes en cada archivo contra la lista de `INVESTIGADORES` menos el operador. |
 | T6 | **Capturar la operación** (Parte 2): reutiliza el mismo mecanismo de "Capturar" ya construido, sobre los paneles de operación en vez de los de investigación. Produce la matriz operador × respuesta (hecho nuevo append-only, `Adjudicacion` o equivalente — nombre a decidir sin repetir el vocabulario ya descartado de "juez"/"analista"). | T5 | La matriz tiene exactamente 8 × 7 = 56 celdas (o menos las que fallen, cada falla como hecho, nunca como ausencia silenciosa); cada celda referencia el `proveedorId` operador y el `proveedorId` (desanonimizado con el sello) de la respuesta evaluada. |
@@ -1823,6 +1823,110 @@ destino) no está construida todavía — sólo el contrato (`PuertoHttp`) y el
 verificador puro contra él. Vive en `apps/desktop`, fuera de
 `packages/analysis` a propósito, y es la próxima pieza antes de que T2
 pueda correr contra una `Ronda` real.
+
+#### T3, cerrada (2026-09-14) — anonimización y barajado, cuota cero
+
+**El hallazgo que obligó a rehacer el diseño a mitad de camino.** La primera
+versión del gate escaneaba el cuerpo armado buscando el id de cualquier
+proveedor EN CUALQUIER PARTE de cada URL citada — dominio, ruta o query, sin
+distinguir. Verificado contra los 74 datos reales de T1, **reventó en
+falso**: mistral cita `https://platform.claude.com/docs/en/build-with-
+claude/prompt-engineering/claude-prompting-best-practices` — una fuente
+LEGÍTIMA de Anthropic sobre cómo escribir prompts para Claude, que
+cualquier proveedor podría citar sin que eso delate NADA sobre quién la
+citó — y "claude" aparece ahí dos veces. La primera versión la habría
+bloqueado, negándole al operador una fuente real por una coincidencia de
+texto. Corregido a DOS reglas, medidas contra la spec real, nunca contra un
+supuesto:
+
+ 1. **HOST propio del proveedor** — `OWN_DOMAINS` en
+    `packages/analysis/src/cuerpo-operador.ts`, copiado literal de
+    `newConversationUrl` en `packages/providers/src/specs.json`: `chatgpt.com`,
+    `chat.z.ai` (glm), `claude.ai`, `gemini.google.com`, `grok.com`,
+    `chat.mistral.ai`, `chat.qwen.ai`, `kimi.ai`, `chat.deepseek.com`. Un
+    link a la INTERFAZ del proveedor (p. ej. "compartir esta conversación")
+    delata siempre, sin excepción legítima posible — y nótese que ni "glm"
+    ni "kimi" aparecen como texto en sus propios dominios (`chat.z.ai`,
+    `kimi.ai`): una búsqueda de texto libre del id NUNCA los habría cubierto,
+    otro motivo para no usarla.
+ 2. **QUERY, y sólo la query** — nunca dominio ni ruta. Un parámetro de
+    tracking (`utm_source=chatgpt.com`) delata porque lo puso el PROVEEDOR
+    EMISOR sobre un link de salida; el mismo texto en la ruta de un sitio de
+    terceros —el caso de mistral, arriba— no lo hace.
+
+**Verificado, las dos reglas, contra el mismo dato real que las corrigió:**
+las 74 citas de T1 (chatgpt 23, mistral 7, glm 6, kimi 17, deepseek 21),
+pasadas por `armarCuerpoConFuentes` una por proveedor y las 74 juntas en un
+cuerpo combinado — **cero throws, cero fugas** (`fugasDeProveedorEnUrls`
+sobre las 74 ya limpias devuelve `[]`). La cita de mistral a
+`platform.claude.com` pasa sin tocarse: exactamente el caso que la primera
+versión rompía.
+
+**Lista BLANCA de query, no negra — la pieza que sí funcionaba, sin
+cambios.** `limpiarQueryWhitelist` quita TODO parámetro salvo `model`
+(único whitelisteado, con motivo: cambia qué página se sirve — medido en
+`?model=gpt-5.5` de chatgpt). Consecuencia medida del cambio de negra a
+blanca: `_bhlid` —que la versión anterior conservaba por no nombrar a
+ningún proveedor— ahora se QUITA también, porque el default pasó a ser
+quitar. La asimetría del riesgo (conservar de más delata; quitar de más, en
+el peor caso, deja una URL algo menos específica) se resuelve para el lado
+de quitar, como pedía esta revisión.
+
+**El gate, extendido y probado en rojo en las DOS direcciones antes de
+confiar en él** (Regla 4 nueva de `guard:sellado`, que ejecuta
+`armarCuerpoConFuentes` en un proceso Node aparte contra dos fixtures):
+ · Se deshabilitó `fugasDeProveedorEnUrls` (forzada a devolver `[]` siempre)
+   → el gate falló con `FALLO_FILTRANTE_NO_TIRO`, revertido después.
+ · El fixture "filtra a propósito" es `https://chatgpt.com/share/abc123` —
+   HOST propio, sin query — para que el gate pruebe la regla 1, la que la
+   limpieza de query NUNCA podría cubrir por sí sola.
+ · El fixture limpio (`arxiv.org/abs/2212.10001`) confirma que el gate no
+   frena de más.
+
+**DOS sistemas de identificador, implementados los dos:**
+ · Etiqueta barajada por ronda: `anonymizeReplies` (ya existía, VERIFICADA
+   de nuevo esta ronda, sin tocar su lógica — "reutilizando el builder
+   sellado" era el mandato). Determinismo probado con 8 respuestas
+   sintéticas: MISMA semilla → MISMO orden en dos corridas independientes
+   (igual, byte a byte); 45 pares de semillas DISTINTAS comparados (no un
+   par elegido a mano) → promedio **6,76/8** posiciones distintas, **39 de
+   45 pares (87%)** con 6 u 8 posiciones distintas — el resto cae en 4 o 5
+   por la varianza esperada de una permutación de 8 elementos, no por un
+   defecto del barajado (verificado que NINGUNA semilla reproduce por
+   casualidad el orden de panel sin barajar).
+ · Código estable por conversación: `codigosEstables` (nuevo,
+   `packages/analysis`), PURO, sin persistencia — deriva `P1`..`P8` del
+   orden de pool YA declarado en §1, medido: `chatgpt→P1, gemini→P2,
+   claude→P3, grok→P4, mistral→P5, glm→P6, kimi→P7, qwen→P8`. No se
+   persiste porque no depende de nada que cambie ronda a ronda; guardarlo
+   sería una segunda fuente de verdad para un dato que ya vive en un solo
+   lugar.
+
+**Semilla, generada de verdad y persistida.** Las dos llamadas a
+`escribirRonda` en `apps/desktop/src/main/index.ts` pasaban `null` desde la
+Fase 2 — el campo existía, nadie lo llenaba. `generarSemilla()`
+(`registro.ts`, `randomUUID()`) reemplaza los dos `null`. `Ronda.semilla`
+persiste como STRING; `hashSemilla` (`packages/analysis/src/anonymize.ts`,
+FNV-1a de 32 bits) la convierte al número que `anonymizeReplies` necesita —
+determinista: la misma semilla siempre da el mismo número, verificado en la
+prueba de arriba.
+
+**Sello, persistido como hecho propio.** Nuevo hecho `Sello` en
+`packages/domain` (append-only, un `Sello` por etiqueta por ronda, misma
+granularidad que `Intento`), y `escribirSello` en `registro.ts` que lo
+escribe. Sin esto, "el informe lo arma el código y desanonimiza con el
+sello" no tenía mecanismo — la semilla sola no alcanza si el orden de
+entrada al barajado no es estable entre la ronda real y quien intente
+reproducirla, acoplamiento que se rompía en silencio (riesgo señalado en
+esta revisión, cerrado con este hecho).
+
+**ABIERTO, con esa palabra: `escribirSello` no tiene todavía un llamador
+real.** `anonymizeReplies` sigue sin invocarse desde `apps/desktop` —
+construir ESE camino (leer las respuestas de una `Ronda`, anonimizarlas,
+escribir el `Sello`, armar el cuerpo por operador) es trabajo de T5/T6, que
+necesitan además la Parte 2 de la interfaz (todavía no existe). T3 entrega
+el MECANISMO, verificado offline con datos sintéticos y con las 74 citas
+reales; conectarlo al flujo real de captura es la tarea que sigue, no ésta.
 
 **Lo que NO entra en esta lista porque ya está resuelto:** capturar el
 cuerpo de las 8 (Objetivo 1, esta sesión), la escritura al registro sin

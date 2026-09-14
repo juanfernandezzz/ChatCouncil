@@ -34,6 +34,7 @@ import {
   escribirIntentos,
   escribirRespuestas,
   escribirRonda,
+  generarSemilla,
   leerRegistroDeArchivo,
 } from "./registro";
 
@@ -580,7 +581,7 @@ function asegurarConversacion(esPrueba: boolean): string {
 async function difundirConRegistro(prompt: string, esPrueba: boolean): Promise<ResultadoEnvio[]> {
   const conv = asegurarConversacion(esPrueba);
   const resultados = await difundir(prompt);
-  rondaActualId = escribirRonda(app.getPath("userData"), conv, indiceRonda++, prompt, null);
+  rondaActualId = escribirRonda(app.getPath("userData"), conv, indiceRonda++, prompt, generarSemilla());
   escribirIntentos(app.getPath("userData"), conv, rondaActualId, resultados);
   registrarDiagnosticoEtiqueta("envio", resultados);
   return resultados;
@@ -641,7 +642,7 @@ const PROMPT_SIN_RONDA = "(capturado sin ronda de envio: el texto ya estaba en p
 function asegurarRondaAbierta(): { conv: string; ronda: string } {
   const conv = asegurarConversacion(false);
   if (!rondaActualId) {
-    rondaActualId = escribirRonda(app.getPath("userData"), conv, indiceRonda++, PROMPT_SIN_RONDA, null);
+    rondaActualId = escribirRonda(app.getPath("userData"), conv, indiceRonda++, PROMPT_SIN_RONDA, generarSemilla());
   }
   return { conv, ronda: rondaActualId };
 }

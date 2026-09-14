@@ -27,6 +27,7 @@ import {
   type RegistroLeido,
   type Respuesta,
   type Ronda,
+  type Sello,
 } from "@chatcouncil/domain";
 
 import { extraerCitas } from "./citas";
@@ -48,8 +49,21 @@ function rutaArchivo(userData: string, conversacionId: string): string {
  * de este registro, así que no hace falta cola ni cerrojo propio — el
  * contrato pide exactamente eso.
  */
-function escribir(userData: string, conversacionId: string, hecho: Conversacion | Ronda | Intento | Respuesta | Cita): void {
+function escribir(userData: string, conversacionId: string, hecho: Conversacion | Ronda | Intento | Respuesta | Cita | Sello): void {
   appendFileSync(rutaArchivo(userData, conversacionId), aLinea(hecho) + "\n", "utf8");
+}
+
+/**
+ * Semilla real para el barajado de una `Ronda` (T3, Fase 3). Antes de esta
+ * ronda, las dos llamadas a `escribirRonda` en `index.ts` pasaban `null` —
+ * el campo existía desde la Fase 2 pero nadie lo llenaba. Persiste como
+ * STRING (formato del campo `Ronda.semilla`); quien barajea con ella
+ * (`anonymizeReplies`, `packages/analysis`) la convierte a número con
+ * `hashSemilla` — la representación persistida no depende de qué algoritmo
+ * de barajado se use hoy.
+ */
+export function generarSemilla(): string {
+  return randomUUID();
 }
 
 export function crearConversacion(userData: string, esPrueba: boolean): string {
@@ -195,6 +209,35 @@ export function escribirRespuestas(
       const { citas } = extraerCitas(hecho.html, hecho.id);
       for (const cita of citas) escribir(userData, conversacionId, cita);
     }
+  }
+}
+
+/**
+ * Persiste el `seal` que produce `anonymizeReplies` (`packages/analysis`):
+ * la correspondencia etiqueta-ciega → identidad real, UNA VEZ, en el
+ * momento en que se anonimiza una ronda. Sin este hecho, "el informe lo
+ * arma el código y desanonimiza con el sello" no tiene mecanismo — ver
+ * `Sello` en `@chatcouncil/domain`. Un `Sello` por entrada, misma
+ * granularidad que `escribirIntentos`.
+ */
+export function escribirSello(
+  userData: string,
+  conversacionId: string,
+  rondaId: string,
+  entradas: readonly { label: string; panelSourceId: string; replyId: string; attemptId: string }[],
+): void {
+  for (const e of entradas) {
+    const hecho: Sello = {
+      tipo: "sello",
+      esquema: VERSION_ESQUEMA,
+      id: randomUUID(),
+      rondaId,
+      label: e.label,
+      panelSourceId: e.panelSourceId,
+      replyId: e.replyId,
+      attemptId: e.attemptId,
+    };
+    escribir(userData, conversacionId, hecho);
   }
 }
 

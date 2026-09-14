@@ -74,6 +74,25 @@ export interface AnonymizeOutput {
 const LABEL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 /**
+ * `Ronda.semilla` (persistida, `packages/domain`) es un STRING — un UUID
+ * generado una vez por ronda (`generarSemilla`, `apps/desktop/src/main/
+ * registro.ts`). `seededShuffle`, acá abajo, necesita un NÚMERO. Este puente
+ * es la única razón por la que existe: convierte de forma determinista —
+ * la MISMA semilla siempre da el MISMO número— sin que el formato de
+ * persistencia tenga que saber nada del algoritmo de barajado de hoy.
+ * FNV-1a de 32 bits: rápido, determinista, no necesita ser criptográfico
+ * (mismo motivo que `seededRandom` no lo es).
+ */
+export function hashSemilla(semilla: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < semilla.length; i++) {
+    h ^= semilla.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/**
  * PRNG determinista (mulberry32). No hace falta aleatoriedad
  * criptográfica: lo único que importa es que la POSICIÓN no quede
  * correlacionada de forma estable con la IDENTIDAD del proveedor. Al ser

@@ -23,16 +23,26 @@
  *  3. provider-names.ts (la lista de términos identificatorios) sólo
  *     puede importarse desde anonymize.ts (scrub) y el índice del
  *     paquete — y JAMÁS desde el builder (cubierto además por la regla 1).
+ *  4. (T3, Fase 3) `armarCuerpoConFuentes` (`packages/analysis/src/
+ *     cuerpo-operador.ts`) es la pieza que YA cubre el camino de la parte 2
+ *     que la regla PENDIENTE de abajo pedía: arma el cuerpo con las URL
+ *     citadas y TIRA si ese cuerpo delata a un proveedor por URL. Este gate
+ *     la EJECUTA (no sólo lee su código) contra dos fixtures — uno limpio,
+ *     uno que filtra a propósito (`?ref=chatgpt`) — en un proceso Node
+ *     aparte con `--experimental-strip-types`, para no necesitar un build
+ *     previo. Si el fixture limpio tira, o el que filtra NO tira, el gate
+ *     falla: es la única forma de que "TIRA si filtra" deje de ser una nota
+ *     de intención en un comentario.
  *
- * PENDIENTE DE LA FASE 3, anotado acá para que no se pierda: la
- * anonimización va ANTES de los analistas, así que este sello tiene que
- * extenderse al camino de la parte 2 cuando ese camino exista. Mientras no
- * exista, no se declara cubierto: una regla declarada "verificada por gate"
- * cuyo gate no la cubre es exactamente el defecto que este proyecto ya tuvo.
+ * Ya no queda pendiente lo que esta sección decía hasta el 2026-09-14: la
+ * anonimización estructural ahora cubre el camino de la parte 2 con
+ * mecanismo, no sólo con una promesa de código.
  */
 
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, unlinkSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 
 const ROOT = process.cwd();
 const BUILDER_PATH = "packages/analysis/src/build-analyst-prompt.ts";
@@ -106,7 +116,73 @@ for (const root of SCAN_ROOTS) {
   if (existsSync(p)) walk(p);
 }
 
+// Regla 4: EJECUTAR (no sólo leer) `armarCuerpoConFuentes` contra un fixture
+// limpio y uno que filtra a propósito. Un proceso Node aparte, con
+// `--experimental-strip-types`, para poder importar el `.ts` fuente
+// directo sin depender de que haya un build previo — el mismo patrón que
+// ya usan las verificaciones offline de T1/T2 en esta ronda.
+const CUERPO_OPERADOR_PATH = join(ROOT, "packages/analysis/src/cuerpo-operador.ts");
+const FIXTURE_RUNNER = `
+import { pathToFileURL } from "node:url";
+const { armarCuerpoConFuentes } = await import(pathToFileURL(${JSON.stringify(CUERPO_OPERADOR_PATH)}).href);
+
+let limpioTiro = false;
+try {
+  armarCuerpoConFuentes("texto de respuesta sin nada raro", ["https://arxiv.org/abs/2212.10001"]);
+} catch {
+  limpioTiro = true;
+}
+
+let filtranteTiro = false;
+try {
+  // El dominio mismo delata al proveedor -- algo que limpiarQueryWhitelist
+  // (que sólo toca la QUERY) no puede limpiar. Es justo el caso que separa
+  // "la lista blanca ya lo resolvió" de "la aserción es la que agarra esto".
+  armarCuerpoConFuentes("texto de respuesta", ["https://chatgpt.com/share/abc123"]);
+} catch {
+  filtranteTiro = true;
+}
+
+if (limpioTiro) {
+  console.error("FALLO_LIMPIO_TIRO");
+  process.exit(1);
+}
+if (!filtranteTiro) {
+  console.error("FALLO_FILTRANTE_NO_TIRO");
+  process.exit(1);
+}
+console.log("REGLA4_OK");
+`;
+
+if (!existsSync(CUERPO_OPERADOR_PATH)) {
+  fail([`no existe ${CUERPO_OPERADOR_PATH.slice(ROOT.length + 1)} — si armarCuerpoConFuentes se movió, actualizar este gate.`]);
+}
+
+const tmpFile = join(mkdtempSync(join(tmpdir(), "guard-sellado-")), "fixture.mjs");
+writeFileSync(tmpFile, FIXTURE_RUNNER, "utf8");
+try {
+  const salida = execFileSync(process.execPath, ["--experimental-strip-types", tmpFile], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (!salida.includes("REGLA4_OK")) {
+    violations.push(`armarCuerpoConFuentes: salida inesperada del runner de fixtures: ${salida.trim()}`);
+  }
+} catch (err) {
+  const detalle = (err.stdout ?? "") + (err.stderr ?? "");
+  if (detalle.includes("FALLO_LIMPIO_TIRO")) {
+    violations.push("armarCuerpoConFuentes tira con un cuerpo LIMPIO (falso positivo) — revisar fugasDeProveedorEnUrls");
+  } else if (detalle.includes("FALLO_FILTRANTE_NO_TIRO")) {
+    violations.push("armarCuerpoConFuentes NO tira con una URL que filtra al proveedor (?ref=chatgpt) — la aserción en tiempo de ejecución no está protegiendo nada");
+  } else {
+    violations.push(`el runner de fixtures de armarCuerpoConFuentes falló: ${detalle.trim() || err.message}`);
+  }
+} finally {
+  unlinkSync(tmpFile);
+}
+
 if (violations.length > 0) fail(violations);
 console.log(
-  `[guard:sellado] OK — builder sellado sin imports; build-analyst-prompt importado sólo desde: ${[...BUILDER_ALLOWED_IMPORTERS].join(", ")}`,
+  `[guard:sellado] OK — builder sellado sin imports; build-analyst-prompt importado sólo desde: ${[...BUILDER_ALLOWED_IMPORTERS].join(", ")}; ` +
+    `armarCuerpoConFuentes deja pasar un cuerpo limpio y TIRA con uno que filtra al proveedor por URL.`,
 );

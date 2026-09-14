@@ -119,7 +119,19 @@ en este repositorio.
 - **La anonimización no sobrevive a las fuentes citadas.** Dominios propios
   del proveedor, idioma de las fuentes, estilos de citación pueden delatar
   quién produjo qué. Se declara, no se resuelve. *Observado de paso,
-  2026-08-13.*
+  2026-08-13.* **Parcialmente cerrado en T3 (2026-09-14):** el canal
+  MECÁNICO —un parámetro de tracking (`utm_source=chatgpt.com`) o un link a
+  la interfaz propia del proveedor (`chatgpt.com/share/…`)— sí se limpia y
+  se verifica en tiempo de ejecución (`armarCuerpoConFuentes`,
+  `packages/analysis/src/cuerpo-operador.ts`; ver `docs/BLUEPRINT.md`, "T3,
+  cerrada"). Lo que sigue SIN resolverse, y no tiene arreglo mecánico
+  posible: una fuente legítima del MISMO LINAJE que un proveedor —mistral
+  citando `platform.claude.com` sobre cómo escribir prompts para Claude—
+  sigue siendo una URL real y correcta; quitarla alteraría el dato
+  canónico. Medido: 0 de 74 citas reales necesitó ese tipo de descarte, pero
+  el riesgo de que el CONTENIDO de una respuesta (no la URL) revele su
+  linaje —"como modelo de Anthropic, yo..."— sigue intacto, cubierto aparte
+  por el scrub de `provider-names.ts`, no por esta pieza.
 
 - **Los ocho no buscan sobre el mismo índice.** Parte de la divergencia
   entre respuestas es de corpus y no de razonamiento. El código puede medir

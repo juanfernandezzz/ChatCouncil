@@ -79,50 +79,16 @@ export function normalizarUrl(url: string): string {
 }
 
 /**
- * DECISIÓN DE T3, escrita AHORA para que no se pierda (revisión de T1,
- * 2026-09-14): `Cita.url` guarda la URL ORIGINAL tal cual el proveedor la
- * puso — es el dato canónico, nunca se pisa. Pero el CUERPO ANONIMIZADO que
- * arma T3 para los operadores tiene que llevar la versión LIMPIA de esa
- * misma URL: `?utm_source=chatgpt.com` en las 23 citas de chatgpt le dice a
- * cualquier operador exactamente cuál respuesta es de ChatGPT, sin que el
- * barajado con semilla falle en rojo — anula la anonimización por un canal
- * que `docs/LIMITACIONES.md` no cubre (esa entrada habla de dominios propios
- * e idioma, esto es mecánico y por eso se puede limpiar).
- *
- * Regla, medida sobre los cinco proveedores con `Cita` reales (chatgpt,
- * mistral, glm, kimi, deepseek): se quita todo parámetro de query cuyo
- * NOMBRE empiece con `utm_`, o cuyo VALOR contenga el id de algún proveedor
- * del pool. Medido: sólo chatgpt trae query params (`utm_source`, `model`,
- * `_bhlid`); los otros cuatro no traen ninguno. De los tres de chatgpt, sólo
- * `utm_source=chatgpt.com` cae bajo la regla (nombra al proveedor Y empieza
- * con `utm_`); `model=gpt-5.5` queda —es parte real de qué página se pidió,
- * no tracking— y `_bhlid=…` también queda —es un id de marketing del SITIO
- * DESTINO (Anthropic), no algo que nombre al proveedor que citó—. No
- * confundir "es tracking feo" con "delata al proveedor": sólo lo segundo se
- * quita acá.
- *
- * T3 usa esta función para el cuerpo anonimizado; NO reemplaza `Cita.url`.
- * El campo para la versión limpia dentro de `Cita` se agrega en T3, no acá.
+ * RETIRADA en la revisión de T3 (2026-09-14): esta función usaba una lista
+ * NEGRA de parámetros (`utm_*` + valor que nombre al proveedor), y una lista
+ * negra sólo cubre lo que ya se vio — un `?ref=chatgpt` nuevo pasaría
+ * intacto sin que nada fallara en rojo. La limpieza para el cuerpo
+ * anonimizado ahora es de LISTA BLANCA y vive en
+ * `packages/analysis/src/cuerpo-operador.ts` (`limpiarQueryWhitelist` +
+ * `armarCuerpoConFuentes`, con una aserción en tiempo de ejecución que TIRA
+ * si el cuerpo arma igual filtra identidad). `Cita.url`, acá arriba, sigue
+ * siendo el dato canónico sin tocar — eso no cambió.
  */
-const IDS_PROVEEDOR = ["chatgpt", "gemini", "claude", "grok", "mistral", "glm", "kimi", "qwen", "deepseek"];
-
-export function limpiarUrlParaAnonimizar(url: string): string {
-  let u: URL;
-  try {
-    u = new URL(url);
-  } catch {
-    return url;
-  }
-  const limpio = new URLSearchParams();
-  for (const [k, v] of u.searchParams.entries()) {
-    const esUtm = /^utm_/i.test(k);
-    const nombraProveedor = IDS_PROVEEDOR.some((id) => v.toLowerCase().includes(id));
-    if (esUtm || nombraProveedor) continue;
-    limpio.append(k, v);
-  }
-  u.search = limpio.toString();
-  return u.toString();
-}
 
 const REGEX_TAG = /<\/?([a-zA-Z][a-zA-Z0-9-]*)((?:\s+[^<>]*?)?)\/?>/g;
 const REGEX_ATTR = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;

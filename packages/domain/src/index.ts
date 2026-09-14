@@ -157,7 +157,38 @@ export interface Cita {
   dondeVive: "cuerpo" | "panel-ancestro";
 }
 
-export type Hecho = Conversacion | Ronda | Intento | Respuesta | Cita;
+/**
+ * La correspondencia etiqueta-ciega → identidad real, para UNA ronda. T3
+ * (Fase 3): `anonymizeReplies` (en `packages/analysis`) ya calculaba esto
+ * como `seal` en memoria, pero nadie lo guardaba — sin este hecho persistido,
+ * "el informe lo arma el código y desanonimiza con el sello" no tiene
+ * mecanismo: la semilla sola no alcanza para reconstruirlo salvo que el
+ * orden de entrada al barajado sea estable entre la ronda real y quien
+ * intente reproducirla, acoplamiento que se rompe en silencio si algún día
+ * cambia el orden en que las respuestas llegan a `anonymizeReplies`.
+ *
+ * Un `Sello` por etiqueta por ronda — misma granularidad que `Intento` y
+ * `Respuesta`, no un array embebido: append-only, nunca se reescribe.
+ *
+ * `label` es la etiqueta BARAJADA de esa ronda ("Modelo A"...) — nunca
+ * estable entre rondas, es justo lo que blindea la posición. Distinto del
+ * código estable por conversación (`P1`..`P8`, `packages/analysis`,
+ * `codigosEstables`), que no se persiste porque es puramente derivable del
+ * orden fijo del pool declarado en `docs/BLUEPRINT.md` §1 — no hace falta
+ * guardar lo que se puede recalcular siempre igual.
+ */
+export interface Sello {
+  tipo: "sello";
+  esquema: number;
+  id: string;
+  rondaId: string;
+  label: string;
+  panelSourceId: string;
+  replyId: string;
+  attemptId: string;
+}
+
+export type Hecho = Conversacion | Ronda | Intento | Respuesta | Cita | Sello;
 
 /** Serializa un hecho a su línea. Sin saltos adentro: una línea es un hecho. */
 export function aLinea(hecho: Hecho): string {
@@ -180,7 +211,7 @@ export interface RegistroLeido {
   ultimaLineaIncompleta: boolean;
 }
 
-const TIPOS = new Set(["conversacion", "ronda", "intento", "respuesta", "cita"]);
+const TIPOS = new Set(["conversacion", "ronda", "intento", "respuesta", "cita", "sello"]);
 
 export function leerRegistro(contenido: string): RegistroLeido {
   const lineas = contenido.split("\n");

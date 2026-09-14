@@ -19,8 +19,13 @@
  *    PURA sobre un puerto HTTP inyectado. Nunca llama a la red por su cuenta:
  *    `guard:dominio` lo verifica igual que verifica que `packages/domain` no
  *    sabe de Electron.
+ *  · `cuerpo-operador` (T3) — el cuerpo ciego que arma el archivo por
+ *    operador: limpieza de URL por lista BLANCA (nunca negra) y una
+ *    aserción en tiempo de ejecución que TIRA si el cuerpo armado todavía
+ *    delata al proveedor por URL. `guard:sellado` la prueba en rojo.
  */
 export * from "./anonymize";
 export * from "./build-analyst-prompt";
+export * from "./cuerpo-operador";
 export * from "./provider-names";
 export * from "./verificar-fuentes";

@@ -20,7 +20,8 @@ import type { Server } from "node:http";
 import { randomUUID } from "node:crypto";
 
 import { PROVIDER_SPECS } from "@chatcouncil/providers";
-import type { Cita, Procedencia, Respuesta, Ronda } from "@chatcouncil/domain";
+import type { Cita, Procedencia, Respuesta, Ronda, Sello } from "@chatcouncil/domain";
+import { etapaDeRonda } from "@chatcouncil/domain";
 import { armarCuerposPorOperador, evaluarIntegridad, hashSemilla } from "@chatcouncil/analysis";
 
 import {
@@ -33,6 +34,8 @@ import {
 import { sondear } from "./probe";
 import {
   crearConversacion,
+  escribirErrorCaptura,
+  escribirInformeIntegrador,
   escribirIntentos,
   escribirRespuestas,
   escribirRonda,
@@ -40,6 +43,7 @@ import {
   leerRegistroDeArchivo,
 } from "./registro";
 import { armarYPersistirCuerposDeRonda, POOL_OPERADORES } from "./operador";
+import { etiquetasValidasDelOperador, procesarSalidaOperador } from "./integrador";
 
 /**
  * DEJAR DE OCLUIR LOS PANELES QUE NO ESTÁN EN PANTALLA.
@@ -520,6 +524,18 @@ let indiceRonda = 0;
 let rondaActualId: string | null = null;
 
 /**
+ * T7 (Fase 3) — el texto EXACTO que se escribió en cada panel, para poder
+ * persistirlo como `promptCompleto` cuando se capture la respuesta. Sólo
+ * vive en memoria de este proceso (igual que `rondaActualId`): si el
+ * proceso se reinicia entre "Consolidar/enviar al integrador" y "Capturar",
+ * se pierde — se persiste como texto explicativo en vez de inventar el
+ * prompt que se perdió (§2 del BLUEPRINT: nunca se simula un dato).
+ */
+const ultimoPromptOperadorPorId = new Map<string, string>();
+let ultimoPromptIntegrador: string | null = null;
+const PROMPT_NO_DISPONIBLE = "(prompt no disponible: no se registró en este proceso — probablemente se reinició la app entre el envío y la captura)";
+
+/**
  * Continuidad NO se infiere del texto (BLUEPRINT / contrato Fase 2): se
  * deriva de un hecho del proceso — si la vista navegó o se recargó desde la
  * ronda anterior. `did-navigate` cubre ambos: una recarga es una navegación
@@ -681,6 +697,26 @@ function asegurarRondaAbierta(): { conv: string; ronda: string } {
   return { conv, ronda: rondaActualId };
 }
 
+/**
+ * T7 (Fase 3) — "Capturar" tiene que saber QUÉ está leyendo antes de leerlo,
+ * y eso lo dice la ETAPA de la ronda (`etapaDeRonda`, `@chatcouncil/domain`),
+ * NUNCA el contenido del panel (§1 de la ronda de cableado: adivinar del
+ * contenido es exactamente el error que este mecanismo evita).
+ *
+ *  · etapa "investigacion" → todos los paneles se capturan como `Respuesta`
+ *    (comportamiento de siempre, sin cambios).
+ *  · etapa "operacion" → los paneles del pool de OPERADORES se capturan
+ *    como `SalidaOperador` + sus `HallazgoHecho` derivados; deepseek (que no
+ *    opera) sigue capturándose como `Respuesta`.
+ *  · etapa "integracion" → el panel de deepseek se captura como
+ *    `InformeIntegrador`; el resto ya terminó su parte y no vuelve a
+ *    escribirse.
+ *
+ * Un fallo AL CAPTURAR una lectura puntual (por ejemplo, el sello de esa
+ * ronda no tiene el proveedor esperado) nunca se adivina ni se descarta en
+ * silencio: se registra como `ErrorCaptura` y se sigue con el resto de las
+ * lecturas de este lote.
+ */
 function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProveedor[]): void {
   const lecturas = marcarLecturasVacias(lecturasCrudas);
   // El diagnóstico se escribe SIEMPRE, aunque no haya ronda abierta a la que
@@ -689,10 +725,45 @@ function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProvee
   // proceso— es un estado que interesa poder mirar.
   registrarDiagnosticoEtiqueta("lectura", lecturas);
   const { conv } = asegurarRondaAbierta();
-  escribirRespuestas(app.getPath("userData"), conv, rondaActualId as string, lecturas, (id) => ({
-    continuidad: continuidadDe(id),
-    panel: panelDe(id),
-  }));
+  const rondaId = rondaActualId as string;
+  const userData = app.getPath("userData");
+
+  const registro = leerRegistroDeArchivo(userData, conv);
+  const etapa = etapaDeRonda(registro.hechos, rondaId, POOL_OPERADORES.length);
+  const sello = registro.hechos.filter((h): h is Sello => h.tipo === "sello" && h.rondaId === rondaId);
+
+  const lecturasOperacion = lecturas.filter((l) => etapa === "operacion" && (POOL_OPERADORES as readonly string[]).includes(l.id));
+  const lecturaIntegrador = etapa === "integracion" ? lecturas.find((l) => l.id === "deepseek") : undefined;
+  const idsYaEspeciales = new Set([...lecturasOperacion.map((l) => l.id), ...(lecturaIntegrador ? [lecturaIntegrador.id] : [])]);
+  const lecturasComoRespuesta = lecturas.filter((l) => !idsYaEspeciales.has(l.id));
+
+  if (lecturasComoRespuesta.length > 0) {
+    escribirRespuestas(userData, conv, rondaId, lecturasComoRespuesta, (id) => ({
+      continuidad: continuidadDe(id),
+      panel: panelDe(id),
+    }));
+  }
+
+  for (const l of lecturasOperacion) {
+    if (l.error) continue; // una lectura fallida no tiene salida que parsear — ya quedó en el diagnóstico
+    try {
+      const etiquetasValidas = etiquetasValidasDelOperador(l.id, POOL_OPERADORES, sello);
+      const promptCompleto = ultimoPromptOperadorPorId.get(l.id) ?? PROMPT_NO_DISPONIBLE;
+      procesarSalidaOperador(userData, conv, rondaId, l.id, promptCompleto, l.text, etiquetasValidas);
+    } catch (e) {
+      escribirErrorCaptura(userData, conv, rondaId, etapa, "salida-operador", e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  if (lecturaIntegrador && !lecturaIntegrador.error) {
+    try {
+      const promptCompleto = ultimoPromptIntegrador ?? PROMPT_NO_DISPONIBLE;
+      escribirInformeIntegrador(userData, conv, rondaId, lecturaIntegrador.id, promptCompleto, lecturaIntegrador.text);
+    } catch (e) {
+      escribirErrorCaptura(userData, conv, rondaId, etapa, "informe-integrador", e instanceof Error ? e.message : String(e));
+    }
+  }
+
   for (const id of ACTIVOS) {
     navegacionesEnRondaAnterior.set(id, contadorNavegaciones.get(id) ?? 0);
   }
@@ -2447,6 +2518,12 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
           ]),
         )) as { ok: boolean; error?: string; textoFinal: string };
         const integridad = evaluarIntegridad(r.textoFinal, cuerpoOperador.marcas);
+        if (r.ok) {
+          // T7 — sólo así "Capturar" puede persistir el PROMPT ENTERO que
+          // de verdad se escribió (`SalidaOperador.promptCompleto`), en vez
+          // de reconstruirlo o dejarlo vacío.
+          ultimoPromptOperadorPorId.set(cuerpoOperador.operadorId, cuerpoOperador.cuerpo);
+        }
         paneles.push({
           operadorId: cuerpoOperador.operadorId,
           ok: r.ok,

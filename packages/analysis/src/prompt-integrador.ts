@@ -98,7 +98,8 @@ No trates de averiguar que sistema produjo cada respuesta. Los
 identificadores P1 a P8 y O1 a O8 son arbitrarios y cambian en cada ronda.`;
 
 function filaDe(h: HallazgoParaIntegrador): string {
-  return [h.id, h.categoria, h.eje ?? "", h.etiquetas.join(","), h.descripcion, h.operador].join("|");
+  const etiquetas = h.etiquetas.length === 0 ? "—" : h.etiquetas.join(",");
+  return [h.id, h.categoria, h.eje ?? "", etiquetas, h.descripcion, h.operador].join("|");
 }
 
 function tablaDe(hallazgos: readonly HallazgoParaIntegrador[]): string {

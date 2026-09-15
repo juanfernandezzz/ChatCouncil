@@ -22,12 +22,18 @@ import {
   VERSION_ESQUEMA,
   type Cita,
   type Conversacion,
+  type ErrorCaptura,
+  type EtapaRonda,
+  type HallazgoHecho,
+  type InformeIntegrador,
   type Intento,
   type Procedencia,
   type RegistroLeido,
   type Respuesta,
   type Ronda,
   type Sello,
+  type SalidaOperador,
+  type TipoCaptura,
 } from "@chatcouncil/domain";
 
 import { extraerCitas } from "./citas";
@@ -49,7 +55,21 @@ function rutaArchivo(userData: string, conversacionId: string): string {
  * de este registro, así que no hace falta cola ni cerrojo propio — el
  * contrato pide exactamente eso.
  */
-function escribir(userData: string, conversacionId: string, hecho: Conversacion | Ronda | Intento | Respuesta | Cita | Sello): void {
+function escribir(
+  userData: string,
+  conversacionId: string,
+  hecho:
+    | Conversacion
+    | Ronda
+    | Intento
+    | Respuesta
+    | Cita
+    | Sello
+    | SalidaOperador
+    | HallazgoHecho
+    | InformeIntegrador
+    | ErrorCaptura,
+): void {
   appendFileSync(rutaArchivo(userData, conversacionId), aLinea(hecho) + "\n", "utf8");
 }
 
@@ -240,6 +260,121 @@ export function escribirSello(
     };
     escribir(userData, conversacionId, hecho);
   }
+}
+
+/**
+ * T7 (Fase 3) — la salida cruda de UN operador, capturada en etapa
+ * "operacion". `promptCompleto` es el prompt ENTERO que se le escribió al
+ * panel, no un nombre de plantilla (ver `SalidaOperador` en
+ * `@chatcouncil/domain`): se persiste tal cual, junto al texto que produjo.
+ */
+export function escribirSalidaOperador(
+  userData: string,
+  conversacionId: string,
+  rondaId: string,
+  operadorId: string,
+  promptCompleto: string,
+  salidaCruda: string,
+): SalidaOperador {
+  const hecho: SalidaOperador = {
+    tipo: "salida-operador",
+    esquema: VERSION_ESQUEMA,
+    id: randomUUID(),
+    rondaId,
+    operadorId,
+    promptCompleto,
+    salidaCruda,
+    recibidaEn: new Date().toISOString(),
+  };
+  escribir(userData, conversacionId, hecho);
+  return hecho;
+}
+
+/**
+ * Un `HallazgoHecho` por línea que `parsearHallazgos` (`packages/analysis`)
+ * extrajo de una `SalidaOperador` — hechos DERIVADOS que referencian el
+ * `salidaOperadorId`, nunca copian el texto crudo (§ regla del dato
+ * canónico, `packages/domain`).
+ */
+export function escribirHallazgos(
+  userData: string,
+  conversacionId: string,
+  salidaOperadorId: string,
+  hallazgos: readonly { categoria: string; eje: string | null; etiquetas: string[]; descripcion: string; etiquetaInvalida: boolean }[],
+): HallazgoHecho[] {
+  const escritos: HallazgoHecho[] = [];
+  for (const h of hallazgos) {
+    const hecho: HallazgoHecho = {
+      tipo: "hallazgo",
+      esquema: VERSION_ESQUEMA,
+      id: randomUUID(),
+      salidaOperadorId,
+      categoria: h.categoria,
+      eje: h.eje,
+      etiquetas: h.etiquetas,
+      descripcion: h.descripcion,
+      etiquetaInvalida: h.etiquetaInvalida,
+    };
+    escribir(userData, conversacionId, hecho);
+    escritos.push(hecho);
+  }
+  return escritos;
+}
+
+/**
+ * El informe del integrador, capturado en etapa "integracion". Mismo
+ * principio que `escribirSalidaOperador`: se persiste el `promptCompleto`
+ * ENTERO junto al `informeCrudo`, nunca por nombre de plantilla.
+ */
+export function escribirInformeIntegrador(
+  userData: string,
+  conversacionId: string,
+  rondaId: string,
+  operadorId: string,
+  promptCompleto: string,
+  informeCrudo: string,
+): InformeIntegrador {
+  const hecho: InformeIntegrador = {
+    tipo: "informe-integrador",
+    esquema: VERSION_ESQUEMA,
+    id: randomUUID(),
+    rondaId,
+    operadorId,
+    promptCompleto,
+    informeCrudo,
+    recibidaEn: new Date().toISOString(),
+  };
+  escribir(userData, conversacionId, hecho);
+  return hecho;
+}
+
+/**
+ * T7 (Fase 3) — "Capturar" pidió leer un tipo de captura que no coincide
+ * con la etapa real de la ronda (`etapaDeRonda`, `@chatcouncil/domain`).
+ * Nunca se adivina qué leer: se registra el desajuste como hecho y quien
+ * llama decide qué hacer (típicamente, no escribir nada más y avisarle a
+ * Juan).
+ */
+export function escribirErrorCaptura(
+  userData: string,
+  conversacionId: string,
+  rondaId: string,
+  etapaEsperada: EtapaRonda,
+  tipoCapturaIntentado: TipoCaptura,
+  detalle: string,
+): ErrorCaptura {
+  const hecho: ErrorCaptura = {
+    tipo: "error-captura",
+    esquema: VERSION_ESQUEMA,
+    id: randomUUID(),
+    rondaId,
+    etapaEsperada,
+    tipoCapturaIntentado,
+    detalle,
+    ocurridoEn: new Date().toISOString(),
+  };
+  escribir(userData, conversacionId, hecho);
+  return hecho;
 }
 
 /**

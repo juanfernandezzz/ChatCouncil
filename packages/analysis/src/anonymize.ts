@@ -110,8 +110,13 @@ function seededRandom(seed: number): () => number {
   };
 }
 
-/** Fisher-Yates con semilla. No muta la entrada. */
-function seededShuffle<T>(items: readonly T[], seed: number): T[] {
+/**
+ * Fisher-Yates con semilla. No muta la entrada. Exportada (T7, Fase 3):
+ * `armar-tabla-hallazgos.ts` barajea el pool de OPERADORES con la misma
+ * semilla de la ronda para asignar los códigos "O#" — mismo algoritmo que
+ * ya barajea las respuestas para "Modelo A".."H", nunca una segunda copia.
+ */
+export function seededShuffle<T>(items: readonly T[], seed: number): T[] {
   const out = [...items];
   const rand = seededRandom(seed);
   for (let i = out.length - 1; i > 0; i--) {

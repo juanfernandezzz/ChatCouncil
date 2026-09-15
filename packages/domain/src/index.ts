@@ -265,6 +265,28 @@ export interface InformeIntegrador {
   recibidaEn: string;
 }
 
+/**
+ * T7 (Fase 3) — "Capturar" en la etapa equivocada nunca se adivina: se
+ * registra como HECHO. Un error de captura no es un `Intento` (eso mide un
+ * ENVÍO) ni una `Respuesta` con `error` (eso asume que se sabía qué se
+ * estaba leyendo) — es su propia categoría: "se intentó leer el panel
+ * esperando el tipo de captura equivocado para la etapa en la que está la
+ * ronda". `etapaEsperada`/`tipoCapturaIntentado` viajan tal cual se
+ * calcularon (`etapaDeRonda`/`tipoCapturaDeEtapa` abajo) para que el hecho
+ * sea autoexplicativo sin tener que reconstruir el estado de la ronda al
+ * releerlo despues.
+ */
+export interface ErrorCaptura {
+  tipo: "error-captura";
+  esquema: number;
+  id: string;
+  rondaId: string;
+  etapaEsperada: EtapaRonda;
+  tipoCapturaIntentado: TipoCaptura;
+  detalle: string;
+  ocurridoEn: string;
+}
+
 export type Hecho =
   | Conversacion
   | Ronda
@@ -274,7 +296,49 @@ export type Hecho =
   | Sello
   | SalidaOperador
   | HallazgoHecho
-  | InformeIntegrador;
+  | InformeIntegrador
+  | ErrorCaptura;
+
+/**
+ * EN QUÉ ETAPA está una ronda — T7, Fase 3. Deriva de HECHOS ya persistidos,
+ * nunca de lo que haya en pantalla (§1 de la ronda de cableado): "Capturar"
+ * necesita saber si tiene que escribir una `Respuesta`, una `SalidaOperador`
+ * o un `InformeIntegrador`, y adivinarlo del CONTENIDO leído es exactamente
+ * el error que este mecanismo evita.
+ *
+ *  · `"investigacion"` — todavía no corrió "Consolidar" para esta ronda (no
+ *    hay `Sello`): los paneles tienen respuestas de los INVESTIGADORES.
+ *  · `"operacion"` — "Consolidar" ya corrió (hay `Sello`) pero todavía no
+ *    se capturaron las 8 `SalidaOperador`: los paneles tienen las
+ *    respuestas de los OPERADORES al prompt de operación.
+ *  · `"integracion"` — ya se capturaron las `totalOperadores` salidas de
+ *    operador: el panel que queda por capturar es el del INTEGRADOR.
+ *
+ * `totalOperadores` se recibe como parámetro, nunca se importa desde
+ * `apps/desktop` (`POOL_OPERADORES`): el dominio no depende de la app (§4).
+ */
+export type EtapaRonda = "investigacion" | "operacion" | "integracion";
+
+export type TipoCaptura = "respuesta" | "salida-operador" | "informe-integrador";
+
+export function etapaDeRonda(hechos: readonly Hecho[], rondaId: string, totalOperadores: number): EtapaRonda {
+  const salidasDeLaRonda = hechos.filter((h) => h.tipo === "salida-operador" && h.rondaId === rondaId).length;
+  if (salidasDeLaRonda >= totalOperadores) return "integracion";
+  const huboConsolidacion = hechos.some((h) => h.tipo === "sello" && h.rondaId === rondaId);
+  if (huboConsolidacion) return "operacion";
+  return "investigacion";
+}
+
+export function tipoCapturaDeEtapa(etapa: EtapaRonda): TipoCaptura {
+  switch (etapa) {
+    case "investigacion":
+      return "respuesta";
+    case "operacion":
+      return "salida-operador";
+    case "integracion":
+      return "informe-integrador";
+  }
+}
 
 /** Serializa un hecho a su línea. Sin saltos adentro: una línea es un hecho. */
 export function aLinea(hecho: Hecho): string {
@@ -307,6 +371,7 @@ const TIPOS = new Set([
   "salida-operador",
   "hallazgo",
   "informe-integrador",
+  "error-captura",
 ]);
 
 export function leerRegistro(contenido: string): RegistroLeido {

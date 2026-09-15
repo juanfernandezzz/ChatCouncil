@@ -25,8 +25,10 @@
  *    delata al proveedor por URL. `guard:sellado` la prueba en rojo.
  */
 export * from "./anonymize";
+export * from "./armar-tabla-hallazgos";
 export * from "./build-analyst-prompt";
 export * from "./cuerpo-operador";
+export * from "./informe-final";
 export * from "./parsear-hallazgos";
 export * from "./parsear-referencias-integrador";
 export * from "./prompt-integrador";

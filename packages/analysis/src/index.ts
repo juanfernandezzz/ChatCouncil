@@ -27,5 +27,7 @@
 export * from "./anonymize";
 export * from "./build-analyst-prompt";
 export * from "./cuerpo-operador";
+export * from "./parsear-hallazgos";
+export * from "./prompt-operacion";
 export * from "./provider-names";
 export * from "./verificar-fuentes";

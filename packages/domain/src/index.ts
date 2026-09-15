@@ -198,7 +198,53 @@ export interface Sello {
   attemptId: string;
 }
 
-export type Hecho = Conversacion | Ronda | Intento | Respuesta | Cita | Sello;
+/**
+ * T6 (Fase 3) — la salida cruda de UN operador sobre el prompt de operación.
+ * REGLA DEL DATO CANÓNICO (misma que rige `Respuesta.textoOriginal` y
+ * `Respuesta.html`): se guarda el TEXTO CRUDO COMPLETO tal como lo devolvió
+ * el operador, sin recortar ni normalizar. Los `HallazgoHecho` que salgan de
+ * parsearlo son HECHOS DERIVADOS que referencian este `id` — si el parseo
+ * cambia mañana, se vuelve a derivar de `salidaCruda`, que nunca se
+ * reemplaza.
+ *
+ * `promptCompleto` guarda el PROMPT ENTERO enviado, no un nombre ni una
+ * versión de plantilla: si el texto de `armarPromptOperacion` cambia en
+ * marzo, una corrida de enero tiene que seguir siendo interpretable con el
+ * prompt que REALMENTE se usó, no con el que esté vigente el día que alguien
+ * la relea.
+ */
+export interface SalidaOperador {
+  tipo: "salida-operador";
+  esquema: number;
+  id: string;
+  rondaId: string;
+  operadorId: string;
+  promptCompleto: string;
+  salidaCruda: string;
+  recibidaEn: string;
+}
+
+/**
+ * Un hallazgo (o una limitación) derivado de `SalidaOperador.salidaCruda`
+ * por `parsearHallazgos` (`packages/analysis`). `eje` es `null` en las
+ * líneas LIMITACION — no llevan eje (ver `parsear-hallazgos.ts`).
+ * `etiquetaInvalida` viaja del parseo tal cual: una etiqueta que el operador
+ * inventó no se descarta, se registra como hecho sobre ESE operador.
+ */
+export interface HallazgoHecho {
+  tipo: "hallazgo";
+  esquema: number;
+  id: string;
+  /** Referencia al dato canónico del que se derivó — nunca se copia el texto. */
+  salidaOperadorId: string;
+  categoria: string;
+  eje: string | null;
+  etiquetas: string[];
+  descripcion: string;
+  etiquetaInvalida: boolean;
+}
+
+export type Hecho = Conversacion | Ronda | Intento | Respuesta | Cita | Sello | SalidaOperador | HallazgoHecho;
 
 /** Serializa un hecho a su línea. Sin saltos adentro: una línea es un hecho. */
 export function aLinea(hecho: Hecho): string {
@@ -221,7 +267,16 @@ export interface RegistroLeido {
   ultimaLineaIncompleta: boolean;
 }
 
-const TIPOS = new Set(["conversacion", "ronda", "intento", "respuesta", "cita", "sello"]);
+const TIPOS = new Set([
+  "conversacion",
+  "ronda",
+  "intento",
+  "respuesta",
+  "cita",
+  "sello",
+  "salida-operador",
+  "hallazgo",
+]);
 
 export function leerRegistro(contenido: string): RegistroLeido {
   const lineas = contenido.split("\n");

@@ -14,6 +14,7 @@
     "guard:sondeo": "node scripts/guard-sondeo.mjs",
     "guard:dominio": "node scripts/guard-dominio.mjs",
     "guard:artefacto": "node scripts/guard-artefacto.mjs",
+    "guard:trazabilidad": "node scripts/guard-trazabilidad.mjs",
     "dev": "pnpm --filter @chatcouncil/desktop dev",
     "build": "pnpm --filter @chatcouncil/desktop build"
   },

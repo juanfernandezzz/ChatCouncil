@@ -244,7 +244,37 @@ export interface HallazgoHecho {
   etiquetaInvalida: boolean;
 }
 
-export type Hecho = Conversacion | Ronda | Intento | Respuesta | Cita | Sello | SalidaOperador | HallazgoHecho;
+/**
+ * T7 (Fase 3) — el informe del INTEGRADOR (deepseek), producido a partir de
+ * la tabla de `HallazgoHecho` de una ronda. Misma REGLA DEL DATO CANÓNICO
+ * que `SalidaOperador`: se guarda el TEXTO CRUDO COMPLETO del informe tal
+ * cual lo devolvió el integrador, más el `promptCompleto` que lo produjo —
+ * nunca por nombre de plantilla, para que una corrida vieja siga siendo
+ * interpretable si el prompt cambia después. Las referencias `[H##]` que
+ * `parsearReferenciasIntegrador` (`packages/analysis`) extraiga son hechos
+ * DERIVADOS que apuntan a este `id`, no se guardan acá.
+ */
+export interface InformeIntegrador {
+  tipo: "informe-integrador";
+  esquema: number;
+  id: string;
+  rondaId: string;
+  operadorId: string;
+  promptCompleto: string;
+  informeCrudo: string;
+  recibidaEn: string;
+}
+
+export type Hecho =
+  | Conversacion
+  | Ronda
+  | Intento
+  | Respuesta
+  | Cita
+  | Sello
+  | SalidaOperador
+  | HallazgoHecho
+  | InformeIntegrador;
 
 /** Serializa un hecho a su línea. Sin saltos adentro: una línea es un hecho. */
 export function aLinea(hecho: Hecho): string {
@@ -276,6 +306,7 @@ const TIPOS = new Set([
   "sello",
   "salida-operador",
   "hallazgo",
+  "informe-integrador",
 ]);
 
 export function leerRegistro(contenido: string): RegistroLeido {

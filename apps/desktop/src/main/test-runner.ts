@@ -105,7 +105,7 @@ export interface InformeTest {
     }[];
   }[];
   continuidad: { id: string; estado: EstadoContinuidad; motivo: string }[];
-  veredicto: string[];
+  resumen: string[];
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -262,7 +262,7 @@ export async function correrPruebaFase1(deps: {
    */
   registrarRespuestas: (lecturas: LecturaProveedor[]) => void;
 }): Promise<InformeTest> {
-  const informe: InformeTest = { sesiones: [], turnos: [], continuidad: [], veredicto: [] };
+  const informe: InformeTest = { sesiones: [], turnos: [], continuidad: [], resumen: [] };
 
   // Dar tiempo a que las páginas de los proveedores terminen de cargar.
   await sleep(8000);
@@ -270,7 +270,7 @@ export async function correrPruebaFase1(deps: {
   informe.sesiones = await deps.sesiones();
   const sinSesion = informe.sesiones.filter((s) => s.cookies === 0).map((s) => s.id);
   if (sinSesion.length > 0) {
-    informe.veredicto.push(
+    informe.resumen.push(
       `SIN SESION en: ${sinSesion.join(", ")}. Hay que loguearse UNA vez en esos paneles; ` +
         `es lo unico humano de esta prueba, porque el agente no maneja credenciales.`,
     );
@@ -290,8 +290,8 @@ export async function correrPruebaFase1(deps: {
     frenos = frenosDeModelo(await deps.leer());
   }
   if (frenos.length > 0) {
-    informe.veredicto.push("ABORTADO por el gate de modelo de pruebas — no se envio ningun prompt:");
-    for (const f of frenos) informe.veredicto.push(`  · ${f}`);
+    informe.resumen.push("ABORTADO por el gate de modelo de pruebas — no se envio ningun prompt:");
+    for (const f of frenos) informe.resumen.push(`  · ${f}`);
     return informe;
   }
 
@@ -341,9 +341,9 @@ export async function correrPruebaFase1(deps: {
   const t1 = informe.turnos[0];
   if (t1) {
     const ok = t1.envio.filter((e) => e.ok).length;
-    informe.veredicto.push(`Turno 1: ${ok} de ${t1.envio.length} recibieron el prompt.`);
+    informe.resumen.push(`Turno 1: ${ok} de ${t1.envio.length} recibieron el prompt.`);
     const conTexto = t1.lectura.filter((l) => l.chars > 0).length;
-    informe.veredicto.push(`Turno 1: ${conTexto} de ${t1.lectura.length} produjeron texto legible.`);
+    informe.resumen.push(`Turno 1: ${conTexto} de ${t1.lectura.length} produjeron texto legible.`);
 
     // Procedencia del fin de respuesta. No es un detalle: en los que dicen
     // "inferido" el fin no se observo, se dedujo de que el texto dejo de
@@ -351,7 +351,7 @@ export async function correrPruebaFase1(deps: {
     // truncada y NADA en el informe lo delata salvo esta linea.
     const inferidos = t1.lectura.filter((l) => l.finDe === "inferido").map((l) => l.id);
     if (inferidos.length > 0) {
-      informe.veredicto.push(
+      informe.resumen.push(
         `Fin de respuesta INFERIDO (no observado) en: ${inferidos.join(", ")}. ` +
           `Esos proveedores no tienen indicador conocido: el fin sale de la ventana de ` +
           `quietud de su spec. Un prompt corto no ejercita esto — hace falta uno largo, ` +
@@ -395,13 +395,13 @@ export async function correrPruebaFase1(deps: {
     }
     const conf = informe.continuidad.filter((c) => c.estado === "confirmada").map((c) => c.id);
     const ind = informe.continuidad.filter((c) => c.estado === "indeterminada").map((c) => c.id);
-    informe.veredicto.push(
+    informe.resumen.push(
       conf.length > 0
         ? `Continuidad de hilo confirmada en: ${conf.join(", ")}.`
         : `Continuidad de hilo NO confirmada en ningun proveedor.`,
     );
     if (ind.length > 0) {
-      informe.veredicto.push(
+      informe.resumen.push(
         `Continuidad INDETERMINADA en: ${ind.join(", ")} — no es un fallo de continuidad, ` +
           `es que la prueba no llego a poder evaluarla. Ver el motivo en "continuidad".`,
       );

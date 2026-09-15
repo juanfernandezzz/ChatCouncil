@@ -116,7 +116,7 @@ function isEnabled(el: Element): boolean {
  *    otra cosa bloqueando. El problema esta ACA.
  *
  * Un mensaje de error que no distingue esas dos manda a arreglar el lado
- * equivocado. Es la misma leccion que la del veredicto de continuidad: el
+ * equivocado. Es la misma leccion que la del resultado de continuidad: el
  * valor por defecto no puede colapsar "no paso" con "no pude ver".
  */
 type EsperaControl =

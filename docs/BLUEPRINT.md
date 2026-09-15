@@ -100,7 +100,7 @@ matriz operador × respuesta. (Fundamento metodológico y limitaciones: ver
 **Noveno — informe.** `deepseek` recibe la matriz y produce el informe
 final: resumen de hallazgos e interpretación de convergencia y divergencia,
 siempre en relación con la pregunta original. NO busca. NO agrega
-contenido. NO adjudica quién tiene razón. Trabaja ciego, con etiquetas
+contenido. NO decide quién tiene razón. Trabaja ciego, con etiquetas
 barajadas; el código desanonimiza después con el sello.
 
 **Regla dura del noveno:** cada afirmación de su informe debe referenciar
@@ -458,7 +458,7 @@ más que eso. Queda por validar en la Fase 2. Si aparece un indicador
 observable en esos DOM, migran a `element-gone`.
 
 El informe de `--cc-test` marca cada lectura con `finDe: "observado"` o
-`"inferido"`, y el veredicto lo dice explícitamente. Sin esa línea, una
+`"inferido"`, y el resultado lo dice explícitamente. Sin esa línea, una
 lectura truncada no se distingue de una respuesta corta.
 
 #### Cuatro gates, y qué agarró cada uno
@@ -1576,8 +1576,8 @@ real pegada, no una suposición de que compiló.
 | T3 | **Anonimización y barajado con semilla**, reutilizando el builder sellado (`guard:sellado`) ya verificado. Persistir la semilla en la `Ronda` (el campo `semilla` del dominio ya existe, sin usar). **✅ CERRADA, 2026-09-14 — ver "T3, cerrada" abajo.** | T1 (necesita el cuerpo de las 8 respuestas + citas para anonimizar) | Dos corridas con la MISMA semilla producen el MISMO orden barajado (determinismo); dos corridas con semilla distinta producen órdenes distintos en al menos 6 de 8 posiciones (no-degenerado). Verificado con una prueba automatizada, no a ojo. |
 | T4 | **Marca canaria.** Antes de armar el archivo por operador, insertar un token único (UUID) al final del cuerpo, y exigir que la respuesta del operador lo repita. Decisión ya tomada con el número que la justifica: ver "El volumen decide pegado vs. archivo" arriba (~26.800 tokens por operador, no entra pegado). **✅ CERRADA, 2026-09-14 — ver "T4, cerrada" abajo.** | T3 (la marca va DENTRO del cuerpo ya anonimizado y barajado) | Una prueba con un archivo TRUNCADO a propósito (le falta la marca) hace que el código marque esa respuesta como `no confiable: archivo truncado`, sin que el operador haya tenido que decirlo — el criterio de éxito es que el CÓDIGO lo detecte, no que el operador lo reporte. |
 | T5 | **Armar y entregar el archivo por operador** (7 de 8, exclusión de autoevaluación), como adjunto — nunca pegado en el compositor, por el volumen medido (decisión 1). Reutiliza la difusión existente (`difundir()`) pero con un archivo en vez de texto, y el prompt de la herramienta (biblioteca de Parte 2) como mensaje. **⏳ MITAD PURA (armar) CERRADA, 2026-09-14 — ver "T5, la mitad PURA" abajo; ENTREGAR sigue abierto, necesita la Parte 2 de la interfaz.** | T4 | Con el pool de 8, se generan exactamente 8 archivos, cada uno con 7 respuestas (nunca la propia), verificado contando los `proveedorId` presentes en cada archivo contra la lista de `INVESTIGADORES` menos el operador. |
-| T6 | **Capturar la operación** (Parte 2): reutiliza el mismo mecanismo de "Capturar" ya construido, sobre los paneles de operación en vez de los de investigación. Produce la matriz operador × respuesta (hecho nuevo append-only, `Adjudicacion` o equivalente — nombre a decidir sin repetir el vocabulario ya descartado de "juez"/"analista"). | T5 | La matriz tiene exactamente 8 × 7 = 56 celdas (o menos las que fallen, cada falla como hecho, nunca como ausencia silenciosa); cada celda referencia el `proveedorId` operador y el `proveedorId` (desanonimizado con el sello) de la respuesta evaluada. |
-| T7 | **El noveno (deepseek) y el informe.** Prompt 3 (instrucciones para leer la matriz, sin buscar, sin agregar, sin adjudicar). Regla dura: cada afirmación del informe referencia una celda de T6 — se verifica con un gate nuevo, probado en rojo antes de confiar en él (regla dura de `AGENTES.md`, aplicable a todo gate nuevo). | T6 | Un informe de prueba con una afirmación SIN referencia a ninguna celda hace que el gate nuevo falle; un informe con las mismas afirmaciones, cada una con su referencia, pasa. Probado en las dos direcciones antes de darlo por bueno. |
+| T6 | **Capturar la operación** (Parte 2): reutiliza el mismo mecanismo de "Capturar" ya construido, sobre los paneles de operación en vez de los de investigación. Cada operador lee las 7 respuestas que no son la suya y registra hallazgos; el código los parsea a hechos `HallazgoHecho` derivados de la `SalidaOperador` cruda. | T5 | Sobre una salida sembrada con las cuatro categorías, los cuatro subtipos de LIMITACION, prosa alrededor y dos etiquetas inválidas, el parseo extrae los hallazgos válidos, descarta la prosa y marca las etiquetas inválidas sin descartarlas. Cada falla queda como hecho, nunca como ausencia silenciosa. |
+| T7 | **El integrador (deepseek) y el informe.** Prompt 3: instrucciones para leer la tabla de hallazgos, sin buscar, sin agregar contenido y sin decidir quién tiene razón. Regla dura: cada afirmación del informe referencia un hallazgo de T6 — se verifica con un gate nuevo, probado en rojo antes de confiar en él. | T6 | Un informe de prueba con una afirmación SIN referencia a ninguna celda hace que el gate nuevo falle; un informe con las mismas afirmaciones, cada una con su referencia, pasa. Probado en las dos direcciones antes de darlo por bueno. |
 
 #### T1, cerrada (2026-09-13, con una revisión el mismo día) — extracción OFFLINE, cuota cero
 
@@ -1691,7 +1691,7 @@ los otros cinco.
 **Revisión manual completa, chatgpt (23) y deepseek (21) — cero fuentes
 reales descartadas.** Las URL crudas quedan en el informe de esta ronda
 (no se duplican acá para no reescribir un documento de 2200+ líneas); el
-veredicto: en los dos, cada `<a>` resuelto es una cita real —arXiv, OpenAI,
+resultado: en los dos, cada `<a>` resuelto es una cita real —arXiv, OpenAI,
 Anthropic, GitHub, blogs de prompt engineering—, sin un solo link de
 interfaz colado. En chatgpt, los primeros 15 son el mismo puñado de fuentes
 repetidas como chip inline (13 URL exactas, 11 sin tracking); los últimos 8
@@ -2675,7 +2675,7 @@ invalidaba el verde**
 variante con guion producía un selector que no matcheaba nada y se reportaba
 como `matches: 0`. El `responseRoot` de Gemini usa justamente esa variante.
 
-**La corrección que se ganó el lugar.** El veredicto de continuidad exige
+**La corrección que se ganó el lugar.** El resultado de continuidad exige
 tres cosas —envío ok, texto CAMBIADO, y recién ahí memoria— porque la lectura
 devuelve siempre el último mensaje del asistente: si el envío del turno 2
 falla en silencio, la lectura sigue trayendo la respuesta del turno 1, que es
@@ -2727,7 +2727,7 @@ entrega, no al estado que se quería restaurar.
     control aparecio deshabilitado" manda a arreglar el lado equivocado.** El
     primero significa que el editor no registro el texto y el problema esta en
     la ESCRITURA; el segundo, que el texto entro y hay otra cosa bloqueando.
-    Es la misma forma que el veredicto de continuidad: un valor por defecto
+    Es la misma forma que el resultado de continuidad: un valor por defecto
     que colapsa "no paso" con "no pude ver".
 22. **`writePrompt` se confirma a si mismo en editores ricos.** Escribe
     `textContent` y despues verifica leyendo `textContent`: siempre da

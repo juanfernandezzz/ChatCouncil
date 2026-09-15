@@ -19,13 +19,6 @@
  * en pie porque nadie la llama todavía: la Fase 3 define dos plantillas
  * nuevas —ronda VERIFICABLE y ronda NO VERIFICABLE— y ahí se decide qué
  * pasa con ésta.
- *
- * PENDIENTE, y se anota en vez de resolverse solo: el esquema de salida
- * de `compare` todavía tiene un campo llamado "veredicto", palabra que
- * el plan vigente excluye junto con "juez". Cambiarlo altera el
- * contrato de salida que el modelo tiene que producir, o sea el
- * instrumento, no el vocabulario del repositorio. Se deja como está y
- * se decide con Juan al definir las plantillas de la Fase 3.
  */
 
 export interface AnalystReplyInput {
@@ -41,7 +34,6 @@ export interface AnalystPromptInput {
 }
 
 const COMPARE_SCHEMA = `{
-  "veredicto": "1-3 frases con la lectura global",
   "porRespuesta": [
     {
       "label": "<etiqueta EXACTA de la respuesta>",

@@ -20,7 +20,7 @@ import type { Server } from "node:http";
 import { randomUUID } from "node:crypto";
 
 import { PROVIDER_SPECS } from "@chatcouncil/providers";
-import type { Cita, Procedencia, Respuesta, Ronda, Sello } from "@chatcouncil/domain";
+import type { Cita, HallazgoHecho, Procedencia, Respuesta, Ronda, SalidaOperador, Sello } from "@chatcouncil/domain";
 import { etapaDeRonda } from "@chatcouncil/domain";
 import { armarCuerposPorOperador, evaluarIntegridad, hashSemilla } from "@chatcouncil/analysis";
 
@@ -43,7 +43,13 @@ import {
   leerRegistroDeArchivo,
 } from "./registro";
 import { armarYPersistirCuerposDeRonda, POOL_OPERADORES } from "./operador";
-import { clasificarLecturasPorEtapa, etiquetasValidasDelOperador, procesarSalidaOperador } from "./integrador";
+import {
+  armarTablaYPromptIntegrador,
+  clasificarLecturasPorEtapa,
+  etiquetasValidasDelOperador,
+  procesarSalidaOperador,
+  puedeEscribirPromptIntegrador,
+} from "./integrador";
 
 /** El noveno investigador (BLUEPRINT §1) es también el ÚNICO integrador — nunca opera, sólo informa. */
 const INTEGRADOR_ID = "deepseek";
@@ -205,7 +211,8 @@ type Modo =
   | "test-visibilidad"
   | "prueba-envio-js"
   | "medir-entrega"
-  | "consolidar";
+  | "consolidar"
+  | "integrador";
 
 /**
  * `--cc-difundir=<texto>`: dispara UNA ronda real —`difundir()` + espera de
@@ -257,6 +264,19 @@ const CONSOLIDAR_CONV_ID = (ARGV.find((a) => a.startsWith("--cc-consolidar=")) ?
 );
 
 /**
+ * `--cc-integrador=<conversacionId>`: corre `enviarPromptAIntegrador()` — el
+ * paso (e) del cableado que le faltaba al camino real: arma la tabla de
+ * hallazgos y el prompt del integrador desde el registro YA persistido
+ * (T6 completo: las 8 `SalidaOperador` capturadas) y lo escribe en el panel
+ * de deepseek, secuencial y al frente. NUNCA envía — mismo contrato que
+ * `--cc-consolidar`. Exige etapa "integracion"; si falta alguna
+ * `SalidaOperador`, se niega en vez de armar una tabla incompleta.
+ */
+const INTEGRADOR_CONV_ID = (ARGV.find((a) => a.startsWith("--cc-integrador=")) ?? "").slice(
+  "--cc-integrador=".length,
+);
+
+/**
  * `--cc-historial=<id>` vuelca UNA conversación por stdout como JSON, leída
  * con `leerRegistro` del paquete de dominio. No abre ninguna ventana ni
  * proveedor: es puro almacén, así que corre y sale.
@@ -301,6 +321,8 @@ const MODO: Modo = HISTORIAL_ID
   ? "medir-entrega"
   : CONSOLIDAR_CONV_ID.length > 0
   ? "consolidar"
+  : INTEGRADOR_CONV_ID.length > 0
+  ? "integrador"
   : ARGV.includes("--cc-test") || process.env["CC_TEST"] === "1"
   ? "test"
   : ARGV.includes("--cc-probe") || process.env["CC_PROBE"] === "1"
@@ -450,6 +472,19 @@ const SOLO = SELECCION.join(",");
 
 const ACTIVOS: readonly ProviderId[] =
   SELECCION.length > 0 ? INVESTIGADORES.filter((id) => SELECCION.includes(id)) : INVESTIGADORES;
+
+/**
+ * T7 (Fase 3) — "paneles abiertos" y "destinatarios de la difusión de la
+ * etapa 1" son DOS COSAS DISTINTAS, y hasta esta corrección estaban
+ * colapsadas en una sola lista (`ACTIVOS`). deepseek necesita su panel
+ * ABIERTO (lo usa como integrador en la etapa 3) pero NO es un
+ * investigador: mandarle la pregunta original en la etapa 1 gasta un
+ * mensaje que no aporta nada al pipeline Y lo ANCLA a una lectura propia
+ * del tema antes de leer la tabla de hallazgos (decisión dada, ronda de
+ * corrección de la instrucción de la primera corrida real). "Enviar a
+ * todos" difunde a esta lista, nunca a `ACTIVOS` completo.
+ */
+const DESTINATARIOS_INVESTIGACION: readonly ProviderId[] = ACTIVOS.filter((id) => id !== INTEGRADOR_ID);
 
 /**
  * `--cc-salida=<ruta>` escribe además el informe a un archivo (append).
@@ -630,10 +665,19 @@ function asegurarConversacion(esPrueba: boolean): string {
   return conversacionActual;
 }
 
-/** `cc:difundir` escribe: la ronda y un intento por proveedor, incluidos los que fallaron. */
-async function difundirConRegistro(prompt: string, esPrueba: boolean): Promise<ResultadoEnvio[]> {
+/**
+ * `cc:difundir` escribe: la ronda y un intento por proveedor, incluidos los
+ * que fallaron. `destinatarios` es explícito y nunca por defecto `ACTIVOS`:
+ * "Enviar a todos" pasa `DESTINATARIOS_INVESTIGACION` (8, sin deepseek) —
+ * ver la nota junto a esa constante.
+ */
+async function difundirConRegistro(
+  prompt: string,
+  esPrueba: boolean,
+  destinatarios: readonly ProviderId[],
+): Promise<ResultadoEnvio[]> {
   const conv = asegurarConversacion(esPrueba);
-  const resultados = await difundir(prompt);
+  const resultados = await difundir(prompt, destinatarios);
   rondaActualId = escribirRonda(app.getPath("userData"), conv, indiceRonda++, prompt, generarSemilla());
   escribirIntentos(app.getPath("userData"), conv, rondaActualId, resultados);
   registrarDiagnosticoEtiqueta("envio", resultados);
@@ -1347,10 +1391,11 @@ async function difundirConEnfoque(
   }
 }
 
-async function difundir(prompt: string): Promise<ResultadoEnvio[]> {
+async function difundir(prompt: string, destinatarios: readonly ProviderId[]): Promise<ResultadoEnvio[]> {
+  const objetivos = vistas.filter((v) => destinatarios.includes(v.id));
   const conFrente: typeof vistas = [];
   const enParalelo: typeof vistas = [];
-  for (const v of vistas) {
+  for (const v of objetivos) {
     const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS] as { envioConfiable?: boolean };
     (spec.envioConfiable ? conFrente : enParalelo).push(v);
   }
@@ -1381,7 +1426,7 @@ async function difundir(prompt: string): Promise<ResultadoEnvio[]> {
   enParalelo.forEach((v, i) => porId.set(v.id, resultadosParalelo[i]!));
   conFrente.forEach((v, i) => porId.set(v.id, resultadosConFrente[i]!));
 
-  return vistas.map((v) => {
+  return objetivos.map((v) => {
     const r = porId.get(v.id)!;
     // El `id` va DESPUÉS del spread, igual que en `leer`: el preload no lo
     // conoce, y si algún día viniera con uno, el nuestro es el bueno.
@@ -1476,7 +1521,7 @@ function registrarIpc(): void {
    * que falla se reporta como fallo y los demás siguen. Nunca se simula un
    * resultado que no ocurrió.
    */
-  ipcMain.handle("cc:difundir", async (_e, prompt: string) => difundirConRegistro(prompt, false));
+  ipcMain.handle("cc:difundir", async (_e, prompt: string) => difundirConRegistro(prompt, false, DESTINATARIOS_INVESTIGACION));
 
   ipcMain.handle("cc:leer", async () => {
     const lecturas = await leer();
@@ -1753,7 +1798,10 @@ async function modoPrueba(): Promise<void> {
         sesiones,
         // `esPrueba: true` — el arnés escribe en el MISMO almacén que el
         // camino real, marcado como corrida de prueba, nunca en uno paralelo.
-        difundir: (prompt) => difundirConRegistro(prompt, true),
+        // El arnés de Fase 1 ejercita CONECTIVIDAD de los 9 paneles (incluido
+        // deepseek) — no es la difusión de la etapa de investigación, así que
+        // usa `ACTIVOS` completo, no `DESTINATARIOS_INVESTIGACION`.
+        difundir: (prompt) => difundirConRegistro(prompt, true, ACTIVOS),
         leer,
         registrarRespuestas: registrarRespuestasDeRondaActual,
       }),
@@ -2218,7 +2266,7 @@ async function modoDifundir(): Promise<void> {
     // de gemini en la Fase 2: 9 paginas cargando a la vez tardan mas que
     // una sola.
     await new Promise((r) => setTimeout(r, 35_000));
-    const envios = await difundirConRegistro(DIFUNDIR_TEXTO, false);
+    const envios = await difundirConRegistro(DIFUNDIR_TEXTO, false, DESTINATARIOS_INVESTIGACION);
     const lecturas = await esperarQuietud(leer, 90_000);
     registrarRespuestasDeRondaActual(lecturas);
     emitir("CC_DIFUNDIR_JSON", {
@@ -2566,6 +2614,143 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
 }
 
 /**
+ * T7 (Fase 3) — "Enviar prompt al integrador" (Parte 2 de la interfaz, paso
+ * (e) del cableado). Mismo patrón que `consolidarRespuestas()`: arma el
+ * dato, escribe en el panel al frente, y NUNCA envía — Juan sigue teniendo
+ * que revisar y apretar enviar él mismo en deepseek, igual que en cada uno
+ * de los 8 operadores.
+ *
+ * Requiere etapa "integracion" (`etapaDeRonda`): si todavía faltan
+ * `SalidaOperador` por capturar, se niega en vez de armar una tabla
+ * incompleta sin avisar.
+ *
+ * GUARDIA OBLIGATORIA antes de escribir (`puedeEscribirPromptIntegrador`,
+ * verificada con cuatro casos sembrados en la ronda de ensayo de etapas):
+ * el destino tiene que ser REALMENTE deepseek y su compositor tiene que
+ * estar VACÍO. Ninguna de las dos se asume.
+ *
+ * VERIFICACIÓN DE ENTREGA — a propósito DISTINTA de la de
+ * `consolidarRespuestas` (marcas canaria intercaladas): el texto de
+ * `prompt-integrador.ts` es LITERAL y no le dice a deepseek que ignore
+ * ninguna marca (a diferencia de `prompt-operacion.ts`, que sí instruye a
+ * los operadores a ignorar `[[CC-xxxxx]]`) — insertarlas acá contaminaría
+ * lo que deepseek lee sin que el prompt lo explique. En su lugar, la
+ * entrega se verifica con la comparación MÁS fuerte posible: el texto que
+ * el compositor devuelve inmediatamente después de escribir tiene que ser
+ * IDÉNTICO, carácter por carácter, al prompt armado — no una cuenta de
+ * marcas, la cadena entera.
+ */
+export interface ResultadoIntegrador {
+  ok: boolean;
+  error?: string;
+  operadorId?: string;
+  caracteresEscritos: number;
+  caracteresPresentes: number;
+  entregaExacta: boolean;
+  navegacionesIntactas: boolean;
+}
+
+async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
+  if (!conversacionActual || !rondaActualId) {
+    return { ok: false, error: "no hay una ronda activa", caracteresEscritos: 0, caracteresPresentes: 0, entregaExacta: false, navegacionesIntactas: true };
+  }
+  const userData = app.getPath("userData");
+  const registro = leerRegistroDeArchivo(userData, conversacionActual);
+  const ronda = registro.hechos.find((h): h is Ronda => h.tipo === "ronda" && h.id === rondaActualId);
+  if (!ronda) {
+    return { ok: false, error: "no se encontró la ronda actual en el registro", caracteresEscritos: 0, caracteresPresentes: 0, entregaExacta: false, navegacionesIntactas: true };
+  }
+  if (ronda.semilla === null) {
+    return { ok: false, error: "la ronda no tiene semilla persistida", caracteresEscritos: 0, caracteresPresentes: 0, entregaExacta: false, navegacionesIntactas: true };
+  }
+
+  const etapa = etapaDeRonda(registro.hechos, rondaActualId, POOL_OPERADORES.length);
+  if (etapa !== "integracion") {
+    return {
+      ok: false,
+      error: `la ronda está en etapa "${etapa}", todavía no en "integracion" — faltan SalidaOperador por capturar`,
+      caracteresEscritos: 0,
+      caracteresPresentes: 0,
+      entregaExacta: false,
+      navegacionesIntactas: true,
+    };
+  }
+
+  const salidas = registro.hechos.filter((h): h is SalidaOperador => h.tipo === "salida-operador" && h.rondaId === rondaActualId);
+  const hallazgosPorSalidaId = new Map<string, HallazgoHecho[]>();
+  for (const h of registro.hechos) {
+    if (h.tipo === "hallazgo") {
+      const lista = hallazgosPorSalidaId.get(h.salidaOperadorId) ?? [];
+      lista.push(h);
+      hallazgosPorSalidaId.set(h.salidaOperadorId, lista);
+    }
+  }
+  const hallazgosPorSalida = salidas.map((s) => ({ operadorId: s.operadorId, hallazgos: hallazgosPorSalidaId.get(s.id) ?? [] }));
+  const { prompt } = armarTablaYPromptIntegrador(ronda.prompt, hallazgosPorSalida, POOL_OPERADORES, ronda.semilla);
+
+  const v = vistas.find((x) => x.id === INTEGRADOR_ID);
+  if (!v) {
+    return { ok: false, error: "panel del integrador no abierto", caracteresEscritos: 0, caracteresPresentes: 0, entregaExacta: false, navegacionesIntactas: true };
+  }
+
+  const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS];
+  const specJson = JSON.stringify(spec);
+  const compositorActual = (await v.view.webContents.executeJavaScript(
+    `window.__ccProvider.leerCompositor(${specJson})`,
+    true,
+  )) as string;
+
+  const guardia = puedeEscribirPromptIntegrador(v.id, INTEGRADOR_ID, compositorActual);
+  if (!guardia.puede) {
+    return {
+      ok: false,
+      error: guardia.motivo ?? "la guardia rechazó la escritura sin motivo explícito",
+      operadorId: v.id,
+      caracteresEscritos: 0,
+      caracteresPresentes: 0,
+      entregaExacta: false,
+      navegacionesIntactas: true,
+    };
+  }
+
+  const navAntes = contadorNavegaciones.get(v.id) ?? 0;
+  const TECHO_EXTERNO_MS = 90_000;
+  try {
+    const r = (await alFrente(v, () =>
+      Promise.race([
+        v.view.webContents.executeJavaScript(`window.__ccProvider.entregarCuerpoOperador(${specJson}, ${JSON.stringify(prompt)})`, true),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`sin respuesta del panel tras ${TECHO_EXTERNO_MS}ms (techo externo)`)), TECHO_EXTERNO_MS),
+        ),
+      ]),
+    )) as { ok: boolean; error?: string; textoFinal: string };
+
+    if (r.ok) ultimoPromptIntegrador = prompt;
+    const navDespues = contadorNavegaciones.get(v.id) ?? 0;
+
+    return {
+      ok: r.ok,
+      ...(r.error ? { error: r.error } : {}),
+      operadorId: v.id,
+      caracteresEscritos: prompt.length,
+      caracteresPresentes: r.textoFinal.length,
+      entregaExacta: r.textoFinal === prompt,
+      navegacionesIntactas: navAntes === navDespues,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+      operadorId: v.id,
+      caracteresEscritos: prompt.length,
+      caracteresPresentes: 0,
+      entregaExacta: false,
+      navegacionesIntactas: (contadorNavegaciones.get(v.id) ?? 0) === navAntes,
+    };
+  }
+}
+
+/**
  * Modo de medición de entrega (`--cc-medir-entrega=<conversacionId>`).
  * Objetivo 1 de la ronda "medición de entrega del cuerpo": ¿el cuerpo REAL
  * de un operador entra PEGADO en el compositor? Lee las `Respuesta`/`Cita`
@@ -2815,6 +3000,36 @@ async function modoConsolidar(): Promise<void> {
     emitir("CC_CONSOLIDAR_JSON", resultado);
   } catch (e) {
     decirPorSalida(`\n===CC_CONSOLIDAR_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+  } finally {
+    app.quit();
+  }
+}
+
+/**
+ * `--cc-integrador=<conversacionId>`: mismo patrón que `modoConsolidar` —
+ * fija `conversacionActual`/`rondaActualId` a la última ronda de esa
+ * conversación (el modo scriptable no pasa por "Enviar a todos" +
+ * "Capturar", así que no llega ahí solo) y corre el camino real.
+ */
+async function modoIntegrador(): Promise<void> {
+  try {
+    await new Promise((r) => setTimeout(r, 50_000));
+
+    const userData = app.getPath("userData");
+    const registro = leerRegistroDeArchivo(userData, INTEGRADOR_CONV_ID);
+    const rondas = registro.hechos.filter((h): h is Ronda => h.tipo === "ronda");
+    const ultima = rondas[rondas.length - 1];
+    if (!ultima) {
+      decirPorSalida(`\n===CC_INTEGRADOR_ERROR===\nLa conversacion "${INTEGRADOR_CONV_ID}" no tiene ninguna ronda.\n`);
+      return;
+    }
+    conversacionActual = INTEGRADOR_CONV_ID;
+    rondaActualId = ultima.id;
+
+    const resultado = await enviarPromptAIntegrador();
+    emitir("CC_INTEGRADOR_JSON", resultado);
+  } catch (e) {
+    decirPorSalida(`\n===CC_INTEGRADOR_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
   } finally {
     app.quit();
   }
@@ -3125,6 +3340,7 @@ void app.whenReady().then(() => {
   if (MODO === "prueba-envio-js") void modoPruebaEnvioJS();
   if (MODO === "medir-entrega") void modoMedirEntrega();
   if (MODO === "consolidar") void modoConsolidar();
+  if (MODO === "integrador") void modoIntegrador();
   app.on("activate", () => {
     if (BaseWindow.getAllWindows().length === 0) createWindow();
   });

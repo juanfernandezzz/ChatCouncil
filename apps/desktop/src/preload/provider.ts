@@ -160,6 +160,21 @@ async function waitForEnabled(sel: string, timeoutMs: number): Promise<EsperaCon
  * mismo comportamiento de "reemplazar", medido como necesario para no dejar
  * basura de una escritura previa concatenada por delante.
  */
+/**
+ * T7 (Fase 3) — lectura PURA del compositor, sin tocarlo. La guardia previa
+ * a escribir el prompt del integrador (`puedeEscribirPromptIntegrador`,
+ * `apps/desktop/src/main/integrador.ts`) necesita saber si el compositor
+ * de destino está vacío ANTES de escribir nada — y hasta esta corrección no
+ * había ninguna vía de leerlo sin escribir primero. Si el selector no
+ * resuelve, se lee como vacío: eso deja que la guardia intente escribir
+ * (que a su vez fallará con su propio error si el compositor no aparece),
+ * en vez de bloquear por un motivo que no es el que dice.
+ */
+function leerCompositor(el: Element | null, kind: PageSpec["composer"]["kind"]): string {
+  if (!el) return "";
+  return kind === "textarea" ? ((el as HTMLTextAreaElement).value ?? "") : (el.textContent ?? "");
+}
+
 function writePrompt(el: Element, kind: PageSpec["composer"]["kind"], text: string): boolean {
   (el as HTMLElement).focus();
   if (kind === "textarea") {
@@ -930,6 +945,7 @@ contextBridge.exposeInMainWorld("__ccProvider", {
   probarEnvioJS: (spec: PageSpec, marcador: string) => probarEnvioJS(spec, marcador),
   medirEntregaPegado: (spec: PageSpec, texto: string) => medirEntregaPegado(spec, texto),
   entregarCuerpoOperador: (spec: PageSpec, texto: string) => entregarCuerpoOperador(spec, texto),
+  leerCompositor: (spec: PageSpec) => leerCompositor(document.querySelector(spec.composer.selector), spec.composer.kind),
   read: (spec: PageSpec) => ({
     text: readAssistant(spec),
     userText: readUserMessage(spec),

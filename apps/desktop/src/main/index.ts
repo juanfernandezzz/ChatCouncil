@@ -43,7 +43,10 @@ import {
   leerRegistroDeArchivo,
 } from "./registro";
 import { armarYPersistirCuerposDeRonda, POOL_OPERADORES } from "./operador";
-import { etiquetasValidasDelOperador, procesarSalidaOperador } from "./integrador";
+import { clasificarLecturasPorEtapa, etiquetasValidasDelOperador, procesarSalidaOperador } from "./integrador";
+
+/** El noveno investigador (BLUEPRINT §1) es también el ÚNICO integrador — nunca opera, sólo informa. */
+const INTEGRADOR_ID = "deepseek";
 
 /**
  * DEJAR DE OCLUIR LOS PANELES QUE NO ESTÁN EN PANTALLA.
@@ -732,10 +735,12 @@ function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProvee
   const etapa = etapaDeRonda(registro.hechos, rondaId, POOL_OPERADORES.length);
   const sello = registro.hechos.filter((h): h is Sello => h.tipo === "sello" && h.rondaId === rondaId);
 
-  const lecturasOperacion = lecturas.filter((l) => etapa === "operacion" && (POOL_OPERADORES as readonly string[]).includes(l.id));
-  const lecturaIntegrador = etapa === "integracion" ? lecturas.find((l) => l.id === "deepseek") : undefined;
-  const idsYaEspeciales = new Set([...lecturasOperacion.map((l) => l.id), ...(lecturaIntegrador ? [lecturaIntegrador.id] : [])]);
-  const lecturasComoRespuesta = lecturas.filter((l) => !idsYaEspeciales.has(l.id));
+  const { lecturasOperacion, lecturaIntegrador, lecturasComoRespuesta } = clasificarLecturasPorEtapa(
+    lecturas,
+    etapa,
+    POOL_OPERADORES,
+    INTEGRADOR_ID,
+  );
 
   if (lecturasComoRespuesta.length > 0) {
     escribirRespuestas(userData, conv, rondaId, lecturasComoRespuesta, (id) => ({

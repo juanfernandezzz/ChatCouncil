@@ -40,14 +40,38 @@ export interface CondicionProveedor {
   fuentesCitadas: number;
 }
 
+/**
+ * Cuota real de la ronda: 8 operadores, 17 mensajes en total (BLUEPRINT §1).
+ * `"ok"` — devolvió al menos un hallazgo parseable. `"sin-hallazgos"` — su
+ * `SalidaOperador` SE CAPTURÓ (nunca se descarta), pero `parsearHallazgos`
+ * no encontró ninguna línea válida. `"fallo"` — no hay `SalidaOperador` en
+ * absoluto para este operador (no respondió, o la captura falló antes de
+ * persistir nada). Las tres son HECHOS, ninguna es "ausencia silenciosa".
+ */
+export type EstadoOperador = "ok" | "sin-hallazgos" | "fallo";
+
+export interface ParticipacionOperador {
+  operadorId: string;
+  estado: EstadoOperador;
+  /** "7 hallazgos", "0 hallazgos parseables (3 líneas de prosa descartadas)", "no se capturó salida: <motivo>". */
+  detalle: string;
+}
+
 export interface InformeFinalInput {
   pregunta: string;
   fecha: string;
-  informeIntegradorCrudo: string;
-  /** Toda referencia `[H##]` encontrada en el informe, en el orden en que aparece — `parsearReferenciasIntegrador` la produce. */
+  /**
+   * `null` cuando el integrador falló y no se capturó ningún `InformeIntegrador`
+   * — el instrumento tiene que poder producir el resto del informe igual: la
+   * tabla de hallazgos NO depende del integrador, sólo de las `SalidaOperador`.
+   */
+  informeIntegradorCrudo: string | null;
+  /** Toda referencia `[H##]` encontrada en el informe, en el orden en que aparece — `parsearReferenciasIntegrador` la produce. Vacío si `informeIntegradorCrudo` es `null`. */
   referenciasEnOrden: readonly ReferenciaResuelta[];
   /** TODOS los hallazgos de la tabla que recibió este integrador (para poder listar los no referenciados). */
   hallazgos: readonly HallazgoResuelto[];
+  /** Uno por operador del pool — incluye a los que fallaron o no dieron hallazgos, nunca sólo a los que salieron bien. */
+  participacionOperadores: readonly ParticipacionOperador[];
   condiciones: readonly CondicionProveedor[];
   /** Ya formado como texto, con el detalle por panel — esta función no calcula integridad, sólo la muestra. */
   integridadEntrega: string;
@@ -75,9 +99,16 @@ function filaCondicion(c: CondicionProveedor): string {
   return `| ${c.proveedorId} | ${etiqueta} | ${c.caracteresRespuesta} | ${c.fuentesCitadas} |`;
 }
 
+function entradaParticipacion(p: ParticipacionOperador): string {
+  return `**${p.operadorId}** — ${p.estado}: ${p.detalle}`;
+}
+
+const SIN_INFORME_INTEGRADOR = "No se capturo informe del integrador para esta ronda.";
+
 export function armarInformeFinal(input: InformeFinalInput): string {
   const codigosExistentes = new Set(input.hallazgos.map((h) => h.codigo));
-  const lecturaMarcada = marcarReferencias(input.informeIntegradorCrudo, codigosExistentes);
+  const lecturaMarcada =
+    input.informeIntegradorCrudo === null ? SIN_INFORME_INTEGRADOR : marcarReferencias(input.informeIntegradorCrudo, codigosExistentes);
 
   // Hallazgos REFERENCIADOS: sólo los que existen, en orden de PRIMERA aparición.
   const referenciados: HallazgoResuelto[] = [];
@@ -99,6 +130,7 @@ export function armarInformeFinal(input: InformeFinalInput): string {
   const seccionLimitaciones =
     limitaciones.length > 0 ? limitaciones.map(entradaHallazgo).join("\n\n") : "Ningun operador registro limitaciones.";
   const tablaCondiciones = input.condiciones.map(filaCondicion).join("\n");
+  const seccionParticipacion = input.participacionOperadores.map(entradaParticipacion).join("\n");
 
   return [
     "# Informe de ronda",
@@ -110,6 +142,10 @@ export function armarInformeFinal(input: InformeFinalInput): string {
     "## Lectura del integrador",
     "",
     lecturaMarcada,
+    "",
+    "## Participacion de operadores",
+    "",
+    seccionParticipacion,
     "",
     "## Hallazgos referenciados",
     "",

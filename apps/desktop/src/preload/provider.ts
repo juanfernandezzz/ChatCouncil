@@ -246,6 +246,36 @@ function ultimoNodoAsistente(spec: PageSpec): Element | null {
   }
 }
 
+/**
+ * T7 (Fase 3) — VERIFICA, no asume, que "Nuevo chat" fue efectivo. Cuenta
+ * mensajes de asistente Y de usuario en el DOM actual; `true` sólo si los
+ * dos selectores dan CERO. Existe porque la exclusión de autoevaluación
+ * (`cuerpo-operador.ts`, T3) arma el cuerpo del operador SIN su propia
+ * respuesta, pero si la conversación del panel sigue teniendo esa
+ * respuesta EN EL HISTORIAL VISIBLE, el operador la lee igual — la
+ * exclusión queda nominal. Un proveedor que arrastre contexto entre
+ * `newConversationUrl` y el chat anterior es un HALLAZGO (a
+ * `docs/LIMITACIONES.md`), no algo que este chequeo pueda arreglar por su
+ * cuenta.
+ */
+function estaVacioElChat(spec: PageSpec): boolean {
+  let asistente: Element[];
+  try {
+    asistente = Array.from(document.querySelectorAll(spec.assistantMessage.selector));
+  } catch {
+    asistente = [];
+  }
+  let usuario: Element[] = [];
+  if (spec.userMessage?.selector) {
+    try {
+      usuario = Array.from(document.querySelectorAll(spec.userMessage.selector));
+    } catch {
+      usuario = [];
+    }
+  }
+  return asistente.length === 0 && usuario.length === 0;
+}
+
 /** Lee el texto del asistente restando los subárboles que sobran, sobre una COPIA. */
 function readAssistant(spec: PageSpec): string {
   const node = ultimoNodoAsistente(spec);
@@ -946,6 +976,7 @@ contextBridge.exposeInMainWorld("__ccProvider", {
   medirEntregaPegado: (spec: PageSpec, texto: string) => medirEntregaPegado(spec, texto),
   entregarCuerpoOperador: (spec: PageSpec, texto: string) => entregarCuerpoOperador(spec, texto),
   leerCompositor: (spec: PageSpec) => leerCompositor(document.querySelector(spec.composer.selector), spec.composer.kind),
+  estaVacioElChat: (spec: PageSpec) => estaVacioElChat(spec),
   read: (spec: PageSpec) => ({
     text: readAssistant(spec),
     userText: readUserMessage(spec),

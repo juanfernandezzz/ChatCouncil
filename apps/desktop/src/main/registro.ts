@@ -21,6 +21,7 @@ import {
   leerRegistro,
   VERSION_ESQUEMA,
   type Cita,
+  type CondicionHerramientas,
   type Conversacion,
   type ErrorCaptura,
   type EtapaRonda,
@@ -68,6 +69,7 @@ function escribir(
     | SalidaOperador
     | HallazgoHecho
     | InformeIntegrador
+    | CondicionHerramientas
     | ErrorCaptura,
 ): void {
   appendFileSync(rutaArchivo(userData, conversacionId), aLinea(hecho) + "\n", "utf8");
@@ -343,6 +345,39 @@ export function escribirInformeIntegrador(
     promptCompleto,
     informeCrudo,
     recibidaEn: new Date().toISOString(),
+  };
+  escribir(userData, conversacionId, hecho);
+  return hecho;
+}
+
+/**
+ * T7 (Fase 3, corrección de la primera corrida real) — la CONDICIÓN de
+ * herramientas de un proveedor en una etapa: si la búsqueda web estaba
+ * activada, y si el dato es `"declarado"` (Juan lo dice) u
+ * `"observado"` (un selector lo leyó del DOM — todavía no derivado para
+ * ningún proveedor, ver `CondicionHerramientas` en `@chatcouncil/domain`).
+ * Sin este hecho, la asimetría de herramientas entre etapas —búsqueda web
+ * ON en investigación, OFF en operación— no queda escrita en ningún lado.
+ */
+export function escribirCondicionHerramientas(
+  userData: string,
+  conversacionId: string,
+  rondaId: string,
+  proveedorId: string,
+  etapa: EtapaRonda,
+  busquedaWebActivada: boolean,
+  fuente: "declarado" | "observado",
+): CondicionHerramientas {
+  const hecho: CondicionHerramientas = {
+    tipo: "condicion-herramientas",
+    esquema: VERSION_ESQUEMA,
+    id: randomUUID(),
+    rondaId,
+    proveedorId,
+    etapa,
+    busquedaWebActivada,
+    fuente,
+    registradoEn: new Date().toISOString(),
   };
   escribir(userData, conversacionId, hecho);
   return hecho;

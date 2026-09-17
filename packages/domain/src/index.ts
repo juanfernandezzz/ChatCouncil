@@ -266,6 +266,40 @@ export interface InformeIntegrador {
 }
 
 /**
+ * T7 (Fase 3, corrección de la ronda de la primera corrida real) — QUÉ
+ * HERRAMIENTAS tenía cada parte en cada etapa es una CONDICIÓN DEL TURNO,
+ * ya decidida como algo que se registra (§ "transferibilidad: registro de
+ * las condiciones de cada turno", `docs/LIMITACIONES.md`). Antes de este
+ * hecho, esa condición no tenía dónde vivir salvo anotada a mano fuera del
+ * registro — y un dato de investigación anotado a mano fuera del registro
+ * no existe (regla del instrumento).
+ *
+ * Sin selector derivado para leer el estado del interruptor de búsqueda web
+ * en ningún proveedor todavía (`docs/BLUEPRINT.md`, fila "conmutador de
+ * búsqueda web": **no encontrado** en varios), este hecho hoy sólo puede
+ * escribirse `fuente: "declarado"` — Juan lo dice, el código lo persiste.
+ * `"observado"` queda declarado para el día en que un selector permita
+ * leerlo del DOM sin que Juan tenga que decirlo: el CAMPO no cambia, sólo
+ * quién lo llena.
+ *
+ * La ASIMETRÍA que el instrumento existe para registrar (T1: investigación
+ * CON búsqueda web; T2: operación SIN búsqueda web, para no dejar que un
+ * operador aporte contenido propio que ningún investigador vio) no queda
+ * escrita en ningún lado sin este campo.
+ */
+export interface CondicionHerramientas {
+  tipo: "condicion-herramientas";
+  esquema: number;
+  id: string;
+  rondaId: string;
+  proveedorId: string;
+  etapa: EtapaRonda;
+  busquedaWebActivada: boolean;
+  fuente: "declarado" | "observado";
+  registradoEn: string;
+}
+
+/**
  * T7 (Fase 3) — "Capturar" en la etapa equivocada nunca se adivina: se
  * registra como HECHO. Un error de captura no es un `Intento` (eso mide un
  * ENVÍO) ni una `Respuesta` con `error` (eso asume que se sabía qué se
@@ -297,6 +331,7 @@ export type Hecho =
   | SalidaOperador
   | HallazgoHecho
   | InformeIntegrador
+  | CondicionHerramientas
   | ErrorCaptura;
 
 /**
@@ -371,6 +406,7 @@ const TIPOS = new Set([
   "salida-operador",
   "hallazgo",
   "informe-integrador",
+  "condicion-herramientas",
   "error-captura",
 ]);
 

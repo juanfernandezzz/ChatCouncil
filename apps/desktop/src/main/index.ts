@@ -212,7 +212,8 @@ type Modo =
   | "prueba-envio-js"
   | "medir-entrega"
   | "consolidar"
-  | "integrador";
+  | "integrador"
+  | "nuevo-chat";
 
 /**
  * `--cc-difundir=<texto>`: dispara UNA ronda real —`difundir()` + espera de
@@ -277,6 +278,16 @@ const INTEGRADOR_CONV_ID = (ARGV.find((a) => a.startsWith("--cc-integrador=")) ?
 );
 
 /**
+ * `--cc-nuevo-chat`: MIDE, contra los 8 paneles reales del pool, si
+ * `nuevoChatPara` (navegar a `newConversationUrl` + confirmar CERO
+ * mensajes previos) es efectivo. Diagnóstico puro: no toca el registro, no
+ * escribe ningún prompt, no envía nada — mismo espíritu que `--cc-probe`.
+ * Existe porque "verificá que sea efectivo, no que el botón exista" no se
+ * responde leyendo código.
+ */
+const NUEVO_CHAT_SONDEO = ARGV.includes("--cc-nuevo-chat");
+
+/**
  * `--cc-historial=<id>` vuelca UNA conversación por stdout como JSON, leída
  * con `leerRegistro` del paquete de dominio. No abre ninguna ventana ni
  * proveedor: es puro almacén, así que corre y sale.
@@ -323,6 +334,8 @@ const MODO: Modo = HISTORIAL_ID
   ? "consolidar"
   : INTEGRADOR_CONV_ID.length > 0
   ? "integrador"
+  : NUEVO_CHAT_SONDEO
+  ? "nuevo-chat"
   : ARGV.includes("--cc-test") || process.env["CC_TEST"] === "1"
   ? "test"
   : ARGV.includes("--cc-probe") || process.env["CC_PROBE"] === "1"
@@ -2444,6 +2457,14 @@ export interface ResultadoConsolidarPanel {
   marcasEsperadas: number;
   marcasPresentes: number;
   interrumpido: boolean;
+  /**
+   * `true` si "Nuevo chat" (T7) confirmó CERO mensajes previos antes de
+   * escribir el cuerpo — `false` es un HALLAZGO (a `docs/LIMITACIONES.md`),
+   * no un fallo: el proveedor arrastra contexto entre `newConversationUrl`
+   * y el chat anterior. `false` también cuando "Nuevo chat" nunca llegó a
+   * correr (secuencia detenida o panel no abierto ANTES de intentarlo).
+   */
+  chatNuevoOk: boolean;
 }
 
 export interface ResultadoConsolidar {
@@ -2451,6 +2472,77 @@ export interface ResultadoConsolidar {
   error?: string;
   paneles: ResultadoConsolidarPanel[];
   navegacionesIntactas: boolean;
+}
+
+/**
+ * T7 (Fase 3) — "Nuevo chat": navega el panel a `newConversationUrl` (la
+ * misma URL con la que ese panel se abrió la primera vez) y CONFIRMA que
+ * quedó sin mensajes previos (`estaVacioElChat`, preload) — nunca asume
+ * que navegar alcanzó. Sin esto, la exclusión de autoevaluación de
+ * `cuerpo-operador.ts` es NOMINAL: el cuerpo no trae la respuesta propia
+ * del operador, pero si el HISTORIAL VISIBLE del panel todavía la tiene
+ * (misma conversación de la Parte 1), el operador la lee igual.
+ *
+ * Es una NAVEGACIÓN real — a propósito, y sin conflicto con "el contador de
+ * navegaciones queda intacto": esa garantía es sobre la secuencia de
+ * ESCRITURA del cuerpo (nada se recarga DESPUÉS de escribir), no sobre este
+ * paso previo, que existe justamente para recargar.
+ */
+export interface ResultadoNuevoChat {
+  operadorId: string;
+  ok: boolean;
+  error?: string;
+  /** `false` = arrastra contexto: HALLAZGO sobre ese proveedor, no un fallo del mecanismo. */
+  quedoLimpio: boolean;
+}
+
+async function nuevoChatPara(v: (typeof vistas)[number]): Promise<ResultadoNuevoChat> {
+  const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS];
+  try {
+    await v.view.webContents.loadURL(spec.newConversationUrl);
+  } catch (e) {
+    return {
+      operadorId: v.id,
+      ok: false,
+      error: `no se pudo navegar a newConversationUrl: ${e instanceof Error ? e.message : String(e)}`,
+      quedoLimpio: false,
+    };
+  }
+
+  const ESPERA_COMPOSER_MS = 20_000;
+  const t0 = Date.now();
+  let composerListo = false;
+  while (Date.now() - t0 < ESPERA_COMPOSER_MS) {
+    try {
+      composerListo = (await v.view.webContents.executeJavaScript(
+        `!!document.querySelector(${JSON.stringify(spec.composer.selector)})`,
+        true,
+      )) as boolean;
+    } catch {
+      composerListo = false;
+    }
+    if (composerListo) break;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  if (!composerListo) {
+    return {
+      operadorId: v.id,
+      ok: false,
+      error: `compositor no reapareció tras ${ESPERA_COMPOSER_MS}ms de navegar a newConversationUrl`,
+      quedoLimpio: false,
+    };
+  }
+
+  try {
+    const specJson = JSON.stringify(spec);
+    const quedoLimpio = (await v.view.webContents.executeJavaScript(
+      `window.__ccProvider.estaVacioElChat(${specJson})`,
+      true,
+    )) as boolean;
+    return { operadorId: v.id, ok: true, quedoLimpio };
+  } catch (e) {
+    return { operadorId: v.id, ok: false, error: e instanceof Error ? e.message : String(e), quedoLimpio: false };
+  }
 }
 
 /** Progreso legible por `cc:consolidar-estado` (polling, no push — ver preload/ui.ts). */
@@ -2522,6 +2614,7 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
           marcasEsperadas: cuerpoOperador.marcas.length,
           marcasPresentes: 0,
           interrumpido: true,
+          chatNuevoOk: false,
         });
         continue;
       }
@@ -2535,6 +2628,7 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
           marcasEsperadas: cuerpoOperador.marcas.length,
           marcasPresentes: 0,
           interrumpido: true,
+          chatNuevoOk: false,
         });
         continue;
       }
@@ -2549,9 +2643,34 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
           marcasEsperadas: cuerpoOperador.marcas.length,
           marcasPresentes: 0,
           interrumpido: false,
+          chatNuevoOk: false,
         });
         continue;
       }
+
+      // T7 (Fase 3) — "Nuevo chat" ANTES de escribir el cuerpo: sin esto, la
+      // propia respuesta del operador (Parte 1) sigue en el historial visible
+      // del mismo panel, y la exclusión de autoevaluación de
+      // `cuerpo-operador.ts` queda NOMINAL — el operador la lee igual, fuera
+      // del cuerpo que se le arma. Ver `nuevoChatPara`.
+      const chatNuevo = await alFrente(v, () => nuevoChatPara(v));
+      if (!chatNuevo.ok) {
+        paneles.push({
+          operadorId: cuerpoOperador.operadorId,
+          ok: false,
+          error: `"Nuevo chat" falló: ${chatNuevo.error ?? "sin detalle"}`,
+          estadoIntegridad: "indeterminado",
+          marcasEsperadas: cuerpoOperador.marcas.length,
+          marcasPresentes: 0,
+          interrumpido: false,
+          chatNuevoOk: false,
+        });
+        continue;
+      }
+      // `quedoLimpio: false` NO aborta: es un HALLAZGO sobre ese proveedor
+      // (a documentar en docs/LIMITACIONES.md), no un fallo del mecanismo —
+      // se sigue escribiendo el cuerpo igual, y el resultado lo declara.
+
       const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS];
       const specJson = JSON.stringify(spec);
       const TECHO_EXTERNO_MS = 90_000;
@@ -2585,6 +2704,7 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
           marcasEsperadas: integridad.marcasEsperadas,
           marcasPresentes: integridad.marcasPresentes,
           interrumpido: false,
+          chatNuevoOk: chatNuevo.quedoLimpio,
         });
       } catch (e) {
         paneles.push({
@@ -2593,6 +2713,7 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
           error: e instanceof Error ? e.message : String(e),
           estadoIntegridad: "indeterminado",
           marcasEsperadas: cuerpoOperador.marcas.length,
+          chatNuevoOk: chatNuevo.quedoLimpio,
           marcasPresentes: 0,
           interrumpido: false,
         });
@@ -3035,6 +3156,31 @@ async function modoIntegrador(): Promise<void> {
   }
 }
 
+/**
+ * `--cc-nuevo-chat`: corre `nuevoChatPara` contra los 8 paneles reales del
+ * pool, secuencial y al frente, y reporta si cada uno quedó SIN mensajes
+ * previos. Diagnóstico puro (no toca el registro, no envía nada).
+ */
+async function modoNuevoChat(): Promise<void> {
+  try {
+    await new Promise((r) => setTimeout(r, 35_000));
+    const resultados: ResultadoNuevoChat[] = [];
+    for (const id of POOL_OPERADORES) {
+      const v = vistas.find((x) => x.id === id);
+      if (!v) {
+        resultados.push({ operadorId: id, ok: false, error: "panel no abierto", quedoLimpio: false });
+        continue;
+      }
+      resultados.push(await alFrente(v, () => nuevoChatPara(v)));
+    }
+    emitir("CC_NUEVO_CHAT_JSON", resultados);
+  } catch (e) {
+    decirPorSalida(`\n===CC_NUEVO_CHAT_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+  } finally {
+    app.quit();
+  }
+}
+
 async function modoVisibilidad(): Promise<void> {
   try {
     await new Promise((r) => setTimeout(r, 35_000));
@@ -3341,6 +3487,7 @@ void app.whenReady().then(() => {
   if (MODO === "medir-entrega") void modoMedirEntrega();
   if (MODO === "consolidar") void modoConsolidar();
   if (MODO === "integrador") void modoIntegrador();
+  if (MODO === "nuevo-chat") void modoNuevoChat();
   app.on("activate", () => {
     if (BaseWindow.getAllWindows().length === 0) createWindow();
   });

@@ -18,6 +18,20 @@ limitaciones sin procedencia repite el problema que viene a resolver.
   metodológica que fundamenta el diseño de la parte 2, no una medición sobre
   ChatCouncil.*
 
+  **La exclusión depende de que la conversación del panel esté limpia, no
+  sólo de qué texto trae el cuerpo.** El prompt de operación se escribe en
+  el mismo panel donde ese proveedor ya respondió la pregunta original — si
+  el historial visible conserva esa respuesta, el operador la lee igual,
+  fuera del cuerpo que se le armó. "Consolidar respuestas" corre "Nuevo
+  chat" (navega a `newConversationUrl`) en los 8 del pool antes de escribir,
+  y VERIFICA (no asume) que quedaron sin mensajes previos. *Medido en vivo,
+  2026-09-17: los 8 proveedores del pool (chatgpt, gemini, claude, grok,
+  mistral, glm, kimi, qwen) quedaron con cero mensajes de asistente y de
+  usuario tras navegar a su `newConversationUrl` — ninguno arrastra
+  contexto entre chats. Si esto cambiara para algún proveedor en una corrida
+  futura, se registra acá con su fecha, igual que el resto de este
+  documento.*
+
 - El marco de rigor es el de Lincoln y Guba (1985, *Naturalistic Inquiry*):
   credibilidad, transferibilidad, dependibilidad y confirmabilidad.
   ChatCouncil los cubre así:

@@ -97,6 +97,26 @@ respuestas que NO son suyas, nadie evalúa su propio trabajo. Produce una
 matriz operador × respuesta. (Fundamento metodológico y limitaciones: ver
 `docs/LIMITACIONES.md`.)
 
+**CONSECUENCIA (corrección de la ronda de la primera corrida real,
+2026-09-17): la exclusión de autoevaluación NO se sostiene sola con armar
+el cuerpo.** El prompt de operación se escribe en el MISMO panel — la misma
+conversación de chat — donde ese proveedor ya respondió la pregunta
+original en la Parte 1. El cuerpo excluye su propia respuesta del TEXTO que
+recibe, pero si el HISTORIAL VISIBLE del panel todavía tiene esa respuesta
+(misma conversación), el operador la lee igual, fuera del cuerpo — la
+exclusión queda nominal, y con ella el diseño round-robin entero. Por eso
+"Consolidar respuestas" ahora corre **"Nuevo chat"** (navegar a
+`newConversationUrl` de cada proveedor) en los 8 paneles del pool, SECUENCIAL
+Y AL FRENTE, ANTES de escribir el cuerpo — y VERIFICA el resultado
+(`estaVacioElChat`: cero mensajes de asistente y de usuario en el DOM),
+nunca asume que navegar alcanzó. Medido en vivo, 2026-09-17: los 8 quedaron
+sin mensajes previos (`quedoLimpio: true`) — ningún proveedor del pool
+arrastra contexto entre `newConversationUrl` y el chat anterior. Si algún
+proveedor lo hiciera, es un HALLAZGO sobre ESE proveedor (a
+`docs/LIMITACIONES.md`), no un fallo del mecanismo: "Consolidar" sigue
+escribiendo el cuerpo igual, y el resultado (`ResultadoConsolidarPanel.
+chatNuevoOk`) lo declara en vez de esconderlo.
+
 **Noveno — informe.** `deepseek` recibe la matriz y produce el informe
 final: resumen de hallazgos e interpretación de convergencia y divergencia,
 siempre en relación con la pregunta original. NO busca. NO agrega

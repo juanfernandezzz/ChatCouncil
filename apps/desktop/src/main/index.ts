@@ -1554,6 +1554,15 @@ async function censoAlCerrar(): Promise<void> {
 
 function registrarIpc(): void {
   ipcMain.handle("cc:investigadores", () => ACTIVOS.slice());
+  /**
+   * Cambio 6 — el renderer necesita saber CUÁL de los `ACTIVOS` es el
+   * integrador (deepseek) para explicar por qué ese panel queda en gris:
+   * no participa de la Parte 1 ("Pegar en todos" nunca lo incluye, ver
+   * `DESTINATARIOS_INVESTIGACION`), así que nunca recibe un `ok`/`mal` de
+   * difusión — es correcto que se quede en "en espera" hasta que se le
+   * escriba el prompt del integrador.
+   */
+  ipcMain.handle("cc:integrador", () => INTEGRADOR_ID);
 
   /**
    * DIFUSIÓN. Se lanzan todas en paralelo y se espera a todas, pero con

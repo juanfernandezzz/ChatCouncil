@@ -77,6 +77,7 @@ interface EstadoConsolidacion {
 }
 interface CcBridge {
   investigadores: () => Promise<string[]>;
+  integrador: () => Promise<string>;
   difundir: (prompt: string) => Promise<Resultado[]>;
   leer: () => Promise<Lectura[]>;
   sesiones: () => Promise<{ id: string; cookies: number }[]>;
@@ -120,8 +121,12 @@ function marcar(id: string, texto: string, clase: "" | "ok" | "mal" = ""): void 
   estadoPanel.set(id, { texto, clase });
 }
 
-void window.cc.investigadores().then((ids) => {
-  for (const id of ids) marcar(id, "en espera");
+// Cambio 6 — deepseek queda en gris a propósito: es el integrador, no un
+// investigador de la Parte 1, así que "Pegar en todos" nunca lo toca y nunca
+// recibe un ok/mal de difusión. Se lo etiqueta distinto para que ese gris no
+// se lea como un fallo.
+void Promise.all([window.cc.investigadores(), window.cc.integrador()]).then(([ids, integrador]) => {
+  for (const id of ids) marcar(id, id === integrador ? "en espera (integrador, no investiga)" : "en espera");
   pintarPaneles();
 });
 

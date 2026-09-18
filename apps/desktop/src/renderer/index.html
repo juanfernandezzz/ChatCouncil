@@ -22,7 +22,17 @@
       }
       button:disabled { opacity: .5; cursor: default; }
       button.primario { background: #5a4a33; border-color: #6d5a3e; }
-      .paneles { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+      /**
+       * Cambio 6 — este selector apuntaba a `.paneles`, pero el div de abajo
+       * es `id="paneles"` sin esa clase: la regla NUNCA se aplicaba. Sin
+       * flex-wrap explícito, los nueve chips dependían del wrap por defecto
+       * de los `<span>` inline, y con nueve nombres (incluido "deepseek",
+       * el más largo) más su ancho variable eso podía dejar alguno cortado
+       * contra el borde de la ventana en vez de bajar a una segunda fila.
+       * Corregido al selector real, con flex-wrap:wrap explícito: si los
+       * nueve no entran en una fila, usan dos.
+       */
+      #paneles { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
       .fila-scroll { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
       .fila-scroll span { font-size: 11px; opacity: .7; white-space: nowrap; }
       #barra-scroll { flex: 1; accent-color: #6d5a3e; cursor: pointer; }

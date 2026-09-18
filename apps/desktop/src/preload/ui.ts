@@ -7,6 +7,8 @@ import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("cc", {
   investigadores: (): Promise<string[]> => ipcRenderer.invoke("cc:investigadores"),
+  /** Cambio 6 — cuál de los `investigadores()` es el integrador (deepseek): no investiga, sólo informa. */
+  integrador: (): Promise<string> => ipcRenderer.invoke("cc:integrador"),
   difundir: (prompt: string): Promise<unknown[]> => ipcRenderer.invoke("cc:difundir", prompt),
   leer: (): Promise<unknown[]> => ipcRenderer.invoke("cc:leer"),
   sesiones: (): Promise<{ id: string; cookies: number }[]> => ipcRenderer.invoke("cc:sesiones"),

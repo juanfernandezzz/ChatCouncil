@@ -175,6 +175,32 @@ function leerCompositor(el: Element | null, kind: PageSpec["composer"]["kind"]):
   return kind === "textarea" ? ((el as HTMLTextAreaElement).value ?? "") : (el.textContent ?? "");
 }
 
+/**
+ * DEFECTO 3 (evidencia de Juan, corrida real, texto que llegó a kimi: "a una
+ * mismapregunta", "alcompararlas", "Alterminar" — palabras pegadas SIN
+ * espacio donde debía ir un salto de línea). MEDIDO, no supuesto (Chromium
+ * real, `document.execCommand("insertText", false, "a\nb")` sobre un
+ * `contenteditable` en blanco): la llamada ÚNICA con el texto entero, `\n`
+ * incluidos, deja `textContent === "ab"` — el `\n` desaparece ENTERO, no se
+ * colapsa a un espacio. Confirma la hipótesis 1 del enunciado: `insertText`
+ * no reconoce `\n` como salto en un `contenteditable`; la vía que sí
+ * funciona es un `insertText` POR LÍNEA con un `insertLineBreak` entre cada
+ * una — medido en el mismo experimento: da `innerHTML` con `<br>` reales
+ * entre líneas.
+ *
+ * Esto NO es un parche de kimi: `writePrompt` es el camino COMPARTIDO de
+ * escritura de los nueve (cabecera de este archivo), y `kind ===
+ * "contenteditable"` cubre seis de los nueve (chatgpt, claude, gemini, grok,
+ * mistral, kimi — ver `packages/providers/src/specs.json`). El texto de
+ * `prompt-operacion.ts` es POR LÍNEAS a propósito (formato "CATEGORIA|EJE|
+ * ETIQUETAS|DESCRIPCION", una por renglón): un operador que lo recibe
+ * pegado no puede reproducirlo, en cualquiera de los seis, no sólo en kimi.
+ *
+ * `textarea` NO tiene este defecto — medido también: `execCommand
+ * ("insertText")` sobre el `.value` de un `<textarea>` preserva `\n` tal
+ * cual, porque ahí es texto plano nativo, no nodos de un árbol enriquecido.
+ * Se deja intacto.
+ */
 function writePrompt(el: Element, kind: PageSpec["composer"]["kind"], text: string): boolean {
   (el as HTMLElement).focus();
   if (kind === "textarea") {
@@ -189,8 +215,30 @@ function writePrompt(el: Element, kind: PageSpec["composer"]["kind"], text: stri
   range.selectNodeContents(host);
   sel?.removeAllRanges();
   sel?.addRange(range);
-  document.execCommand("insertText", false, text);
-  return (host.textContent ?? "").trim() === text.trim();
+  const lineas = text.split("\n");
+  lineas.forEach((linea, i) => {
+    if (linea.length > 0) document.execCommand("insertText", false, linea);
+    if (i < lineas.length - 1) document.execCommand("insertLineBreak", false);
+  });
+  // `textContent` NO cuenta los `<br>` que separan líneas (no tienen texto
+  // propio) — comparar contra él daría por buena una escritura que perdió
+  // los saltos exactamente igual que el defecto que esto corrige. `leerTexto`
+  // (abajo) es la misma reconstrucción que usa la lectura del compositor en
+  // todo el resto de este archivo.
+  return leerTexto(host, kind).trim() === text.trim();
+}
+
+/**
+ * Lee el texto de un compositor RECONSTRUYENDO los saltos de línea: para
+ * `textarea`, `.value` ya los preserva tal cual. Para `contenteditable`,
+ * `textContent` los pierde si viven en `<br>` (un `<br>` no tiene texto
+ * propio) — `innerText`, en cambio, respeta el LAYOUT renderizado (`<br>`,
+ * bloques) y por eso es lo que hay que leer para comparar contra el
+ * original línea por línea. Ver `writePrompt` para la medición completa.
+ */
+function leerTexto(el: Element, kind: PageSpec["composer"]["kind"]): string {
+  if (kind === "textarea") return (el as HTMLTextAreaElement).value ?? "";
+  return (el as HTMLElement).innerText ?? "";
 }
 
 /**
@@ -890,8 +938,11 @@ async function escribirYEsperarQuietud(spec: PageSpec, texto: string): Promise<R
     return { ok: false, error: "compositor no encontrado: no se escribió nada", ms: 0, textoFinal: "", composer: null };
   }
 
-  const leer = (): string =>
-    spec.composer.kind === "textarea" ? (composer as HTMLTextAreaElement).value : (composer.textContent ?? "");
+  // DEFECTO 3: `leerTexto` (no `textContent`) para que `textoFinal` refleje
+  // los saltos de línea reales — comparar contra `textContent` daría por
+  // buena una escritura que perdió las líneas, exactamente el defecto que
+  // esto corrige (ver `writePrompt`/`leerTexto` para la medición completa).
+  const leer = (): string => leerTexto(composer, spec.composer.kind);
 
   if (leer().trim().length > 0) {
     return {

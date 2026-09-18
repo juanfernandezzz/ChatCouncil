@@ -48,7 +48,7 @@ import {
   generarSemilla,
   leerRegistroDeArchivo,
 } from "./registro";
-import { armarYPersistirCuerposDeRonda, POOL_OPERADORES } from "./operador";
+import { armarCuerposDeRonda, armarYPersistirCuerposDeRonda, POOL_OPERADORES } from "./operador";
 import {
   armarTablaYPromptIntegrador,
   clasificarLecturasPorEtapa,
@@ -994,11 +994,20 @@ function layout(): void {
  * de construcción, que es justo `chatgpt`.
  */
 function vistaEnFrente(): WebContentsView | undefined {
+  return vistaConIdEnFrente()?.view;
+}
+
+/**
+ * Cambio 4 — "Consolidar este panel" necesita saber QUIÉN es el panel al
+ * frente, no sólo su `WebContentsView`: mismo cálculo de índice que
+ * `vistaEnFrente`, factorizado para no duplicarlo.
+ */
+function vistaConIdEnFrente(): { id: string; view: WebContentsView } | undefined {
   const abiertas = todas();
   const ancho = anchoPanel();
   if (abiertas.length === 0 || ancho === 0) return undefined;
   const indice = Math.min(abiertas.length - 1, Math.max(0, Math.round(scrollX / ancho)));
-  return abiertas[indice]?.view;
+  return abiertas[indice];
 }
 
 function estadoDesplazamiento(): { scrollX: number; anchoTotal: number; ventanaAncho: number } {
@@ -1592,6 +1601,12 @@ function registrarIpc(): void {
    */
   ipcMain.handle("cc:consolidar", async () => consolidarRespuestas());
   ipcMain.handle("cc:consolidar-estado", () => estadoConsolidacion);
+
+  /**
+   * Cambio 4 — "Consolidar este panel": mismo prompt de operación, pero sólo
+   * para el panel que está al frente en ese momento. Ver `consolidarPanelActual`.
+   */
+  ipcMain.handle("cc:consolidar-uno", async () => consolidarPanelActual());
 }
 
 /**
@@ -2624,32 +2639,31 @@ function armarPromptDeOperacionConMarcas(
   return { texto: `${textoConMarcas}\n${marcaFin}\n`, marcas: [...marcas, marcaFin] };
 }
 
-async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
+/**
+ * Comprobaciones comunes a "Consolidar respuestas" y "Consolidar este panel"
+ * (Cambio 4): ronda activa, pregunta registrada, y las 8 respuestas del pool
+ * ya capturadas. Devuelve la ronda y los hechos que hacen falta para armar
+ * los cuerpos, o el motivo exacto por el que no se puede — nunca escribe en
+ * ningún panel.
+ */
+function prepararRondaParaOperar():
+  | { ok: true; ronda: Ronda; respuestas: Respuesta[]; citas: Cita[] }
+  | { ok: false; error: string } {
   if (!conversacionActual || !rondaActualId) {
-    return {
-      ok: false,
-      error: "no hay una ronda activa: capturá las 8 respuestas del pool antes de consolidar",
-      paneles: [],
-      navegacionesIntactas: true,
-    };
+    return { ok: false, error: "no hay una ronda activa: capturá las 8 respuestas del pool antes de consolidar" };
   }
   const userData = app.getPath("userData");
   const registro = leerRegistroDeArchivo(userData, conversacionActual);
   const ronda = registro.hechos.find((h): h is Ronda => h.tipo === "ronda" && h.id === rondaActualId);
   if (!ronda) {
-    return { ok: false, error: "no se encontró la ronda actual en el registro", paneles: [], navegacionesIntactas: true };
+    return { ok: false, error: "no se encontró la ronda actual en el registro" };
   }
   // T14 (Cambio 1): sin pregunta registrada no se arma NINGÚN prompt de
   // operación — un prompt con la pregunta vacía no es un prompt, es un
   // cuerpo pelado con un rótulo vacío encima. Falla ANTES de tocar ningún
   // panel.
   if (!ronda.prompt || ronda.prompt.trim().length === 0) {
-    return {
-      ok: false,
-      error: `la ronda ${ronda.id} no tiene pregunta registrada (Ronda.prompt vacío): no se puede armar el prompt de operación`,
-      paneles: [],
-      navegacionesIntactas: true,
-    };
+    return { ok: false, error: `la ronda ${ronda.id} no tiene pregunta registrada (Ronda.prompt vacío): no se puede armar el prompt de operación` };
   }
 
   const respuestasDeLaRonda = new Map<string, Respuesta>();
@@ -2660,18 +2674,123 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
   }
   const faltantes = POOL_OPERADORES.filter((id) => !respuestasDeLaRonda.has(id));
   if (faltantes.length > 0) {
-    return {
-      ok: false,
-      error: `faltan respuestas capturadas en esta ronda: ${faltantes.join(", ")} — usá "Capturar" antes de consolidar`,
-      paneles: [],
-      navegacionesIntactas: true,
-    };
+    return { ok: false, error: `faltan respuestas capturadas en esta ronda: ${faltantes.join(", ")} — usá "Capturar" antes de consolidar` };
   }
   const citas = registro.hechos.filter((h): h is Cita => h.tipo === "cita");
+  return { ok: true, ronda, respuestas: [...respuestasDeLaRonda.values()], citas: [...citas] };
+}
+
+/**
+ * Escribe el prompt de operación en UN panel ya identificado: "Nuevo chat",
+ * escritura, marcas de integridad y `verificarPromptCompleto` (Cambio 2).
+ * Factorizado de `consolidarRespuestas` para que "Consolidar este panel"
+ * (Cambio 4) haga EXACTAMENTE lo mismo sobre un solo panel, sin duplicar la
+ * lógica.
+ */
+async function consolidarUnPanel(
+  v: (typeof vistas)[number],
+  operadorId: string,
+  textoAEscribir: string,
+  marcasDeEsteOperador: string[],
+): Promise<ResultadoConsolidarPanel> {
+  // T7 (Fase 3) — "Nuevo chat" ANTES de escribir el cuerpo: sin esto, la
+  // propia respuesta del operador (Parte 1) sigue en el historial visible
+  // del mismo panel, y la exclusión de autoevaluación de
+  // `cuerpo-operador.ts` queda NOMINAL — el operador la lee igual, fuera
+  // del cuerpo que se le arma. Ver `nuevoChatPara`.
+  const chatNuevo = await alFrente(v, () => nuevoChatPara(v));
+  if (!chatNuevo.ok) {
+    return {
+      operadorId,
+      ok: false,
+      error: `"Nuevo chat" falló: ${chatNuevo.error ?? "sin detalle"}`,
+      estadoIntegridad: "indeterminado",
+      marcasEsperadas: marcasDeEsteOperador.length,
+      marcasPresentes: 0,
+      promptCompleto: false,
+      faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
+      interrumpido: false,
+      chatNuevoOk: false,
+    };
+  }
+  // `quedoLimpio: false` NO aborta: es un HALLAZGO sobre ese proveedor
+  // (a documentar en docs/LIMITACIONES.md), no un fallo del mecanismo —
+  // se sigue escribiendo el cuerpo igual, y el resultado lo declara.
+
+  const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS];
+  const specJson = JSON.stringify(spec);
+  const TECHO_EXTERNO_MS = 90_000;
+  try {
+    const r = (await alFrente(v, () =>
+      Promise.race([
+        v.view.webContents.executeJavaScript(
+          `window.__ccProvider.entregarCuerpoOperador(${specJson}, ${JSON.stringify(textoAEscribir)})`,
+          true,
+        ),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`sin respuesta del panel tras ${TECHO_EXTERNO_MS}ms (techo externo)`)),
+            TECHO_EXTERNO_MS,
+          ),
+        ),
+      ]),
+    )) as { ok: boolean; error?: string; textoFinal: string };
+    const integridad = evaluarIntegridad(r.textoFinal, marcasDeEsteOperador);
+    // Cambio 2 — SEGUNDA comprobación, independiente de las marcas: el
+    // criterio viejo ("N de N marcas presentes") verifica la FORMA del
+    // texto y un cuerpo pelado sin instrucciones lo pasa perfecto (era
+    // exactamente el caso de la corrida real de Juan). Ésta verifica
+    // CONTENIDO: que las nueve cadenas del prompt de operación estén.
+    const verificacionPrompt = verificarPromptCompleto(r.textoFinal);
+    if (r.ok) {
+      // T7 — sólo así "Capturar" puede persistir el PROMPT ENTERO que
+      // de verdad se escribió (`SalidaOperador.promptCompleto`), en vez
+      // de reconstruirlo o dejarlo vacío.
+      ultimoPromptOperadorPorId.set(operadorId, textoAEscribir);
+    }
+    return {
+      operadorId,
+      ok: r.ok && verificacionPrompt.completo,
+      ...(r.error
+        ? { error: r.error }
+        : !verificacionPrompt.completo
+          ? { error: `prompt incompleto: faltan ${verificacionPrompt.faltantes.join(", ")}` }
+          : {}),
+      estadoIntegridad: integridad.estado,
+      marcasEsperadas: integridad.marcasEsperadas,
+      marcasPresentes: integridad.marcasPresentes,
+      promptCompleto: verificacionPrompt.completo,
+      faltantesPrompt: verificacionPrompt.faltantes,
+      interrumpido: false,
+      chatNuevoOk: chatNuevo.quedoLimpio,
+    };
+  } catch (e) {
+    return {
+      operadorId,
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+      estadoIntegridad: "indeterminado",
+      marcasEsperadas: marcasDeEsteOperador.length,
+      chatNuevoOk: chatNuevo.quedoLimpio,
+      marcasPresentes: 0,
+      promptCompleto: false,
+      faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
+      interrumpido: false,
+    };
+  }
+}
+
+async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
+  const prep = prepararRondaParaOperar();
+  if (!prep.ok) {
+    return { ok: false, error: prep.error, paneles: [], navegacionesIntactas: true };
+  }
+  const { ronda, respuestas, citas } = prep;
+  const userData = app.getPath("userData");
 
   let resultadoArmado;
   try {
-    resultadoArmado = armarYPersistirCuerposDeRonda(userData, conversacionActual, ronda, [...respuestasDeLaRonda.values()], citas);
+    resultadoArmado = armarYPersistirCuerposDeRonda(userData, conversacionActual!, ronda, respuestas, citas);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e), paneles: [], navegacionesIntactas: true };
   }
@@ -2746,92 +2865,7 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
         continue;
       }
 
-      // T7 (Fase 3) — "Nuevo chat" ANTES de escribir el cuerpo: sin esto, la
-      // propia respuesta del operador (Parte 1) sigue en el historial visible
-      // del mismo panel, y la exclusión de autoevaluación de
-      // `cuerpo-operador.ts` queda NOMINAL — el operador la lee igual, fuera
-      // del cuerpo que se le arma. Ver `nuevoChatPara`.
-      const chatNuevo = await alFrente(v, () => nuevoChatPara(v));
-      if (!chatNuevo.ok) {
-        paneles.push({
-          operadorId: cuerpoOperador.operadorId,
-          ok: false,
-          error: `"Nuevo chat" falló: ${chatNuevo.error ?? "sin detalle"}`,
-          estadoIntegridad: "indeterminado",
-          marcasEsperadas: marcasDeEsteOperador.length,
-          marcasPresentes: 0,
-          promptCompleto: false,
-          faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
-          interrumpido: false,
-          chatNuevoOk: false,
-        });
-        continue;
-      }
-      // `quedoLimpio: false` NO aborta: es un HALLAZGO sobre ese proveedor
-      // (a documentar en docs/LIMITACIONES.md), no un fallo del mecanismo —
-      // se sigue escribiendo el cuerpo igual, y el resultado lo declara.
-
-      const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS];
-      const specJson = JSON.stringify(spec);
-      const TECHO_EXTERNO_MS = 90_000;
-      try {
-        const r = (await alFrente(v, () =>
-          Promise.race([
-            v.view.webContents.executeJavaScript(
-              `window.__ccProvider.entregarCuerpoOperador(${specJson}, ${JSON.stringify(textoAEscribir)})`,
-              true,
-            ),
-            new Promise((_, reject) =>
-              setTimeout(
-                () => reject(new Error(`sin respuesta del panel tras ${TECHO_EXTERNO_MS}ms (techo externo)`)),
-                TECHO_EXTERNO_MS,
-              ),
-            ),
-          ]),
-        )) as { ok: boolean; error?: string; textoFinal: string };
-        const integridad = evaluarIntegridad(r.textoFinal, marcasDeEsteOperador);
-        // Cambio 2 — SEGUNDA comprobación, independiente de las marcas: el
-        // criterio viejo ("N de N marcas presentes") verifica la FORMA del
-        // texto y un cuerpo pelado sin instrucciones lo pasa perfecto (era
-        // exactamente el caso de la corrida real de Juan). Ésta verifica
-        // CONTENIDO: que las nueve cadenas del prompt de operación estén.
-        const verificacionPrompt = verificarPromptCompleto(r.textoFinal);
-        if (r.ok) {
-          // T7 — sólo así "Capturar" puede persistir el PROMPT ENTERO que
-          // de verdad se escribió (`SalidaOperador.promptCompleto`), en vez
-          // de reconstruirlo o dejarlo vacío.
-          ultimoPromptOperadorPorId.set(cuerpoOperador.operadorId, textoAEscribir);
-        }
-        paneles.push({
-          operadorId: cuerpoOperador.operadorId,
-          ok: r.ok && verificacionPrompt.completo,
-          ...(r.error
-            ? { error: r.error }
-            : !verificacionPrompt.completo
-              ? { error: `prompt incompleto: faltan ${verificacionPrompt.faltantes.join(", ")}` }
-              : {}),
-          estadoIntegridad: integridad.estado,
-          marcasEsperadas: integridad.marcasEsperadas,
-          marcasPresentes: integridad.marcasPresentes,
-          promptCompleto: verificacionPrompt.completo,
-          faltantesPrompt: verificacionPrompt.faltantes,
-          interrumpido: false,
-          chatNuevoOk: chatNuevo.quedoLimpio,
-        });
-      } catch (e) {
-        paneles.push({
-          operadorId: cuerpoOperador.operadorId,
-          ok: false,
-          error: e instanceof Error ? e.message : String(e),
-          estadoIntegridad: "indeterminado",
-          marcasEsperadas: marcasDeEsteOperador.length,
-          chatNuevoOk: chatNuevo.quedoLimpio,
-          marcasPresentes: 0,
-          promptCompleto: false,
-          faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
-          interrumpido: false,
-        });
-      }
+      paneles.push(await consolidarUnPanel(v, cuerpoOperador.operadorId, textoAEscribir, marcasDeEsteOperador));
     }
   } finally {
     estadoConsolidacion = { enCurso: false, indice: 0, total: 0, operadorId: null };
@@ -2846,6 +2880,64 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
     paneles,
     navegacionesIntactas,
   };
+}
+
+export interface ResultadoConsolidarUno {
+  ok: boolean;
+  error?: string;
+  panel?: ResultadoConsolidarPanel;
+}
+
+/**
+ * Cambio 4 — "Consolidar este panel": hace lo mismo que "Consolidar
+ * respuestas" pero SÓLO sobre el panel visible en pantalla en ese momento
+ * ("Nuevo chat", escribe el prompt de operación de ESE operador, sin
+ * enviar). Usa la MISMA ronda y la MISMA semilla que la consolidación
+ * general — `armarCuerposDeRonda` es determinista sobre `ronda.semilla`, así
+ * que recalcularla para un solo panel da el MISMO barajado, nunca uno nuevo
+ * (si cambiara, ese operador vería las respuestas en otro orden que el
+ * resto y la ronda quedaría inconsistente). A diferencia de
+ * `armarYPersistirCuerposDeRonda`, NO vuelve a escribir el `Sello`: ya se
+ * escribió una vez al consolidar por primera vez, y `escribirSello` es
+ * append-only — escribirlo de nuevo lo duplicaría.
+ *
+ * Si no hay ninguna ronda en etapa de operación (falta alguna de las 8
+ * respuestas capturadas, o no hay ronda activa), no hace nada y avisa.
+ */
+async function consolidarPanelActual(): Promise<ResultadoConsolidarUno> {
+  const prep = prepararRondaParaOperar();
+  if (!prep.ok) {
+    return { ok: false, error: prep.error };
+  }
+  const { ronda, respuestas, citas } = prep;
+
+  const objetivo = vistaConIdEnFrente();
+  if (!objetivo) {
+    return { ok: false, error: "no hay ningún panel visible" };
+  }
+  if (!(POOL_OPERADORES as readonly string[]).includes(objetivo.id)) {
+    return { ok: false, error: `el panel al frente ("${objetivo.id}") no es un operador del pool: no tiene cuerpo que consolidar` };
+  }
+
+  let resultadoArmado;
+  try {
+    resultadoArmado = armarCuerposDeRonda(ronda, respuestas, citas);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+  const cuerpoOperador = resultadoArmado.cuerpos.find((c) => c.operadorId === objetivo.id);
+  if (!cuerpoOperador) {
+    return { ok: false, error: `no se encontró el cuerpo de "${objetivo.id}" entre los del pool` };
+  }
+
+  const { texto: textoAEscribir, marcas: marcasDeEsteOperador } = armarPromptDeOperacionConMarcas(
+    ronda.prompt,
+    cuerpoOperador,
+  );
+  // Ya se verificó arriba que `objetivo.id` está en POOL_OPERADORES (⊂ ProviderId).
+  const v = { id: objetivo.id as ProviderId, view: objetivo.view };
+  const panel = await consolidarUnPanel(v, objetivo.id, textoAEscribir, marcasDeEsteOperador);
+  return { ok: panel.ok, panel, ...(panel.error ? { error: panel.error } : {}) };
 }
 
 /**

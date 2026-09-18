@@ -53,13 +53,21 @@ interface ResultadoConsolidarPanel {
   estadoIntegridad: string;
   marcasEsperadas: number;
   marcasPresentes: number;
+  promptCompleto: boolean;
+  faltantesPrompt: string[];
   interrumpido: boolean;
+  chatNuevoOk: boolean;
 }
 interface ResultadoConsolidar {
   ok: boolean;
   error?: string;
   paneles: ResultadoConsolidarPanel[];
   navegacionesIntactas: boolean;
+}
+interface ResultadoConsolidarUno {
+  ok: boolean;
+  error?: string;
+  panel?: ResultadoConsolidarPanel;
 }
 interface EstadoConsolidacion {
   enCurso: boolean;
@@ -78,6 +86,7 @@ interface CcBridge {
   posicion: () => Promise<Posicion>;
   consolidar: () => Promise<ResultadoConsolidar>;
   consolidarEstado: () => Promise<EstadoConsolidacion>;
+  consolidarUno: () => Promise<ResultadoConsolidarUno>;
 }
 declare global {
   interface Window {
@@ -265,6 +274,33 @@ botonConsolidar.addEventListener("click", () => {
       ? ""
       : "\n\n⚠ El contador de navegaciones cambió durante la consolidación — alguna vista pudo haberse recargado.";
     decir(`Consolidación:\n${detalle}${avisoNav}`, r.ok && r.navegacionesIntactas ? "ok" : "mal");
+  });
+});
+
+/**
+ * CONSOLIDAR ESTE PANEL — Cambio 4. Igual que "Consolidar respuestas" pero
+ * sólo para el panel al frente en este momento: no re-arma el sello ni
+ * vuelve a barajar, usa la misma ronda tal cual está.
+ */
+const botonConsolidarUno = $<HTMLButtonElement>("consolidar-uno");
+botonConsolidarUno.addEventListener("click", () => {
+  botonConsolidarUno.disabled = true;
+  decir("Consolidando el panel al frente…");
+  void window.cc.consolidarUno().then((r) => {
+    botonConsolidarUno.disabled = false;
+    if (!r.ok || !r.panel) {
+      decir(`No se pudo consolidar este panel: ${r.error ?? "sin detalle"}`, "mal");
+      return;
+    }
+    const p = r.panel;
+    marcar(p.operadorId, p.ok ? `listo · ${p.estadoIntegridad} (${p.marcasPresentes}/${p.marcasEsperadas})` : p.error ?? "falló", p.ok ? "ok" : "mal");
+    pintarPaneles();
+    decir(
+      p.ok
+        ? `${p.operadorId}: listo, integridad ${p.estadoIntegridad} (${p.marcasPresentes}/${p.marcasEsperadas} marcas)`
+        : `${p.operadorId}: ${p.error ?? "falló"}`,
+      p.ok ? "ok" : "mal",
+    );
   });
 });
 

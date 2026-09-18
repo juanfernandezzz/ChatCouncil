@@ -32,6 +32,12 @@ contextBridge.exposeInMainWorld("cc", {
   consolidar: (): Promise<ResultadoConsolidar> => ipcRenderer.invoke("cc:consolidar"),
   /** Progreso de la consolidación en curso — sondeo, no evento empujado. */
   consolidarEstado: (): Promise<EstadoConsolidacion> => ipcRenderer.invoke("cc:consolidar-estado"),
+  /**
+   * Cambio 4 — "Consolidar este panel": mismo prompt de operación de
+   * "Consolidar respuestas", pero sólo para el panel que está al frente en
+   * este momento. Misma ronda, misma semilla — no vuelve a barajar.
+   */
+  consolidarUno: (): Promise<ResultadoConsolidarUno> => ipcRenderer.invoke("cc:consolidar-uno"),
 });
 
 interface ResultadoConsolidarPanel {
@@ -41,13 +47,21 @@ interface ResultadoConsolidarPanel {
   estadoIntegridad: string;
   marcasEsperadas: number;
   marcasPresentes: number;
+  promptCompleto: boolean;
+  faltantesPrompt: string[];
   interrumpido: boolean;
+  chatNuevoOk: boolean;
 }
 interface ResultadoConsolidar {
   ok: boolean;
   error?: string;
   paneles: ResultadoConsolidarPanel[];
   navegacionesIntactas: boolean;
+}
+interface ResultadoConsolidarUno {
+  ok: boolean;
+  error?: string;
+  panel?: ResultadoConsolidarPanel;
 }
 interface EstadoConsolidacion {
   enCurso: boolean;

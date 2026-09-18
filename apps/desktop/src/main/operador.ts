@@ -53,9 +53,16 @@ export const POOL_OPERADORES = [
  * Con `generarSemilla()` ya en `escribirRonda` (T3), esto sólo puede pasar
  * con una `Ronda` de antes de esta revisión.
  */
-export function armarYPersistirCuerposDeRonda(
-  userData: string,
-  conversacionId: string,
+/**
+ * LA MITAD PURA, sin persistir nada — extraída para "Consolidar este panel"
+ * (Cambio 4): ese botón necesita los MISMOS 8 cuerpos, con la MISMA semilla
+ * (nunca se recalcula el barajado — si cambiara, ese operador vería las
+ * respuestas en otro orden que el resto y la ronda quedaría inconsistente),
+ * pero SIN volver a escribir el `Sello`: `escribirSello` es append-only, y
+ * `armarYPersistirCuerposDeRonda` ya lo escribió una vez para esta ronda —
+ * llamarlo de nuevo duplicaría las entradas del sello.
+ */
+export function armarCuerposDeRonda(
   ronda: Ronda,
   respuestas: readonly Respuesta[],
   citas: readonly Cita[],
@@ -90,14 +97,17 @@ export function armarYPersistirCuerposDeRonda(
     };
   });
 
-  const resultado = armarCuerposPorOperador(
-    paraOperar,
-    POOL_OPERADORES,
-    hashSemilla(ronda.semilla),
-    () => randomUUID(),
-  );
+  return armarCuerposPorOperador(paraOperar, POOL_OPERADORES, hashSemilla(ronda.semilla), () => randomUUID());
+}
 
+export function armarYPersistirCuerposDeRonda(
+  userData: string,
+  conversacionId: string,
+  ronda: Ronda,
+  respuestas: readonly Respuesta[],
+  citas: readonly Cita[],
+): CuerposPorOperador {
+  const resultado = armarCuerposDeRonda(ronda, respuestas, citas);
   escribirSello(userData, conversacionId, ronda.id, resultado.sello);
-
   return resultado;
 }

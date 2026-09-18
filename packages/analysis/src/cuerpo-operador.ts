@@ -470,7 +470,17 @@ export function armarCuerposPorOperador(
       const textoLimpio = armarCuerpoConFuentes(l.text, urls);
       bloques.push(`### Respuesta ${l.label}\n${textoLimpio}`);
       incluidos.push(proveedorDeEsteLabel);
-      respuestasParaOperador.push({ etiqueta: l.label, texto: textoLimpio });
+      // DEFECTO 2 (corrida real de Juan, 2026-09-19): `armarPromptOperacion`
+      // es LITERAL y le dice al operador "los identificadores P1 a P8 son
+      // arbitrarios" — nunca "Modelo A".."H". `l.label` es la etiqueta
+      // BARAJADA de `anonymizeReplies` (correcta para `bloques`/`seal`, que
+      // siguen igual: hay que poder reconstruir el sello ya persistido de
+      // Juan sobre esta misma ronda). Para lo que el OPERADOR lee, hace falta
+      // el código ESTABLE que el propio texto del prompt promete: `codigos`
+      // (arriba) ya lo calcula por proveedor para el sello, así que se
+      // reutiliza acá — nunca una tercera fuente de identificador.
+      const codigoDeEsteLabel = codigos.get(proveedorDeEsteLabel) ?? "";
+      respuestasParaOperador.push({ etiqueta: codigoDeEsteLabel, texto: textoLimpio });
     });
     const textoBase = bloques.join("\n\n");
     const token = generarToken();

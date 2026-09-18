@@ -473,6 +473,19 @@ function contarCompositoresGenericos(): number {
   return document.querySelectorAll('textarea, div[contenteditable="true"], [role="textbox"]').length;
 }
 
+/**
+ * Cambio 3 (decisión de Juan, 2026-09-18): "Pegar en todos" escribe el
+ * prompt en el compositor y SE DETIENE AHÍ — nunca hace clic en el control
+ * de envío, nunca despacha Enter/tecla de envío, nunca dispara ningún
+ * evento que envíe el mensaje. Juan revisa cada panel y envía a mano, uno
+ * por uno: así se asegura de cada respuesta y evita gastar cuota en un
+ * proveedor que rechace el prompt.
+ *
+ * Motivo de que el nombre siga siendo `run`: es el único método expuesto en
+ * `window.__ccProvider` para escribir+(antes)enviar, y `difundir()` en
+ * `main/index.ts` es su único llamador — cambiar el contrato acá basta para
+ * que TODO el camino de difusión deje de enviar, sin tocar `index.ts`.
+ */
 async function run(spec: PageSpec, prompt: string): Promise<RunResult> {
   const esperaCompositor = spec.timeouts?.composerMs ?? 15_000;
   const t0 = Date.now();
@@ -491,6 +504,19 @@ async function run(spec: PageSpec, prompt: string): Promise<RunResult> {
     return { ok: false, error: "el compositor no aceptó el texto" };
   }
 
+  // Cuota cero: NUNCA se llega a `enviarPorClickOTecla` de abajo. `run()`
+  // termina acá, con el texto pegado y nada enviado.
+  return { ok: true, modelLabel: readModelLabel(spec), modelLabelDesglose: readModelLabelDesglose(spec) };
+}
+
+/**
+ * EL CÓDIGO DE ENVÍO NO SE BORRÓ: queda acá, sin llamadores, por decisión
+ * de Juan del 2026-09-18 (Cambio 3) — Juan envía a mano cada panel, nunca
+ * el código. Si en el futuro se decide reactivar el envío automático para
+ * algún camino distinto de "Pegar en todos", es ESTA función la que hay que
+ * volver a invocar, no reescribir.
+ */
+async function enviarPorClickOTecla(spec: PageSpec, prompt: string, composer: Element): Promise<RunResult> {
   const before = readAssistant(spec).length;
 
   if (spec.submit.kind === "click") {
@@ -969,6 +995,15 @@ async function entregarCuerpoOperador(spec: PageSpec, texto: string): Promise<Re
  */
 contextBridge.exposeInMainWorld("__ccProvider", {
   run: (spec: PageSpec, prompt: string) => run(spec, prompt),
+  // Cambio 3 (decisión de Juan, 2026-09-18): expuesta pero SIN LLAMADORES en
+  // el camino de difusión — `run()` ya no la invoca. Queda accesible, no
+  // borrada, para si algún día se decide reactivar el envío automático fuera
+  // de "Pegar en todos" (ver comentario sobre la función misma).
+  enviarPorClickOTecla: async (spec: PageSpec, prompt: string) => {
+    const composer = await waitFor(spec.composer.selector, spec.timeouts?.composerMs ?? 15_000);
+    if (!composer) return { ok: false, error: "compositor no encontrado: no se envía nada" };
+    return enviarPorClickOTecla(spec, prompt, composer);
+  },
   prepararConfiable: (spec: PageSpec) => prepararConfiable(spec),
   verificarTextoEscrito: (spec: PageSpec, texto: string) => verificarTextoEscrito(spec, texto),
   confirmarEfecto: (spec: PageSpec, antesLen: number) => confirmarEfecto(spec, antesLen),

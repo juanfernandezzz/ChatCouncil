@@ -1350,25 +1350,37 @@ async function difundirConfiable(
     }
   }
 
-  // VERIFICACIÓN DURA antes de enviar: si el compositor no tiene el texto
-  // esperado, no se manda Enter. Sin esto, un Enter a ciegas sobre un
-  // compositor que no recibió el texto (por ejemplo, si perdió el foco a
-  // mitad de la escritura) dispara una acción no pedida en la cuenta real.
+  // Cambio 3 (decisión de Juan, 2026-09-18) — "Pegar en todos" escribe y se
+  // detiene ACÁ. La verificación de que el texto quedó bien pegado se
+  // conserva (es la comprobación dura contra escribir a ciegas, no contra
+  // enviar a ciegas); lo que se retira es todo lo que había DESPUÉS: el
+  // Enter y la confirmación de efecto post-envío. Ver `enviarEnterConfiable`.
   const textoOk = pegoOk || (await verificar());
   if (!textoOk) {
     return {
       ok: false,
-      error:
-        "el compositor no reflejó el texto esperado tras escribir con eventos de entrada confiables: NO se envió nada",
+      error: "el compositor no reflejó el texto esperado tras escribir con eventos de entrada confiables",
     };
   }
-  if (v.view.webContents.isDestroyed()) return { ok: false, error: "la vista se destruyó antes de enviar" };
+  return { ok: true };
+}
 
+/**
+ * EL CÓDIGO DE ENVÍO NO SE BORRÓ: queda acá, sin llamadores, por decisión de
+ * Juan del 2026-09-18 (Cambio 3). Antes era la cola de `difundirConfiable`
+ * —Enter confiable vía `sendInputEvent` + `confirmarEfecto`—; ahora Juan
+ * envía a mano cada panel, así que nada en el camino de difusión la llama.
+ */
+async function enviarEnterConfiable(
+  v: { id: string; view: WebContentsView },
+  specJson: string,
+  antesLen: number,
+): Promise<Omit<ResultadoEnvio, "id">> {
+  if (v.view.webContents.isDestroyed()) return { ok: false, error: "la vista se destruyó antes de enviar" };
   v.view.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
   v.view.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
-
   return (await v.view.webContents.executeJavaScript(
-    `window.__ccProvider.confirmarEfecto(${specJson}, ${prep.antesLen ?? 0})`,
+    `window.__ccProvider.confirmarEfecto(${specJson}, ${antesLen})`,
     true,
   )) as Omit<ResultadoEnvio, "id">;
 }

@@ -125,24 +125,26 @@ function decir(texto: string, clase?: "ok" | "mal"): void {
 }
 
 async function difundir(prompt: string): Promise<void> {
-  decir("Enviando al consejo…");
+  // Cambio 3 (decisión de Juan, 2026-09-18): esto PEGA, nunca envía. Juan
+  // revisa cada panel y envía a mano, uno por uno.
+  decir("Pegando en el consejo…");
   const rs = await window.cc.difundir(prompt);
   const bien = rs.filter((r) => r.ok);
   const mal = rs.filter((r) => !r.ok);
   for (const r of rs) {
-    if (r.ok) marcar(r.id, `enviado${r.modelLabel ? ` · ${r.modelLabel}` : ""}`, "ok");
+    if (r.ok) marcar(r.id, `pegado${r.modelLabel ? ` · ${r.modelLabel}` : ""}`, "ok");
     else marcar(r.id, r.error ?? "falló", "mal");
   }
   pintarPaneles();
   const detalle = rs
     .map((r) =>
       r.ok
-        ? `  ${r.id}: enviado${r.modelLabel ? ` · ${r.modelLabel}` : ""}`
+        ? `  ${r.id}: pegado${r.modelLabel ? ` · ${r.modelLabel}` : ""}`
         : `  ${r.id}: ${r.error ?? "falló"}`,
     )
     .join("\n");
   decir(
-    `${bien.length} de ${rs.length} recibieron el prompt.\n${detalle}`,
+    `${bien.length} de ${rs.length} recibieron el prompt pegado (sin enviar).\n${detalle}`,
     mal.length === 0 ? "ok" : mal.length === rs.length ? "mal" : undefined,
   );
 }

@@ -321,6 +321,29 @@ export interface ErrorCaptura {
   ocurridoEn: string;
 }
 
+/**
+ * Defecto 1 de la corrida real de Juan (2026-09-19): una ronda cuya Parte 1
+ * se envió a mano nunca pasa por `escribirRonda` con la pregunta real —
+ * `Ronda.prompt` queda con el marcador interno "(capturado sin ronda de
+ * envío: ...)", que NO es una pregunta. `Ronda` es append-only y ya se
+ * escribió: no se reescribe (§2 del BLUEPRINT). Este hecho APARTE deja que
+ * Juan declare, después, cuál fue la pregunta real de una ronda ya
+ * capturada — con procedencia `"declarado-por-usuario"`, nunca `"observado"`,
+ * porque nadie la observó: Juan la escribe de memoria o de sus notas.
+ * Si hay más de una para la misma ronda (Juan la corrige dos veces), vale
+ * la ÚLTIMA — mismo criterio que "el hecho más reciente gana" que ya usa el
+ * resto del registro para estado derivado.
+ */
+export interface PreguntaDeclarada {
+  tipo: "pregunta-declarada";
+  esquema: number;
+  id: string;
+  rondaId: string;
+  texto: string;
+  declaradaEn: string;
+  procedencia: "declarado-por-usuario";
+}
+
 export type Hecho =
   | Conversacion
   | Ronda
@@ -332,7 +355,8 @@ export type Hecho =
   | HallazgoHecho
   | InformeIntegrador
   | CondicionHerramientas
-  | ErrorCaptura;
+  | ErrorCaptura
+  | PreguntaDeclarada;
 
 /**
  * EN QUÉ ETAPA está una ronda — T7, Fase 3. Deriva de HECHOS ya persistidos,
@@ -355,6 +379,38 @@ export type Hecho =
 export type EtapaRonda = "investigacion" | "operacion" | "integracion";
 
 export type TipoCaptura = "respuesta" | "salida-operador" | "informe-integrador";
+
+/**
+ * Defecto 1 — "hay algo en el campo" no alcanza como validación: el
+ * marcador interno `PROMPT_SIN_RONDA` ("(capturado sin ronda de envío:
+ * ...)") es texto no vacío y pasaba como si fuera una pregunta válida. Una
+ * pregunta real de Juan, en español natural, no empieza con "(" ni contiene
+ * ese marcador — cualquiera de las dos cosas es indicio seguro de que es un
+ * texto del SISTEMA, no del investigador.
+ */
+export function esPreguntaValida(texto: string): boolean {
+  const t = texto.trim();
+  if (t.length === 0) return false;
+  if (t.startsWith("(")) return false;
+  if (t.toLowerCase().includes("capturado sin ronda de envio")) return false;
+  return true;
+}
+
+/**
+ * La pregunta EFECTIVA de una ronda: `Ronda.prompt` si es válida (caso
+ * normal); si no, la `PreguntaDeclarada` más reciente para esa ronda, si
+ * Juan ya declaró una y ES válida (nunca se acepta un marcador ahí tampoco);
+ * si ninguna de las dos alcanza, `null` — quien llama decide cómo fallar.
+ */
+export function preguntaEfectivaDeRonda(hechos: readonly Hecho[], ronda: Ronda): string | null {
+  if (esPreguntaValida(ronda.prompt)) return ronda.prompt;
+  const declaradas = hechos.filter(
+    (h): h is PreguntaDeclarada => h.tipo === "pregunta-declarada" && h.rondaId === ronda.id,
+  );
+  if (declaradas.length === 0) return null;
+  const ultima = declaradas.reduce((a, b) => (b.declaradaEn > a.declaradaEn ? b : a));
+  return esPreguntaValida(ultima.texto) ? ultima.texto : null;
+}
 
 export function etapaDeRonda(hechos: readonly Hecho[], rondaId: string, totalOperadores: number): EtapaRonda {
   const salidasDeLaRonda = hechos.filter((h) => h.tipo === "salida-operador" && h.rondaId === rondaId).length;
@@ -408,6 +464,7 @@ const TIPOS = new Set([
   "informe-integrador",
   "condicion-herramientas",
   "error-captura",
+  "pregunta-declarada",
 ]);
 
 export function leerRegistro(contenido: string): RegistroLeido {

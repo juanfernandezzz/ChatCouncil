@@ -14,14 +14,14 @@ import { app, BaseWindow, clipboard, Menu, WebContentsView, ipcMain, screen, ses
 import type { MenuItemConstructorOptions } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { randomUUID } from "node:crypto";
 
 import { PROVIDER_SPECS } from "@chatcouncil/providers";
 import type { Cita, Conversacion, HallazgoHecho, Procedencia, Respuesta, Ronda, SalidaOperador, Sello } from "@chatcouncil/domain";
-import { etapaDeRonda } from "@chatcouncil/domain";
+import { etapaDeRonda, preguntaEfectivaDeRonda } from "@chatcouncil/domain";
 import {
   armarCuerposPorOperador,
   armarPromptOperacion,
@@ -43,6 +43,7 @@ import {
   escribirErrorCaptura,
   escribirInformeIntegrador,
   escribirIntentos,
+  escribirPreguntaDeclarada,
   escribirRespuestas,
   escribirRonda,
   generarSemilla,
@@ -219,7 +220,8 @@ type Modo =
   | "medir-entrega"
   | "consolidar"
   | "integrador"
-  | "nuevo-chat";
+  | "nuevo-chat"
+  | "declarar-pregunta";
 
 /**
  * `--cc-difundir=<texto>`: dispara UNA ronda real —`difundir()` + espera de
@@ -231,6 +233,24 @@ type Modo =
  * porque no hay forma de clickear una `BaseWindow` desde estas herramientas.
  */
 const DIFUNDIR_TEXTO = (ARGV.find((a) => a.startsWith("--cc-difundir=")) ?? "").slice("--cc-difundir=".length);
+
+/**
+ * Defecto 1 (Cambio pedido por Juan, 2026-09-19) — `--cc-declarar-pregunta=
+ * <conversacionId>:<rondaId>` con `--cc-pregunta-archivo=<ruta a un .txt>`:
+ * la forma más simple de que Juan declare la pregunta REAL de una ronda que
+ * ya capturó sin haber pasado por `escribirRonda` con el texto (envío hecho
+ * a mano). Un ARCHIVO, no un valor de línea de comandos: la pregunta de
+ * Juan es un párrafo largo con comillas, saltos de línea y acentos —
+ * exactamente lo que ninguna shell pasa bien como argumento— y un archivo
+ * evita ese problema entero. Corre, escribe UN hecho `PreguntaDeclarada`
+ * (nunca reescribe la `Ronda`, que es append-only) y sale.
+ */
+const DECLARAR_PREGUNTA_ARG = (ARGV.find((a) => a.startsWith("--cc-declarar-pregunta=")) ?? "").slice(
+  "--cc-declarar-pregunta=".length,
+);
+const PREGUNTA_ARCHIVO = (ARGV.find((a) => a.startsWith("--cc-pregunta-archivo=")) ?? "").slice(
+  "--cc-pregunta-archivo=".length,
+);
 
 /**
  * `--cc-prueba-envio-js=<id>`: Objetivo 2 de la ronda de camino de entrada
@@ -332,6 +352,8 @@ const MODO: Modo = HISTORIAL_ID
   ? "historial"
   : SESION
   ? "sesion"
+  : DECLARAR_PREGUNTA_ARG.length > 0
+  ? "declarar-pregunta"
   : PRUEBA_ENVIO_JS_ID.length > 0
   ? "prueba-envio-js"
   : MEDIR_ENTREGA_CONV_ID.length > 0
@@ -2379,6 +2401,42 @@ function modoHistorial(): void {
 }
 
 /**
+ * Defecto 1 — `--cc-declarar-pregunta=<conversacionId>:<rondaId>`
+ * `--cc-pregunta-archivo=<ruta>`: escribe UN hecho `PreguntaDeclarada`
+ * (`escribirPreguntaDeclarada`, procedencia `"declarado-por-usuario"`) y
+ * sale. NUNCA reescribe la `Ronda` — es append-only — y NUNCA valida contra
+ * el marcador `PROMPT_SIN_RONDA` acá: esa validación vive en
+ * `preguntaEfectivaDeRonda` (dominio), la MISMA que corre al consolidar, así
+ * que declarar un marcador por error se detecta ahí, no acá dos veces.
+ */
+function modoDeclararPregunta(): void {
+  try {
+    const [conversacionId, rondaId] = DECLARAR_PREGUNTA_ARG.split(":");
+    if (!conversacionId || !rondaId) {
+      throw new Error(
+        `--cc-declarar-pregunta requiere "<conversacionId>:<rondaId>", recibido "${DECLARAR_PREGUNTA_ARG}"`,
+      );
+    }
+    if (!PREGUNTA_ARCHIVO) {
+      throw new Error("falta --cc-pregunta-archivo=<ruta a un .txt con la pregunta>");
+    }
+    const texto = readFileSync(PREGUNTA_ARCHIVO, "utf8");
+    const userData = app.getPath("userData");
+    const registro = leerRegistroDeArchivo(userData, conversacionId);
+    const ronda = registro.hechos.find((h): h is Ronda => h.tipo === "ronda" && h.id === rondaId);
+    if (!ronda) {
+      throw new Error(`no se encontró la ronda ${rondaId} en la conversación ${conversacionId}`);
+    }
+    const hecho = escribirPreguntaDeclarada(userData, conversacionId, rondaId, texto);
+    emitir("CC_DECLARAR_PREGUNTA_JSON", { ok: true, hecho });
+  } catch (e) {
+    decirPorSalida(`\n===CC_DECLARAR_PREGUNTA_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+  } finally {
+    app.quit();
+  }
+}
+
+/**
  * Modo de difusión disparada (`--cc-difundir=<texto>`). Corre el MISMO
  * camino que "Enviar a todos" + "Leer" en la interfaz —`difundirConRegistro`,
  * `esperarQuietud`, `registrarRespuestasDeRondaActual`—, no una reimplementación
@@ -2765,7 +2823,7 @@ function armarPromptDeOperacionConMarcas(
  * ningún panel.
  */
 function prepararRondaParaOperar():
-  | { ok: true; ronda: Ronda; respuestas: Respuesta[]; citas: Cita[] }
+  | { ok: true; ronda: Ronda; pregunta: string; respuestas: Respuesta[]; citas: Cita[] }
   | { ok: false; error: string } {
   if (!conversacionActual || !rondaActualId) {
     return { ok: false, error: "no hay una ronda activa: capturá las 8 respuestas del pool antes de consolidar" };
@@ -2776,12 +2834,25 @@ function prepararRondaParaOperar():
   if (!ronda) {
     return { ok: false, error: "no se encontró la ronda actual en el registro" };
   }
-  // T14 (Cambio 1): sin pregunta registrada no se arma NINGÚN prompt de
-  // operación — un prompt con la pregunta vacía no es un prompt, es un
-  // cuerpo pelado con un rótulo vacío encima. Falla ANTES de tocar ningún
-  // panel.
-  if (!ronda.prompt || ronda.prompt.trim().length === 0) {
-    return { ok: false, error: `la ronda ${ronda.id} no tiene pregunta registrada (Ronda.prompt vacío): no se puede armar el prompt de operación` };
+  // Defecto 1 (corrida real de Juan, 2026-09-19): "hay algo en el campo" NO
+  // es el criterio — `Ronda.prompt` puede ser el marcador interno
+  // `PROMPT_SIN_RONDA` ("(capturado sin ronda de envío: ...)") de una
+  // ronda cuyo envío se hizo a mano, y ESE texto pasaba la validación vieja
+  // como si fuera una pregunta real. `preguntaEfectivaDeRonda` (dominio)
+  // rechaza explícitamente cualquier texto que empiece con "(" o contenga
+  // "capturado sin ronda de envio", y si `Ronda.prompt` no sirve, busca la
+  // `PreguntaDeclarada` más reciente que Juan haya escrito para esta ronda
+  // (ver `escribirPreguntaDeclarada` / `--cc-declarar-pregunta`). Si
+  // ninguna de las dos alcanza, falla ACÁ, antes de tocar ningún panel.
+  const pregunta = preguntaEfectivaDeRonda(registro.hechos, ronda);
+  if (pregunta === null) {
+    return {
+      ok: false,
+      error:
+        `la ronda ${ronda.id} no tiene pregunta registrada (Ronda.prompt es el marcador interno o está vacío, ` +
+        `y no hay ninguna "pregunta declarada" válida): declarala con --cc-declarar-pregunta=${conversacionActual}:${ronda.id} ` +
+        `--cc-pregunta-archivo=<ruta a un .txt con la pregunta> antes de consolidar`,
+    };
   }
 
   const respuestasDeLaRonda = new Map<string, Respuesta>();
@@ -2795,7 +2866,7 @@ function prepararRondaParaOperar():
     return { ok: false, error: `faltan respuestas capturadas en esta ronda: ${faltantes.join(", ")} — usá "Capturar" antes de consolidar` };
   }
   const citas = registro.hechos.filter((h): h is Cita => h.tipo === "cita");
-  return { ok: true, ronda, respuestas: [...respuestasDeLaRonda.values()], citas: [...citas] };
+  return { ok: true, ronda, pregunta, respuestas: [...respuestasDeLaRonda.values()], citas: [...citas] };
 }
 
 /**
@@ -2903,7 +2974,7 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
   if (!prep.ok) {
     return { ok: false, error: prep.error, paneles: [], navegacionesIntactas: true };
   }
-  const { ronda, respuestas, citas } = prep;
+  const { ronda, pregunta, respuestas, citas } = prep;
   const userData = app.getPath("userData");
 
   let resultadoArmado;
@@ -2930,7 +3001,7 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
       // entero (pregunta + instrucciones + las 7 respuestas), no sólo sobre
       // el cuerpo de respuestas.
       const { texto: textoAEscribir, marcas: marcasDeEsteOperador } = armarPromptDeOperacionConMarcas(
-        ronda.prompt,
+        pregunta,
         cuerpoOperador,
       );
 
@@ -3027,7 +3098,7 @@ async function consolidarPanelActual(): Promise<ResultadoConsolidarUno> {
   if (!prep.ok) {
     return { ok: false, error: prep.error };
   }
-  const { ronda, respuestas, citas } = prep;
+  const { ronda, pregunta, respuestas, citas } = prep;
 
   const objetivo = vistaConIdEnFrente();
   if (!objetivo) {
@@ -3049,7 +3120,7 @@ async function consolidarPanelActual(): Promise<ResultadoConsolidarUno> {
   }
 
   const { texto: textoAEscribir, marcas: marcasDeEsteOperador } = armarPromptDeOperacionConMarcas(
-    ronda.prompt,
+    pregunta,
     cuerpoOperador,
   );
   // Ya se verificó arriba que `objetivo.id` está en POOL_OPERADORES (⊂ ProviderId).
@@ -3802,7 +3873,7 @@ void app.whenReady().then(() => {
   // toca cookies y `localStorage` propios— así que se salta `createWindow()`
   // y con eso la carga por red de las cuatro páginas reales, que no aporta
   // nada a esta prueba y sólo agrega tiempo y una fuente más de fallos.
-  if (MODO !== "sesion" && MODO !== "historial") createWindow();
+  if (MODO !== "sesion" && MODO !== "historial" && MODO !== "declarar-pregunta") createWindow();
   if (MODO === "test") void modoPrueba();
   if (MODO === "probe") void modoSondeo();
   if (MODO === "login") modoLogin();
@@ -3810,6 +3881,7 @@ void app.whenReady().then(() => {
   if (MODO === "test-scroll") void modoTestScroll();
   if (MODO === "sesion") void modoSesion();
   if (MODO === "historial") modoHistorial();
+  if (MODO === "declarar-pregunta") modoDeclararPregunta();
   if (MODO === "difundir") void modoDifundir();
   if (MODO === "test-visibilidad") void modoVisibilidad();
   if (MODO === "prueba-envio-js") void modoPruebaEnvioJS();

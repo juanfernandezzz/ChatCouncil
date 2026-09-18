@@ -28,6 +28,7 @@ import {
   type HallazgoHecho,
   type InformeIntegrador,
   type Intento,
+  type PreguntaDeclarada,
   type Procedencia,
   type RegistroLeido,
   type Respuesta,
@@ -70,7 +71,8 @@ function escribir(
     | HallazgoHecho
     | InformeIntegrador
     | CondicionHerramientas
-    | ErrorCaptura,
+    | ErrorCaptura
+    | PreguntaDeclarada,
 ): void {
   appendFileSync(rutaArchivo(userData, conversacionId), aLinea(hecho) + "\n", "utf8");
 }
@@ -262,6 +264,34 @@ export function escribirSello(
     };
     escribir(userData, conversacionId, hecho);
   }
+}
+
+/**
+ * Defecto 1 (corrida real de Juan, 2026-09-19) — declara la pregunta real
+ * de una ronda que ya se capturó sin haber pasado por `escribirRonda` con el
+ * texto de la pregunta (envío hecho a mano: `Ronda.prompt` quedó con el
+ * marcador `PROMPT_SIN_RONDA`). `Ronda` es append-only y no se reescribe; se
+ * agrega este hecho APARTE, con procedencia `"declarado-por-usuario"` —
+ * nunca `"observado"`, porque nadie la observó. Quien lee la ronda después
+ * la resuelve con `preguntaEfectivaDeRonda` (`packages/domain`).
+ */
+export function escribirPreguntaDeclarada(
+  userData: string,
+  conversacionId: string,
+  rondaId: string,
+  texto: string,
+): PreguntaDeclarada {
+  const hecho: PreguntaDeclarada = {
+    tipo: "pregunta-declarada",
+    esquema: VERSION_ESQUEMA,
+    id: randomUUID(),
+    rondaId,
+    texto,
+    declaradaEn: new Date().toISOString(),
+    procedencia: "declarado-por-usuario",
+  };
+  escribir(userData, conversacionId, hecho);
+  return hecho;
 }
 
 /**

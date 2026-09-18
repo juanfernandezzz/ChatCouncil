@@ -22,7 +22,13 @@ import { randomUUID } from "node:crypto";
 import { PROVIDER_SPECS } from "@chatcouncil/providers";
 import type { Cita, HallazgoHecho, Procedencia, Respuesta, Ronda, SalidaOperador, Sello } from "@chatcouncil/domain";
 import { etapaDeRonda } from "@chatcouncil/domain";
-import { armarCuerposPorOperador, evaluarIntegridad, hashSemilla } from "@chatcouncil/analysis";
+import {
+  armarCuerposPorOperador,
+  armarPromptOperacion,
+  evaluarIntegridad,
+  insertarMarcasIntercaladas,
+  hashSemilla,
+} from "@chatcouncil/analysis";
 
 import {
   correrPruebaFase1,
@@ -2456,6 +2462,17 @@ export interface ResultadoConsolidarPanel {
   estadoIntegridad: string;
   marcasEsperadas: number;
   marcasPresentes: number;
+  /**
+   * Cambio 2: las marcas de integridad verifican la FORMA del texto, no que
+   * el panel haya recibido instrucciones. `promptCompleto` es la segunda
+   * comprobación, independiente de las marcas: el compositor tiene que
+   * contener las nueve cadenas exactas de `REQUISITOS_PROMPT_OPERACION`.
+   * `false` con las marcas en verde es exactamente el caso que se perdió en
+   * la corrida real de Juan (cuerpo pelado, 86/86 marcas).
+   */
+  promptCompleto: boolean;
+  /** Cadenas de `REQUISITOS_PROMPT_OPERACION` ausentes del compositor — vacío si `promptCompleto`. */
+  faltantesPrompt: string[];
   interrumpido: boolean;
   /**
    * `true` si "Nuevo chat" (T7) confirmó CERO mensajes previos antes de
@@ -2553,6 +2570,48 @@ let estadoConsolidacion: { enCurso: boolean; indice: number; total: number; oper
   operadorId: null,
 };
 
+/**
+ * Cambio 2 — las nueve cadenas que sólo pueden venir de haber armado el
+ * prompt de operación de verdad (`armarPromptOperacion`, literal en
+ * `prompt-operacion.ts`), nunca de un cuerpo pelado. Las marcas de
+ * integridad verifican que el TEXTO llegó completo; esto verifica que el
+ * texto que llegó era el prompt correcto y no sólo las respuestas crudas.
+ */
+const REQUISITOS_PROMPT_OPERACION = [
+  "CONVERGENCIA",
+  "DIVERGENCIA",
+  "SINGULARIDAD",
+  "AUSENCIA",
+  "LIMITACION:CORPUS",
+  "LIMITACION:AMBIGUEDAD",
+  "LIMITACION:TAREA",
+  "LIMITACION:OTRA",
+  "LA PREGUNTA ORIGINAL FUE:",
+] as const;
+
+function verificarPromptCompleto(texto: string): { completo: boolean; faltantes: string[] } {
+  const faltantes = REQUISITOS_PROMPT_OPERACION.filter((s) => !texto.includes(s)) as unknown as string[];
+  return { completo: faltantes.length === 0, faltantes };
+}
+
+/**
+ * Cambio 1 — arma el TEXTO ENTERO que un operador tiene que recibir:
+ * `armarPromptOperacion` (pregunta + las respuestas etiquetadas que
+ * `armarCuerposPorOperador` ya calculó para ese operador, T14) y recién
+ * SOBRE ESE TEXTO COMPLETO se intercalan las marcas de integridad — no sólo
+ * sobre el cuerpo de respuestas, como hacía la versión vieja.
+ */
+function armarPromptDeOperacionConMarcas(
+  pregunta: string,
+  cuerpoOperador: { respuestasParaOperador: { etiqueta: string; texto: string }[] },
+): { texto: string; marcas: string[] } {
+  const promptSinMarcas = armarPromptOperacion(pregunta, cuerpoOperador.respuestasParaOperador);
+  const token = randomUUID();
+  const { textoConMarcas, marcas } = insertarMarcasIntercaladas(promptSinMarcas, token);
+  const marcaFin = `[[CC-MARCA-FIN-${token}]]`;
+  return { texto: `${textoConMarcas}\n${marcaFin}\n`, marcas: [...marcas, marcaFin] };
+}
+
 async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
   if (!conversacionActual || !rondaActualId) {
     return {
@@ -2567,6 +2626,18 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
   const ronda = registro.hechos.find((h): h is Ronda => h.tipo === "ronda" && h.id === rondaActualId);
   if (!ronda) {
     return { ok: false, error: "no se encontró la ronda actual en el registro", paneles: [], navegacionesIntactas: true };
+  }
+  // T14 (Cambio 1): sin pregunta registrada no se arma NINGÚN prompt de
+  // operación — un prompt con la pregunta vacía no es un prompt, es un
+  // cuerpo pelado con un rótulo vacío encima. Falla ANTES de tocar ningún
+  // panel.
+  if (!ronda.prompt || ronda.prompt.trim().length === 0) {
+    return {
+      ok: false,
+      error: `la ronda ${ronda.id} no tiene pregunta registrada (Ronda.prompt vacío): no se puede armar el prompt de operación`,
+      paneles: [],
+      navegacionesIntactas: true,
+    };
   }
 
   const respuestasDeLaRonda = new Map<string, Respuesta>();
@@ -2605,14 +2676,25 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
       const cuerpoOperador = resultadoArmado.cuerpos[i]!;
       estadoConsolidacion = { enCurso: true, indice: i + 1, total: resultadoArmado.cuerpos.length, operadorId: cuerpoOperador.operadorId };
 
+      // T14 (Cambio 1) — el prompt completo de ESTE operador, con sus
+      // propias marcas de integridad intercaladas sobre el texto final
+      // entero (pregunta + instrucciones + las 7 respuestas), no sólo sobre
+      // el cuerpo de respuestas.
+      const { texto: textoAEscribir, marcas: marcasDeEsteOperador } = armarPromptDeOperacionConMarcas(
+        ronda.prompt,
+        cuerpoOperador,
+      );
+
       if (interrumpidoGlobal) {
         paneles.push({
           operadorId: cuerpoOperador.operadorId,
           ok: false,
           error: "secuencia detenida antes de llegar a este panel",
           estadoIntegridad: "indeterminado",
-          marcasEsperadas: cuerpoOperador.marcas.length,
+          marcasEsperadas: marcasDeEsteOperador.length,
           marcasPresentes: 0,
+          promptCompleto: false,
+          faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
           interrumpido: true,
           chatNuevoOk: false,
         });
@@ -2625,8 +2707,10 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
           ok: false,
           error: "el usuario desplazó la fila de paneles durante la consolidación: secuencia detenida",
           estadoIntegridad: "indeterminado",
-          marcasEsperadas: cuerpoOperador.marcas.length,
+          marcasEsperadas: marcasDeEsteOperador.length,
           marcasPresentes: 0,
+          promptCompleto: false,
+          faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
           interrumpido: true,
           chatNuevoOk: false,
         });
@@ -2640,8 +2724,10 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
           ok: false,
           error: "panel no abierto",
           estadoIntegridad: "indeterminado",
-          marcasEsperadas: cuerpoOperador.marcas.length,
+          marcasEsperadas: marcasDeEsteOperador.length,
           marcasPresentes: 0,
+          promptCompleto: false,
+          faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
           interrumpido: false,
           chatNuevoOk: false,
         });
@@ -2660,8 +2746,10 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
           ok: false,
           error: `"Nuevo chat" falló: ${chatNuevo.error ?? "sin detalle"}`,
           estadoIntegridad: "indeterminado",
-          marcasEsperadas: cuerpoOperador.marcas.length,
+          marcasEsperadas: marcasDeEsteOperador.length,
           marcasPresentes: 0,
+          promptCompleto: false,
+          faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
           interrumpido: false,
           chatNuevoOk: false,
         });
@@ -2678,7 +2766,7 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
         const r = (await alFrente(v, () =>
           Promise.race([
             v.view.webContents.executeJavaScript(
-              `window.__ccProvider.entregarCuerpoOperador(${specJson}, ${JSON.stringify(cuerpoOperador.cuerpo)})`,
+              `window.__ccProvider.entregarCuerpoOperador(${specJson}, ${JSON.stringify(textoAEscribir)})`,
               true,
             ),
             new Promise((_, reject) =>
@@ -2689,20 +2777,32 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
             ),
           ]),
         )) as { ok: boolean; error?: string; textoFinal: string };
-        const integridad = evaluarIntegridad(r.textoFinal, cuerpoOperador.marcas);
+        const integridad = evaluarIntegridad(r.textoFinal, marcasDeEsteOperador);
+        // Cambio 2 — SEGUNDA comprobación, independiente de las marcas: el
+        // criterio viejo ("N de N marcas presentes") verifica la FORMA del
+        // texto y un cuerpo pelado sin instrucciones lo pasa perfecto (era
+        // exactamente el caso de la corrida real de Juan). Ésta verifica
+        // CONTENIDO: que las nueve cadenas del prompt de operación estén.
+        const verificacionPrompt = verificarPromptCompleto(r.textoFinal);
         if (r.ok) {
           // T7 — sólo así "Capturar" puede persistir el PROMPT ENTERO que
           // de verdad se escribió (`SalidaOperador.promptCompleto`), en vez
           // de reconstruirlo o dejarlo vacío.
-          ultimoPromptOperadorPorId.set(cuerpoOperador.operadorId, cuerpoOperador.cuerpo);
+          ultimoPromptOperadorPorId.set(cuerpoOperador.operadorId, textoAEscribir);
         }
         paneles.push({
           operadorId: cuerpoOperador.operadorId,
-          ok: r.ok,
-          ...(r.error ? { error: r.error } : {}),
+          ok: r.ok && verificacionPrompt.completo,
+          ...(r.error
+            ? { error: r.error }
+            : !verificacionPrompt.completo
+              ? { error: `prompt incompleto: faltan ${verificacionPrompt.faltantes.join(", ")}` }
+              : {}),
           estadoIntegridad: integridad.estado,
           marcasEsperadas: integridad.marcasEsperadas,
           marcasPresentes: integridad.marcasPresentes,
+          promptCompleto: verificacionPrompt.completo,
+          faltantesPrompt: verificacionPrompt.faltantes,
           interrumpido: false,
           chatNuevoOk: chatNuevo.quedoLimpio,
         });
@@ -2712,9 +2812,11 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
           ok: false,
           error: e instanceof Error ? e.message : String(e),
           estadoIntegridad: "indeterminado",
-          marcasEsperadas: cuerpoOperador.marcas.length,
+          marcasEsperadas: marcasDeEsteOperador.length,
           chatNuevoOk: chatNuevo.quedoLimpio,
           marcasPresentes: 0,
+          promptCompleto: false,
+          faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
           interrumpido: false,
         });
       }

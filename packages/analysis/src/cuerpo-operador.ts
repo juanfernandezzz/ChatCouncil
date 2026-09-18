@@ -1,4 +1,5 @@
 import { anonymizeReplies } from "./anonymize";
+import type { RespuestaEtiquetada } from "./prompt-operacion";
 
 /**
  * cuerpo-operador.ts — T3, Fase 3: el cuerpo que llega a los operadores.
@@ -404,6 +405,15 @@ export interface CuerpoOperador {
   marcas: string[];
   /** Sólo para verificar el criterio de exclusión — nunca es lo que el operador lee. */
   proveedoresIncluidos: string[];
+  /**
+   * Las respuestas de este operador (etiqueta barajada + texto ya limpio de
+   * fuentes), SIN marca todavía — el insumo que `armarPromptOperacion`
+   * (`prompt-operacion.ts`) necesita para armar el prompt completo (T14).
+   * `cuerpo` de arriba queda igual que antes (lo sigue usando el modo de
+   * medición de entrega, que no arma prompt de operación); este campo es el
+   * agregado, no un reemplazo.
+   */
+  respuestasParaOperador: RespuestaEtiquetada[];
 }
 
 export interface CuerposPorOperador {
@@ -452,12 +462,15 @@ export function armarCuerposPorOperador(
   const cuerpos: CuerpoOperador[] = poolOrden.map((operadorId) => {
     const bloques: string[] = [];
     const incluidos: string[] = [];
+    const respuestasParaOperador: RespuestaEtiquetada[] = [];
     labeled.forEach((l, i) => {
       const proveedorDeEsteLabel = seal[i]!.panelSourceId;
       if (proveedorDeEsteLabel === operadorId) return; // exclusión de autoevaluación
       const urls = urlsPor.get(proveedorDeEsteLabel) ?? [];
-      bloques.push(`### Respuesta ${l.label}\n${armarCuerpoConFuentes(l.text, urls)}`);
+      const textoLimpio = armarCuerpoConFuentes(l.text, urls);
+      bloques.push(`### Respuesta ${l.label}\n${textoLimpio}`);
       incluidos.push(proveedorDeEsteLabel);
+      respuestasParaOperador.push({ etiqueta: l.label, texto: textoLimpio });
     });
     const textoBase = bloques.join("\n\n");
     const token = generarToken();
@@ -493,7 +506,13 @@ export function armarCuerposPorOperador(
     if (fugas.length > 0) {
       throw new Error(`cuerpo del operador ${operadorId} filtra identidad de proveedor por URL: ${fugas.join(" | ")}`);
     }
-    return { operadorId, cuerpo, marcas: [...marcas, `[[CC-MARCA-FIN-${token}]]`], proveedoresIncluidos: incluidos };
+    return {
+      operadorId,
+      cuerpo,
+      marcas: [...marcas, `[[CC-MARCA-FIN-${token}]]`],
+      proveedoresIncluidos: incluidos,
+      respuestasParaOperador,
+    };
   });
 
   return { cuerpos, sello: selloConCodigo };

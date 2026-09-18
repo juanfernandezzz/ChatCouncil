@@ -14,13 +14,13 @@ import { app, BaseWindow, clipboard, Menu, WebContentsView, ipcMain, screen, ses
 import type { MenuItemConstructorOptions } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { randomUUID } from "node:crypto";
 
 import { PROVIDER_SPECS } from "@chatcouncil/providers";
-import type { Cita, HallazgoHecho, Procedencia, Respuesta, Ronda, SalidaOperador, Sello } from "@chatcouncil/domain";
+import type { Cita, Conversacion, HallazgoHecho, Procedencia, Respuesta, Ronda, SalidaOperador, Sello } from "@chatcouncil/domain";
 import { etapaDeRonda } from "@chatcouncil/domain";
 import {
   armarCuerposPorOperador,
@@ -579,6 +579,86 @@ const PARTICIONES_CONOCIDAS: readonly string[] = [
 let conversacionActual: string | null = null;
 let indiceRonda = 0;
 let rondaActualId: string | null = null;
+
+/**
+ * DEFECTO REAL, medido leyendo el registro de Juan (2026-09-18): reinició la
+ * app para cargar un build nuevo, con las 8 respuestas del pool ya
+ * capturadas y el `Sello` de una consolidación anterior ya escrito —o sea,
+ * en etapa "operacion" según `etapaDeRonda`—, y "Consolidar respuestas" le
+ * respondió "no hay una ronda activa". `conversacionActual`/`rondaActualId`
+ * de arriba son estado EN MEMORIA de este proceso y nunca se derivaban del
+ * registro al arrancar: cerrar la app los pierde, aunque el registro
+ * append-only tenga todo lo necesario para reconstruirlos.
+ *
+ * Se restauran UNA vez, al arrancar en modo ventana normal, ANTES de que
+ * cualquier IPC pueda leerlos: la última ronda de la última conversación
+ * NO marcada `esPrueba` — "última" por `creadaEn`/`indice`, nunca por orden
+ * de archivo en el directorio (`readdirSync` no garantiza ningún orden).
+ * `indiceRonda` se restaura junto con ellos: si no, la primera ronda nueva
+ * que Juan dispare en esa misma conversación reusaría el índice 0, que ya
+ * existe.
+ *
+ * NUNCA escribe nada: sólo lee `conversaciones/*.jsonl` con
+ * `leerRegistroDeArchivo`, que ya es la función que usa todo el resto del
+ * código para leer el registro — cero mecanismo nuevo de lectura.
+ *
+ * SÓLO corre en `MODO === "normal"` (la ventana interactiva de Juan) — a
+ * propósito, y NO por descuido: `asegurarConversacion()` sólo crea una
+ * `Conversacion` nueva cuando `conversacionActual` es `null`, así que
+ * restaurar ACÁ en cualquier otro modo dejaría, por ejemplo, `--cc-test`
+ * (el arnés de Haiku, `esPrueba: true`) escribiendo sus rondas de prueba
+ * DENTRO de la conversación real de Juan en vez de crear la suya propia. Los
+ * modos que sí necesitan una conversación puntual ya la fijan ellos mismos,
+ * explícitos (`CONSOLIDAR_CONV_ID`, `INTEGRADOR_CONV_ID`, etc.).
+ */
+function restaurarRondaActivaDesdeRegistro(): void {
+  const userData = app.getPath("userData");
+  const dir = join(userData, "conversaciones");
+  if (!existsSync(dir)) return;
+
+  let archivos: string[];
+  try {
+    archivos = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
+  } catch (e) {
+    decirPorSalida(`\n[cc] no pude listar conversaciones para restaurar la ronda activa: ${String(e)}\n`);
+    return;
+  }
+
+  let mejorConversacion: Conversacion | null = null;
+  let mejorRonda: Ronda | null = null;
+
+  for (const archivo of archivos) {
+    const id = archivo.slice(0, -".jsonl".length);
+    let registro: ReturnType<typeof leerRegistroDeArchivo>;
+    try {
+      registro = leerRegistroDeArchivo(userData, id);
+    } catch {
+      continue; // un archivo ilegible no bloquea la restauración de los demás
+    }
+    const conv = registro.hechos.find((h): h is Conversacion => h.tipo === "conversacion" && h.id === id);
+    if (!conv || conv.esPrueba) continue;
+
+    const rondas = registro.hechos.filter((h): h is Ronda => h.tipo === "ronda" && h.conversacionId === id);
+    if (rondas.length === 0) continue;
+    const ultimaRonda = rondas.reduce((a, b) => (b.indice > a.indice ? b : a));
+
+    // "Última" por creadaEn de la CONVERSACIÓN — comparación de string ISO 8601,
+    // válida porque todas las fechas se generan con `new Date().toISOString()`.
+    if (!mejorConversacion || conv.creadaEn > mejorConversacion.creadaEn) {
+      mejorConversacion = conv;
+      mejorRonda = ultimaRonda;
+    }
+  }
+
+  if (!mejorConversacion || !mejorRonda) return;
+
+  conversacionActual = mejorConversacion.id;
+  rondaActualId = mejorRonda.id;
+  indiceRonda = mejorRonda.indice + 1;
+  decirPorSalida(
+    `\n[cc] ronda activa restaurada del registro: conversación ${mejorConversacion.id}, ronda ${mejorRonda.id} (índice ${mejorRonda.indice}).\n`,
+  );
+}
 
 /**
  * T7 (Fase 3) — el texto EXACTO que se escribió en cada panel, para poder
@@ -3711,6 +3791,11 @@ function construirMenu(): void {
 }
 
 void app.whenReady().then(() => {
+  // Antes que cualquier otra cosa: si no se restaura ACÁ, `registrarIpc()`
+  // ya deja `cc:consolidar` (y todo lo que dependa de `rondaActualId`)
+  // operando sobre `null` hasta el primer "Pegar en todos" de esta corrida.
+  // Sólo en modo normal — ver el comentario de la función.
+  if (MODO === "normal") restaurarRondaActivaDesdeRegistro();
   construirMenu();
   registrarIpc();
   // `sesion` no abre ninguna página de proveedor —ni falta le hace: sólo

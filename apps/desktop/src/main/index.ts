@@ -2586,16 +2586,45 @@ async function nuevoChatPara(v: (typeof vistas)[number]): Promise<ResultadoNuevo
     };
   }
 
-  try {
-    const specJson = JSON.stringify(spec);
-    const quedoLimpio = (await v.view.webContents.executeJavaScript(
-      `window.__ccProvider.estaVacioElChat(${specJson})`,
-      true,
-    )) as boolean;
-    return { operadorId: v.id, ok: true, quedoLimpio };
-  } catch (e) {
-    return { operadorId: v.id, ok: false, error: e instanceof Error ? e.message : String(e), quedoLimpio: false };
+  // Cambio 5 — kimi quedó en 0/86 marcas en la corrida real: el cuerpo se
+  // escribió, pero el operador no vio ninguna. Hipótesis 1 y 2 (compositor
+  // presente pero editor sin montar del todo; escritura cayendo en el
+  // compositor del chat VIEJO todavía en el DOM mientras el nuevo monta)
+  // convergen en la MISMA corrección: no basta con que el selector del
+  // compositor matchee (arriba) — hay que esperar a que `estaVacioElChat`
+  // TAMBIÉN confirme cero mensajes antes de escribir, con reintentos, en vez
+  // de una sola lectura que puede caer en el instante equivocado del montaje.
+  // NO MEDIDO EN VIVO en esta corrida (necesita una sesión real de kimi.ai
+  // logueada, que este entorno no tiene): esto es la corrección que el
+  // Cambio 5 pide aplicar SI la causa es 1 o 2, escrita con la misma
+  // comprobación que ya existía (`estaVacioElChat`), no una nueva sin probar.
+  const ESPERA_VACIO_MS = 20_000;
+  const t1 = Date.now();
+  const specJson = JSON.stringify(spec);
+  let quedoLimpio = false;
+  let ultimoError: string | undefined;
+  while (Date.now() - t1 < ESPERA_VACIO_MS) {
+    try {
+      quedoLimpio = (await v.view.webContents.executeJavaScript(
+        `window.__ccProvider.estaVacioElChat(${specJson})`,
+        true,
+      )) as boolean;
+      ultimoError = undefined;
+    } catch (e) {
+      quedoLimpio = false;
+      ultimoError = e instanceof Error ? e.message : String(e);
+    }
+    if (quedoLimpio) break;
+    await new Promise((r) => setTimeout(r, 500));
   }
+  if (ultimoError) {
+    return { operadorId: v.id, ok: false, error: ultimoError, quedoLimpio: false };
+  }
+  // `quedoLimpio: false` tras agotar la espera NO aborta: sigue siendo un
+  // HALLAZGO sobre ese proveedor (a `docs/LIMITACIONES.md`), no un fallo del
+  // mecanismo — pero ahora es un hallazgo medido tras esperar, no una lectura
+  // tomada en el primer instante en que el compositor apareció.
+  return { operadorId: v.id, ok: true, quedoLimpio };
 }
 
 /** Progreso legible por `cc:consolidar-estado` (polling, no push — ver preload/ui.ts). */

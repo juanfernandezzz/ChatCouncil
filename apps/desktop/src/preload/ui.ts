@@ -9,8 +9,18 @@ contextBridge.exposeInMainWorld("cc", {
   investigadores: (): Promise<string[]> => ipcRenderer.invoke("cc:investigadores"),
   /** Cambio 6 — cuál de los `investigadores()` es el integrador (deepseek): no investiga, sólo informa. */
   integrador: (): Promise<string> => ipcRenderer.invoke("cc:integrador"),
-  difundir: (prompt: string): Promise<unknown[]> => ipcRenderer.invoke("cc:difundir", prompt),
-  leer: (): Promise<unknown[]> => ipcRenderer.invoke("cc:leer"),
+  /**
+   * Rediseño de la barra (2026-09-19, decisión de Juan): siete botones, el
+   * pegado deja de ser automático — el instrumento ofrece el botón, Juan
+   * decide cuándo y dónde. "Pegar pregunta en todos" escribe en los ocho del
+   * pool (nunca deepseek) y registra la pregunta de la ronda. Nunca envía.
+   */
+  pegarPreguntaEnTodos: (prompt: string): Promise<unknown[]> => ipcRenderer.invoke("cc:pegar-pregunta-en-todos", prompt),
+  /** Lo mismo, pero SÓLO en el panel al frente. Si es deepseek, no hace nada y avisa. Nunca envía, no registra ronda. */
+  pegarPreguntaAqui: (prompt: string): Promise<ResultadoEnvioUno> => ipcRenderer.invoke("cc:pegar-pregunta-aqui", prompt),
+  capturarTodos: (): Promise<unknown[]> => ipcRenderer.invoke("cc:capturar-todos"),
+  /** Captura SÓLO el panel al frente, con el tipo de captura que corresponda a la etapa de la ronda. */
+  capturarUno: (): Promise<ResultadoCapturarUno> => ipcRenderer.invoke("cc:capturar-uno"),
   sesiones: (): Promise<{ id: string; cookies: number }[]> => ipcRenderer.invoke("cc:sesiones"),
   /**
    * Sondeo de SÓLO LECTURA sobre las vistas que ya están abiertas. No navega
@@ -26,20 +36,27 @@ contextBridge.exposeInMainWorld("cc", {
   /** Estado actual de desplazamiento, para dibujar la barra sin moverse primero. */
   posicion: (): Promise<Posicion> => ipcRenderer.invoke("cc:posicion"),
   /**
-   * T5 — "Consolidar respuestas". Arma los 8 cuerpos, anonimiza, baraja,
-   * persiste el sello, y los escribe SECUENCIAL Y AL FRENTE en su panel —
-   * sin enviar nada. Puede tardar minutos (medido: ~150s para los 8); el
-   * renderer sondea `consolidarEstado` mientras tanto.
+   * T5, renombrado en el rediseño de la barra — "Pegar operación en todos".
+   * Arma los 8 cuerpos, anonimiza, baraja, persiste el sello, y los escribe
+   * SECUENCIAL Y AL FRENTE en su panel — sin enviar nada. Puede tardar
+   * minutos (medido: ~150s para los 8); el renderer sondea
+   * `pegarOperacionEstado` mientras tanto.
    */
-  consolidar: (): Promise<ResultadoConsolidar> => ipcRenderer.invoke("cc:consolidar"),
-  /** Progreso de la consolidación en curso — sondeo, no evento empujado. */
-  consolidarEstado: (): Promise<EstadoConsolidacion> => ipcRenderer.invoke("cc:consolidar-estado"),
+  pegarOperacionEnTodos: (): Promise<ResultadoConsolidar> => ipcRenderer.invoke("cc:pegar-operacion-en-todos"),
+  /** Progreso de "Pegar operación en todos" en curso — sondeo, no evento empujado. */
+  pegarOperacionEstado: (): Promise<EstadoConsolidacion> => ipcRenderer.invoke("cc:pegar-operacion-estado"),
   /**
-   * Cambio 4 — "Consolidar este panel": mismo prompt de operación de
-   * "Consolidar respuestas", pero sólo para el panel que está al frente en
-   * este momento. Misma ronda, misma semilla — no vuelve a barajar.
+   * Cambio 4, renombrado — "Pegar operación aquí": mismo prompt de
+   * operación, pero sólo para el panel al frente. Misma ronda, misma
+   * semilla — no vuelve a barajar.
    */
-  consolidarUno: (): Promise<ResultadoConsolidarUno> => ipcRenderer.invoke("cc:consolidar-uno"),
+  pegarOperacionAqui: (): Promise<ResultadoConsolidarUno> => ipcRenderer.invoke("cc:pegar-operacion-aqui"),
+  /**
+   * Rediseño de la barra — "Pegar integrador": arma la tabla de hallazgos y
+   * el prompt del integrador, y lo escribe en deepseek (lo trae al frente si
+   * no es el panel visible). Antes sólo alcanzable por `--cc-integrador=<id>`.
+   */
+  pegarIntegrador: (): Promise<ResultadoIntegrador> => ipcRenderer.invoke("cc:pegar-integrador"),
 });
 
 interface ResultadoConsolidarPanel {
@@ -59,17 +76,40 @@ interface ResultadoConsolidar {
   error?: string;
   paneles: ResultadoConsolidarPanel[];
   navegacionesIntactas: boolean;
+  etapa?: string;
 }
 interface ResultadoConsolidarUno {
   ok: boolean;
   error?: string;
   panel?: ResultadoConsolidarPanel;
+  etapa?: string;
 }
 interface EstadoConsolidacion {
   enCurso: boolean;
   indice: number;
   total: number;
   operadorId: string | null;
+}
+interface ResultadoEnvioUno {
+  id: string;
+  ok?: boolean;
+  error?: string;
+  modelLabel?: string | null;
+}
+interface ResultadoCapturarUno {
+  ok: boolean;
+  error?: string;
+  lectura?: { id: string; text: string; error?: string; generating: boolean | null };
+}
+interface ResultadoIntegrador {
+  ok: boolean;
+  error?: string;
+  operadorId?: string;
+  caracteresEscritos: number;
+  caracteresPresentes: number;
+  entregaExacta: boolean;
+  navegacionesIntactas: boolean;
+  etapa?: string;
 }
 
 interface Posicion {

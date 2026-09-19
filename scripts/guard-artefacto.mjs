@@ -27,8 +27,20 @@ const BASE = "apps/desktop/out";
 const EXIGIDO = {
   "main/index.js": [
     "cc:investigadores",
-    "cc:difundir",
-    "cc:leer",
+    // Rediseño de la barra (2026-09-19, decisión de Juan): "Pegar en todos"
+    // y "Capturar" se renombraron a "Pegar pregunta en todos" y "Capturar
+    // todos" (siete botones en total) — mismos canales IPC RENOMBRADOS, no
+    // una capacidad nueva ni una vieja que desapareció. "cc:difundir" y
+    // "cc:leer" salen de esta lista por el mismo motivo que ya sacó
+    // "kimi.com" en su momento: el marcador viejo dejó de ser el nombre
+    // correcto de la misma capacidad.
+    "cc:pegar-pregunta-en-todos",
+    "cc:pegar-pregunta-aqui",
+    "cc:capturar-todos",
+    "cc:capturar-uno",
+    "cc:pegar-operacion-en-todos",
+    "cc:pegar-operacion-aqui",
+    "cc:pegar-integrador",
     "cc:sesiones",
     "persist:",
     "--cc-test",
@@ -214,7 +226,15 @@ const EXIGIDO = {
     // si el desglose se cae, el marcador se cae con el (probado en rojo).
     "data-test-id",
   ],
-  "preload/ui.cjs": ["cc:investigadores", "cc:difundir", "cc:leer", "cc:sesiones", "cc:sondear"],
+  "preload/ui.cjs": [
+    "cc:investigadores",
+    "cc:pegar-pregunta-en-todos",
+    "cc:pegar-pregunta-aqui",
+    "cc:capturar-todos",
+    "cc:capturar-uno",
+    "cc:sesiones",
+    "cc:sondear",
+  ],
   // "sondear" salio de la barra principal (decision de Juan, 2026-09-01: un
   // solo boton, "Capturar", fusiona lo que hacian "Leer" y "Sondear"; el
   // sondeo de derivacion de specs sigue existiendo pero como modo de

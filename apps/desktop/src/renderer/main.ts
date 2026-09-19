@@ -6,6 +6,14 @@
  * viven el compositor único, el estado por proveedor y —más adelante— la
  * salida del análisis. Espejar el texto no aportaría ninguna capacidad
  * nativa y traería toda la fragilidad que costó la v2.
+ *
+ * Rediseño de la barra (decisión de Juan, 2026-09-19): siete botones, el
+ * pegado deja de ser automático. Lo valioso de este instrumento es
+ * automatizar la CAPTURA, no el INPUT — la captura funciona (9 de 9 en la
+ * corrida real de Juan); el pegado llevaba semanas fallando de formas
+ * distintas en cada proveedor. Ahora Juan controla cada pegado, panel por
+ * panel si hace falta: el instrumento ofrece el botón, Juan decide cuándo y
+ * dónde.
  */
 
 interface Resultado {
@@ -63,11 +71,13 @@ interface ResultadoConsolidar {
   error?: string;
   paneles: ResultadoConsolidarPanel[];
   navegacionesIntactas: boolean;
+  etapa?: string;
 }
 interface ResultadoConsolidarUno {
   ok: boolean;
   error?: string;
   panel?: ResultadoConsolidarPanel;
+  etapa?: string;
 }
 interface EstadoConsolidacion {
   enCurso: boolean;
@@ -75,19 +85,37 @@ interface EstadoConsolidacion {
   total: number;
   operadorId: string | null;
 }
+interface ResultadoIntegrador {
+  ok: boolean;
+  error?: string;
+  operadorId?: string;
+  caracteresEscritos: number;
+  caracteresPresentes: number;
+  entregaExacta: boolean;
+  navegacionesIntactas: boolean;
+  etapa?: string;
+}
+interface ResultadoCapturarUno {
+  ok: boolean;
+  error?: string;
+  lectura?: Lectura;
+}
 interface CcBridge {
   investigadores: () => Promise<string[]>;
   integrador: () => Promise<string>;
-  difundir: (prompt: string) => Promise<Resultado[]>;
-  leer: () => Promise<Lectura[]>;
+  pegarPreguntaEnTodos: (prompt: string) => Promise<Resultado[]>;
+  pegarPreguntaAqui: (prompt: string) => Promise<Resultado>;
+  capturarTodos: () => Promise<Lectura[]>;
+  capturarUno: () => Promise<ResultadoCapturarUno>;
   sesiones: () => Promise<{ id: string; cookies: number }[]>;
   sondear: () => Promise<Sondeo>;
   desplazar: (direccion: 1 | -1) => Promise<Posicion>;
   desplazarA: (x: number) => Promise<Posicion>;
   posicion: () => Promise<Posicion>;
-  consolidar: () => Promise<ResultadoConsolidar>;
-  consolidarEstado: () => Promise<EstadoConsolidacion>;
-  consolidarUno: () => Promise<ResultadoConsolidarUno>;
+  pegarOperacionEnTodos: () => Promise<ResultadoConsolidar>;
+  pegarOperacionEstado: () => Promise<EstadoConsolidacion>;
+  pegarOperacionAqui: () => Promise<ResultadoConsolidarUno>;
+  pegarIntegrador: () => Promise<ResultadoIntegrador>;
 }
 declare global {
   interface Window {
@@ -122,9 +150,9 @@ function marcar(id: string, texto: string, clase: "" | "ok" | "mal" = ""): void 
 }
 
 // Cambio 6 — deepseek queda en gris a propósito: es el integrador, no un
-// investigador de la Parte 1, así que "Pegar en todos" nunca lo toca y nunca
-// recibe un ok/mal de difusión. Se lo etiqueta distinto para que ese gris no
-// se lea como un fallo.
+// investigador de la Parte 1, así que "Pegar pregunta en todos" nunca lo
+// toca y nunca recibe un ok/mal de difusión. Se lo etiqueta distinto para
+// que ese gris no se lea como un fallo.
 void Promise.all([window.cc.investigadores(), window.cc.integrador()]).then(([ids, integrador]) => {
   for (const id of ids) marcar(id, id === integrador ? "en espera (integrador, no investiga)" : "en espera");
   pintarPaneles();
@@ -138,11 +166,16 @@ function decir(texto: string, clase?: "ok" | "mal"): void {
   estado.className = clase ?? "";
 }
 
-async function difundir(prompt: string): Promise<void> {
-  // Cambio 3 (decisión de Juan, 2026-09-18): esto PEGA, nunca envía. Juan
-  // revisa cada panel y envía a mano, uno por uno.
-  decir("Pegando en el consejo…");
-  const rs = await window.cc.difundir(prompt);
+const etiquetaEtapa = (etapa?: string): string => (etapa ? ` [etapa: ${etapa}]` : "");
+
+/**
+ * BOTÓN 1 — "Pegar pregunta en todos". Escribe en los ocho paneles del
+ * pool (nunca deepseek) y registra la pregunta como la de la ronda. Nunca
+ * envía — Juan revisa y envía a mano, uno por uno.
+ */
+async function pegarPreguntaEnTodos(prompt: string): Promise<void> {
+  decir("Pegando la pregunta en el consejo…");
+  const rs = await window.cc.pegarPreguntaEnTodos(prompt);
   const bien = rs.filter((r) => r.ok);
   const mal = rs.filter((r) => !r.ok);
   for (const r of rs) {
@@ -151,23 +184,19 @@ async function difundir(prompt: string): Promise<void> {
   }
   pintarPaneles();
   const detalle = rs
-    .map((r) =>
-      r.ok
-        ? `  ${r.id}: pegado${r.modelLabel ? ` · ${r.modelLabel}` : ""}`
-        : `  ${r.id}: ${r.error ?? "falló"}`,
-    )
+    .map((r) => (r.ok ? `  ${r.id}: pegado${r.modelLabel ? ` · ${r.modelLabel}` : ""}` : `  ${r.id}: ${r.error ?? "falló"}`))
     .join("\n");
   decir(
-    `${bien.length} de ${rs.length} recibieron el prompt pegado (sin enviar).\n${detalle}`,
+    `${bien.length} de ${rs.length} recibieron la pregunta pegada (sin enviar).\n${detalle}`,
     mal.length === 0 ? "ok" : mal.length === rs.length ? "mal" : undefined,
   );
 }
 
-$("enviar").addEventListener("click", () => {
+$("pegar-pregunta-en-todos").addEventListener("click", () => {
   const prompt = $<HTMLTextAreaElement>("prompt").value.trim();
   if (!prompt) return;
   if (noPreguntarMas) {
-    void difundir(prompt);
+    void pegarPreguntaEnTodos(prompt);
     return;
   }
   dialogo.showModal();
@@ -181,31 +210,40 @@ $("confirmar").addEventListener("click", () => {
   noPreguntarMas = $<HTMLInputElement>("no-preguntar").checked;
   dialogo.close();
   const prompt = $<HTMLTextAreaElement>("prompt").value.trim();
-  if (prompt) void difundir(prompt);
+  if (prompt) void pegarPreguntaEnTodos(prompt);
 });
 
 /**
- * CAPTURAR — botón único que reemplaza a "Leer" y "Sondear" (decisión de
- * Juan, 2026-08-26/09-01: sin historial, la app lee el texto que YA está en
- * pantalla, nada más). Por cada panel: último mensaje del usuario, respuesta
- * completa, modelLabel. No navega, no recarga, no escribe en ningún
- * compositor, cuota cero. El sondeo de derivación de specs sigue existiendo
- * pero como modo de diagnóstico por bandera de línea de comando, fuera de
- * esta barra.
+ * BOTÓN 2 — "Pegar pregunta aquí". Sólo en el panel al frente; si es
+ * deepseek, no hace nada y avisa. No registra ronda: es un reintento
+ * puntual, no una difusión nueva.
  */
-$("capturar").addEventListener("click", () => {
-  void window.cc.leer().then((ls) => {
+$("pegar-pregunta-aqui").addEventListener("click", () => {
+  const prompt = $<HTMLTextAreaElement>("prompt").value.trim();
+  if (!prompt) return;
+  decir("Pegando la pregunta en el panel al frente…");
+  void window.cc.pegarPreguntaAqui(prompt).then((r) => {
+    marcar(r.id, r.ok ? `pegado${r.modelLabel ? ` · ${r.modelLabel}` : ""}` : r.error ?? "falló", r.ok ? "ok" : "mal");
+    pintarPaneles();
+    decir(r.ok ? `${r.id}: pegado${r.modelLabel ? ` · ${r.modelLabel}` : ""}` : `${r.id}: ${r.error ?? "falló"}`, r.ok ? "ok" : "mal");
+  });
+});
+
+/**
+ * BOTÓN 6 — "Capturar todos". Lo que antes hacía el único botón "Capturar":
+ * por cada panel, último mensaje del usuario, respuesta completa,
+ * modelLabel. No navega, no recarga, no escribe en ningún compositor.
+ * Cuota cero.
+ */
+$("capturar-todos").addEventListener("click", () => {
+  void window.cc.capturarTodos().then((ls) => {
     for (const l of ls) {
       if (l.error) marcar(l.id, l.error, "mal");
       else marcar(l.id, `${l.text.length} car.${estadoLectura(l)}`, l.text.length > 0 ? "ok" : "");
     }
     pintarPaneles();
     const detalle = ls
-      .map((l) =>
-        l.error
-          ? `  ${l.id}: ${l.error}`
-          : `  ${l.id}: ${l.text.length} caracteres${estadoLectura(l)}`,
-      )
+      .map((l) => (l.error ? `  ${l.id}: ${l.error}` : `  ${l.id}: ${l.text.length} caracteres${estadoLectura(l)}`))
       .join("\n");
     // Aviso de la cobertura del riesgo de "sin historial": si los prompts de
     // usuario capturados no coinciden entre proveedores, se informa acá —
@@ -225,12 +263,32 @@ $("capturar").addEventListener("click", () => {
 });
 
 /**
- * CONSOLIDAR RESPUESTAS — T5. Arma los 8 cuerpos, los escribe secuencial y
- * al frente, sin enviar. Puede tardar minutos (medido: ~150s los 8), así
- * que se sondea el progreso — sin señal de avance por dos minutos y medio
- * se lee como cuelgue, y ya pasó en esta fase.
+ * BOTÓN 7 — "Capturar este panel". Sólo el panel al frente, con el tipo de
+ * captura que corresponda a la etapa de la ronda. Existe para cuando un
+ * panel falla y no hay que recapturar los nueve.
  */
-const botonConsolidar = $<HTMLButtonElement>("consolidar");
+$("capturar-uno").addEventListener("click", () => {
+  void window.cc.capturarUno().then((r) => {
+    if (!r.ok || !r.lectura) {
+      decir(`No se pudo capturar este panel: ${r.error ?? "sin detalle"}`, "mal");
+      return;
+    }
+    const l = r.lectura;
+    if (l.error) marcar(l.id, l.error, "mal");
+    else marcar(l.id, `${l.text.length} car.${estadoLectura(l)}`, l.text.length > 0 ? "ok" : "");
+    pintarPaneles();
+    decir(l.error ? `${l.id}: ${l.error}` : `${l.id}: ${l.text.length} caracteres${estadoLectura(l)}`, l.error ? "mal" : "ok");
+  });
+});
+
+/**
+ * BOTÓN 3 — "Pegar operación en todos" (antes "Consolidar respuestas").
+ * Arma los 8 cuerpos, los escribe secuencial y al frente, sin enviar. Puede
+ * tardar minutos (medido: ~150s los 8), así que se sondea el progreso — sin
+ * señal de avance por dos minutos y medio se lee como cuelgue, y ya pasó en
+ * esta fase.
+ */
+const botonPegarOperacionEnTodos = $<HTMLButtonElement>("pegar-operacion-en-todos");
 let sondeoProgreso: ReturnType<typeof setInterval> | null = null;
 
 function detenerSondeoProgreso(): void {
@@ -240,24 +298,32 @@ function detenerSondeoProgreso(): void {
   }
 }
 
-botonConsolidar.addEventListener("click", () => {
-  botonConsolidar.disabled = true;
-  decir("Consolidando: armando los 8 cuerpos…");
+function detalleConsolidarPanel(p: ResultadoConsolidarPanel): string {
+  return p.interrumpido
+    ? `  ${p.operadorId}: interrumpido — ${p.error ?? ""}`
+    : p.ok
+      ? `  ${p.operadorId}: listo, integridad ${p.estadoIntegridad} (${p.marcasPresentes}/${p.marcasEsperadas} marcas)`
+      : `  ${p.operadorId}: ${p.error ?? "falló"}`;
+}
+
+botonPegarOperacionEnTodos.addEventListener("click", () => {
+  botonPegarOperacionEnTodos.disabled = true;
+  decir("Pegando operación: armando los 8 cuerpos…");
 
   sondeoProgreso = setInterval(() => {
-    void window.cc.consolidarEstado().then((e) => {
+    void window.cc.pegarOperacionEstado().then((e) => {
       if (e.enCurso) {
-        decir(`Consolidando: panel ${e.indice} de ${e.total} (${e.operadorId ?? "…"})…`);
+        decir(`Pegando operación: panel ${e.indice} de ${e.total} (${e.operadorId ?? "…"})…`);
       }
     });
   }, 2000);
 
-  void window.cc.consolidar().then((r) => {
+  void window.cc.pegarOperacionEnTodos().then((r) => {
     detenerSondeoProgreso();
-    botonConsolidar.disabled = false;
+    botonPegarOperacionEnTodos.disabled = false;
 
     if (r.error) {
-      decir(`No se pudo consolidar: ${r.error}`, "mal");
+      decir(`No se pudo pegar la operación: ${r.error}${etiquetaEtapa(r.etapa)}`, "mal");
       return;
     }
     for (const p of r.paneles) {
@@ -266,45 +332,55 @@ botonConsolidar.addEventListener("click", () => {
       else marcar(p.operadorId, `listo · ${p.estadoIntegridad} (${p.marcasPresentes}/${p.marcasEsperadas})`, p.estadoIntegridad === "completo" ? "ok" : "mal");
     }
     pintarPaneles();
-    const detalle = r.paneles
-      .map((p) =>
-        p.interrumpido
-          ? `  ${p.operadorId}: interrumpido — ${p.error ?? ""}`
-          : p.ok
-            ? `  ${p.operadorId}: listo, integridad ${p.estadoIntegridad} (${p.marcasPresentes}/${p.marcasEsperadas} marcas)`
-            : `  ${p.operadorId}: ${p.error ?? "falló"}`,
-      )
-      .join("\n");
+    const detalle = r.paneles.map(detalleConsolidarPanel).join("\n");
     const avisoNav = r.navegacionesIntactas
       ? ""
-      : "\n\n⚠ El contador de navegaciones cambió durante la consolidación — alguna vista pudo haberse recargado.";
-    decir(`Consolidación:\n${detalle}${avisoNav}`, r.ok && r.navegacionesIntactas ? "ok" : "mal");
+      : "\n\n⚠ El contador de navegaciones cambió durante la operación — alguna vista pudo haberse recargado.";
+    decir(`Pegar operación${etiquetaEtapa(r.etapa)}:\n${detalle}${avisoNav}`, r.ok && r.navegacionesIntactas ? "ok" : "mal");
   });
 });
 
 /**
- * CONSOLIDAR ESTE PANEL — Cambio 4. Igual que "Consolidar respuestas" pero
- * sólo para el panel al frente en este momento: no re-arma el sello ni
- * vuelve a barajar, usa la misma ronda tal cual está.
+ * BOTÓN 4 — "Pegar operación aquí" (antes "Consolidar este panel"). Igual
+ * que el 3 pero sólo para el panel al frente: no re-arma el sello ni vuelve
+ * a barajar, usa la misma ronda tal cual está.
  */
-const botonConsolidarUno = $<HTMLButtonElement>("consolidar-uno");
-botonConsolidarUno.addEventListener("click", () => {
-  botonConsolidarUno.disabled = true;
-  decir("Consolidando el panel al frente…");
-  void window.cc.consolidarUno().then((r) => {
-    botonConsolidarUno.disabled = false;
+const botonPegarOperacionAqui = $<HTMLButtonElement>("pegar-operacion-aqui");
+botonPegarOperacionAqui.addEventListener("click", () => {
+  botonPegarOperacionAqui.disabled = true;
+  decir("Pegando operación en el panel al frente…");
+  void window.cc.pegarOperacionAqui().then((r) => {
+    botonPegarOperacionAqui.disabled = false;
     if (!r.ok || !r.panel) {
-      decir(`No se pudo consolidar este panel: ${r.error ?? "sin detalle"}`, "mal");
+      decir(`No se pudo pegar la operación en este panel: ${r.error ?? "sin detalle"}${etiquetaEtapa(r.etapa)}`, "mal");
       return;
     }
     const p = r.panel;
     marcar(p.operadorId, p.ok ? `listo · ${p.estadoIntegridad} (${p.marcasPresentes}/${p.marcasEsperadas})` : p.error ?? "falló", p.ok ? "ok" : "mal");
     pintarPaneles();
+    decir(`${detalleConsolidarPanel(p).trim()}${etiquetaEtapa(r.etapa)}`, p.ok ? "ok" : "mal");
+  });
+});
+
+/**
+ * BOTÓN 5 — "Pegar integrador". Arma la tabla de hallazgos y el prompt del
+ * integrador, y lo escribe en deepseek (el proceso principal lo trae al
+ * frente si no es el panel visible). Nunca envía. No se bloquea por etapa:
+ * si la ronda no llegó a "integracion" todavía, se hace igual y se avisa.
+ */
+$("pegar-integrador").addEventListener("click", () => {
+  decir("Pegando el prompt del integrador…");
+  void window.cc.pegarIntegrador().then((r) => {
+    const id = r.operadorId ?? "deepseek";
+    if (r.ok) marcar(id, `listo · entrega ${r.entregaExacta ? "exacta" : "con diferencias"} (${r.caracteresPresentes}/${r.caracteresEscritos})`, r.entregaExacta ? "ok" : "mal");
+    else marcar(id, r.error ?? "falló", "mal");
+    pintarPaneles();
+    const avisoNav = r.navegacionesIntactas ? "" : "\n\n⚠ El contador de navegaciones cambió — el panel pudo haberse recargado.";
     decir(
-      p.ok
-        ? `${p.operadorId}: listo, integridad ${p.estadoIntegridad} (${p.marcasPresentes}/${p.marcasEsperadas} marcas)`
-        : `${p.operadorId}: ${p.error ?? "falló"}`,
-      p.ok ? "ok" : "mal",
+      r.ok
+        ? `${id}: listo, entrega ${r.entregaExacta ? "exacta" : "CON DIFERENCIAS"} (${r.caracteresPresentes}/${r.caracteresEscritos} caracteres)${etiquetaEtapa(r.etapa)}${avisoNav}`
+        : `${id}: ${r.error ?? "falló"}${etiquetaEtapa(r.etapa)}`,
+      r.ok && r.entregaExacta && r.navegacionesIntactas ? "ok" : "mal",
     );
   });
 });

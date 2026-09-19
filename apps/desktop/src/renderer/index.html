@@ -11,6 +11,14 @@
         background: #1a1714; color: #e8e2d9; overflow: hidden;
       }
       .fila { display: flex; gap: 8px; align-items: flex-start; }
+      /**
+       * Rediseño de la barra (2026-09-19): siete botones no entran en una
+       * fila sobre 1366 px. Agrupados en dos filas —cinco de "pegar", dos de
+       * "capturar" + utilidades— con flex-wrap:wrap como red de seguridad si
+       * la ventana es más angosta todavía (mismo motivo que el Cambio 6 ya
+       * aplicó a la barra de estados de proveedor).
+       */
+      .fila-botones { flex-wrap: wrap; margin-top: 6px; }
       textarea {
         flex: 1; height: 52px; resize: none; padding: 8px 10px;
         background: #211d19; color: inherit; border: 1px solid #3a332c;
@@ -60,10 +68,17 @@
   <body>
     <div class="fila">
       <textarea id="prompt" placeholder="Escribe la pregunta para todo el consejo…"></textarea>
-      <button id="enviar" class="primario">Pegar en todos</button>
-      <button id="capturar" title="Lee, por cada panel: ultimo mensaje del usuario, respuesta completa, modelLabel. No navega, no recarga y no escribe en ningun compositor. Cuota cero.">Capturar</button>
-      <button id="consolidar" title="Arma los 8 cuerpos por operador (anonimizados, barajados), los escribe uno por uno con su panel al frente, y los deja SIN enviar para que los revises. Puede tardar unos minutos.">Consolidar respuestas</button>
-      <button id="consolidar-uno" title="Igual que Consolidar respuestas, pero SÓLO para el panel que está al frente ahora mismo. Misma ronda, misma semilla: no vuelve a barajar. Sin enviar.">Consolidar este panel</button>
+    </div>
+    <div class="fila fila-botones">
+      <button id="pegar-pregunta-en-todos" class="primario" title="Escribe la pregunta del cuadro de arriba en los ocho paneles del pool (nunca en deepseek) y la registra como la pregunta de la ronda. Nunca envía.">Pegar pregunta en todos</button>
+      <button id="pegar-pregunta-aqui" title="Escribe la pregunta del cuadro de arriba SOLO en el panel que está al frente ahora mismo. Si es deepseek, no hace nada. Nunca envía.">Pegar pregunta aquí</button>
+      <button id="pegar-operacion-en-todos" title="Arma los 8 cuerpos por operador (anonimizados, barajados), los escribe uno por uno con su panel al frente, y los deja SIN enviar para que los revises. Puede tardar unos minutos.">Pegar operación en todos</button>
+      <button id="pegar-operacion-aqui" title="Igual que Pegar operación en todos, pero SÓLO para el panel que está al frente ahora mismo. Misma ronda, misma semilla: no vuelve a barajar. Sin enviar.">Pegar operación aquí</button>
+      <button id="pegar-integrador" title="Arma la tabla de hallazgos y el prompt del integrador, y lo escribe en el panel de deepseek (lo trae al frente si no es el visible). Nunca envía.">Pegar integrador</button>
+    </div>
+    <div class="fila fila-botones">
+      <button id="capturar-todos" title="Lee, por cada panel: ultimo mensaje del usuario, respuesta completa, modelLabel. No navega, no recarga y no escribe en ningun compositor. Cuota cero.">Capturar todos</button>
+      <button id="capturar-uno" title="Captura SOLO el panel que está al frente ahora mismo, con el tipo de captura que corresponda a la etapa de la ronda. Cuota cero.">Capturar este panel</button>
       <button id="sesiones">Sesiones</button>
       <button id="desplazar-izquierda" title="Desplazar la fila de paneles a la izquierda. No navega ni recarga.">◀</button>
       <button id="desplazar-derecha" title="Desplazar la fila de paneles a la derecha. No navega ni recarga.">▶</button>
@@ -76,7 +91,7 @@
     <div id="estado">Listo.</div>
 
     <dialog id="confirmacion">
-      <h2>Antes de enviar</h2>
+      <h2>Antes de pegar</h2>
       <p>
         ¿Activaste las capacidades nativas que quieras en cada proveedor?
         Razonamiento, búsqueda en internet, pensamiento extendido — cada uno
@@ -88,7 +103,7 @@
       </label>
       <div class="acciones">
         <button id="cancelar">Cancelar</button>
-        <button id="confirmar" class="primario">Enviar</button>
+        <button id="confirmar" class="primario">Pegar</button>
       </div>
     </dialog>
 

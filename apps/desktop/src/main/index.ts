@@ -20,7 +20,7 @@ import type { Server } from "node:http";
 import { randomUUID } from "node:crypto";
 
 import { PROVIDER_SPECS } from "@chatcouncil/providers";
-import type { Cita, Conversacion, HallazgoHecho, Procedencia, Respuesta, Ronda, SalidaOperador, Sello } from "@chatcouncil/domain";
+import type { Cita, Conversacion, EtapaRonda, HallazgoHecho, Procedencia, Respuesta, Ronda, SalidaOperador, Sello } from "@chatcouncil/domain";
 import { etapaDeRonda, preguntaEfectivaDeRonda } from "@chatcouncil/domain";
 import {
   armarCuerposPorOperador,
@@ -279,7 +279,7 @@ const MEDIR_ENTREGA_CONV_ID = (ARGV.find((a) => a.startsWith("--cc-medir-entrega
 );
 
 /**
- * `--cc-consolidar=<conversacionId>`: corre `consolidarRespuestas()` —el
+ * `--cc-consolidar=<conversacionId>`: corre `pegarOperacionEnTodos()` —el
  * mismo camino que dispara el botón "Consolidar respuestas"— sin que nadie
  * haga clic. Fija `conversacionActual`/`rondaActualId` a la ÚLTIMA ronda de
  * esa conversación antes de llamarlo, porque el camino real los toma del
@@ -806,6 +806,28 @@ async function difundirConRegistro(
 }
 
 /**
+ * Rediseño de la barra (2026-09-19) — "Pegar pregunta aquí": escribe la
+ * pregunta SÓLO en el panel que está al frente en este momento, NUNCA en
+ * deepseek (no es investigador de la Parte 1). A propósito NO pasa por
+ * `difundirConRegistro`: es un utilitario de reintento puntual sobre UN
+ * panel, no una difusión nueva — no crea una `Ronda` ni un `Intento`, para
+ * no fabricar una ronda de un solo proveedor cada vez que Juan reintenta un
+ * pegado que falló. Reutiliza `difundir()` (la misma función pura que usa
+ * "Pegar pregunta en todos"), restringida a un único destinatario.
+ */
+async function pegarPreguntaAqui(prompt: string): Promise<ResultadoEnvio> {
+  const objetivo = vistaConIdEnFrente();
+  if (!objetivo) {
+    return { id: "(ninguno)", ok: false, error: "no hay ningún panel visible" };
+  }
+  if (objetivo.id === INTEGRADOR_ID) {
+    return { id: objetivo.id, ok: false, error: "deepseek no recibe la pregunta: no es investigador de la Parte 1" };
+  }
+  const [resultado] = await difundir(prompt, [objetivo.id as ProviderId]);
+  return resultado ?? { id: objetivo.id, ok: false, error: "difundir() no devolvió resultado" };
+}
+
+/**
  * `cc:leer` escribe: una respuesta por proveedor, con procedencia derivada
  * por `derivarProcedencia` (Fase 2). Sin una ronda abierta no hay a qué
  * enganchar la respuesta, así que se omite la escritura — sigue devolviendo
@@ -937,6 +959,35 @@ function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProvee
   for (const id of ACTIVOS) {
     navegacionesEnRondaAnterior.set(id, contadorNavegaciones.get(id) ?? 0);
   }
+}
+
+export interface ResultadoCapturarUno {
+  ok: boolean;
+  error?: string;
+  lectura?: LecturaProveedor;
+}
+
+/**
+ * Rediseño de la barra (2026-09-19) — "Capturar este panel": existe para
+ * cuando UN panel falla y no hay que recapturar los nueve. Lee sólo el panel
+ * visible (`leerUno`) y lo pasa, como lista de UN elemento, a
+ * `registrarRespuestasDeRondaActual` — la MISMA función que "Capturar
+ * todos" usa para los nueve, que ya sabe clasificar por etapa
+ * (`clasificarLecturasPorEtapa`) sin que este camino tenga que repetir esa
+ * lógica.
+ */
+async function capturarPanelActual(): Promise<ResultadoCapturarUno> {
+  const objetivo = vistaConIdEnFrente();
+  if (!objetivo) {
+    return { ok: false, error: "no hay ningún panel visible" };
+  }
+  const v = vistas.find((x) => x.id === objetivo.id);
+  if (!v) {
+    return { ok: false, error: `el panel "${objetivo.id}" no tiene spec de investigador: no se puede capturar` };
+  }
+  const lectura = await leerUno(v);
+  registrarRespuestasDeRondaActual([lectura]);
+  return { ok: !lectura.error, ...(lectura.error ? { error: lectura.error } : {}), lectura };
 }
 
 /**
@@ -1598,6 +1649,21 @@ async function leer(): Promise<LecturaProveedor[]> {
 }
 
 /**
+ * Rediseño de la barra (2026-09-19) — "Capturar este panel": lee UN solo
+ * panel, con la MISMA vía de sólo lectura que `leer()` usa para los nueve
+ * (`window.__ccProvider.read`) — nunca una segunda implementación.
+ */
+async function leerUno(v: (typeof vistas)[number]): Promise<LecturaProveedor> {
+  const spec = JSON.stringify(PROVIDER_SPECS[v.id]);
+  try {
+    const r = (await v.view.webContents.executeJavaScript(`window.__ccProvider.read(${spec})`, true)) as LecturaProveedor;
+    return { ...r, id: v.id };
+  } catch (e) {
+    return { id: v.id, text: "", generating: false, modelLabel: null, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
  * CENSO DE SESIÓN. Sólo CANTIDADES: nunca nombres, dominios ni valores de
  * cookie. Es la línea dura del proyecto y no se cruza ni para diagnosticar.
  *
@@ -1667,14 +1733,15 @@ function registrarIpc(): void {
   ipcMain.handle("cc:integrador", () => INTEGRADOR_ID);
 
   /**
-   * DIFUSIÓN. Se lanzan todas en paralelo y se espera a todas, pero con
-   * `allSettled`: **el fallo de un proveedor no puede tumbar la ronda**. El
-   * que falla se reporta como fallo y los demás siguen. Nunca se simula un
-   * resultado que no ocurrió.
+   * DIFUSIÓN — "Pegar pregunta en todos" (rediseño de la barra, 2026-09-19).
+   * Se lanzan todas en paralelo y se espera a todas, pero con `allSettled`:
+   * **el fallo de un proveedor no puede tumbar la ronda**. El que falla se
+   * reporta como fallo y los demás siguen. Nunca se simula un resultado que
+   * no ocurrió.
    */
-  ipcMain.handle("cc:difundir", async (_e, prompt: string) => difundirConRegistro(prompt, false, DESTINATARIOS_INVESTIGACION));
+  ipcMain.handle("cc:pegar-pregunta-en-todos", async (_e, prompt: string) => difundirConRegistro(prompt, false, DESTINATARIOS_INVESTIGACION));
 
-  ipcMain.handle("cc:leer", async () => {
+  ipcMain.handle("cc:capturar-todos", async () => {
     const lecturas = await leer();
     registrarRespuestasDeRondaActual(lecturas);
     return lecturas;
@@ -1705,19 +1772,44 @@ function registrarIpc(): void {
   ipcMain.handle("cc:posicion", () => estadoDesplazamiento());
 
   /**
-   * T5 — "Consolidar respuestas". El renderer llama esto UNA vez (botón) y
+   * T5, renombrado el 2026-09-19 (rediseño de la barra, siete botones) —
+   * "Pegar operación en todos". El renderer llama esto UNA vez (botón) y
    * recibe el resultado final; mientras tanto puede sondear
-   * `cc:consolidar-estado` para saber en qué panel va (2,5 min sin señal se
-   * lee como cuelgue — medido, ya pasó en esta fase).
+   * `cc:pegar-operacion-estado` para saber en qué panel va (2,5 min sin
+   * señal se lee como cuelgue — medido, ya pasó en esta fase).
    */
-  ipcMain.handle("cc:consolidar", async () => consolidarRespuestas());
-  ipcMain.handle("cc:consolidar-estado", () => estadoConsolidacion);
+  ipcMain.handle("cc:pegar-operacion-en-todos", async () => pegarOperacionEnTodos());
+  ipcMain.handle("cc:pegar-operacion-estado", () => estadoConsolidacion);
 
   /**
-   * Cambio 4 — "Consolidar este panel": mismo prompt de operación, pero sólo
-   * para el panel que está al frente en ese momento. Ver `consolidarPanelActual`.
+   * Cambio 4, renombrado — "Pegar operación aquí": mismo prompt de
+   * operación, pero sólo para el panel que está al frente en ese momento.
+   * Ver `pegarOperacionAqui`.
    */
-  ipcMain.handle("cc:consolidar-uno", async () => consolidarPanelActual());
+  ipcMain.handle("cc:pegar-operacion-aqui", async () => pegarOperacionAqui());
+
+  /**
+   * Rediseño de la barra (2026-09-19) — "Pegar pregunta aquí": escribe la
+   * pregunta SÓLO en el panel al frente, nunca en deepseek. A diferencia de
+   * "Pegar pregunta en todos", NO registra ronda ni intentos — es un
+   * utilitario de reintento puntual, no una difusión nueva.
+   */
+  ipcMain.handle("cc:pegar-pregunta-aqui", async (_e, prompt: string) => pegarPreguntaAqui(prompt));
+
+  /**
+   * Rediseño de la barra (2026-09-19) — "Pegar integrador" pasa a tener
+   * botón: antes sólo alcanzable por `--cc-integrador=<id>`. Ver
+   * `enviarPromptAIntegrador`.
+   */
+  ipcMain.handle("cc:pegar-integrador", async () => enviarPromptAIntegrador());
+
+  /**
+   * Rediseño de la barra (2026-09-19) — "Capturar este panel": captura SÓLO
+   * el panel al frente, con el tipo de captura que corresponda a la etapa de
+   * la ronda. Existe para cuando un panel falla y no hay que recapturar los
+   * nueve. Ver `capturarPanelActual`.
+   */
+  ipcMain.handle("cc:capturar-uno", async () => capturarPanelActual());
 }
 
 /**
@@ -2663,6 +2755,8 @@ export interface ResultadoConsolidar {
   error?: string;
   paneles: ResultadoConsolidarPanel[];
   navegacionesIntactas: boolean;
+  /** Etapa de la ronda AL EMPEZAR — informativa, nunca bloquea (rediseño de la barra, 2026-09-19). */
+  etapa?: EtapaRonda;
 }
 
 /**
@@ -2823,7 +2917,7 @@ function armarPromptDeOperacionConMarcas(
  * ningún panel.
  */
 function prepararRondaParaOperar():
-  | { ok: true; ronda: Ronda; pregunta: string; respuestas: Respuesta[]; citas: Cita[] }
+  | { ok: true; ronda: Ronda; pregunta: string; respuestas: Respuesta[]; citas: Cita[]; etapa: EtapaRonda }
   | { ok: false; error: string } {
   if (!conversacionActual || !rondaActualId) {
     return { ok: false, error: "no hay una ronda activa: capturá las 8 respuestas del pool antes de consolidar" };
@@ -2866,13 +2960,20 @@ function prepararRondaParaOperar():
     return { ok: false, error: `faltan respuestas capturadas en esta ronda: ${faltantes.join(", ")} — usá "Capturar" antes de consolidar` };
   }
   const citas = registro.hechos.filter((h): h is Cita => h.tipo === "cita");
-  return { ok: true, ronda, pregunta, respuestas: [...respuestasDeLaRonda.values()], citas: [...citas] };
+  // Rediseño de la barra (2026-09-19) — "los botones NO se bloquean por
+  // etapa": esta función nunca lo usó para negarse (sólo exige que las 8
+  // respuestas EXISTAN, un requisito de DATOS, no de etapa — construir un
+  // cuerpo sin las 8 respuestas del pool es imposible, no una regla
+  // arbitraria). `etapa` viaja igual en el resultado para que el botón lo
+  // informe en una línea, nunca para bloquear.
+  const etapa = etapaDeRonda(registro.hechos, ronda.id, POOL_OPERADORES.length);
+  return { ok: true, ronda, pregunta, respuestas: [...respuestasDeLaRonda.values()], citas: [...citas], etapa };
 }
 
 /**
  * Escribe el prompt de operación en UN panel ya identificado: "Nuevo chat",
  * escritura, marcas de integridad y `verificarPromptCompleto` (Cambio 2).
- * Factorizado de `consolidarRespuestas` para que "Consolidar este panel"
+ * Factorizado de `pegarOperacionEnTodos` para que "Consolidar este panel"
  * (Cambio 4) haga EXACTAMENTE lo mismo sobre un solo panel, sin duplicar la
  * lógica.
  */
@@ -2969,12 +3070,12 @@ async function consolidarUnPanel(
   }
 }
 
-async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
+async function pegarOperacionEnTodos(): Promise<ResultadoConsolidar> {
   const prep = prepararRondaParaOperar();
   if (!prep.ok) {
     return { ok: false, error: prep.error, paneles: [], navegacionesIntactas: true };
   }
-  const { ronda, pregunta, respuestas, citas } = prep;
+  const { ronda, pregunta, respuestas, citas, etapa } = prep;
   const userData = app.getPath("userData");
 
   let resultadoArmado;
@@ -3068,6 +3169,7 @@ async function consolidarRespuestas(): Promise<ResultadoConsolidar> {
     ok: !interrumpidoGlobal && paneles.every((p) => p.ok),
     paneles,
     navegacionesIntactas,
+    etapa,
   };
 }
 
@@ -3075,6 +3177,8 @@ export interface ResultadoConsolidarUno {
   ok: boolean;
   error?: string;
   panel?: ResultadoConsolidarPanel;
+  /** Etapa de la ronda AL EMPEZAR — informativa, nunca bloquea (rediseño de la barra, 2026-09-19). */
+  etapa?: EtapaRonda;
 }
 
 /**
@@ -3093,12 +3197,12 @@ export interface ResultadoConsolidarUno {
  * Si no hay ninguna ronda en etapa de operación (falta alguna de las 8
  * respuestas capturadas, o no hay ronda activa), no hace nada y avisa.
  */
-async function consolidarPanelActual(): Promise<ResultadoConsolidarUno> {
+async function pegarOperacionAqui(): Promise<ResultadoConsolidarUno> {
   const prep = prepararRondaParaOperar();
   if (!prep.ok) {
     return { ok: false, error: prep.error };
   }
-  const { ronda, pregunta, respuestas, citas } = prep;
+  const { ronda, pregunta, respuestas, citas, etapa } = prep;
 
   const objetivo = vistaConIdEnFrente();
   if (!objetivo) {
@@ -3126,12 +3230,12 @@ async function consolidarPanelActual(): Promise<ResultadoConsolidarUno> {
   // Ya se verificó arriba que `objetivo.id` está en POOL_OPERADORES (⊂ ProviderId).
   const v = { id: objetivo.id as ProviderId, view: objetivo.view };
   const panel = await consolidarUnPanel(v, objetivo.id, textoAEscribir, marcasDeEsteOperador);
-  return { ok: panel.ok, panel, ...(panel.error ? { error: panel.error } : {}) };
+  return { ok: panel.ok, panel, etapa, ...(panel.error ? { error: panel.error } : {}) };
 }
 
 /**
  * T7 (Fase 3) — "Enviar prompt al integrador" (Parte 2 de la interfaz, paso
- * (e) del cableado). Mismo patrón que `consolidarRespuestas()`: arma el
+ * (e) del cableado). Mismo patrón que `pegarOperacionEnTodos()`: arma el
  * dato, escribe en el panel al frente, y NUNCA envía — Juan sigue teniendo
  * que revisar y apretar enviar él mismo en deepseek, igual que en cada uno
  * de los 8 operadores.
@@ -3146,7 +3250,7 @@ async function consolidarPanelActual(): Promise<ResultadoConsolidarUno> {
  * estar VACÍO. Ninguna de las dos se asume.
  *
  * VERIFICACIÓN DE ENTREGA — a propósito DISTINTA de la de
- * `consolidarRespuestas` (marcas canaria intercaladas): el texto de
+ * `pegarOperacionEnTodos` (marcas canaria intercaladas): el texto de
  * `prompt-integrador.ts` es LITERAL y no le dice a deepseek que ignore
  * ninguna marca (a diferencia de `prompt-operacion.ts`, que sí instruye a
  * los operadores a ignorar `[[CC-xxxxx]]`) — insertarlas acá contaminaría
@@ -3164,6 +3268,8 @@ export interface ResultadoIntegrador {
   caracteresPresentes: number;
   entregaExacta: boolean;
   navegacionesIntactas: boolean;
+  /** Etapa de la ronda AL EMPEZAR — informativa, nunca bloquea (rediseño de la barra, 2026-09-19). */
+  etapa?: EtapaRonda;
 }
 
 async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
@@ -3179,18 +3285,27 @@ async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
   if (ronda.semilla === null) {
     return { ok: false, error: "la ronda no tiene semilla persistida", caracteresEscritos: 0, caracteresPresentes: 0, entregaExacta: false, navegacionesIntactas: true };
   }
-
-  const etapa = etapaDeRonda(registro.hechos, rondaActualId, POOL_OPERADORES.length);
-  if (etapa !== "integracion") {
+  // Defecto 1, aplicado también acá: la pregunta viaja por los TRES prompts
+  // (BLUEPRINT §1) — si `Ronda.prompt` es el marcador interno, el prompt del
+  // integrador lo heredaría igual que el de operación lo hacía antes.
+  const pregunta = preguntaEfectivaDeRonda(registro.hechos, ronda);
+  if (pregunta === null) {
     return {
       ok: false,
-      error: `la ronda está en etapa "${etapa}", todavía no en "integracion" — faltan SalidaOperador por capturar`,
+      error: `la ronda ${ronda.id} no tiene pregunta registrada válida: declarala con --cc-declarar-pregunta antes de pegar el integrador`,
       caracteresEscritos: 0,
       caracteresPresentes: 0,
       entregaExacta: false,
       navegacionesIntactas: true,
     };
   }
+
+  // Rediseño de la barra (2026-09-19) — "los botones NO se bloquean por
+  // etapa": esto ANTES negaba escribir si la ronda no estaba en
+  // "integracion" (faltaban SalidaOperador). Ahora Juan decide: si arma la
+  // tabla con menos hallazgos de los que habría con la ronda completa, la
+  // etapa viaja en el resultado para que el botón lo informe en una línea.
+  const etapa = etapaDeRonda(registro.hechos, rondaActualId, POOL_OPERADORES.length);
 
   const salidas = registro.hechos.filter((h): h is SalidaOperador => h.tipo === "salida-operador" && h.rondaId === rondaActualId);
   const hallazgosPorSalidaId = new Map<string, HallazgoHecho[]>();
@@ -3202,11 +3317,11 @@ async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
     }
   }
   const hallazgosPorSalida = salidas.map((s) => ({ operadorId: s.operadorId, hallazgos: hallazgosPorSalidaId.get(s.id) ?? [] }));
-  const { prompt } = armarTablaYPromptIntegrador(ronda.prompt, hallazgosPorSalida, POOL_OPERADORES, ronda.semilla);
+  const { prompt } = armarTablaYPromptIntegrador(pregunta, hallazgosPorSalida, POOL_OPERADORES, ronda.semilla);
 
   const v = vistas.find((x) => x.id === INTEGRADOR_ID);
   if (!v) {
-    return { ok: false, error: "panel del integrador no abierto", caracteresEscritos: 0, caracteresPresentes: 0, entregaExacta: false, navegacionesIntactas: true };
+    return { ok: false, error: "panel del integrador no abierto", caracteresEscritos: 0, caracteresPresentes: 0, entregaExacta: false, navegacionesIntactas: true, etapa };
   }
 
   const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS];
@@ -3226,6 +3341,7 @@ async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
       caracteresPresentes: 0,
       entregaExacta: false,
       navegacionesIntactas: true,
+      etapa,
     };
   }
 
@@ -3252,6 +3368,7 @@ async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
       caracteresPresentes: r.textoFinal.length,
       entregaExacta: r.textoFinal === prompt,
       navegacionesIntactas: navAntes === navDespues,
+      etapa,
     };
   } catch (e) {
     return {
@@ -3262,6 +3379,7 @@ async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
       caracteresPresentes: 0,
       entregaExacta: false,
       navegacionesIntactas: (contadorNavegaciones.get(v.id) ?? 0) === navAntes,
+      etapa,
     };
   }
 }
@@ -3492,7 +3610,7 @@ async function modoMedirEntrega(): Promise<void> {
 
 /**
  * Modo scriptable de "Consolidar respuestas" (`--cc-consolidar=<id>`) — ver
- * `consolidarRespuestas()`. Verifica el camino REAL sin que nadie haga
+ * `pegarOperacionEnTodos()`. Verifica el camino REAL sin que nadie haga
  * clic: fija el estado que la UI dejaría (`conversacionActual`,
  * `rondaActualId` en la última ronda de esa conversación) y llama a la
  * MISMA función que expone `cc:consolidar`.
@@ -3512,7 +3630,7 @@ async function modoConsolidar(): Promise<void> {
     conversacionActual = CONSOLIDAR_CONV_ID;
     rondaActualId = ultima.id;
 
-    const resultado = await consolidarRespuestas();
+    const resultado = await pegarOperacionEnTodos();
     emitir("CC_CONSOLIDAR_JSON", resultado);
   } catch (e) {
     decirPorSalida(`\n===CC_CONSOLIDAR_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);

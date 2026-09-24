@@ -170,6 +170,8 @@ export function armarInformeFinalDeRonda(params: {
   /** `proveedoresCargadosDeRonda` del registro; `null` si la ronda es anterior a ese hecho. */
   proveedoresCargados?: readonly string[] | null;
   pool?: readonly string[];
+  /** Integrador real de la ronda: el que escribió el informe, o el registrado al abrirla. */
+  integrador?: string | null;
 }): string {
   const cargados = params.proveedoresCargados ?? null;
   const incompletos =
@@ -218,6 +220,7 @@ export function armarInformeFinalDeRonda(params: {
     integridadEntrega: params.integridadEntrega,
     semilla: params.semilla,
     proveedoresCargadosIncompletos: incompletos,
+    integrador: params.informeIntegrador?.operadorId ?? params.integrador ?? null,
   });
 }
 

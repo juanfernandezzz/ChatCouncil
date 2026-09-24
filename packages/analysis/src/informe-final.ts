@@ -82,6 +82,8 @@ export interface InformeFinalInput {
    * ausente = pool completo, o ronda anterior a ese registro — no se imprime.
    */
   proveedoresCargadosIncompletos?: readonly string[] | null;
+  /** Proveedor real que integró esta ronda (2026-09-24): el integrador es una preferencia y puede cambiar entre rondas. */
+  integrador?: string | null;
 }
 
 function marcarReferencias(texto: string, existentes: ReadonlySet<string>): string {
@@ -170,6 +172,8 @@ export function armarInformeFinal(input: InformeFinalInput): string {
     "| Proveedor | Etiqueta de modelo | Caracteres de su respuesta | Fuentes citadas |",
     "|---|---|---|---|",
     tablaCondiciones,
+    "",
+    `Integrador de esta ronda: ${input.integrador ?? "(no registrado)"}`,
     "",
     ...(input.proveedoresCargadosIncompletos
       ? ["Proveedores cargados en esta ronda:", ...input.proveedoresCargadosIncompletos.map((p) => `- ${p}`), ""]

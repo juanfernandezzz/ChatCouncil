@@ -20,26 +20,13 @@ import { randomUUID } from "node:crypto";
 import { escribirSello, leerRegistroDeArchivo } from "./registro";
 
 /**
- * El pool de OPERADORES (Parte 2), BLUEPRINT §1: los 8 investigadores,
- * SIEMPRE en este orden — es de ahí que sale el código estable P1..P8.
- * `deepseek` queda AFUERA a propósito: es el noveno, sólo informa, nunca
- * opera ni es operado (§1, "Arquitectura vigente: DOS partes"). Lista
- * propia en vez de reutilizar `INVESTIGADORES` de `index.ts`: esa lista
- * privada del módulo principal incluye a deepseek (investiga en la Parte 1)
- * y no es el pool correcto para la Parte 2 sin filtrarlo — declarar la
- * lista correcta acá, una vez, evita que ese filtro se repita mal en algún
- * otro lugar.
+ * El pool de OPERADORES (Parte 2), BLUEPRINT §1: los investigadores MENOS el
+ * integrador, en el orden fijo de los paneles — de ahí sale el código
+ * estable P1..P8. Hasta el 2026-09-24 era una lista fija sin `deepseek`; desde
+ * entonces el integrador es una preferencia de Juan ("Proveedores al
+ * iniciar…"), así que el pool lo recibe quien llama (`index.ts` lo deriva de
+ * esa preferencia) en vez de estar escrito acá.
  */
-export const POOL_OPERADORES = [
-  "chatgpt",
-  "gemini",
-  "claude",
-  "grok",
-  "mistral",
-  "glm",
-  "kimi",
-  "qwen",
-] as const;
 
 /**
  * Arma y persiste los 8 cuerpos de una ronda. `respuestas` y `citas` son
@@ -66,6 +53,7 @@ export function armarCuerposDeRonda(
   ronda: Ronda,
   respuestas: readonly Respuesta[],
   citas: readonly Cita[],
+  pool: readonly string[],
 ): CuerposPorOperador {
   if (ronda.semilla === null) {
     throw new Error(
@@ -74,7 +62,7 @@ export function armarCuerposDeRonda(
   }
 
   const porProveedor = new Map(respuestas.map((r) => [r.proveedorId, r]));
-  const faltantes = POOL_OPERADORES.filter((id) => !porProveedor.has(id));
+  const faltantes = pool.filter((id) => !porProveedor.has(id));
   if (faltantes.length > 0) {
     throw new Error(`faltan respuestas del pool de operadores para armar el cuerpo: ${faltantes.join(", ")}`);
   }
@@ -86,7 +74,7 @@ export function armarCuerposDeRonda(
     citasPorRespuestaId.set(c.respuestaId, lista);
   }
 
-  const paraOperar = POOL_OPERADORES.map((id) => {
+  const paraOperar = pool.map((id) => {
     const r = porProveedor.get(id)!;
     return {
       proveedorId: id,
@@ -97,7 +85,7 @@ export function armarCuerposDeRonda(
     };
   });
 
-  return armarCuerposPorOperador(paraOperar, POOL_OPERADORES, hashSemilla(ronda.semilla), () => randomUUID());
+  return armarCuerposPorOperador(paraOperar, pool, hashSemilla(ronda.semilla), () => randomUUID());
 }
 
 /**
@@ -154,8 +142,9 @@ export function armarYPersistirCuerposDeRonda(
   ronda: Ronda,
   respuestas: readonly Respuesta[],
   citas: readonly Cita[],
+  pool: readonly string[],
 ): CuerposPorOperador {
-  const resultado = armarCuerposDeRonda(ronda, respuestas, citas);
+  const resultado = armarCuerposDeRonda(ronda, respuestas, citas, pool);
 
   const registro = leerRegistroDeArchivo(userData, conversacionId);
   const selloExistente = registro.hechos.filter((h): h is Sello => h.tipo === "sello" && h.rondaId === ronda.id);

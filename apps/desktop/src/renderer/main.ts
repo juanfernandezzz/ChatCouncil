@@ -155,10 +155,23 @@ function marcar(id: string, texto: string, clase: "" | "ok" | "mal" = ""): void 
 // investigador de la Parte 1, así que "Pegar pregunta en todos" nunca lo
 // toca y nunca recibe un ok/mal de difusión. Se lo etiqueta distinto para
 // que ese gris no se lea como un fallo.
-void Promise.all([window.cc.investigadores(), window.cc.integrador()]).then(([ids, integrador]) => {
-  for (const id of ids) marcar(id, id === integrador ? "en espera (integrador, no investiga)" : "en espera");
+let integradorId = "";
+
+/**
+ * 2026-09-24: los chips son los de los paneles CARGADOS en este momento. El
+ * integrador no se carga hasta "Pegar integrador" y se cierra al abrir una
+ * ronda nueva, así que su chip aparece y desaparece con su panel.
+ */
+async function refrescarChips(): Promise<void> {
+  const [ids, integrador] = await Promise.all([window.cc.investigadores(), window.cc.integrador()]);
+  integradorId = integrador;
+  for (const id of [...estadoPanel.keys()]) if (!ids.includes(id)) estadoPanel.delete(id);
+  for (const id of ids) {
+    if (!estadoPanel.has(id)) marcar(id, id === integrador ? "en espera (integrador, no investiga)" : "en espera");
+  }
   pintarPaneles();
-});
+}
+void refrescarChips();
 
 /** Vive sólo mientras la app está abierta: se vuelve a preguntar al reiniciar. */
 let noPreguntarMas = false;
@@ -178,6 +191,8 @@ const etiquetaEtapa = (etapa?: string): string => (etapa ? ` [etapa: ${etapa}]` 
 async function pegarPreguntaEnTodos(prompt: string): Promise<void> {
   decir("Pegando la pregunta en el consejo…");
   const rs = await window.cc.pegarPreguntaEnTodos(prompt);
+  // Una ronda nueva cierra el panel del integrador: su chip se va con él.
+  await refrescarChips();
   const bien = rs.filter((r) => r.ok);
   const mal = rs.filter((r) => !r.ok);
   for (const r of rs) {
@@ -389,8 +404,12 @@ $("armar-informe-final").addEventListener("click", () => {
  */
 $("pegar-integrador").addEventListener("click", () => {
   decir("Pegando el prompt del integrador…");
-  void window.cc.pegarIntegrador().then((r) => {
-    const id = r.operadorId ?? "deepseek";
+  void window.cc.pegarIntegrador().then(async (r) => {
+    // "Pegar integrador" abre su panel: aparece su chip, y la barra de scroll
+    // fino suma su panel al recorrido.
+    await refrescarChips();
+    void window.cc.posicion().then(pintarPosicion);
+    const id = r.operadorId ?? integradorId;
     if (r.ok) marcar(id, `listo · entrega ${r.entregaExacta ? "exacta" : "con diferencias"} (${r.caracteresPresentes}/${r.caracteresEscritos})`, r.entregaExacta ? "ok" : "mal");
     else marcar(id, r.error ?? "falló", "mal");
     pintarPaneles();

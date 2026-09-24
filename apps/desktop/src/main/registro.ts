@@ -134,6 +134,7 @@ export function escribirCondicionProveedoresCargados(
   conversacionId: string,
   rondaId: string,
   proveedores: readonly string[],
+  integrador: string,
 ): void {
   escribir(userData, conversacionId, {
     tipo: "condicion-proveedores-cargados",
@@ -141,6 +142,7 @@ export function escribirCondicionProveedoresCargados(
     id: randomUUID(),
     rondaId,
     proveedores: [...proveedores],
+    integrador,
     registradoEn: new Date().toISOString(),
   });
 }

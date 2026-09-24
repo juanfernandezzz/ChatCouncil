@@ -357,7 +357,17 @@ export interface CondicionProveedoresCargados {
   id: string;
   rondaId: string;
   proveedores: string[];
+  /** Integrador elegido al abrir la ronda (2026-09-24). Ausente en rondas anteriores. */
+  integrador?: string;
   registradoEn: string;
+}
+
+/** El integrador registrado al abrir la ronda, o `null` si la ronda es anterior a ese dato. */
+export function integradorDeRonda(hechos: readonly Hecho[], rondaId: string): string | null {
+  const c = hechos.filter(
+    (h): h is CondicionProveedoresCargados => h.tipo === "condicion-proveedores-cargados" && h.rondaId === rondaId,
+  );
+  return c[c.length - 1]?.integrador ?? null;
 }
 
 /** La condición más reciente de la ronda, o `null` si la ronda es anterior a este hecho. */

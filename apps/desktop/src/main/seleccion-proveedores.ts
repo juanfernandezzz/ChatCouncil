@@ -29,16 +29,34 @@ export function leerSeleccion(userData: string, conocidos: readonly string[]): s
   }
 }
 
+/** 2026-09-24: el integrador es una preferencia, con deepseek por defecto. */
+export const INTEGRADOR_POR_DEFECTO = "deepseek";
+export const ERROR_INTEGRADOR_DESMARCADO = "El integrador tiene que estar entre los proveedores cargados.";
+
+/** El integrador guardado, o el de por defecto si no hay archivo o no es un proveedor conocido. */
+export function leerIntegrador(userData: string, conocidos: readonly string[]): string {
+  const ruta = join(userData, ARCHIVO_SELECCION);
+  if (!existsSync(ruta)) return INTEGRADOR_POR_DEFECTO;
+  try {
+    const { integrador } = JSON.parse(readFileSync(ruta, "utf8")) as { integrador?: unknown };
+    return typeof integrador === "string" && conocidos.includes(integrador) ? integrador : INTEGRADOR_POR_DEFECTO;
+  } catch {
+    return INTEGRADOR_POR_DEFECTO;
+  }
+}
+
 export function guardarSeleccion(
   userData: string,
   conocidos: readonly string[],
   marcados: readonly string[],
+  integrador: string = INTEGRADOR_POR_DEFECTO,
 ): { ok: true } | { ok: false; error: string } {
   const validos = conocidos.filter((id) => marcados.includes(id));
   if (validos.length === 0) return { ok: false, error: ERROR_SELECCION_VACIA };
+  if (!validos.includes(integrador)) return { ok: false, error: ERROR_INTEGRADOR_DESMARCADO };
   writeFileSync(
     join(userData, ARCHIVO_SELECCION),
-    JSON.stringify({ proveedores: validos, guardadoEn: new Date().toISOString() }, null, 2),
+    JSON.stringify({ proveedores: validos, integrador, guardadoEn: new Date().toISOString() }, null, 2),
     "utf8",
   );
   return { ok: true };

@@ -32,7 +32,7 @@ import type {
   SalidaOperador,
   Sello,
 } from "@chatcouncil/domain";
-import { etapaDeRonda, preguntaEfectivaDeRonda, proveedoresCargadosDeRonda } from "@chatcouncil/domain";
+import { etapaDeRonda, integradorDeRonda, preguntaEfectivaDeRonda, proveedoresCargadosDeRonda } from "@chatcouncil/domain";
 import {
   armarCuerposPorOperador,
   armarPromptOperacion,
@@ -62,8 +62,8 @@ import {
   generarSemilla,
   leerRegistroDeArchivo,
 } from "./registro";
-import { guardarSeleccion, leerSeleccion } from "./seleccion-proveedores";
-import { armarCuerposDeRonda, armarYPersistirCuerposDeRonda, POOL_OPERADORES } from "./operador";
+import { guardarSeleccion, leerIntegrador, leerSeleccion } from "./seleccion-proveedores";
+import { armarCuerposDeRonda, armarYPersistirCuerposDeRonda } from "./operador";
 import {
   armarInformeFinalDeRonda,
   armarTablaYPromptIntegrador,
@@ -73,8 +73,6 @@ import {
   puedeEscribirPromptIntegrador,
 } from "./integrador";
 
-/** El noveno investigador (BLUEPRINT §1) es también el ÚNICO integrador — nunca opera, sólo informa. */
-const INTEGRADOR_ID = "deepseek";
 
 /**
  * DEJAR DE OCLUIR LOS PANELES QUE NO ESTÁN EN PANTALLA.
@@ -546,6 +544,30 @@ const ACTIVOS: readonly ProviderId[] =
   SELECCION.length > 0 ? INVESTIGADORES.filter((id) => SELECCION.includes(id)) : INVESTIGADORES;
 
 /**
+ * El INTEGRADOR (2026-09-24, decisión de Juan): deja de estar cableado a
+ * deepseek y pasa a ser una preferencia de "Proveedores al iniciar…", con
+ * deepseek por defecto. Nunca opera ni investiga: sólo lee la tabla de
+ * hallazgos y escribe el informe.
+ */
+const INTEGRADOR_ID = leerIntegrador(app.getPath("userData"), INVESTIGADORES) as ProviderId;
+
+/**
+ * El pool de investigadores y operadores: los nueve MENOS el integrador, en
+ * el orden fijo de los paneles (de ahí salen P1..P8). Se deriva del
+ * integrador elegido; ya no es una lista escrita a mano.
+ */
+const POOL_OPERADORES: readonly ProviderId[] = INVESTIGADORES.filter((id) => id !== INTEGRADOR_ID);
+
+/**
+ * El panel del integrador NO se carga durante las Partes 1 y 2 (decisión de
+ * Juan, 2026-09-24): se abre recién con "Pegar integrador" y se vuelve a
+ * cerrar al abrir una ronda nueva. Sólo en los modos de uso y en los que
+ * verifican ese camino; los modos de sondeo siguen abriendo todo.
+ */
+const CARGA_DIFERIDA_INTEGRADOR =
+  MODO === "normal" || MODO === "login" || MODO === "consolidar" || MODO === "integrador" || MODO === "test-visibilidad";
+
+/**
  * T7 (Fase 3) — "paneles abiertos" y "destinatarios de la difusión de la
  * etapa 1" son DOS COSAS DISTINTAS, y hasta esta corrección estaban
  * colapsadas en una sola lista (`ACTIVOS`). deepseek necesita su panel
@@ -918,12 +940,67 @@ function asegurarRondaAbierta(): { conv: string; ronda: string } {
   return { conv, ronda: rondaActualId };
 }
 
-/** Escribe la `Ronda` y, como condición suya, qué proveedores estaban cargados. */
+/**
+ * Escribe la `Ronda` y, como condición suya, qué proveedores estaban cargados
+ * y quién es el integrador. Una ronda nueva vuelve a cerrar el panel del
+ * integrador: aparece recién cuando le llega el turno.
+ */
 function abrirRonda(conv: string, prompt: string): string {
   const userData = app.getPath("userData");
   const id = escribirRonda(userData, conv, indiceRonda++, prompt, generarSemilla());
-  escribirCondicionProveedoresCargados(userData, conv, id, ACTIVOS);
+  escribirCondicionProveedoresCargados(userData, conv, id, ACTIVOS, INTEGRADOR_ID);
+  ocultarIntegrador();
   return id;
+}
+
+/** Crea la vista de UN proveedor, la agrega a la ventana y cuenta sus navegaciones. */
+function agregarVista(id: ProviderId): (typeof vistas)[number] {
+  const view = crearVista(id, PROVIDER_SPECS[id].newConversationUrl);
+  const vista = { id, view };
+  vistas.push(vista);
+  win?.contentView.addChildView(view);
+  // Continuidad se deriva de esto, no del texto: cada navegación —incluida
+  // una recarga, que navega al mismo URL— cuenta acá.
+  contadorNavegaciones.set(id, 0);
+  view.webContents.on("did-navigate", () => {
+    contadorNavegaciones.set(id, (contadorNavegaciones.get(id) ?? 0) + 1);
+  });
+  return vista;
+}
+
+/**
+ * Abre el panel del integrador si todavía no está, y espera a que monte su
+ * compositor (techo 45 s). `null` si el integrador no está entre los
+ * proveedores cargados.
+ */
+async function cargarIntegrador(): Promise<(typeof vistas)[number] | null> {
+  const existente = vistas.find((x) => x.id === INTEGRADOR_ID);
+  if (existente) return existente;
+  if (!win || !ACTIVOS.includes(INTEGRADOR_ID)) return null;
+  const v = agregarVista(INTEGRADOR_ID);
+  layout();
+  const selector = JSON.stringify(PROVIDER_SPECS[INTEGRADOR_ID].composer.selector);
+  const hasta = Date.now() + 45_000;
+  while (Date.now() < hasta) {
+    try {
+      if ((await v.view.webContents.executeJavaScript(`!!document.querySelector(${selector})`, true)) as boolean) break;
+    } catch {
+      /* la página todavía está cargando */
+    }
+    await new Promise((res) => setTimeout(res, 500));
+  }
+  return v;
+}
+
+/** Cierra el panel del integrador (ronda nueva): sale del recorrido y de los chips. */
+function ocultarIntegrador(): void {
+  if (!CARGA_DIFERIDA_INTEGRADOR) return;
+  const i = vistas.findIndex((x) => x.id === INTEGRADOR_ID);
+  if (i < 0) return;
+  const [v] = vistas.splice(i, 1);
+  win?.contentView.removeChildView(v!.view);
+  if (!v!.view.webContents.isDestroyed()) v!.view.webContents.close();
+  layout();
 }
 
 /**
@@ -1378,15 +1455,8 @@ function createWindow(): void {
   void uiView.webContents.loadFile(join(__dirname, "../renderer/index.html"));
 
   for (const id of ACTIVOS) {
-    const view = crearVista(id, PROVIDER_SPECS[id].newConversationUrl);
-    vistas.push({ id, view });
-    win.contentView.addChildView(view);
-    // Continuidad se deriva de esto, no del texto: cada navegación —incluida
-    // una recarga, que navega al mismo URL— cuenta acá.
-    contadorNavegaciones.set(id, 0);
-    view.webContents.on("did-navigate", () => {
-      contadorNavegaciones.set(id, (contadorNavegaciones.get(id) ?? 0) + 1);
-    });
+    if (CARGA_DIFERIDA_INTEGRADOR && id === INTEGRADOR_ID) continue;
+    agregarVista(id);
   }
 
   if (CON_CANDIDATOS) {
@@ -1763,18 +1833,20 @@ async function censoAlCerrar(): Promise<void> {
 }
 
 function registrarIpc(): void {
-  ipcMain.handle("cc:investigadores", () => ACTIVOS.slice());
+  ipcMain.handle("cc:investigadores", () => vistas.map((x) => x.id));
   ipcMain.handle("cc:armar-informe-final", () => armarInformeFinalDeRondaActiva());
   ipcMain.handle("cc:progreso-estado", () => ultimoProgreso);
   ipcMain.handle("cc:seleccion-leer", () => ({
     conocidos: [...INVESTIGADORES],
     marcados: leerSeleccion(app.getPath("userData"), INVESTIGADORES) ?? [...INVESTIGADORES],
+    integrador: leerIntegrador(app.getPath("userData"), INVESTIGADORES),
   }));
-  ipcMain.handle("cc:seleccion-guardar", (_e, marcados: unknown) =>
+  ipcMain.handle("cc:seleccion-guardar", (_e, marcados: unknown, integrador: unknown) =>
     guardarSeleccion(
       app.getPath("userData"),
       INVESTIGADORES,
       Array.isArray(marcados) ? marcados.filter((m): m is string => typeof m === "string") : [],
+      typeof integrador === "string" ? integrador : undefined,
     ),
   );
   /**
@@ -3301,7 +3373,7 @@ async function pegarOperacionEnTodos(): Promise<ResultadoConsolidar> {
 
   let resultadoArmado;
   try {
-    resultadoArmado = armarYPersistirCuerposDeRonda(userData, conversacionActual!, ronda, respuestas, citas);
+    resultadoArmado = armarYPersistirCuerposDeRonda(userData, conversacionActual!, ronda, respuestas, citas, POOL_OPERADORES);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e), paneles: [], navegacionesIntactas: true };
   }
@@ -3424,7 +3496,7 @@ async function pegarOperacionAqui(): Promise<ResultadoConsolidarUno> {
 
   let resultadoArmado;
   try {
-    resultadoArmado = armarCuerposDeRonda(ronda, respuestas, citas);
+    resultadoArmado = armarCuerposDeRonda(ronda, respuestas, citas, POOL_OPERADORES);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -3529,10 +3601,12 @@ async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
   const hallazgosPorSalida = salidas.map((s) => ({ operadorId: s.operadorId, hallazgos: hallazgosPorSalidaId.get(s.id) ?? [] }));
   const { prompt } = armarTablaYPromptIntegrador(pregunta, hallazgosPorSalida, POOL_OPERADORES, ronda.semilla);
 
-  const v = vistas.find((x) => x.id === INTEGRADOR_ID);
+  const v = await cargarIntegrador();
   if (!v) {
-    return { ok: false, error: "panel del integrador no abierto", caracteresEscritos: 0, caracteresPresentes: 0, entregaExacta: false, navegacionesIntactas: true, etapa };
+    return { ok: false, error: `el integrador (${INTEGRADOR_ID}) no está entre los proveedores cargados`, caracteresEscritos: 0, caracteresPresentes: 0, entregaExacta: false, navegacionesIntactas: true, etapa };
   }
+  // Su panel pasa a verse y queda al frente.
+  desplazarA(todas().findIndex((x) => x.id === v.id) * anchoPanel());
 
   const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS];
   const specJson = JSON.stringify(spec);
@@ -4186,6 +4260,7 @@ function armarInformeFinalDeRondaActiva(): { ok: boolean; mensaje: string; ruta?
     semilla,
     proveedoresCargados: proveedoresCargadosDeRonda(hechos, ronda.id),
     pool: POOL_OPERADORES,
+    integrador: integradorDeRonda(hechos, ronda.id),
   });
 
   const dir = join(userData, "informes");

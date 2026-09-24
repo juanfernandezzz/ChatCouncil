@@ -344,6 +344,30 @@ export interface PreguntaDeclarada {
   procedencia: "declarado-por-usuario";
 }
 
+/**
+ * Selección de proveedores al iniciar (2026-09-23, pedido de Juan): qué
+ * paneles estaban CARGADOS cuando se abrió la ronda. Es una condición de la
+ * ronda, no una preferencia: la preferencia vive en un archivo aparte fuera
+ * del registro; acá sólo queda lo que efectivamente estuvo cargado, para que
+ * el informe pueda decir si la ronda corrió con menos que el pool completo.
+ */
+export interface CondicionProveedoresCargados {
+  tipo: "condicion-proveedores-cargados";
+  esquema: number;
+  id: string;
+  rondaId: string;
+  proveedores: string[];
+  registradoEn: string;
+}
+
+/** La condición más reciente de la ronda, o `null` si la ronda es anterior a este hecho. */
+export function proveedoresCargadosDeRonda(hechos: readonly Hecho[], rondaId: string): string[] | null {
+  const c = hechos.filter(
+    (h): h is CondicionProveedoresCargados => h.tipo === "condicion-proveedores-cargados" && h.rondaId === rondaId,
+  );
+  return c.length === 0 ? null : c[c.length - 1]!.proveedores;
+}
+
 export type Hecho =
   | Conversacion
   | Ronda
@@ -356,7 +380,8 @@ export type Hecho =
   | InformeIntegrador
   | CondicionHerramientas
   | ErrorCaptura
-  | PreguntaDeclarada;
+  | PreguntaDeclarada
+  | CondicionProveedoresCargados;
 
 /**
  * EN QUÉ ETAPA está una ronda — T7, Fase 3. Deriva de HECHOS ya persistidos,
@@ -465,6 +490,7 @@ const TIPOS = new Set([
   "condicion-herramientas",
   "error-captura",
   "pregunta-declarada",
+  "condicion-proveedores-cargados",
 ]);
 
 export function leerRegistro(contenido: string): RegistroLeido {

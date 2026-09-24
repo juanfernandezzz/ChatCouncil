@@ -76,6 +76,12 @@ export interface InformeFinalInput {
   /** Ya formado como texto, con el detalle por panel — esta función no calcula integridad, sólo la muestra. */
   integridadEntrega: string;
   semilla: string;
+  /**
+   * Sólo cuando la ronda corrió con MENOS que el pool completo (selección de
+   * "Proveedores al iniciar…"): la lista de lo que estuvo cargado. `null` o
+   * ausente = pool completo, o ronda anterior a ese registro — no se imprime.
+   */
+  proveedoresCargadosIncompletos?: readonly string[] | null;
 }
 
 function marcarReferencias(texto: string, existentes: ReadonlySet<string>): string {
@@ -165,6 +171,9 @@ export function armarInformeFinal(input: InformeFinalInput): string {
     "|---|---|---|---|",
     tablaCondiciones,
     "",
+    ...(input.proveedoresCargadosIncompletos
+      ? ["Proveedores cargados en esta ronda:", ...input.proveedoresCargadosIncompletos.map((p) => `- ${p}`), ""]
+      : []),
     `**Integridad de entrega:** ${input.integridadEntrega}`,
     `**Semilla de la ronda:** ${input.semilla}`,
     "",

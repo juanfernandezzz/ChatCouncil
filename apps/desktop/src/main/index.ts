@@ -10,7 +10,7 @@
  * con 72 cookies sobreviviendo al cierre completo de la app.
  */
 
-import { app, BaseWindow, clipboard, Menu, WebContentsView, ipcMain, screen, session } from "electron";
+import { app, BaseWindow, BrowserWindow, clipboard, Menu, WebContentsView, ipcMain, screen, session } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -45,10 +45,12 @@ import {
   escribirIntentos,
   escribirPreguntaDeclarada,
   escribirRespuestas,
+  escribirCondicionProveedoresCargados,
   escribirRonda,
   generarSemilla,
   leerRegistroDeArchivo,
 } from "./registro";
+import { guardarSeleccion, leerSeleccion } from "./seleccion-proveedores";
 import { armarCuerposDeRonda, armarYPersistirCuerposDeRonda, POOL_OPERADORES } from "./operador";
 import {
   armarTablaYPromptIntegrador,
@@ -508,7 +510,20 @@ const SOLO_LISTA = ((ARGV.find((a) => a.startsWith("--cc-solo=")) ?? "").split("
  */
 const SOLO_CANDIDATOS = ARGV.includes("--cc-solo-candidatos") || process.env["CC_SOLO_CANDIDATOS"] === "1";
 
-const SELECCION: readonly string[] = SOLO_CANDIDATOS ? CANDIDATOS_SONDEO.map((c) => c.id) : SOLO_LISTA;
+/**
+ * "Proveedores al iniciar…" (menú Ver): la selección guardada en el archivo
+ * aparte. Sólo en los modos de uso de Juan —`normal` y `login`, que es el que
+ * abre `AbrirChatCouncil.cmd`—; los modos de diagnóstico siguen con su
+ * `--cc-solo` explícito. `--cc-solo` por línea de comando manda sobre el archivo.
+ */
+const SELECCION_ARCHIVO: readonly string[] =
+  MODO === "normal" || MODO === "login" ? (leerSeleccion(app.getPath("userData"), INVESTIGADORES) ?? []) : [];
+
+const SELECCION: readonly string[] = SOLO_CANDIDATOS
+  ? CANDIDATOS_SONDEO.map((c) => c.id)
+  : SOLO_LISTA.length > 0
+    ? SOLO_LISTA
+    : SELECCION_ARCHIVO;
 const SOLO = SELECCION.join(",");
 
 const ACTIVOS: readonly ProviderId[] =
@@ -799,7 +814,7 @@ async function difundirConRegistro(
 ): Promise<ResultadoEnvio[]> {
   const conv = asegurarConversacion(esPrueba);
   const resultados = await difundir(prompt, destinatarios);
-  rondaActualId = escribirRonda(app.getPath("userData"), conv, indiceRonda++, prompt, generarSemilla());
+  rondaActualId = abrirRonda(conv, prompt);
   escribirIntentos(app.getPath("userData"), conv, rondaActualId, resultados);
   registrarDiagnosticoEtiqueta("envio", resultados);
   return resultados;
@@ -882,9 +897,17 @@ const PROMPT_SIN_RONDA = "(capturado sin ronda de envio: el texto ya estaba en p
 function asegurarRondaAbierta(): { conv: string; ronda: string } {
   const conv = asegurarConversacion(false);
   if (!rondaActualId) {
-    rondaActualId = escribirRonda(app.getPath("userData"), conv, indiceRonda++, PROMPT_SIN_RONDA, generarSemilla());
+    rondaActualId = abrirRonda(conv, PROMPT_SIN_RONDA);
   }
   return { conv, ronda: rondaActualId };
+}
+
+/** Escribe la `Ronda` y, como condición suya, qué proveedores estaban cargados. */
+function abrirRonda(conv: string, prompt: string): string {
+  const userData = app.getPath("userData");
+  const id = escribirRonda(userData, conv, indiceRonda++, prompt, generarSemilla());
+  escribirCondicionProveedoresCargados(userData, conv, id, ACTIVOS);
+  return id;
 }
 
 /**
@@ -1722,6 +1745,17 @@ async function censoAlCerrar(): Promise<void> {
 
 function registrarIpc(): void {
   ipcMain.handle("cc:investigadores", () => ACTIVOS.slice());
+  ipcMain.handle("cc:seleccion-leer", () => ({
+    conocidos: [...INVESTIGADORES],
+    marcados: leerSeleccion(app.getPath("userData"), INVESTIGADORES) ?? [...INVESTIGADORES],
+  }));
+  ipcMain.handle("cc:seleccion-guardar", (_e, marcados: unknown) =>
+    guardarSeleccion(
+      app.getPath("userData"),
+      INVESTIGADORES,
+      Array.isArray(marcados) ? marcados.filter((m): m is string => typeof m === "string") : [],
+    ),
+  );
   /**
    * Cambio 6 — el renderer necesita saber CUÁL de los `ACTIVOS` es el
    * integrador (deepseek) para explicar por qué ese panel queda en gris:
@@ -3923,6 +3957,19 @@ async function modoSesion(): Promise<void> {
  * cortar/copiar/pegar/deshacer sí funcionan porque esos roles se resuelven
  * contra el `webContents` con foco de teclado, no contra la ventana.
  */
+/** Ventana chica de "Proveedores al iniciar…". No abre ni cierra paneles: sólo edita el archivo aparte. */
+function abrirSeleccionProveedores(): void {
+  const w = new BrowserWindow({
+    width: 440,
+    height: 560,
+    title: "Proveedores al iniciar",
+    autoHideMenuBar: true,
+    resizable: false,
+    webPreferences: { preload: join(__dirname, "../preload/ui.cjs"), sandbox: true },
+  });
+  void w.loadFile(join(__dirname, "../renderer/seleccion.html"));
+}
+
 function construirMenu(): void {
   const recargarPanelActual = (forzar: boolean): void => {
     const v = vistaEnFrente();
@@ -3966,6 +4013,8 @@ function construirMenu(): void {
             });
           },
         },
+        { type: "separator" },
+        { label: "Proveedores al iniciar…", click: abrirSeleccionProveedores },
         { type: "separator" },
         { role: "resetZoom" },
         { role: "zoomIn" },

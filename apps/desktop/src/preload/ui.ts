@@ -57,6 +57,10 @@ contextBridge.exposeInMainWorld("cc", {
    * no es el panel visible). Antes sólo alcanzable por `--cc-integrador=<id>`.
    */
   pegarIntegrador: (): Promise<ResultadoIntegrador> => ipcRenderer.invoke("cc:pegar-integrador"),
+  /** Ventana "Proveedores al iniciar": lee/guarda el archivo aparte de selección. Se aplica al reiniciar. */
+  seleccionLeer: (): Promise<{ conocidos: string[]; marcados: string[] }> => ipcRenderer.invoke("cc:seleccion-leer"),
+  seleccionGuardar: (marcados: string[]): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("cc:seleccion-guardar", marcados),
 });
 
 interface ResultadoConsolidarPanel {

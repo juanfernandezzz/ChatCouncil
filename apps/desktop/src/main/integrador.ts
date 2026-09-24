@@ -167,7 +167,13 @@ export function armarInformeFinalDeRonda(params: {
   resultadosOperadores: readonly ResultadoOperador[];
   integridadEntrega: string;
   semilla: string;
+  /** `proveedoresCargadosDeRonda` del registro; `null` si la ronda es anterior a ese hecho. */
+  proveedoresCargados?: readonly string[] | null;
+  pool?: readonly string[];
 }): string {
+  const cargados = params.proveedoresCargados ?? null;
+  const incompletos =
+    cargados !== null && (params.pool ?? []).some((id) => !cargados.includes(id)) ? cargados : null;
   const proveedorDeCodigoEstable = new Map(params.sello.map((s) => [s.codigoEstable, s.panelSourceId]));
 
   const hallazgosResueltos: HallazgoResuelto[] = params.tabla.filas.map((f: FilaTabla) => ({
@@ -211,6 +217,7 @@ export function armarInformeFinalDeRonda(params: {
     condiciones,
     integridadEntrega: params.integridadEntrega,
     semilla: params.semilla,
+    proveedoresCargadosIncompletos: incompletos,
   });
 }
 

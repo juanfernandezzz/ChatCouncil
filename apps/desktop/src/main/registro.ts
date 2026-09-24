@@ -22,6 +22,7 @@ import {
   VERSION_ESQUEMA,
   type Cita,
   type CondicionHerramientas,
+  type CondicionProveedoresCargados,
   type Conversacion,
   type ErrorCaptura,
   type EtapaRonda,
@@ -72,7 +73,8 @@ function escribir(
     | InformeIntegrador
     | CondicionHerramientas
     | ErrorCaptura
-    | PreguntaDeclarada,
+    | PreguntaDeclarada
+    | CondicionProveedoresCargados,
 ): void {
   appendFileSync(rutaArchivo(userData, conversacionId), aLinea(hecho) + "\n", "utf8");
 }
@@ -124,6 +126,23 @@ export function escribirRonda(
   };
   escribir(userData, conversacionId, hecho);
   return id;
+}
+
+/** Qué proveedores estaban cargados al abrir la ronda (ver `CondicionProveedoresCargados`). */
+export function escribirCondicionProveedoresCargados(
+  userData: string,
+  conversacionId: string,
+  rondaId: string,
+  proveedores: readonly string[],
+): void {
+  escribir(userData, conversacionId, {
+    tipo: "condicion-proveedores-cargados",
+    esquema: VERSION_ESQUEMA,
+    id: randomUUID(),
+    rondaId,
+    proveedores: [...proveedores],
+    registradoEn: new Date().toISOString(),
+  });
 }
 
 /** Un intento por proveedor, INCLUIDOS los que fallaron: un envío fallido es un hecho. */

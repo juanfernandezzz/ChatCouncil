@@ -213,6 +213,33 @@ function leerCompositor(el: Element | null, kind: PageSpec["composer"]["kind"]):
  */
 type Escritura = "insertText" | "pegado" | "lineaSuave" | "lineaParrafo";
 
+/**
+ * Parte el texto en tramos de hasta `max` caracteres, cortando en saltos de
+ * línea (una línea más larga que `max` se corta donde caiga). Concatenados,
+ * los tramos reconstruyen el texto exacto: el salto entre dos tramos va al
+ * PRINCIPIO del tramo siguiente.
+ */
+function tramosDePegado(text: string, max: number): string[] {
+  const tramos: string[] = [];
+  let actual = "";
+  for (const [i, linea] of text.split("\n").entries()) {
+    const pieza = i === 0 ? linea : `\n${linea}`;
+    // Sólo se corta ANTES de una línea con texto: un tramo que empieza con una
+    // línea en blanco la perdía (medido en chatgpt: 5 líneas en blanco menos).
+    if (actual.length > 0 && actual.length + pieza.length > max && linea.length > 0) {
+      tramos.push(actual);
+      actual = "";
+    }
+    actual += pieza;
+    while (actual.length > max) {
+      tramos.push(actual.slice(0, max));
+      actual = actual.slice(max);
+    }
+  }
+  if (actual.length > 0) tramos.push(actual);
+  return tramos;
+}
+
 async function writePrompt(
   el: Element,
   kind: PageSpec["composer"]["kind"],
@@ -234,9 +261,27 @@ async function writePrompt(
   sel?.addRange(range);
   if (escritura === "pegado") {
     // Lo que el editor ya sabe hacer cuando una persona pega varias líneas.
-    const dt = new DataTransfer();
-    dt.setData("text/plain", text);
-    host.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+    // EN TRAMOS de hasta 1.000 caracteres, cortados en saltos de línea: medido
+    // en claude, un solo pegado de ~92.000 caracteres dejó el compositor VACÍO
+    // (0 de 91.859), con o sin ventana modal, mientras que el de 3 líneas
+    // entraba exacto. Cada tramo después del primero empieza con el salto que
+    // lo separa del anterior, así el editor abre el párrafo siguiente.
+    // Un compositor "vacío" puede tener párrafos vacíos (medido en kimi: el
+    // texto quedaba con una línea en blanco adelante). El borrado nativo
+    // sobre la selección los deja en uno solo, y el pegado arranca con el
+    // cursor al principio de ese primer párrafo.
+    document.execCommand("delete", false);
+    const primero = host.firstElementChild ?? host;
+    const inicio = document.createRange();
+    inicio.setStart(primero, 0);
+    inicio.collapse(true);
+    sel?.removeAllRanges();
+    sel?.addRange(inicio);
+    for (const tramo of tramosDePegado(text, 1_000)) {
+      const dt = new DataTransfer();
+      dt.setData("text/plain", tramo);
+      host.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+    }
   } else {
     const salto = escritura === "lineaParrafo" ? "insertParagraph" : "insertLineBreak";
     const lineas = text.split("\n");
@@ -919,8 +964,14 @@ async function vaciarCompositorMedicion(composer: Element, kind: PageSpec["compo
   for (let intento = 0; intento < 3; intento++) {
     (composer as HTMLElement).focus();
     if (kind === "textarea") {
-      (composer as HTMLTextAreaElement).value = "";
-      composer.dispatchEvent(new Event("input", { bubbles: true }));
+      // Primero por el propio editor (select + delete): una asignación directa
+      // de `value` no le avisa al framework, y el borrador guardado sobrevive.
+      (composer as HTMLTextAreaElement).select();
+      document.execCommand("delete", false);
+      if (leer().length > 0) {
+        (composer as HTMLTextAreaElement).value = "";
+        composer.dispatchEvent(new Event("input", { bubbles: true }));
+      }
     } else {
       try {
         const sel = window.getSelection();
@@ -939,6 +990,10 @@ async function vaciarCompositorMedicion(composer: Element, kind: PageSpec["compo
       } catch {
         /* idem */
       }
+      // Cada vía se deja asentar antes de mirar: el editor aplica el borrado en
+      // un frame posterior, y mirar en el mismo tick pasaba a la vía siguiente
+      // (medido en kimi: la vía de más abajo terminaba reponiendo el texto).
+      await sleep(150);
       if (leer().length > 0) {
         try {
           document.execCommand("selectAll", false);
@@ -946,6 +1001,7 @@ async function vaciarCompositorMedicion(composer: Element, kind: PageSpec["compo
         } catch {
           /* idem */
         }
+        await sleep(150);
       }
       if (leer().length > 0) {
         // `replaceChildren()` y no `innerHTML = ""`: medido el 2026-09-24, una

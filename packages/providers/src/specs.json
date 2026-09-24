@@ -152,7 +152,7 @@
     },
     "grok": {
       "newConversationUrl": "https://grok.com/",
-      "escritura": "pegado",
+      "escritura": "lineaParrafo",
       "composer": {
         "selector": "div[aria-label=\"Ask Grok anything\"]",
         "kind": "contenteditable"
@@ -186,7 +186,7 @@
     },
     "mistral": {
       "newConversationUrl": "https://chat.mistral.ai/",
-      "escritura": "pegado",
+      "escritura": "lineaParrafo",
       "composer": {
         "selector": "div.ProseMirror",
         "kind": "contenteditable"

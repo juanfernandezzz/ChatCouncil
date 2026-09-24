@@ -1765,6 +1765,7 @@ async function censoAlCerrar(): Promise<void> {
 function registrarIpc(): void {
   ipcMain.handle("cc:investigadores", () => ACTIVOS.slice());
   ipcMain.handle("cc:armar-informe-final", () => armarInformeFinalDeRondaActiva());
+  ipcMain.handle("cc:progreso-estado", () => ultimoProgreso);
   ipcMain.handle("cc:seleccion-leer", () => ({
     conocidos: [...INVESTIGADORES],
     marcados: leerSeleccion(app.getPath("userData"), INVESTIGADORES) ?? [...INVESTIGADORES],
@@ -2950,7 +2951,18 @@ const REQUISITOS_PROMPT_OPERACION = [
   "LA PREGUNTA ORIGINAL FUE:",
 ] as const;
 
-function verificarPromptCompleto(texto: string): { completo: boolean; faltantes: string[] } {
+/**
+ * Las marcas se intercalan cada 1.000 caracteres sin mirar dónde caen
+ * (`insertarMarcasIntercaladas`), así que pueden partir una de estas cadenas
+ * al medio (medido: "LIMITACION:CORPUS" en el prompt de chatgpt). Se
+ * comprueba sobre el texto SIN las marcas.
+ */
+function sinMarcas(texto: string): string {
+  return texto.replace(/\n\[\[CC-MARCA-[^\]\n]*\]\]\n?/g, "");
+}
+
+function verificarPromptCompleto(textoConMarcas: string): { completo: boolean; faltantes: string[] } {
+  const texto = sinMarcas(textoConMarcas);
   const faltantes = REQUISITOS_PROMPT_OPERACION.filter((s) => !texto.includes(s)) as unknown as string[];
   return { completo: faltantes.length === 0, faltantes };
 }
@@ -2970,7 +2982,9 @@ function armarPromptDeOperacionConMarcas(
   const token = randomUUID();
   const { textoConMarcas, marcas } = insertarMarcasIntercaladas(promptSinMarcas, token);
   const marcaFin = `[[CC-MARCA-FIN-${token}]]`;
-  return { texto: `${textoConMarcas}\n${marcaFin}\n`, marcas: [...marcas, marcaFin] };
+  // Sin salto final: es formato nuestro, no del prompt, y cada editor lo trata
+  // distinto (medido: kimi lo descartaba, chatgpt agregaba una línea).
+  return { texto: `${textoConMarcas}\n${marcaFin}`, marcas: [...marcas, marcaFin] };
 }
 
 /**
@@ -3052,8 +3066,46 @@ async function consolidarUnPanel(
   // del mismo panel, y la exclusión de autoevaluación de
   // `cuerpo-operador.ts` queda NOMINAL — el operador la lee igual, fuera
   // del cuerpo que se le arma. Ver `nuevoChatPara`.
-  // Cierre de Fase 3, objetivo B: sin `alFrente`. Con los nueve paneles
-  // "visible" (objetivo A), escribir no necesita traer el panel al frente.
+  // Cierre de Fase 3, objetivo 2 (decisión de Juan): SECUENCIAL y con el
+  // panel al frente — la única forma medida que dio 8 de 8 con ~90.000
+  // caracteres. Todo el recorrido del panel corre al frente.
+  return alFrente(v, () => consolidarUnPanelAlFrente(v, operadorId, textoAEscribir, marcasDeEsteOperador));
+}
+
+/**
+ * Espera a que el compositor quede VACÍO Y ESTABLE después de "Nuevo chat":
+ * tres lecturas vacías seguidas, cada 300 ms, con techo de 10 s. Un editor
+ * puede restaurar un borrador propio de forma asincrónica después de navegar
+ * (hipótesis sobre kimi): escribir antes mezcla ese borrador con el prompt.
+ * Nunca borra lo que aparezca: si no queda vacío, el panel falla y lo dice.
+ */
+async function esperarCompositorVacioEstable(v: (typeof vistas)[number]): Promise<boolean> {
+  const specJson = JSON.stringify(PROVIDER_SPECS[v.id]);
+  const hasta = Date.now() + 10_000;
+  let vaciasSeguidas = 0;
+  while (Date.now() < hasta) {
+    let texto: string | null;
+    try {
+      texto = (await v.view.webContents.executeJavaScript(
+        `window.__ccProvider.leerTextoCompositor(${specJson})`,
+        true,
+      )) as string | null;
+    } catch {
+      texto = null;
+    }
+    vaciasSeguidas = texto !== null && texto.trim().length === 0 ? vaciasSeguidas + 1 : 0;
+    if (vaciasSeguidas >= 3) return true;
+    await new Promise((res) => setTimeout(res, 300));
+  }
+  return false;
+}
+
+async function consolidarUnPanelAlFrente(
+  v: (typeof vistas)[number],
+  operadorId: string,
+  textoAEscribir: string,
+  marcasDeEsteOperador: string[],
+): Promise<ResultadoConsolidarPanel> {
   const lineasPrompt = textoAEscribir.replace(/\r\n/g, "\n").split("\n").length;
   const chatNuevo = await nuevoChatPara(v);
   if (!chatNuevo.ok) {
@@ -3076,6 +3128,24 @@ async function consolidarUnPanel(
   // `quedoLimpio: false` NO aborta: es un HALLAZGO sobre ese proveedor
   // (a documentar en docs/LIMITACIONES.md), no un fallo del mecanismo —
   // se sigue escribiendo el cuerpo igual, y el resultado lo declara.
+
+  if (!(await esperarCompositorVacioEstable(v))) {
+    return {
+      operadorId,
+      ok: false,
+      error: "el compositor no quedó vacío tras el chat nuevo (10 s): no se escribe encima",
+      estadoIntegridad: "indeterminado",
+      marcasEsperadas: marcasDeEsteOperador.length,
+      marcasPresentes: 0,
+      promptCompleto: false,
+      faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
+      lineasPrompt,
+      lineasCompositor: 0,
+      igualCaracterPorCaracter: false,
+      interrumpido: false,
+      chatNuevoOk: chatNuevo.quedoLimpio,
+    };
+  }
 
   const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS];
   const specJson = JSON.stringify(spec);
@@ -3153,6 +3223,70 @@ async function consolidarUnPanel(
   }
 }
 
+/** Objetivo 3 — nombres de panel en la ventana de progreso, en este orden y con esta escritura. */
+const NOMBRE_PANEL: Record<string, string> = {
+  chatgpt: "ChatGPT",
+  gemini: "Gemini",
+  claude: "Claude",
+  grok: "Grok",
+  mistral: "Mistral",
+  glm: "GLM",
+  kimi: "Kimi",
+  qwen: "Qwen",
+};
+
+interface EstadoProgreso {
+  inicio: number;
+  /** Panel en curso, 1..8; `null` antes de empezar o al terminar. */
+  actual: number | null;
+  /** Nombre del panel en curso. */
+  enCurso?: string;
+  paneles: { id: string; nombre: string; estado: string }[];
+  /** Milisegundos de cada panel YA terminado en esta corrida (para la estimación). */
+  duraciones: number[];
+  terminado: boolean;
+}
+
+let ventanaProgreso: BrowserWindow | null = null;
+let ultimoProgreso: EstadoProgreso | null = null;
+
+/**
+ * Objetivo 3 — ventana de progreso de "Pegar operación en todos": hija MODAL
+ * de la ventana principal, siempre encima, sin botón de cerrar mientras
+ * corre. Modal deja la ventana principal deshabilitada: Juan no puede
+ * cambiar de panel ni hacer clic ahí mientras se escribe.
+ */
+function abrirVentanaProgreso(estado: EstadoProgreso): void {
+  ultimoProgreso = estado;
+  if (!win) return;
+  ventanaProgreso?.destroy();
+  ventanaProgreso = new BrowserWindow({
+    parent: win,
+    modal: true,
+    alwaysOnTop: true,
+    width: 480,
+    height: 420,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: false,
+    autoHideMenuBar: true,
+    title: "Pegando la operación",
+    webPreferences: { preload: join(__dirname, "../preload/ui.cjs"), sandbox: true },
+  });
+  ventanaProgreso.on("closed", () => {
+    ventanaProgreso = null;
+  });
+  void ventanaProgreso.loadFile(join(__dirname, "../renderer/progreso.html"));
+}
+
+function actualizarProgreso(estado: EstadoProgreso): void {
+  ultimoProgreso = estado;
+  // Al terminar vuelve a poder cerrarse: aparece "Cerrar" en la ventana.
+  if (estado.terminado) ventanaProgreso?.setClosable(true);
+  ventanaProgreso?.webContents.send("cc:progreso", estado);
+}
+
 async function pegarOperacionEnTodos(): Promise<ResultadoConsolidar> {
   const prep = prepararRondaParaOperar();
   if (!prep.ok) {
@@ -3168,52 +3302,67 @@ async function pegarOperacionEnTodos(): Promise<ResultadoConsolidar> {
     return { ok: false, error: e instanceof Error ? e.message : String(e), paneles: [], navegacionesIntactas: true };
   }
 
-  // Cierre de Fase 3, objetivo B (decisión de Juan): los ocho EN PARALELO.
-  // Cada panel corre su propia cadena —"Nuevo chat", y recién cuando SU chat
-  // nuevo quedó vacío, la escritura— sin esperar a los demás ni pasar al
-  // frente. La guardia "el usuario desplazó la fila" era de la secuencia (se
-  // chequeaba antes del panel siguiente); en paralelo no hay panel siguiente.
+  // Cierre de Fase 3, objetivo 2 (decisión de Juan): SECUENCIAL, con cada
+  // panel al frente (ver `consolidarUnPanel`). Mientras corre, la ventana de
+  // progreso (objetivo 3) informa panel, estado y tiempo.
   const navAntes = new Map(POOL_OPERADORES.map((id) => [id, contadorNavegaciones.get(id) ?? 0]));
   const total = resultadoArmado.cuerpos.length;
-  let terminados = 0;
   estadoConsolidacion = { enCurso: true, indice: 0, total, operadorId: null };
-  let paneles: ResultadoConsolidarPanel[];
+  const progreso: EstadoProgreso = {
+    inicio: Date.now(),
+    actual: null,
+    paneles: POOL_OPERADORES.map((id) => ({ id, nombre: NOMBRE_PANEL[id] ?? id, estado: "pendiente" })),
+    duraciones: [],
+    terminado: false,
+  };
+  abrirVentanaProgreso(progreso);
+  const paneles: ResultadoConsolidarPanel[] = [];
   try {
-    paneles = await Promise.all(
-      resultadoArmado.cuerpos.map(async (cuerpoOperador) => {
-        // T14 (Cambio 1) — el prompt completo de ESTE operador, con sus
-        // propias marcas de integridad intercaladas sobre el texto final
-        // entero (pregunta + instrucciones + las 7 respuestas), no sólo sobre
-        // el cuerpo de respuestas.
-        const { texto: textoAEscribir, marcas: marcasDeEsteOperador } = armarPromptDeOperacionConMarcas(
-          pregunta,
-          cuerpoOperador,
-        );
-        const v = vistas.find((x) => x.id === cuerpoOperador.operadorId);
-        const panel: ResultadoConsolidarPanel = v
-          ? await consolidarUnPanel(v, cuerpoOperador.operadorId, textoAEscribir, marcasDeEsteOperador)
-          : {
-              operadorId: cuerpoOperador.operadorId,
-              ok: false,
-              error: "panel no abierto",
-              estadoIntegridad: "indeterminado",
-              marcasEsperadas: marcasDeEsteOperador.length,
-              marcasPresentes: 0,
-              promptCompleto: false,
-              faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
-              lineasPrompt: textoAEscribir.split("\n").length,
-              lineasCompositor: 0,
-              igualCaracterPorCaracter: false,
-              interrumpido: false,
-              chatNuevoOk: false,
-            };
-        terminados++;
-        estadoConsolidacion = { enCurso: true, indice: terminados, total, operadorId: cuerpoOperador.operadorId };
-        return panel;
-      }),
-    );
+    for (let i = 0; i < total; i++) {
+      const cuerpoOperador = resultadoArmado.cuerpos[i]!;
+      estadoConsolidacion = { enCurso: true, indice: i + 1, total, operadorId: cuerpoOperador.operadorId };
+      const fila = progreso.paneles.find((x) => x.id === cuerpoOperador.operadorId);
+      progreso.actual = i + 1;
+      progreso.enCurso = fila?.nombre ?? cuerpoOperador.operadorId;
+      if (fila) fila.estado = "escribiendo…";
+      actualizarProgreso(progreso);
+      const t0 = Date.now();
+      // T14 (Cambio 1) — el prompt completo de ESTE operador, con sus
+      // propias marcas de integridad intercaladas sobre el texto final
+      // entero (pregunta + instrucciones + las 7 respuestas), no sólo sobre
+      // el cuerpo de respuestas.
+      const { texto: textoAEscribir, marcas: marcasDeEsteOperador } = armarPromptDeOperacionConMarcas(
+        pregunta,
+        cuerpoOperador,
+      );
+      const v = vistas.find((x) => x.id === cuerpoOperador.operadorId);
+      const panel: ResultadoConsolidarPanel = v
+        ? await consolidarUnPanel(v, cuerpoOperador.operadorId, textoAEscribir, marcasDeEsteOperador)
+        : {
+            operadorId: cuerpoOperador.operadorId,
+            ok: false,
+            error: "panel no abierto",
+            estadoIntegridad: "indeterminado",
+            marcasEsperadas: marcasDeEsteOperador.length,
+            marcasPresentes: 0,
+            promptCompleto: false,
+            faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
+            lineasPrompt: textoAEscribir.split("\n").length,
+            lineasCompositor: 0,
+            igualCaracterPorCaracter: false,
+            interrumpido: false,
+            chatNuevoOk: false,
+          };
+      paneles.push(panel);
+      progreso.duraciones.push(Date.now() - t0);
+      if (fila) fila.estado = panel.ok ? "listo" : `falló: ${panel.error ?? "sin detalle"}`;
+      actualizarProgreso(progreso);
+    }
   } finally {
     estadoConsolidacion = { enCurso: false, indice: 0, total: 0, operadorId: null };
+    progreso.terminado = true;
+    progreso.actual = null;
+    actualizarProgreso(progreso);
   }
 
   // "Nuevo chat" navega a propósito (una vez por panel); lo que se verifica

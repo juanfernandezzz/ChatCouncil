@@ -59,6 +59,11 @@ contextBridge.exposeInMainWorld("cc", {
   pegarIntegrador: (): Promise<ResultadoIntegrador> => ipcRenderer.invoke("cc:pegar-integrador"),
   /** Objetivo E — arma el informe final de la ronda activa y lo guarda en `informes/`. */
   armarInformeFinal: (): Promise<{ ok: boolean; mensaje: string; ruta?: string }> => ipcRenderer.invoke("cc:armar-informe-final"),
+  /** Objetivo 3 — ventana de progreso de "Pegar operación en todos": estado actual y actualizaciones. */
+  progresoEstado: (): Promise<unknown> => ipcRenderer.invoke("cc:progreso-estado"),
+  alProgreso: (fn: (estado: unknown) => void): void => {
+    ipcRenderer.on("cc:progreso", (_e, estado: unknown) => fn(estado));
+  },
   /** Objetivo D — el menú "Ventana" pide acá que se corra la acción de un solo panel. */
   alMenu: (fn: (accion: string) => void): void => {
     ipcRenderer.on("cc:menu", (_e, accion: string) => fn(accion));

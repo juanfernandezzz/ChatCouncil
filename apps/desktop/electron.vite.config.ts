@@ -34,6 +34,7 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, "src/renderer/index.html"),
           seleccion: resolve(__dirname, "src/renderer/seleccion.html"),
+          progreso: resolve(__dirname, "src/renderer/progreso.html"),
         },
       },
     },

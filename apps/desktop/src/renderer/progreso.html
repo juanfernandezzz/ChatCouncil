@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pegando la operación</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; padding: 14px 18px; font: 13.5px/1.45 system-ui, sans-serif; background: #1a1714; color: #e8e2d9; }
+      p { margin: 0 0 8px; opacity: .85; }
+      #progreso { margin: 10px 0 2px; font-weight: 600; }
+      #tiempos { margin-bottom: 8px; opacity: .85; white-space: pre-line; }
+      #lista { margin: 0 0 8px; padding: 0; list-style: none; }
+      #lista li { padding: 1px 0; }
+      .listo { color: #9bbf8a; } .fallo { color: #d98c7a; }
+      #aviso { margin: 6px 0; }
+      button { padding: 6px 16px; background: #5a4a33; color: inherit; border: 1px solid #6d5a3e; border-radius: 6px; cursor: pointer; font: inherit; }
+    </style>
+  </head>
+  <body>
+    <p>Escribiendo el prompt de operación en los ocho paneles, uno por uno.</p>
+    <p>No toques la ventana de ChatCouncil hasta que esto termine: si cambiás de
+panel o hacés clic en ella, la escritura se puede cortar.</p>
+    <p>Nada se envía. Cuando termine, vas a revisar y enviar cada panel a mano.</p>
+    <div id="progreso"></div>
+    <div id="tiempos"></div>
+    <ul id="lista"></ul>
+    <div id="aviso" hidden>Los paneles que fallaron se pueden rehacer desde el menú Ventana → Pegar
+operación en este panel.</div>
+    <button id="cerrar" hidden>Cerrar</button>
+    <script type="module">
+      const $ = (id) => document.getElementById(id);
+      const mmss = (ms) => {
+        const s = Math.max(0, Math.round(ms / 1000));
+        return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+      };
+      let estado = null;
+      function pintar() {
+        if (!estado) return;
+        const total = estado.paneles.length;
+        if (estado.terminado) {
+          const listos = estado.paneles.filter((p) => p.estado === "listo").length;
+          $("progreso").textContent = `Terminado. ${listos} de ${total} paneles listos.`;
+          $("aviso").hidden = listos === total;
+          $("cerrar").hidden = false;
+        } else if (estado.actual) {
+          $("progreso").textContent = `Panel ${estado.actual} de ${total}: ${estado.enCurso}`;
+        }
+        // Estimación: promedio de los paneles YA terminados en esta corrida × los que faltan.
+        const hechos = estado.duraciones.length;
+        const restante = hechos === 0
+          ? "calculando…"
+          : mmss((estado.duraciones.reduce((a, b) => a + b, 0) / hechos) * (total - hechos));
+        $("tiempos").textContent = estado.terminado
+          ? `Tiempo transcurrido: ${mmss(estado.fin - estado.inicio)}`
+          : `Tiempo transcurrido: ${mmss(Date.now() - estado.inicio)}\nTiempo restante estimado: ${restante}`;
+        $("lista").replaceChildren(
+          ...estado.paneles.map((p) => {
+            const li = document.createElement("li");
+            li.textContent = `${p.nombre}: ${p.estado}`;
+            if (p.estado === "listo") li.className = "listo";
+            if (p.estado.startsWith("falló")) li.className = "fallo";
+            return li;
+          }),
+        );
+      }
+      window.cc.alProgreso((e) => {
+        estado = { ...e, fin: e.terminado ? (estado?.fin ?? Date.now()) : undefined };
+        pintar();
+      });
+      const inicial = await window.cc.progresoEstado();
+      if (inicial && !estado) estado = { ...inicial, fin: inicial.terminado ? Date.now() : undefined };
+      pintar();
+      setInterval(() => { if (estado && !estado.terminado) pintar(); }, 1000);
+      $("cerrar").onclick = () => window.close();
+    </script>
+  </body>
+</html>

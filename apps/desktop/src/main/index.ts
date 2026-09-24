@@ -3163,9 +3163,13 @@ async function consolidarUnPanelAlFrente(
         ),
       ),
     ])) as { ok: boolean; error?: string; textoFinal: string };
-    const final = r.textoFinal.replace(/\r\n/g, "\n");
+    // Criterio de igualdad de escritura (decisión de Juan, 2026-09-24): se
+    // normaliza `\r\n` a `\n` y U+00A0 a espacio, en los ocho paneles. Ver
+    // docs/BLUEPRINT.md y docs/LIMITACIONES.md (chatgpt, espacio duro).
+    const normalizar = (t: string): string => t.replace(/\r\n/g, "\n").replace(/ /g, " ");
+    const final = normalizar(r.textoFinal);
     const lineasCompositor = final.length === 0 ? 0 : final.split("\n").length;
-    const igualCaracterPorCaracter = final === textoAEscribir.replace(/\r\n/g, "\n");
+    const igualCaracterPorCaracter = final === normalizar(textoAEscribir);
     const integridad = evaluarIntegridad(r.textoFinal, marcasDeEsteOperador);
     // Cambio 2 — SEGUNDA comprobación, independiente de las marcas: el
     // criterio viejo ("N de N marcas presentes") verifica la FORMA del

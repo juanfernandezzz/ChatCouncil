@@ -2426,6 +2426,13 @@ de esta lista la corrige. Queda como una condición del turno que T6/T7
 tienen que poder mostrar, no resolver — es exactamente la distinción entre
 "declarar" y "corregir" que ya se fijó al medirla.
 
+Criterio de igualdad de escritura: el texto del compositor se compara con el
+original normalizando `\r\n` a `\n` y U+00A0 a espacio. Decisión de Juan,
+2026-09-24: chatgpt convierte unos 200 espacios en espacio duro con los tres
+métodos probados, y esa diferencia no afecta el parseo — ninguna categoría,
+eje, etiqueta, subtipo de limitación ni marca de integridad contiene espacios
+que el parseo lea; el separador de campos es `|`.
+
 ### Fase 5 — Exportación ⏳
 Salidas citables con el original, la vista derivada y la procedencia.
 

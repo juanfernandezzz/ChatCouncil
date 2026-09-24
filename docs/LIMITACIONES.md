@@ -323,6 +323,11 @@ en este repositorio.
   de versión posible ahí. *Spec: MEDIDA, 2026-08-23. Envío automático:
   PENDIENTE de la primera ronda real que lo incluya.*
 
+- chatgpt convierte unos 200 espacios del prompt de operación en espacio
+  duro (U+00A0). Medido el 2026-09-24 con los tres métodos de escritura. No
+  se corrigió: no afecta el parseo. No está medido si chatgpt envía el
+  espacio duro o un espacio normal, porque medirlo exige enviar un mensaje.
+
 ## Sobre qué es y qué no es
 
 - Es un instrumento para **comparar** respuestas, no para determinar cuál

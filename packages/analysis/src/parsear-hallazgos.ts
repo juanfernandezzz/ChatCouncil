@@ -94,7 +94,11 @@ export function parsearHallazgos(salidaCruda: string, etiquetasValidas: readonly
   const hallazgos: Hallazgo[] = [];
   let lineasDescartadas = 0;
 
-  for (const lineaCruda of salidaCruda.split("\n")) {
+  // Espacio duro (U+00A0) a espacio ANTES de parsear (decisión de Juan,
+  // 2026-09-24): chatgpt escribe unos 200 espacios del prompt de operación
+  // como espacio duro, y un operador que copie ese formato no puede dejar
+  // hallazgos con un carácter distinto al de los demás.
+  for (const lineaCruda of salidaCruda.replace(/ /g, " ").split("\n")) {
     const linea = lineaCruda.trim();
     if (linea.length === 0) continue;
 

@@ -3,6 +3,7 @@
   "specs": {
     "chatgpt": {
       "newConversationUrl": "https://chatgpt.com/",
+      "escritura": "insertText",
       "composer": {
         "selector": "#prompt-textarea",
         "kind": "contenteditable"
@@ -37,6 +38,7 @@
     },
     "glm": {
       "newConversationUrl": "https://chat.z.ai/",
+      "escritura": "insertText",
       "composer": {
         "selector": "#chat-input",
         "kind": "textarea"
@@ -72,6 +74,7 @@
     },
     "claude": {
       "newConversationUrl": "https://claude.ai/new",
+      "escritura": "pegado",
       "composer": {
         "selector": "div[data-testid=\"chat-input\"]",
         "kind": "contenteditable"
@@ -104,6 +107,7 @@
     },
     "gemini": {
       "newConversationUrl": "https://gemini.google.com/app",
+      "escritura": "insertText",
       "composer": {
         "selector": "div[aria-label=\"Ingresa una instrucción para Gemini\"]",
         "kind": "contenteditable"
@@ -148,6 +152,7 @@
     },
     "grok": {
       "newConversationUrl": "https://grok.com/",
+      "escritura": "pegado",
       "composer": {
         "selector": "div[aria-label=\"Ask Grok anything\"]",
         "kind": "contenteditable"
@@ -181,6 +186,7 @@
     },
     "mistral": {
       "newConversationUrl": "https://chat.mistral.ai/",
+      "escritura": "pegado",
       "composer": {
         "selector": "div.ProseMirror",
         "kind": "contenteditable"
@@ -214,6 +220,7 @@
     },
     "qwen": {
       "newConversationUrl": "https://chat.qwen.ai/",
+      "escritura": "insertText",
       "composer": {
         "selector": "textarea.message-input-textarea",
         "kind": "textarea"
@@ -247,6 +254,7 @@
     },
     "kimi": {
       "newConversationUrl": "https://kimi.ai/",
+      "escritura": "pegado",
       "composer": {
         "selector": "div.chat-input-editor",
         "kind": "contenteditable"
@@ -282,6 +290,7 @@
     },
     "deepseek": {
       "newConversationUrl": "https://chat.deepseek.com/sign_in",
+      "escritura": "insertText",
       "composer": {
         "selector": "textarea._27c9245.ds-scroll-area",
         "kind": "textarea"

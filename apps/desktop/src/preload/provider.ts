@@ -41,6 +41,8 @@ type CompletionSpec =
 
 interface PageSpec {
   composer: { selector: string; kind: "textarea" | "contenteditable" };
+  /** Objetivo 1 del cierre de Fase 3: cómo se escribe en ESTE compositor. */
+  escritura: Escritura;
   submit: { kind: "click"; selector: string } | { kind: "key"; key: "Enter" };
   assistantMessage: { selector: string; pick: "last"; exclude?: string[] };
   completion: CompletionSpec;
@@ -201,7 +203,22 @@ function leerCompositor(el: Element | null, kind: PageSpec["composer"]["kind"]):
  * cual, porque ahí es texto plano nativo, no nodos de un árbol enriquecido.
  * Se deja intacto.
  */
-function writePrompt(el: Element, kind: PageSpec["composer"]["kind"], text: string): boolean {
+/**
+ * Cierre de Fase 3, objetivo 1 — el método de escritura lo declara CADA spec
+ * (`escritura`), porque los saltos de línea se comportan distinto por
+ * editor (medido: claude, grok y mistral dejaban un espacio; kimi los
+ * perdía). "insertText" es el camino que ya funcionaba: `insertText` entero
+ * en un `textarea`, y en un `contenteditable` una línea por vez con
+ * `insertLineBreak` — el mismo que "lineaSuave".
+ */
+type Escritura = "insertText" | "pegado" | "lineaSuave" | "lineaParrafo";
+
+async function writePrompt(
+  el: Element,
+  kind: PageSpec["composer"]["kind"],
+  text: string,
+  escritura: Escritura,
+): Promise<boolean> {
   (el as HTMLElement).focus();
   if (kind === "textarea") {
     const ta = el as HTMLTextAreaElement;
@@ -215,17 +232,32 @@ function writePrompt(el: Element, kind: PageSpec["composer"]["kind"], text: stri
   range.selectNodeContents(host);
   sel?.removeAllRanges();
   sel?.addRange(range);
-  const lineas = text.split("\n");
-  lineas.forEach((linea, i) => {
-    if (linea.length > 0) document.execCommand("insertText", false, linea);
-    if (i < lineas.length - 1) document.execCommand("insertLineBreak", false);
-  });
+  if (escritura === "pegado") {
+    // Lo que el editor ya sabe hacer cuando una persona pega varias líneas.
+    const dt = new DataTransfer();
+    dt.setData("text/plain", text);
+    host.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+  } else {
+    const salto = escritura === "lineaParrafo" ? "insertParagraph" : "insertLineBreak";
+    const lineas = text.split("\n");
+    lineas.forEach((linea, i) => {
+      if (linea.length > 0) document.execCommand("insertText", false, linea);
+      if (i < lineas.length - 1) document.execCommand(salto, false);
+    });
+  }
   // `textContent` NO cuenta los `<br>` que separan líneas (no tienen texto
   // propio) — comparar contra él daría por buena una escritura que perdió
   // los saltos exactamente igual que el defecto que esto corrige. `leerTexto`
   // (abajo) es la misma reconstrucción que usa la lectura del compositor en
   // todo el resto de este archivo.
-  return leerTexto(host, kind).trim() === text.trim();
+  // Un editor (medido en kimi, Lexical) aplica el pegado en un frame
+  // posterior: se espera hasta 3 s a que el texto asiente antes de decidir.
+  const hasta = Date.now() + 3_000;
+  for (;;) {
+    if (leerTexto(host, kind).trim() === text.trim()) return true;
+    if (Date.now() > hasta) return false;
+    await sleep(100);
+  }
 }
 
 /**
@@ -238,6 +270,15 @@ function writePrompt(el: Element, kind: PageSpec["composer"]["kind"], text: stri
  */
 function leerTexto(el: Element, kind: PageSpec["composer"]["kind"]): string {
   if (kind === "textarea") return (el as HTMLTextAreaElement).value ?? "";
+  // Objetivo 1 del cierre de Fase 3, medido en claude: un editor que guarda
+  // cada línea como un `<p>` propio da, con `innerText`, una línea EN BLANCO
+  // entre párrafos (3 líneas escritas se leían como 5). Si el compositor es
+  // una lista de bloques, cada bloque es UNA línea.
+  const hijos = Array.from(el.children) as HTMLElement[];
+  const esBloque = (h: HTMLElement): boolean => /^(P|DIV|H[1-6]|LI|PRE|BLOCKQUOTE)$/.test(h.tagName);
+  if (hijos.length > 0 && hijos.every(esBloque)) {
+    return hijos.map((h) => (h.innerText ?? "").replace(/\n$/, "")).join("\n");
+  }
   return (el as HTMLElement).innerText ?? "";
 }
 
@@ -548,7 +589,7 @@ async function run(spec: PageSpec, prompt: string): Promise<RunResult> {
           : `compositor no encontrado tras ${Date.now() - t0} ms, pero la pagina SI tiene ${genericos} cuadro/s de texto: cargo y muestra otra cosa (otro layout, otro idioma, o el selector caduco)`,
     };
   }
-  if (!writePrompt(composer, spec.composer.kind, prompt)) {
+  if (!(await writePrompt(composer, spec.composer.kind, prompt, spec.escritura))) {
     return { ok: false, error: "el compositor no aceptó el texto" };
   }
 
@@ -963,7 +1004,7 @@ async function escribirYEsperarQuietud(spec: PageSpec, texto: string): Promise<R
 
   (composer as HTMLElement).focus();
   const t0 = performance.now();
-  writePrompt(composer, spec.composer.kind, texto);
+  await writePrompt(composer, spec.composer.kind, texto, spec.escritura);
 
   // MEDICIÓN POR QUIETUD, no por una sola lectura instantánea: un editor con
   // framework puede seguir committeando el texto en varios frames después de

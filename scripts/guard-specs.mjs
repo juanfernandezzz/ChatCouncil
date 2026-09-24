@@ -35,6 +35,14 @@ for (const [id, spec] of Object.entries(specs)) {
     if (spec[campo] == null) fallos.push(`${donde}: falta "${campo}"`);
   }
 
+  // Cierre de Fase 3, objetivo 1: el metodo de escritura se declara por
+  // proveedor. Sin el campo, el preload no sabe como escribir los saltos de
+  // linea en ESE editor (medido: en claude, grok y mistral quedaban espacios).
+  const ESCRITURAS = ["insertText", "pegado", "lineaSuave", "lineaParrafo"];
+  if (!ESCRITURAS.includes(spec.escritura)) {
+    fallos.push(`${donde}: "escritura" tiene que ser uno de ${ESCRITURAS.join(", ")} (tiene ${JSON.stringify(spec.escritura)}).`);
+  }
+
   const c = spec.completion;
   if (c == null) continue;
 

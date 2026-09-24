@@ -88,6 +88,9 @@ const INTEGRADOR_ID = "deepseek";
  */
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
+// Cierre de Fase 3, objetivo A: el tercero, para los temporizadores de las
+// vistas fuera de pantalla (los otros dos cubren el renderer entero).
+app.commandLine.appendSwitch("disable-background-timer-throttling");
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -1255,6 +1258,9 @@ function crearVista(id: string, url: string): WebContentsView {
   };
   view.webContents.on("will-navigate", (e, destino) => frenar(e, destino));
   view.webContents.on("will-redirect", (e, destino) => frenar(e, destino));
+  // Además de `backgroundThrottling: false` en webPreferences: explícito en el
+  // webContents, en TODAS las vistas de proveedor (todas pasan por acá).
+  view.webContents.setBackgroundThrottling(false);
 
   void view.webContents.loadURL(url);
   return view;
@@ -3731,85 +3737,70 @@ async function modoNuevoChat(): Promise<void> {
 async function modoVisibilidad(): Promise<void> {
   try {
     await new Promise((r) => setTimeout(r, 35_000));
-    const objetivos = vistas; // los 9 INVESTIGADORES, spec conocida.
-    const w = win!.getContentBounds().width;
-
-    const composerPresente = async (v: (typeof vistas)[number]): Promise<boolean> => {
-      const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS] as { composer?: { selector: string } };
-      if (!spec.composer) return false;
-      try {
-        return (await v.view.webContents.executeJavaScript(
-          `!!document.querySelector(${JSON.stringify(spec.composer.selector)})`,
-          true,
-        )) as boolean;
-      } catch {
-        return false;
+    // Cierre de Fase 3, objetivo A — los tres criterios en UNA apertura:
+    // (1) `visibilityState` de las nueve con un solo panel en pantalla;
+    // (2) veinte cambios de panel por el MISMO camino que las flechas
+    //     (`desplazar`) dejan el contador de navegaciones intacto;
+    // (3) el tamaño de cada vista no cambia al cambiar de panel.
+    // Cuota cero: sólo lee `document.visibilityState`, nunca escribe ni envía.
+    const leerVisibilidad = async (): Promise<Record<string, string>> => {
+      const r: Record<string, string> = {};
+      for (const v of vistas) {
+        try {
+          r[v.id] = (await v.view.webContents.executeJavaScript("document.visibilityState", true)) as string;
+        } catch (e) {
+          r[v.id] = `error: ${e instanceof Error ? e.message : String(e)}`;
+        }
       }
+      return r;
     };
+    const bounds = (): Record<string, Electron.Rectangle> =>
+      Object.fromEntries(vistas.map((v) => [v.id, v.view.getBounds()]));
+    const navs = (): Record<string, number> =>
+      Object.fromEntries(vistas.map((v) => [v.id, contadorNavegaciones.get(v.id) ?? 0]));
 
-    // PASO 1 — estado tal como quedó el layout inicial (scrollX en 0: sólo
-    // el primero está en rango; los otros ocho, fuera).
-    const filas: {
-      id: string;
-      visibilityState: string;
-      hidden: boolean;
-      boundsX: number;
-      boundsWidth: number;
-      dentroDelViewport: boolean;
-      /**
-       * Si el composer está PRESENTE en el DOM en este momento —con el panel
-       * tal como quedó tras la carga (la mayoría, fuera del rango visible).
-       * Nombre corregido: se llamaba `composerFueraDeViewport` y ese nombre
-       * decía lo contrario del dato — un lector de `true` habría concluido
-       * "está fuera" cuando el campo dice "está presente". El registro que
-       * emite este modo es append-only por archivo de salida; se corrige
-       * ahora, antes de que se escriban más corridas con el nombre viejo.
-       */
-      composerPresente: boolean;
-    }[] = [];
-    for (const v of objetivos) {
-      const b = v.view.getBounds();
-      const dentro = b.x + b.width > 0 && b.x < w;
-      let visibility: { visibilityState: string; hidden: boolean };
-      try {
-        visibility = (await v.view.webContents.executeJavaScript(
-          `({ visibilityState: document.visibilityState, hidden: document.hidden })`,
-          true,
-        )) as { visibilityState: string; hidden: boolean };
-      } catch {
-        visibility = { visibilityState: "error", hidden: true };
+    const visibilidadInicial = await leerVisibilidad();
+    const panelInicial = vistaConIdEnFrente()?.id ?? null;
+    const navAntes = navs();
+    const boundsAntes = bounds();
+    const tamanos: Record<string, Set<string>> = Object.fromEntries(vistas.map((v) => [v.id, new Set<string>()]));
+    const recorrido: string[] = [];
+    let direccion: 1 | -1 = 1;
+    for (let i = 0; i < 20; i++) {
+      const antes = vistaConIdEnFrente()?.id;
+      desplazar(direccion);
+      if (vistaConIdEnFrente()?.id === antes) {
+        direccion = direccion === 1 ? -1 : 1;
+        desplazar(direccion);
       }
-      const composerOk = await composerPresente(v);
-      filas.push({
-        id: v.id,
-        visibilityState: visibility.visibilityState,
-        hidden: visibility.hidden,
-        boundsX: b.x,
-        boundsWidth: b.width,
-        dentroDelViewport: dentro,
-        composerPresente: composerOk,
-      });
+      recorrido.push(vistaConIdEnFrente()?.id ?? "?");
+      await new Promise((r) => setTimeout(r, 400));
+      for (const [id, b] of Object.entries(bounds())) tamanos[id]!.add(`${b.width}x${b.height}`);
     }
+    const navDespues = navs();
+    const boundsDespues = bounds();
+    const visibilidadFinal = await leerVisibilidad();
 
-    // PASO 2 — cada panel AL FRENTE, uno por uno (scrollX = su posición),
-    // repitiendo SÓLO el chequeo de composer. Nunca escribe ni envía.
-    const alFrente: { id: string; composerAlFrente: boolean }[] = [];
-    for (let i = 0; i < objetivos.length; i++) {
-      scrollX = i * w;
-      layout();
-      await new Promise((r) => setTimeout(r, 1200));
-      const v = objetivos[i]!;
-      alFrente.push({ id: v.id, composerAlFrente: await composerPresente(v) });
-    }
-    scrollX = 0;
-    layout();
-
-    const tabla = filas.map((f) => ({
-      ...f,
-      composerAlFrente: alFrente.find((a) => a.id === f.id)?.composerAlFrente ?? null,
-    }));
-
-    emitir("CC_VISIBILIDAD_JSON", { ventanaAncho: w, tabla });
+    const visibles = Object.values(visibilidadInicial).filter((s) => s === "visible").length;
+    emitir("CC_VISIBILIDAD_JSON", {
+      ventana: win!.getContentBounds(),
+      panelInicial,
+      visibilidadInicial,
+      visiblesInicial: `${visibles} de ${vistas.length}`,
+      recorrido,
+      navAntes,
+      navDespues,
+      navegacionesIntactas: vistas.every((v) => navAntes[v.id] === navDespues[v.id]),
+      tamanosVistosPorVista: Object.fromEntries(Object.entries(tamanos).map(([id, s]) => [id, [...s]])),
+      tamanoConstante: Object.values(tamanos).every((s) => s.size === 1),
+      boundsAntes,
+      boundsDespues,
+      boundsIdenticosAntesYDespues: vistas.every(
+        (v) => JSON.stringify(boundsAntes[v.id]) === JSON.stringify(boundsDespues[v.id]),
+      ),
+      panelFinal: vistaConIdEnFrente()?.id ?? null,
+      visibilidadFinal,
+    });
   } catch (e) {
     decirPorSalida(`\n===CC_VISIBILIDAD_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
   } finally {

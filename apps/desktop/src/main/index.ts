@@ -10,7 +10,7 @@
  * con 72 cookies sobreviviendo al cierre completo de la app.
  */
 
-import { app, BaseWindow, BrowserWindow, clipboard, Menu, WebContentsView, ipcMain, screen, session } from "electron";
+import { app, BaseWindow, BrowserWindow, clipboard, Menu, WebContentsView, ipcMain, screen, session, shell } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -20,14 +20,26 @@ import type { Server } from "node:http";
 import { randomUUID } from "node:crypto";
 
 import { PROVIDER_SPECS } from "@chatcouncil/providers";
-import type { Cita, Conversacion, EtapaRonda, HallazgoHecho, Procedencia, Respuesta, Ronda, SalidaOperador, Sello } from "@chatcouncil/domain";
-import { etapaDeRonda, preguntaEfectivaDeRonda } from "@chatcouncil/domain";
+import type {
+  Cita,
+  Conversacion,
+  EtapaRonda,
+  HallazgoHecho,
+  InformeIntegrador,
+  Procedencia,
+  Respuesta,
+  Ronda,
+  SalidaOperador,
+  Sello,
+} from "@chatcouncil/domain";
+import { etapaDeRonda, preguntaEfectivaDeRonda, proveedoresCargadosDeRonda } from "@chatcouncil/domain";
 import {
   armarCuerposPorOperador,
   armarPromptOperacion,
   evaluarIntegridad,
   insertarMarcasIntercaladas,
   hashSemilla,
+  parsearHallazgos,
 } from "@chatcouncil/analysis";
 
 import {
@@ -53,6 +65,7 @@ import {
 import { guardarSeleccion, leerSeleccion } from "./seleccion-proveedores";
 import { armarCuerposDeRonda, armarYPersistirCuerposDeRonda, POOL_OPERADORES } from "./operador";
 import {
+  armarInformeFinalDeRonda,
   armarTablaYPromptIntegrador,
   clasificarLecturasPorEtapa,
   etiquetasValidasDelOperador,
@@ -1751,6 +1764,7 @@ async function censoAlCerrar(): Promise<void> {
 
 function registrarIpc(): void {
   ipcMain.handle("cc:investigadores", () => ACTIVOS.slice());
+  ipcMain.handle("cc:armar-informe-final", () => armarInformeFinalDeRondaActiva());
   ipcMain.handle("cc:seleccion-leer", () => ({
     conocidos: [...INVESTIGADORES],
     marcados: leerSeleccion(app.getPath("userData"), INVESTIGADORES) ?? [...INVESTIGADORES],
@@ -2779,6 +2793,16 @@ export interface ResultadoConsolidarPanel {
   promptCompleto: boolean;
   /** Cadenas de `REQUISITOS_PROMPT_OPERACION` ausentes del compositor — vacío si `promptCompleto`. */
   faltantesPrompt: string[];
+  /**
+   * Cierre de Fase 3 (objetivo B): el compositor comparado contra el texto
+   * que se quiso escribir, normalizando SÓLO `\r\n` a `\n`. Las marcas y las
+   * nueve cadenas pasan con un compositor que mezcló texto viejo (medido en
+   * kimi: 580 líneas escritas, 1 leída, con restos de una escritura previa);
+   * esta comparación no.
+   */
+  lineasPrompt: number;
+  lineasCompositor: number;
+  igualCaracterPorCaracter: boolean;
   interrumpido: boolean;
   /**
    * `true` si "Nuevo chat" (T7) confirmó CERO mensajes previos antes de
@@ -3028,7 +3052,10 @@ async function consolidarUnPanel(
   // del mismo panel, y la exclusión de autoevaluación de
   // `cuerpo-operador.ts` queda NOMINAL — el operador la lee igual, fuera
   // del cuerpo que se le arma. Ver `nuevoChatPara`.
-  const chatNuevo = await alFrente(v, () => nuevoChatPara(v));
+  // Cierre de Fase 3, objetivo B: sin `alFrente`. Con los nueve paneles
+  // "visible" (objetivo A), escribir no necesita traer el panel al frente.
+  const lineasPrompt = textoAEscribir.replace(/\r\n/g, "\n").split("\n").length;
+  const chatNuevo = await nuevoChatPara(v);
   if (!chatNuevo.ok) {
     return {
       operadorId,
@@ -3039,6 +3066,9 @@ async function consolidarUnPanel(
       marcasPresentes: 0,
       promptCompleto: false,
       faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
+      lineasPrompt,
+      lineasCompositor: 0,
+      igualCaracterPorCaracter: false,
       interrumpido: false,
       chatNuevoOk: false,
     };
@@ -3051,20 +3081,21 @@ async function consolidarUnPanel(
   const specJson = JSON.stringify(spec);
   const TECHO_EXTERNO_MS = 90_000;
   try {
-    const r = (await alFrente(v, () =>
-      Promise.race([
-        v.view.webContents.executeJavaScript(
-          `window.__ccProvider.entregarCuerpoOperador(${specJson}, ${JSON.stringify(textoAEscribir)})`,
-          true,
+    const r = (await Promise.race([
+      v.view.webContents.executeJavaScript(
+        `window.__ccProvider.entregarCuerpoOperador(${specJson}, ${JSON.stringify(textoAEscribir)})`,
+        true,
+      ),
+      new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`sin respuesta del panel tras ${TECHO_EXTERNO_MS}ms (techo externo)`)),
+          TECHO_EXTERNO_MS,
         ),
-        new Promise((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`sin respuesta del panel tras ${TECHO_EXTERNO_MS}ms (techo externo)`)),
-            TECHO_EXTERNO_MS,
-          ),
-        ),
-      ]),
-    )) as { ok: boolean; error?: string; textoFinal: string };
+      ),
+    ])) as { ok: boolean; error?: string; textoFinal: string };
+    const final = r.textoFinal.replace(/\r\n/g, "\n");
+    const lineasCompositor = final.length === 0 ? 0 : final.split("\n").length;
+    const igualCaracterPorCaracter = final === textoAEscribir.replace(/\r\n/g, "\n");
     const integridad = evaluarIntegridad(r.textoFinal, marcasDeEsteOperador);
     // Cambio 2 — SEGUNDA comprobación, independiente de las marcas: el
     // criterio viejo ("N de N marcas presentes") verifica la FORMA del
@@ -3080,17 +3111,26 @@ async function consolidarUnPanel(
     }
     return {
       operadorId,
-      ok: r.ok && verificacionPrompt.completo,
+      ok: r.ok && verificacionPrompt.completo && igualCaracterPorCaracter,
       ...(r.error
         ? { error: r.error }
         : !verificacionPrompt.completo
           ? { error: `prompt incompleto: faltan ${verificacionPrompt.faltantes.join(", ")}` }
-          : {}),
+          : !igualCaracterPorCaracter
+            ? {
+                error:
+                  `el compositor no es igual al prompt: ${lineasCompositor} de ${lineasPrompt} líneas, ` +
+                  `${final.length} de ${textoAEscribir.length} caracteres`,
+              }
+            : {}),
       estadoIntegridad: integridad.estado,
       marcasEsperadas: integridad.marcasEsperadas,
       marcasPresentes: integridad.marcasPresentes,
       promptCompleto: verificacionPrompt.completo,
       faltantesPrompt: verificacionPrompt.faltantes,
+      lineasPrompt,
+      lineasCompositor,
+      igualCaracterPorCaracter,
       interrumpido: false,
       chatNuevoOk: chatNuevo.quedoLimpio,
     };
@@ -3105,6 +3145,9 @@ async function consolidarUnPanel(
       marcasPresentes: 0,
       promptCompleto: false,
       faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
+      lineasPrompt,
+      lineasCompositor: 0,
+      igualCaracterPorCaracter: false,
       interrumpido: false,
     };
   }
@@ -3125,88 +3168,62 @@ async function pegarOperacionEnTodos(): Promise<ResultadoConsolidar> {
     return { ok: false, error: e instanceof Error ? e.message : String(e), paneles: [], navegacionesIntactas: true };
   }
 
+  // Cierre de Fase 3, objetivo B (decisión de Juan): los ocho EN PARALELO.
+  // Cada panel corre su propia cadena —"Nuevo chat", y recién cuando SU chat
+  // nuevo quedó vacío, la escritura— sin esperar a los demás ni pasar al
+  // frente. La guardia "el usuario desplazó la fila" era de la secuencia (se
+  // chequeaba antes del panel siguiente); en paralelo no hay panel siguiente.
   const navAntes = new Map(POOL_OPERADORES.map((id) => [id, contadorNavegaciones.get(id) ?? 0]));
-  const scrollXInicial = scrollX;
-
-  estadoConsolidacion = { enCurso: true, indice: 0, total: resultadoArmado.cuerpos.length, operadorId: null };
-  const paneles: ResultadoConsolidarPanel[] = [];
-  let interrumpidoGlobal = false;
-
+  const total = resultadoArmado.cuerpos.length;
+  let terminados = 0;
+  estadoConsolidacion = { enCurso: true, indice: 0, total, operadorId: null };
+  let paneles: ResultadoConsolidarPanel[];
   try {
-    for (let i = 0; i < resultadoArmado.cuerpos.length; i++) {
-      const cuerpoOperador = resultadoArmado.cuerpos[i]!;
-      estadoConsolidacion = { enCurso: true, indice: i + 1, total: resultadoArmado.cuerpos.length, operadorId: cuerpoOperador.operadorId };
-
-      // T14 (Cambio 1) — el prompt completo de ESTE operador, con sus
-      // propias marcas de integridad intercaladas sobre el texto final
-      // entero (pregunta + instrucciones + las 7 respuestas), no sólo sobre
-      // el cuerpo de respuestas.
-      const { texto: textoAEscribir, marcas: marcasDeEsteOperador } = armarPromptDeOperacionConMarcas(
-        pregunta,
-        cuerpoOperador,
-      );
-
-      if (interrumpidoGlobal) {
-        paneles.push({
-          operadorId: cuerpoOperador.operadorId,
-          ok: false,
-          error: "secuencia detenida antes de llegar a este panel",
-          estadoIntegridad: "indeterminado",
-          marcasEsperadas: marcasDeEsteOperador.length,
-          marcasPresentes: 0,
-          promptCompleto: false,
-          faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
-          interrumpido: true,
-          chatNuevoOk: false,
-        });
-        continue;
-      }
-      if (scrollX !== scrollXInicial) {
-        interrumpidoGlobal = true;
-        paneles.push({
-          operadorId: cuerpoOperador.operadorId,
-          ok: false,
-          error: "el usuario desplazó la fila de paneles durante la consolidación: secuencia detenida",
-          estadoIntegridad: "indeterminado",
-          marcasEsperadas: marcasDeEsteOperador.length,
-          marcasPresentes: 0,
-          promptCompleto: false,
-          faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
-          interrumpido: true,
-          chatNuevoOk: false,
-        });
-        continue;
-      }
-
-      const v = vistas.find((x) => x.id === cuerpoOperador.operadorId);
-      if (!v) {
-        paneles.push({
-          operadorId: cuerpoOperador.operadorId,
-          ok: false,
-          error: "panel no abierto",
-          estadoIntegridad: "indeterminado",
-          marcasEsperadas: marcasDeEsteOperador.length,
-          marcasPresentes: 0,
-          promptCompleto: false,
-          faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
-          interrumpido: false,
-          chatNuevoOk: false,
-        });
-        continue;
-      }
-
-      paneles.push(await consolidarUnPanel(v, cuerpoOperador.operadorId, textoAEscribir, marcasDeEsteOperador));
-    }
+    paneles = await Promise.all(
+      resultadoArmado.cuerpos.map(async (cuerpoOperador) => {
+        // T14 (Cambio 1) — el prompt completo de ESTE operador, con sus
+        // propias marcas de integridad intercaladas sobre el texto final
+        // entero (pregunta + instrucciones + las 7 respuestas), no sólo sobre
+        // el cuerpo de respuestas.
+        const { texto: textoAEscribir, marcas: marcasDeEsteOperador } = armarPromptDeOperacionConMarcas(
+          pregunta,
+          cuerpoOperador,
+        );
+        const v = vistas.find((x) => x.id === cuerpoOperador.operadorId);
+        const panel: ResultadoConsolidarPanel = v
+          ? await consolidarUnPanel(v, cuerpoOperador.operadorId, textoAEscribir, marcasDeEsteOperador)
+          : {
+              operadorId: cuerpoOperador.operadorId,
+              ok: false,
+              error: "panel no abierto",
+              estadoIntegridad: "indeterminado",
+              marcasEsperadas: marcasDeEsteOperador.length,
+              marcasPresentes: 0,
+              promptCompleto: false,
+              faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
+              lineasPrompt: textoAEscribir.split("\n").length,
+              lineasCompositor: 0,
+              igualCaracterPorCaracter: false,
+              interrumpido: false,
+              chatNuevoOk: false,
+            };
+        terminados++;
+        estadoConsolidacion = { enCurso: true, indice: terminados, total, operadorId: cuerpoOperador.operadorId };
+        return panel;
+      }),
+    );
   } finally {
     estadoConsolidacion = { enCurso: false, indice: 0, total: 0, operadorId: null };
   }
 
+  // "Nuevo chat" navega a propósito (una vez por panel); lo que se verifica
+  // es que DESPUÉS de esa navegación nada más recargó: una por panel, no más.
   const navegacionesIntactas = POOL_OPERADORES.every(
-    (id) => (navAntes.get(id) ?? 0) === (contadorNavegaciones.get(id) ?? 0),
+    (id) => (contadorNavegaciones.get(id) ?? 0) - (navAntes.get(id) ?? 0) <= 1,
   );
 
   return {
-    ok: !interrumpidoGlobal && paneles.every((p) => p.ok),
+    ok: paneles.every((p) => p.ok),
     paneles,
     navegacionesIntactas,
     etapa,
@@ -3948,6 +3965,91 @@ async function modoSesion(): Promise<void> {
  * cortar/copiar/pegar/deshacer sí funcionan porque esos roles se resuelven
  * contra el `webContents` con foco de teclado, no contra la ventana.
  */
+/**
+ * Cierre de Fase 3, objetivo E — "Armar informe final". `armarInformeFinalDeRonda`
+ * existía verificada con datos sembrados y sin llamador. Toma la ronda activa
+ * con LO QUE HAYA en el registro: sin salidas de operador o sin informe del
+ * integrador lo arma igual, y esas faltas quedan nombradas en el informe
+ * ("fallo: no se capturo salida", "No se capturo informe del integrador").
+ * Nunca sobrescribe un informe anterior: si el nombre existe, agrega la hora.
+ */
+function armarInformeFinalDeRondaActiva(): { ok: boolean; mensaje: string; ruta?: string } {
+  const sinRonda = { ok: false, mensaje: "No hay una ronda activa para armar el informe." };
+  if (!conversacionActual || !rondaActualId) return sinRonda;
+  const userData = app.getPath("userData");
+  const hechos = leerRegistroDeArchivo(userData, conversacionActual).hechos;
+  const ronda = hechos.find((h): h is Ronda => h.tipo === "ronda" && h.id === rondaActualId);
+  if (!ronda) return sinRonda;
+  const deLaRonda = <T extends { rondaId: string }>(tipo: string): T[] =>
+    hechos.filter((h) => h.tipo === tipo && (h as unknown as T).rondaId === ronda.id) as unknown as T[];
+
+  const semilla = ronda.semilla ?? "";
+  const sello = deLaRonda<Sello>("sello");
+  // La última de cada proveedor/operador: "el hecho más reciente gana".
+  const ultimaPor = <T>(lista: T[], clave: (x: T) => string): T[] => [...new Map(lista.map((x) => [clave(x), x])).values()];
+  const respuestasDelPool = ultimaPor(
+    deLaRonda<Respuesta>("respuesta").filter((r) => (POOL_OPERADORES as readonly string[]).includes(r.proveedorId)),
+    (r) => r.proveedorId,
+  );
+  const idsRespuesta = new Set(respuestasDelPool.map((r) => r.id));
+  const citas = hechos.filter((h): h is Cita => h.tipo === "cita" && idsRespuesta.has(h.respuestaId));
+  const salidas = ultimaPor(deLaRonda<SalidaOperador>("salida-operador"), (s) => s.operadorId);
+  const hallazgosDe = (salidaId: string): HallazgoHecho[] =>
+    hechos.filter((h): h is HallazgoHecho => h.tipo === "hallazgo" && h.salidaOperadorId === salidaId);
+  const { tabla } = armarTablaYPromptIntegrador(
+    ronda.prompt,
+    salidas.map((s) => ({ operadorId: s.operadorId, hallazgos: hallazgosDe(s.id) })),
+    POOL_OPERADORES,
+    semilla,
+  );
+  const resultadosOperadores = POOL_OPERADORES.map((id) => {
+    const s = salidas.find((x) => x.operadorId === id);
+    if (!s) return { operadorId: id, capturado: false, motivoFallo: "no hay salida de operador en el registro" };
+    let lineasDescartadas: number | undefined;
+    try {
+      lineasDescartadas = parsearHallazgos(s.salidaCruda, etiquetasValidasDelOperador(id, POOL_OPERADORES, sello)).lineasDescartadas;
+    } catch {
+      lineasDescartadas = undefined;
+    }
+    return {
+      operadorId: id,
+      capturado: true,
+      totalHallazgos: hallazgosDe(s.id).length,
+      ...(lineasDescartadas === undefined ? {} : { lineasDescartadas }),
+    };
+  });
+  const informes = deLaRonda<InformeIntegrador>("informe-integrador");
+
+  const texto = armarInformeFinalDeRonda({
+    pregunta: preguntaEfectivaDeRonda(hechos, ronda) ?? ronda.prompt,
+    fecha: new Date().toISOString(),
+    informeIntegrador: informes[informes.length - 1] ?? null,
+    tabla,
+    sello,
+    respuestasDelPool,
+    citas,
+    resultadosOperadores,
+    integridadEntrega: "no persistida en el registro (se informa en pantalla al pegar cada panel)",
+    semilla,
+    proveedoresCargados: proveedoresCargadosDeRonda(hechos, ronda.id),
+    pool: POOL_OPERADORES,
+  });
+
+  const dir = join(userData, "informes");
+  mkdirSync(dir, { recursive: true });
+  const base = `${conversacionActual}-${ronda.id}`;
+  let ruta = join(dir, `${base}.md`);
+  if (existsSync(ruta)) {
+    const d = new Date();
+    const hhmmss = [d.getHours(), d.getMinutes(), d.getSeconds()].map((n) => String(n).padStart(2, "0")).join("");
+    ruta = join(dir, `${base}-${hhmmss}.md`);
+  }
+  // `wx`: falla antes que pisar un archivo existente.
+  writeFileSync(ruta, texto, { encoding: "utf8", flag: "wx" });
+  shell.showItemInFolder(ruta);
+  return { ok: true, mensaje: `Informe guardado en: ${ruta}`, ruta };
+}
+
 /** Ventana chica de "Proveedores al iniciar…". No abre ni cierra paneles: sólo edita el archivo aparte. */
 function abrirSeleccionProveedores(): void {
   const w = new BrowserWindow({
@@ -4014,7 +4116,20 @@ function construirMenu(): void {
         { role: "togglefullscreen" },
       ],
     },
-    { role: "windowMenu" },
+    {
+      // Cierre de Fase 3, objetivo D (decisión de Juan): los botones de UN
+      // panel son salida de emergencia, no flujo — salen de la barra y viven
+      // acá. Cada entrada le pide al renderer que corra EXACTAMENTE lo que
+      // hacía su botón (misma función, mismo informe en pantalla).
+      label: "Ventana",
+      submenu: [
+        { label: "Solo si un panel se comporta mal", enabled: false },
+        { type: "separator" },
+        { label: "Pegar pregunta en este panel", click: () => uiView?.webContents.send("cc:menu", "pegar-pregunta-aqui") },
+        { label: "Pegar operación en este panel", click: () => uiView?.webContents.send("cc:menu", "pegar-operacion-aqui") },
+        { label: "Capturar este panel", click: () => uiView?.webContents.send("cc:menu", "capturar-uno") },
+      ],
+    },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

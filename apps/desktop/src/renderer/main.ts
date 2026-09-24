@@ -116,6 +116,8 @@ interface CcBridge {
   pegarOperacionEstado: () => Promise<EstadoConsolidacion>;
   pegarOperacionAqui: () => Promise<ResultadoConsolidarUno>;
   pegarIntegrador: () => Promise<ResultadoIntegrador>;
+  armarInformeFinal: () => Promise<{ ok: boolean; mensaje: string; ruta?: string }>;
+  alMenu: (fn: (accion: string) => void) => void;
 }
 declare global {
   interface Window {
@@ -218,16 +220,19 @@ $("confirmar").addEventListener("click", () => {
  * deepseek, no hace nada y avisa. No registra ronda: es un reintento
  * puntual, no una difusión nueva.
  */
-$("pegar-pregunta-aqui").addEventListener("click", () => {
+function pegarPreguntaAqui(): void {
   const prompt = $<HTMLTextAreaElement>("prompt").value.trim();
-  if (!prompt) return;
+  if (!prompt) {
+    decir("Escribí la pregunta en el cuadro de arriba antes de pegarla en este panel.", "mal");
+    return;
+  }
   decir("Pegando la pregunta en el panel al frente…");
   void window.cc.pegarPreguntaAqui(prompt).then((r) => {
     marcar(r.id, r.ok ? `pegado${r.modelLabel ? ` · ${r.modelLabel}` : ""}` : r.error ?? "falló", r.ok ? "ok" : "mal");
     pintarPaneles();
     decir(r.ok ? `${r.id}: pegado${r.modelLabel ? ` · ${r.modelLabel}` : ""}` : `${r.id}: ${r.error ?? "falló"}`, r.ok ? "ok" : "mal");
   });
-});
+}
 
 /**
  * BOTÓN 6 — "Capturar todos". Lo que antes hacía el único botón "Capturar":
@@ -267,7 +272,7 @@ $("capturar-todos").addEventListener("click", () => {
  * captura que corresponda a la etapa de la ronda. Existe para cuando un
  * panel falla y no hay que recapturar los nueve.
  */
-$("capturar-uno").addEventListener("click", () => {
+function capturarUno(): void {
   void window.cc.capturarUno().then((r) => {
     if (!r.ok || !r.lectura) {
       decir(`No se pudo capturar este panel: ${r.error ?? "sin detalle"}`, "mal");
@@ -279,7 +284,7 @@ $("capturar-uno").addEventListener("click", () => {
     pintarPaneles();
     decir(l.error ? `${l.id}: ${l.error}` : `${l.id}: ${l.text.length} caracteres${estadoLectura(l)}`, l.error ? "mal" : "ok");
   });
-});
+}
 
 /**
  * BOTÓN 3 — "Pegar operación en todos" (antes "Consolidar respuestas").
@@ -345,12 +350,9 @@ botonPegarOperacionEnTodos.addEventListener("click", () => {
  * que el 3 pero sólo para el panel al frente: no re-arma el sello ni vuelve
  * a barajar, usa la misma ronda tal cual está.
  */
-const botonPegarOperacionAqui = $<HTMLButtonElement>("pegar-operacion-aqui");
-botonPegarOperacionAqui.addEventListener("click", () => {
-  botonPegarOperacionAqui.disabled = true;
+function pegarOperacionAqui(): void {
   decir("Pegando operación en el panel al frente…");
   void window.cc.pegarOperacionAqui().then((r) => {
-    botonPegarOperacionAqui.disabled = false;
     if (!r.ok || !r.panel) {
       decir(`No se pudo pegar la operación en este panel: ${r.error ?? "sin detalle"}${etiquetaEtapa(r.etapa)}`, "mal");
       return;
@@ -360,6 +362,23 @@ botonPegarOperacionAqui.addEventListener("click", () => {
     pintarPaneles();
     decir(`${detalleConsolidarPanel(p).trim()}${etiquetaEtapa(r.etapa)}`, p.ok ? "ok" : "mal");
   });
+}
+
+/**
+ * Objetivo D — menú "Ventana": las tres acciones de UN panel (salida de
+ * emergencia, no flujo). Corren exactamente las mismas funciones que antes
+ * colgaban de sus botones.
+ */
+window.cc.alMenu((accion) => {
+  if (accion === "pegar-pregunta-aqui") pegarPreguntaAqui();
+  else if (accion === "pegar-operacion-aqui") pegarOperacionAqui();
+  else if (accion === "capturar-uno") capturarUno();
+});
+
+/** Objetivo E — "Armar informe final": lo guarda en informes/ y abre la carpeta. */
+$("armar-informe-final").addEventListener("click", () => {
+  decir("Armando el informe final…");
+  void window.cc.armarInformeFinal().then((r) => decir(r.mensaje, r.ok ? "ok" : "mal"));
 });
 
 /**

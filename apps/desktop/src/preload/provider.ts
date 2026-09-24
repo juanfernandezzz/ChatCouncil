@@ -907,8 +907,15 @@ async function vaciarCompositorMedicion(composer: Element, kind: PageSpec["compo
         }
       }
       if (leer().length > 0) {
-        (composer as HTMLElement).innerHTML = "";
-        composer.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+        // `replaceChildren()` y no `innerHTML = ""`: medido el 2026-09-24, una
+        // página con Trusted Types rechaza la asignación de `innerHTML` con
+        // una excepción que abortaba el vaciado entero.
+        try {
+          (composer as HTMLElement).replaceChildren();
+          composer.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+        } catch {
+          /* idem */
+        }
       }
     }
     await sleep(250);
@@ -1062,6 +1069,32 @@ contextBridge.exposeInMainWorld("__ccProvider", {
   medirEntregaPegado: (spec: PageSpec, texto: string) => medirEntregaPegado(spec, texto),
   entregarCuerpoOperador: (spec: PageSpec, texto: string) => entregarCuerpoOperador(spec, texto),
   leerCompositor: (spec: PageSpec) => leerCompositor(document.querySelector(spec.composer.selector), spec.composer.kind),
+  // Cierre de Fase 3 (objetivos B/C/F): el texto del compositor CON sus
+  // saltos de línea (`leerTexto`), para comparar carácter por carácter y
+  // contar líneas contra el original. `null` si el compositor no está.
+  leerTextoCompositor: (spec: PageSpec) => {
+    const el = document.querySelector(spec.composer.selector);
+    return el ? leerTexto(el, spec.composer.kind) : null;
+  },
+  // Mensajes de asistente y de usuario en el hilo: "cero mensajes nuevos"
+  // se mide comparando esto antes y después de escribir.
+  contarMensajes: (spec: PageSpec) => {
+    const n = (sel: string | undefined): number => {
+      if (!sel) return 0;
+      try {
+        return document.querySelectorAll(sel).length;
+      } catch {
+        return 0;
+      }
+    };
+    return { asistente: n(spec.assistantMessage.selector), usuario: n(spec.userMessage?.selector) };
+  },
+  // El vaciado multi-vía ya medido (Selection API + `beforeinput`, con
+  // reintentos), expuesto para vaciar un compositor sin enviar nada.
+  vaciarCompositor: async (spec: PageSpec) => {
+    const el = document.querySelector(spec.composer.selector);
+    return el ? vaciarCompositorMedicion(el, spec.composer.kind) : false;
+  },
   estaVacioElChat: (spec: PageSpec) => estaVacioElChat(spec),
   read: (spec: PageSpec) => ({
     text: readAssistant(spec),

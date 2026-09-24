@@ -57,6 +57,12 @@ contextBridge.exposeInMainWorld("cc", {
    * no es el panel visible). Antes sólo alcanzable por `--cc-integrador=<id>`.
    */
   pegarIntegrador: (): Promise<ResultadoIntegrador> => ipcRenderer.invoke("cc:pegar-integrador"),
+  /** Objetivo E — arma el informe final de la ronda activa y lo guarda en `informes/`. */
+  armarInformeFinal: (): Promise<{ ok: boolean; mensaje: string; ruta?: string }> => ipcRenderer.invoke("cc:armar-informe-final"),
+  /** Objetivo D — el menú "Ventana" pide acá que se corra la acción de un solo panel. */
+  alMenu: (fn: (accion: string) => void): void => {
+    ipcRenderer.on("cc:menu", (_e, accion: string) => fn(accion));
+  },
   /** Ventana "Proveedores al iniciar": lee/guarda el archivo aparte de selección. Se aplica al reiniciar. */
   seleccionLeer: (): Promise<{ conocidos: string[]; marcados: string[] }> => ipcRenderer.invoke("cc:seleccion-leer"),
   seleccionGuardar: (marcados: string[]): Promise<{ ok: boolean; error?: string }> =>

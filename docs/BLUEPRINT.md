@@ -2429,8 +2429,32 @@ tienen que poder mostrar, no resolver — es exactamente la distinción entre
 ### Fase 5 — Exportación ⏳
 Salidas citables con el original, la vista derivada y la procedencia.
 
-### Fase 6 — Rediseño estético y media pack ⏳
-La dirección de §2. Va al final.
+### Fase 6 — Reconstrucción ⏳
+
+Empieza cuando la Fase 3 este cerrada con el recorrido real de Juan.
+
+ChatCouncil se reconstruye en Unity Engine, como aplicacion (no como juego),
+multidispositivo y con interfaz nueva. Decision de Juan, no negociable.
+
+Se construyen DOS versiones, para compararlas:
+
+· Version A — la construye Code. Recibe todo lo que se descubrio midiendo y
+  usando: las specs de los proveedores, los hallazgos de transporte
+  (visibilidad de los paneles, entrada confiable, editores ricos, saltos de
+  linea), las reglas de captura, el modelo de datos, los prompts, y las
+  lecciones de este documento.
+· Version B — la construye una conversacion nueva, desde cero, como grupo de
+  control. Todo lo que no se descubre probando —lo de base, la estructura, lo
+  estetico y lo no funcional— lo decide ella.
+
+Despues se comparan las dos: que hizo mejor cada una, que hizo peor, y se toma
+lo mejor de ambas o se mezclan.
+
+PASO PREVIO — auditoria de los plugins y skills instalados en Claude Desktop:
+ 1. Se listan los usos concretos que necesita la reconstruccion.
+ 2. Para cada uso se eligen las skills que lo cubren, dejando escrito donde,
+    cuando, como y de que forma se usa cada una.
+ 3. Si una skill sirve para varios usos, se repite. Manda la funcionalidad.
 
 ---
 

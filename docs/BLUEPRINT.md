@@ -1556,7 +1556,7 @@ esta corrida y el pedido de Juan fue "sólo incluir en informe".
 DeepSeek sobre el output unificado. Herramienta por defecto: **convergencia
 y divergencia**, no resumen. Herramientas editables con defaults inmutables.
 
-### Fase 3 (vigente, 2026-09-13) — Parte 1, Parte 2 y el Noveno
+### Fase 3 ✅ (cerrada 2026-09-25 — ver §10, "Fase 3 — verificada en la maquina de Juan") — Parte 1, Parte 2 y el Noveno
 
 Reemplaza la Fase 3 y la Fase 4 supersedidas de arriba (que quedan como
 registro histórico, no se borran). Se escribe DESPUÉS de la corrida de
@@ -3127,3 +3127,29 @@ aparece, aparece con cualquier método que haya dejado el texto.
     sondeo escribe en el compositor para medir; si el compositor ya tenía
     texto, ese texto es un borrador de Juan. Se omite la medición y se dice
     por qué, en vez de borrarlo.
+
+### Fase 3 — verificada en la maquina de Juan (2026-09-25)
+
+Recorrido real en limpio, sin datos sembrados.
+· Conversacion 2e1baf0a-898a-45be-b9ae-85a5ca972485, ronda c26c40de-ded2-470d-9b81-5e9dc70a9946, esPrueba: false.
+· Respuestas de investigacion: 8 de 8.
+· Salidas de operador capturadas: 8 de 8. Hallazgos parseados: 270.
+  Lineas descartadas por el parseo: 35. Etiquetas invalidas: 0.
+  Lineas LIMITACION: 10.
+· Informe del integrador: presente. Referencias validas: 156.
+  Referencias invalidas: 0.
+· Informe final: C:\Users\Juan Fernández\AppData\Roaming\ChatCouncil\informes\2e1baf0a-898a-45be-b9ae-85a5ca972485-c26c40de-ded2-470d-9b81-5e9dc70a9946-025832.md
+
+La Fase 3 es de funcionamiento y cierra con esto.
+
+ABIERTO al cerrar la Fase 3:
+· La verificacion de fuentes no sale a la red: el informe cuenta cuantas
+  fuentes cito cada proveedor, no si resuelven.
+· chatgpt escribe unos 200 espacios como espacio duro. No afecta el parseo.
+· "Pegar operacion en todos" fallo en el primer intento: la comprobacion de
+  marcas de armarCuerposPorOperador no contaba las fuentes citadas (454 en
+  esta ronda) y rechazaba el cuerpo de gemini (111 marcas contra ~107).
+  Corregido durante el recorrido (2f09490).
+· La captura del integrador de las 05:35 no guardo el informe de deepseek;
+  la de las 05:55 si (9027 caracteres). Motivo no determinado: una lectura
+  del integrador con error se descarta sin dejar hecho en el registro.

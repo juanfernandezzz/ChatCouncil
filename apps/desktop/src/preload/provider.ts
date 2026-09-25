@@ -415,8 +415,12 @@ function readAssistant(spec: PageSpec): string {
   const node = ultimoNodoAsistente(spec);
   if (!node) return "";
   const exclude = spec.assistantMessage.exclude ?? [];
-  if (exclude.length === 0) return node.textContent ?? "";
   const copy = node.cloneNode(true) as Element;
+  // En los nueve (2026-09-25): `<style>` y `<script>` nunca son respuesta.
+  // Medido en la ronda de cierre de Juan: el `<style>` de un diagrama metía
+  // 7.331 caracteres de CSS en la respuesta de glm. El `html` crudo que se
+  // guarda aparte no se toca: sólo cambia este texto derivado.
+  copy.querySelectorAll("style, script").forEach((n) => n.remove());
   for (const sel of exclude) {
     try {
       copy.querySelectorAll(sel).forEach((n) => {

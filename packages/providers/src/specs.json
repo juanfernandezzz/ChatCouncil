@@ -88,7 +88,10 @@
       },
       "assistantMessage": {
         "selector": "div.font-claude-response",
-        "pick": "last"
+        "pick": "last",
+        "exclude": [
+          "[data-testid=\"TurnStatus\"]"
+        ]
       },
       "completion": {
         "kind": "quiescence",
@@ -166,7 +169,10 @@
       },
       "assistantMessage": {
         "selector": "div.relative.response-content-markdown",
-        "pick": "last"
+        "pick": "last",
+        "exclude": [
+          "[data-testid=\"code-block\"] div[class*=\"group/code-header\"]"
+        ]
       },
       "completion": {
         "kind": "quiescence",
@@ -234,7 +240,11 @@
       },
       "assistantMessage": {
         "selector": "div.qwen-chat-message.qwen-chat-message-assistant",
-        "pick": "last"
+        "pick": "last",
+        "exclude": [
+          "div.qwen-chat-thinking-tool-status-card-wraper",
+          "div.overflow-guard > div.margin"
+        ]
       },
       "completion": {
         "kind": "quiescence",
@@ -271,7 +281,8 @@
         "pick": "last",
         "exclude": [
           "div.markdown-container.toolcall-content-text",
-          "div.segment-assistant-actions"
+          "div.segment-assistant-actions",
+          "div.toolcall-container"
         ]
       },
       "completion": {

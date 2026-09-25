@@ -266,12 +266,20 @@ export function insertarMarcasIntercaladas(
   const marcas: string[] = [];
   const partes: string[] = [];
   let indice = 0;
-  for (let pos = 0; pos < texto.length; pos += intervaloChars) {
-    partes.push(texto.slice(pos, pos + intervaloChars));
+  let pos = 0;
+  while (pos < texto.length) {
+    // Decisión de Juan (2026-09-25): la marca va en el primer espacio o salto
+    // de línea a partir del carácter `intervaloChars` del tramo, nunca en
+    // medio de una palabra (medido en su ronda de cierre: "l" + marca + "a
+    // entrada"). Si el tramo no tiene ninguno, la marca va al final.
+    let corte = Math.min(pos + intervaloChars, texto.length);
+    while (corte < texto.length && texto[corte] !== " " && texto[corte] !== "\n") corte++;
+    partes.push(texto.slice(pos, corte));
     const marca = textoMarca(indice, token);
     marcas.push(marca);
     partes.push(`\n${marca}\n`);
     indice++;
+    pos = corte;
   }
   return { textoConMarcas: partes.join(""), marcas };
 }

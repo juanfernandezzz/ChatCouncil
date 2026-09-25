@@ -305,6 +305,27 @@ export function puedeEscribirPromptIntegrador(
   return { puede: true };
 }
 
+/**
+ * El aviso de "Capturar todos" sobre si los prompts de usuario coinciden entre
+ * proveedores. Decisión de Juan (2026-09-25): corre SÓLO en la etapa de
+ * investigación, donde los ocho reciben la misma pregunta. En operación cada
+ * operador recibe a propósito un texto distinto (las siete respuestas que no
+ * son la suya), y ahí el aviso era una falsa alarma. `""` = sin aviso.
+ */
+export function avisoPromptsDeCaptura(
+  lecturas: readonly { userText?: string | null }[],
+  etapa: EtapaRonda,
+): string {
+  if (etapa !== "investigacion") return "";
+  const conPrompt = lecturas.filter((l) => typeof l.userText === "string" && l.userText.length > 0);
+  if (conPrompt.length < 2) return "";
+  const normalizado = (t: string): string => t.trim().replace(/\s+/g, " ").toLowerCase();
+  const distintos = new Set(conPrompt.map((l) => normalizado(l.userText as string)));
+  return distintos.size > 1
+    ? `⚠ Los prompts de usuario capturados NO coinciden entre proveedores (${distintos.size} versiones distintas) — revisar antes de comparar respuestas.`
+    : `Prompt de usuario: coincide en los ${conPrompt.length} proveedores donde se pudo leer.`;
+}
+
 /** Sólo para que la corrida simulada pueda fabricar ids de hecho sin tocar el registro real. */
 export function idFicticio(): string {
   return randomUUID();

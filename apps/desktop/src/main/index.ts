@@ -71,6 +71,7 @@ import {
   etiquetasValidasDelOperador,
   procesarSalidaOperador,
   puedeEscribirPromptIntegrador,
+  avisoPromptsDeCaptura,
 } from "./integrador";
 
 
@@ -1026,7 +1027,7 @@ function ocultarIntegrador(): void {
  * silencio: se registra como `ErrorCaptura` y se sigue con el resto de las
  * lecturas de este lote.
  */
-function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProveedor[]): void {
+function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProveedor[]): EtapaRonda {
   const lecturas = marcarLecturasVacias(lecturasCrudas);
   // El diagnóstico se escribe SIEMPRE, aunque no haya ronda abierta a la que
   // enganchar la respuesta: es un archivo aparte y su valor no depende del
@@ -1066,18 +1067,31 @@ function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProvee
     }
   }
 
-  if (lecturaIntegrador && !lecturaIntegrador.error) {
-    try {
-      const promptCompleto = ultimoPromptIntegrador ?? PROMPT_NO_DISPONIBLE;
-      escribirInformeIntegrador(userData, conv, rondaId, lecturaIntegrador.id, promptCompleto, lecturaIntegrador.text);
-    } catch (e) {
-      escribirErrorCaptura(userData, conv, rondaId, etapa, "informe-integrador", e instanceof Error ? e.message : String(e));
+  // Decisión de Juan (2026-09-25): en la etapa de integración, una lectura del
+  // integrador que falla —o un panel del integrador que no está abierto— queda
+  // como `ErrorCaptura`, con proveedor, etapa, hora y el mensaje completo.
+  // Antes se descartaba en silencio: la captura de las 05:35 de la ronda de
+  // cierre no guardó nada y no quedó forma de saber por qué.
+  if (etapa === "integracion") {
+    if (!lecturaIntegrador) {
+      escribirErrorCaptura(userData, conv, rondaId, etapa, "informe-integrador",
+        `el panel del integrador (${INTEGRADOR_ID}) no estaba abierto al capturar`, INTEGRADOR_ID);
+    } else if (lecturaIntegrador.error) {
+      escribirErrorCaptura(userData, conv, rondaId, etapa, "informe-integrador", lecturaIntegrador.error, lecturaIntegrador.id);
+    } else {
+      try {
+        const promptCompleto = ultimoPromptIntegrador ?? PROMPT_NO_DISPONIBLE;
+        escribirInformeIntegrador(userData, conv, rondaId, lecturaIntegrador.id, promptCompleto, lecturaIntegrador.text);
+      } catch (e) {
+        escribirErrorCaptura(userData, conv, rondaId, etapa, "informe-integrador", e instanceof Error ? e.message : String(e), lecturaIntegrador.id);
+      }
     }
   }
 
   for (const id of ACTIVOS) {
     navegacionesEnRondaAnterior.set(id, contadorNavegaciones.get(id) ?? 0);
   }
+  return etapa;
 }
 
 export interface ResultadoCapturarUno {
@@ -1873,8 +1887,10 @@ function registrarIpc(): void {
 
   ipcMain.handle("cc:capturar-todos", async () => {
     const lecturas = await leer();
-    registrarRespuestasDeRondaActual(lecturas);
-    return lecturas;
+    // La etapa ANTES de esta captura decide si corre el aviso de prompts
+    // (decisión de Juan, 2026-09-25: sólo en investigación).
+    const etapa = registrarRespuestasDeRondaActual(lecturas);
+    return { lecturas, aviso: avisoPromptsDeCaptura(lecturas, etapa) };
   });
 
   ipcMain.handle("cc:sesiones", async () => sesiones());

@@ -448,6 +448,7 @@ export function escribirErrorCaptura(
   etapaEsperada: EtapaRonda,
   tipoCapturaIntentado: TipoCaptura,
   detalle: string,
+  proveedorId?: string,
 ): ErrorCaptura {
   const hecho: ErrorCaptura = {
     tipo: "error-captura",
@@ -456,6 +457,7 @@ export function escribirErrorCaptura(
     rondaId,
     etapaEsperada,
     tipoCapturaIntentado,
+    ...(proveedorId ? { proveedorId } : {}),
     detalle,
     ocurridoEn: new Date().toISOString(),
   };

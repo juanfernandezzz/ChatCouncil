@@ -105,7 +105,7 @@ interface CcBridge {
   integrador: () => Promise<string>;
   pegarPreguntaEnTodos: (prompt: string) => Promise<Resultado[]>;
   pegarPreguntaAqui: (prompt: string) => Promise<Resultado>;
-  capturarTodos: () => Promise<Lectura[]>;
+  capturarTodos: () => Promise<{ lecturas: Lectura[]; aviso: string }>;
   capturarUno: () => Promise<ResultadoCapturarUno>;
   sesiones: () => Promise<{ id: string; cookies: number }[]>;
   sondear: () => Promise<Sondeo>;
@@ -256,7 +256,7 @@ function pegarPreguntaAqui(): void {
  * Cuota cero.
  */
 $("capturar-todos").addEventListener("click", () => {
-  void window.cc.capturarTodos().then((ls) => {
+  void window.cc.capturarTodos().then(({ lecturas: ls, aviso }) => {
     for (const l of ls) {
       if (l.error) marcar(l.id, l.error, "mal");
       else marcar(l.id, `${l.text.length} car.${estadoLectura(l)}`, l.text.length > 0 ? "ok" : "");
@@ -265,20 +265,10 @@ $("capturar-todos").addEventListener("click", () => {
     const detalle = ls
       .map((l) => (l.error ? `  ${l.id}: ${l.error}` : `  ${l.id}: ${l.text.length} caracteres${estadoLectura(l)}`))
       .join("\n");
-    // Aviso de la cobertura del riesgo de "sin historial": si los prompts de
-    // usuario capturados no coinciden entre proveedores, se informa acá —
-    // nunca bloquea, pero Juan tiene que verlo antes de comparar respuestas.
-    const conPrompt = ls.filter((l) => typeof l.userText === "string" && l.userText.length > 0);
-    let avisoPrompt = "";
-    if (conPrompt.length >= 2) {
-      const normalizado = (t: string): string => t.trim().replace(/\s+/g, " ").toLowerCase();
-      const distintos = new Set(conPrompt.map((l) => normalizado(l.userText as string)));
-      avisoPrompt =
-        distintos.size > 1
-          ? `\n\n⚠ Los prompts de usuario capturados NO coinciden entre proveedores (${distintos.size} versiones distintas) — revisar antes de comparar respuestas.`
-          : `\n\nPrompt de usuario: coincide en los ${conPrompt.length} proveedores donde se pudo leer.`;
-    }
-    decir(`Captura:\n${detalle}${avisoPrompt}`, avisoPrompt.startsWith("\n\n⚠") ? "mal" : "ok");
+    // Aviso de la cobertura del riesgo de "sin historial": lo calcula el
+    // proceso principal (`avisoPromptsDeCaptura`), que conoce la etapa de la
+    // ronda y sólo lo emite en investigación (decisión de Juan, 2026-09-25).
+    decir(`Captura:\n${detalle}${aviso ? `\n\n${aviso}` : ""}`, aviso.startsWith("⚠") ? "mal" : "ok");
   });
 });
 

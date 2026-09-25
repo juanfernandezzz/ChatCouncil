@@ -317,6 +317,8 @@ export interface ErrorCaptura {
   rondaId: string;
   etapaEsperada: EtapaRonda;
   tipoCapturaIntentado: TipoCaptura;
+  /** Proveedor cuya lectura falló (2026-09-25). Ausente en hechos anteriores. */
+  proveedorId?: string;
   detalle: string;
   ocurridoEn: string;
 }

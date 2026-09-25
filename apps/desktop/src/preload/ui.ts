@@ -18,7 +18,8 @@ contextBridge.exposeInMainWorld("cc", {
   pegarPreguntaEnTodos: (prompt: string): Promise<unknown[]> => ipcRenderer.invoke("cc:pegar-pregunta-en-todos", prompt),
   /** Lo mismo, pero SÓLO en el panel al frente. Si es deepseek, no hace nada y avisa. Nunca envía, no registra ronda. */
   pegarPreguntaAqui: (prompt: string): Promise<ResultadoEnvioUno> => ipcRenderer.invoke("cc:pegar-pregunta-aqui", prompt),
-  capturarTodos: (): Promise<unknown[]> => ipcRenderer.invoke("cc:capturar-todos"),
+  /** Lecturas de los nueve + el aviso de prompts (vacío fuera de la etapa de investigación). */
+  capturarTodos: (): Promise<{ lecturas: unknown[]; aviso: string }> => ipcRenderer.invoke("cc:capturar-todos"),
   /** Captura SÓLO el panel al frente, con el tipo de captura que corresponda a la etapa de la ronda. */
   capturarUno: (): Promise<ResultadoCapturarUno> => ipcRenderer.invoke("cc:capturar-uno"),
   sesiones: (): Promise<{ id: string; cookies: number }[]> => ipcRenderer.invoke("cc:sesiones"),

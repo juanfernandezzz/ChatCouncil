@@ -3133,6 +3133,9 @@ aparece, aparece con cualquier método que haya dejado el texto.
 Recorrido real en limpio, sin datos sembrados.
 · Conversacion 2e1baf0a-898a-45be-b9ae-85a5ca972485, ronda c26c40de-ded2-470d-9b81-5e9dc70a9946, esPrueba: false.
 · Respuestas de investigacion: 8 de 8.
+  De esas 8, la de Mistral llegó vacía: respondió en un canvas aparte que la
+  captura no leía, y solo se registró el aviso "Listo. Creé el canvas…". Los
+  siete operadores leyeron ese aviso como la respuesta de Mistral.
 · Salidas de operador capturadas: 8 de 8. Hallazgos parseados: 270.
   Lineas descartadas por el parseo: 35. Etiquetas invalidas: 0.
   Lineas LIMITACION: 10.
@@ -3153,3 +3156,4 @@ ABIERTO al cerrar la Fase 3:
 · La captura del integrador de las 05:35 no guardo el informe de deepseek;
   la de las 05:55 si (9027 caracteres). Motivo no determinado: una lectura
   del integrador con error se descarta sin dejar hecho en el registro.
+· La respuesta de Mistral de esa ronda quedó incompleta por el canvas.

@@ -328,6 +328,11 @@ en este repositorio.
   se corrigió: no afecta el parseo. No está medido si chatgpt envía el
   espacio duro o un espacio normal, porque medirlo exige enviar un mensaje.
 
+- Qwen muestra el código en un editor que solo carga las líneas visibles en
+  pantalla. Un bloque de código largo en una respuesta de Qwen puede llegar
+  incompleto a la captura. Medido el 2026-09-25 en la ronda de cierre de la
+  Fase 3. No se corrigió.
+
 ## Sobre qué es y qué no es
 
 - Es un instrumento para **comparar** respuestas, no para determinar cuál

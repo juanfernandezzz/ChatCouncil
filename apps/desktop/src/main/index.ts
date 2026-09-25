@@ -605,7 +605,10 @@ const VENTANA_H = VENTANA ? Number(VENTANA[2]) : 1000;
  * (fila nueva bajo los chips de estado) — si no crece, esa fila queda tapada
  * por los paneles de proveedor.
  */
-const UI_HEIGHT = 158;
+// 2026-09-25: 158 dejaba los chips (px 157) y el estado (px 216) debajo de la
+// franja, tapados por los paneles. Medido a 1366 px con una sola fila de
+// botones: el estado termina en el px 222.
+const UI_HEIGHT = 232;
 
 interface Vista {
   id: string;
@@ -4367,7 +4370,11 @@ void app.whenReady().then(() => {
   // ya deja `cc:consolidar` (y todo lo que dependa de `rondaActualId`)
   // operando sobre `null` hasta el primer "Pegar en todos" de esta corrida.
   // Sólo en modo normal — ver el comentario de la función.
-  if (MODO === "normal") restaurarRondaActivaDesdeRegistro();
+  // `login` también: es el modo con el que Juan abre la app de verdad
+  // (AbrirChatCouncil.cmd usa --cc-login). Medido el 2026-09-25: sin esto,
+  // reabrir la app a mitad del recorrido dejaba "Pegar operación en todos"
+  // sin ronda activa aunque el registro la tuviera.
+  if (MODO === "normal" || MODO === "login") restaurarRondaActivaDesdeRegistro();
   construirMenu();
   registrarIpc();
   // `sesion` no abre ninguna página de proveedor —ni falta le hace: sólo

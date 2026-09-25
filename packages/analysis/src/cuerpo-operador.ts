@@ -445,14 +445,22 @@ export function armarCuerposPorOperador(
   const { labeled, seal } = anonymizeReplies(analizables, true, shuffleSeedNumerica);
 
   const urlsPor = new Map(respuestas.map((r) => [r.proveedorId, r.urlsCitadas]));
-  const textoLenPorProveedor = new Map(respuestas.map((r) => [r.proveedorId, r.texto.length]));
-  // Suma de TODOS los `texto` crudos del pool — independiente de a quién
+  // Tamaño de cada respuesta TAL COMO ENTRA al cuerpo: su texto MÁS la lista
+  // de fuentes que le agrega `armarCuerpoConFuentes`. Medido en la ronda real
+  // de Juan del 2026-09-25: con 454 citas, contar sólo el texto crudo dejaba
+  // el cuerpo de gemini 4 marcas por encima de lo esperado (111 contra ~107)
+  // y la comprobación de abajo bloqueaba "Pegar operación en todos" con un
+  // cuerpo correcto.
+  const textoLenPorProveedor = new Map(
+    respuestas.map((r) => [r.proveedorId, armarCuerpoConFuentes(r.texto, r.urlsCitadas).length]),
+  );
+  // Suma de TODOS los tamaños del pool — independiente de a quién
   // termine incluyendo cada cuerpo, a propósito: es la referencia contra la
   // que se comprueba la exclusión más abajo, y una referencia que se
   // calculara a partir de `incluidos` sería tautológica (nunca podría
   // discrepar de sí misma). Verificado en rojo: calcularla desde `incluidos`
   // fue la primera versión de esta comprobación, y no agarraba nada.
-  const sumaTotalPool = respuestas.reduce((s, r) => s + r.texto.length, 0);
+  const sumaTotalPool = [...textoLenPorProveedor.values()].reduce((s, n) => s + n, 0);
   const codigos = codigosEstables(poolOrden);
   const selloConCodigo: EntradaSelloConCodigo[] = seal.map((s) => ({
     ...s,

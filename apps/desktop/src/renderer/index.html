@@ -51,7 +51,10 @@
       }
       .chip.ok { border-color: #4c6b40; }
       .chip.mal { border-color: #7a4438; }
-      #estado { margin-top: 8px; font-size: 12.5px; opacity: .85; white-space: pre-wrap; }
+      /* 2026-09-25: el estado quedaba DEBAJO de la franja de 158 px y los
+         paneles lo tapaban (medido: empezaba en el px 216). Altura fija con su
+         propio scroll, dentro de la franja. */
+      #estado { margin-top: 6px; font-size: 12.5px; opacity: .85; white-space: pre-wrap; height: 52px; overflow-y: auto; }
       .ok { color: #9bbf8a; } .mal { color: #d98c7a; }
 
       dialog {
@@ -75,8 +78,6 @@
       <button id="pegar-integrador" title="Arma la tabla de hallazgos y el prompt del integrador, y lo escribe en el panel de deepseek (lo trae al frente si no es el visible). Nunca envía.">Pegar integrador</button>
       <button id="capturar-todos" title="Lee, por cada panel: ultimo mensaje del usuario, respuesta completa, modelLabel. No navega, no recarga y no escribe en ningun compositor. Cuota cero.">Capturar todos</button>
       <button id="armar-informe-final" title="Arma el informe final de la ronda activa con lo que haya en el registro y lo guarda en la carpeta de datos, en informes/. Abre la carpeta.">Armar informe final</button>
-    </div>
-    <div class="fila fila-botones">
       <button id="sesiones">Sesiones</button>
       <button id="desplazar-izquierda" title="Desplazar la fila de paneles a la izquierda. No navega ni recarga.">◀</button>
       <button id="desplazar-derecha" title="Desplazar la fila de paneles a la derecha. No navega ni recarga.">▶</button>

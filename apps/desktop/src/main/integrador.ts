@@ -51,9 +51,10 @@ export function procesarSalidaOperador(
   operadorId: string,
   promptCompleto: string,
   salidaCruda: string,
+  html: string | null,
   etiquetasValidas: readonly string[],
 ): { salida: ReturnType<typeof escribirSalidaOperador>; hallazgos: HallazgoHecho[]; lineasDescartadas: number } {
-  const salida = escribirSalidaOperador(userData, conversacionId, rondaId, operadorId, promptCompleto, salidaCruda);
+  const salida = escribirSalidaOperador(userData, conversacionId, rondaId, operadorId, promptCompleto, salidaCruda, html);
   const resultado = parsearHallazgos(salidaCruda, etiquetasValidas);
   const hallazgos = escribirHallazgos(userData, conversacionId, salida.id, resultado.hallazgos);
   return { salida, hallazgos, lineasDescartadas: resultado.lineasDescartadas };

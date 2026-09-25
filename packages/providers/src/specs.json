@@ -208,6 +208,13 @@
         "selector": "div.markdown-container-style.max-w-none",
         "pick": "last"
       },
+      "canvas": {
+        "mensaje": "[data-message-author-role=\"assistant\"]",
+        "abrir": "div.rounded-t-xl.border-b > button.cursor-pointer, button[aria-label=\"Abrir Canvas\"]",
+        "contenido": "#chat-side-panel .tiptap.ProseMirror",
+        "cerrar": "#chat-side-panel button[aria-label=\"Cerrar\"]"
+      },
+      "_notaCanvas": "Medido el 2026-09-25 sobre la conversacion de la ronda de cierre de Juan: el texto del canvas no existe en el DOM hasta abrir la tarjeta del mensaje; se monta en #chat-side-panel del mismo documento (sin iframe). 'Abrir Canvas' y 'Cerrar' son aria-label en espanol. La tarjeta cerrada es el boton del titulo en la cabecera de la tarjeta; con otro canvas abierto, la tarjeta minimizada lleva aria-label 'Abrir Canvas'.",
       "completion": {
         "kind": "quiescence",
         "quiescenceMs": 20000

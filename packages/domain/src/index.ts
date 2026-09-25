@@ -222,6 +222,12 @@ export interface SalidaOperador {
   promptCompleto: string;
   salidaCruda: string;
   recibidaEn: string;
+  /**
+   * HTML crudo del nodo capturado, misma regla que `Respuesta.html`: de acá
+   * se re-deriva el texto si cambia un `exclude`. Ausente en los hechos
+   * escritos antes del 2026-09-25.
+   */
+  html?: string | null;
 }
 
 /**
@@ -263,6 +269,8 @@ export interface InformeIntegrador {
   promptCompleto: string;
   informeCrudo: string;
   recibidaEn: string;
+  /** HTML crudo del nodo capturado — ver `SalidaOperador.html`. */
+  html?: string | null;
 }
 
 /**

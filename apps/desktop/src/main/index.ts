@@ -1056,12 +1056,25 @@ function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProvee
     }));
   }
 
+  // Decisión de Juan (2026-09-25): la ronda de cierre registró como respuesta
+  // de Mistral solo el aviso "Listo. Creé el canvas…" — la respuesta real
+  // estaba fuera del nodo capturado. No bloquea: deja constancia. Ojo: ese
+  // aviso medía 1.498 caracteres, así que este umbral no lo habría marcado.
+  if (etapa === "investigacion") {
+    for (const l of lecturasComoRespuesta) {
+      if (!l.error && l.text.length < 300) {
+        escribirErrorCaptura(userData, conv, rondaId, etapa, "respuesta",
+          "respuesta sospechosamente corta: puede haber quedado fuera de la captura", l.id);
+      }
+    }
+  }
+
   for (const l of lecturasOperacion) {
     if (l.error) continue; // una lectura fallida no tiene salida que parsear — ya quedó en el diagnóstico
     try {
       const etiquetasValidas = etiquetasValidasDelOperador(l.id, POOL_OPERADORES, sello);
       const promptCompleto = ultimoPromptOperadorPorId.get(l.id) ?? PROMPT_NO_DISPONIBLE;
-      procesarSalidaOperador(userData, conv, rondaId, l.id, promptCompleto, l.text, etiquetasValidas);
+      procesarSalidaOperador(userData, conv, rondaId, l.id, promptCompleto, l.text, l.html ?? null, etiquetasValidas);
     } catch (e) {
       escribirErrorCaptura(userData, conv, rondaId, etapa, "salida-operador", e instanceof Error ? e.message : String(e));
     }
@@ -1081,7 +1094,7 @@ function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProvee
     } else {
       try {
         const promptCompleto = ultimoPromptIntegrador ?? PROMPT_NO_DISPONIBLE;
-        escribirInformeIntegrador(userData, conv, rondaId, lecturaIntegrador.id, promptCompleto, lecturaIntegrador.text);
+        escribirInformeIntegrador(userData, conv, rondaId, lecturaIntegrador.id, promptCompleto, lecturaIntegrador.text, lecturaIntegrador.html ?? null);
       } catch (e) {
         escribirErrorCaptura(userData, conv, rondaId, etapa, "informe-integrador", e instanceof Error ? e.message : String(e), lecturaIntegrador.id);
       }

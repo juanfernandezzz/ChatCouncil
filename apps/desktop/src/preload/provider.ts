@@ -45,6 +45,8 @@ interface PageSpec {
   escritura: Escritura;
   submit: { kind: "click"; selector: string } | { kind: "key"; key: "Enter" };
   assistantMessage: { selector: string; pick: "last"; exclude?: string[] };
+  /** Respuesta escrita en un documento aparte (mistral): ver `leerCanvas`. */
+  canvas?: { mensaje: string; abrir: string; contenido: string; cerrar: string };
   completion: CompletionSpec;
   timeouts?: { composerMs?: number; submitReadyMs?: number; submitConfirmMs?: number };
   modelLabel?: { selector: string };
@@ -431,6 +433,40 @@ function readAssistant(spec: PageSpec): string {
     }
   }
   return copy.textContent ?? "";
+}
+
+/**
+ * Ronda de cierre de Juan (2026-09-25): mistral escribió la respuesta en un
+ * "canvas" y en el mensaje dejó sólo el aviso "Listo. Creé el canvas…". El
+ * texto del canvas NO está en el DOM hasta abrirlo (medido: se monta en
+ * `#chat-side-panel`, mismo documento, sin iframe). Se abre con la tarjeta
+ * del último mensaje del asistente, se lee y se cierra — abrir no envía nada.
+ * Si el panel ya estaba abierto (lo abrió Juan) se lee y se deja abierto.
+ * ponytail: toma la ÚLTIMA tarjeta del mensaje; varios canvas en una misma
+ * respuesta, sumarlos si aparece el caso.
+ */
+async function leerCanvas(spec: PageSpec, node: Element | null): Promise<{ texto: string; html: string } | null> {
+  const c = spec.canvas;
+  const msg = c && node ? node.closest(c.mensaje) : null;
+  if (!c || !msg) return null;
+  const tarjeta = Array.from(msg.querySelectorAll(c.abrir)).pop() as HTMLElement | undefined;
+  if (!tarjeta) return null;
+  const yaAbierto = document.querySelector(c.contenido) !== null;
+  try {
+    if (!yaAbierto) tarjeta.click();
+    const hasta = Date.now() + 8000;
+    let el = document.querySelector(c.contenido);
+    while ((!el || (el.textContent ?? "").length === 0) && Date.now() < hasta) {
+      await sleep(150);
+      el = document.querySelector(c.contenido);
+    }
+    if (!el) return null;
+    const copia = el.cloneNode(true) as Element;
+    copia.querySelectorAll("style, script").forEach((n) => n.remove());
+    return { texto: copia.textContent ?? "", html: el.outerHTML };
+  } finally {
+    if (!yaAbierto) (document.querySelector(c.cerrar) as HTMLElement | null)?.click();
+  }
 }
 
 /**
@@ -1197,33 +1233,38 @@ contextBridge.exposeInMainWorld("__ccProvider", {
     return el ? vaciarCompositorMedicion(el, spec.composer.kind) : false;
   },
   estaVacioElChat: (spec: PageSpec) => estaVacioElChat(spec),
-  read: (spec: PageSpec) => ({
-    text: readAssistant(spec),
-    userText: readUserMessage(spec),
-    // Ver contarEnlacesDeFuente: cuenta <a href> REALES en el DOM, nunca en
-    // el texto extraido. Decide si "no hay URLs en textoOriginal" es (a) un
-    // selector que pierde las fuentes o (b) una respuesta sin busqueda web.
-    fuentesHref: contarEnlacesDeFuente(ultimoNodoAsistente(spec)),
-    // EL CRUDO ES EL DATO CANONICO (regla ya vigente para las extracciones
-    // del analista, aplicada acá al DOM): si la captura sólo guarda texto
-    // derivado, cualquier selector nuevo -contar links, encontrar un panel
-    // de fuentes, lo que sea- exige una corrida real nueva contra la cuenta
-    // de Juan. Con el HTML del subárbol al lado, esas correcciones se
-    // re-derivan OFFLINE sobre capturas viejas, sin gastar cuota ni pedirle
-    // nada a Juan. Sin `exclude`: es el crudo, no la vista recortada que ve
-    // `readAssistant`. Nueve subárboles por corrida es un costo irrelevante
-    // para el volumen que ya se mide acá (BLUEPRINT, decisión de la marca
-    // canaria).
-    html: ultimoNodoAsistente(spec)?.outerHTML ?? null,
-    generating: estaGenerando(spec),
-    // Viaja con la lectura para que quien la consuma sepa si el fin se OBSERVA
-    // o se INFIERE, sin tener que volver a mirar la spec.
-    completionKind: spec.completion.kind,
-    quiescenceMs: spec.completion.quiescenceMs,
-    modelLabel: readModelLabel(spec),
-    // Viaja junto con la etiqueta y en la MISMA lectura: si se tomara en otra
-    // llamada, el DOM ya no seria el mismo y el desglose describiria un
-    // instante distinto del que produjo la etiqueta que se guarda.
-    modelLabelDesglose: readModelLabelDesglose(spec),
-  }),
+  read: async (spec: PageSpec) => {
+    const node = ultimoNodoAsistente(spec);
+    // Con canvas, su texto REEMPLAZA al aviso; el html guarda los dos, en orden.
+    const canvas = await leerCanvas(spec, node);
+    return {
+      text: canvas ? canvas.texto : readAssistant(spec),
+      userText: readUserMessage(spec),
+      // Ver contarEnlacesDeFuente: cuenta <a href> REALES en el DOM, nunca en
+      // el texto extraido. Decide si "no hay URLs en textoOriginal" es (a) un
+      // selector que pierde las fuentes o (b) una respuesta sin busqueda web.
+      fuentesHref: contarEnlacesDeFuente(node),
+      // EL CRUDO ES EL DATO CANONICO (regla ya vigente para las extracciones
+      // del analista, aplicada acá al DOM): si la captura sólo guarda texto
+      // derivado, cualquier selector nuevo -contar links, encontrar un panel
+      // de fuentes, lo que sea- exige una corrida real nueva contra la cuenta
+      // de Juan. Con el HTML del subárbol al lado, esas correcciones se
+      // re-derivan OFFLINE sobre capturas viejas, sin gastar cuota ni pedirle
+      // nada a Juan. Sin `exclude`: es el crudo, no la vista recortada que ve
+      // `readAssistant`. Nueve subárboles por corrida es un costo irrelevante
+      // para el volumen que ya se mide acá (BLUEPRINT, decisión de la marca
+      // canaria).
+      html: node ? node.outerHTML + (canvas ? "\n" + canvas.html : "") : null,
+      generating: estaGenerando(spec),
+      // Viaja con la lectura para que quien la consuma sepa si el fin se OBSERVA
+      // o se INFIERE, sin tener que volver a mirar la spec.
+      completionKind: spec.completion.kind,
+      quiescenceMs: spec.completion.quiescenceMs,
+      modelLabel: readModelLabel(spec),
+      // Viaja junto con la etiqueta y en la MISMA lectura: si se tomara en otra
+      // llamada, el DOM ya no seria el mismo y el desglose describiria un
+      // instante distinto del que produjo la etiqueta que se guarda.
+      modelLabelDesglose: readModelLabelDesglose(spec),
+    };
+  },
 });

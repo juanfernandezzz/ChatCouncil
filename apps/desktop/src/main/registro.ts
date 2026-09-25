@@ -328,6 +328,7 @@ export function escribirSalidaOperador(
   operadorId: string,
   promptCompleto: string,
   salidaCruda: string,
+  html: string | null,
 ): SalidaOperador {
   const hecho: SalidaOperador = {
     tipo: "salida-operador",
@@ -338,6 +339,7 @@ export function escribirSalidaOperador(
     promptCompleto,
     salidaCruda,
     recibidaEn: new Date().toISOString(),
+    html,
   };
   escribir(userData, conversacionId, hecho);
   return hecho;
@@ -386,6 +388,7 @@ export function escribirInformeIntegrador(
   operadorId: string,
   promptCompleto: string,
   informeCrudo: string,
+  html: string | null,
 ): InformeIntegrador {
   const hecho: InformeIntegrador = {
     tipo: "informe-integrador",
@@ -396,6 +399,7 @@ export function escribirInformeIntegrador(
     promptCompleto,
     informeCrudo,
     recibidaEn: new Date().toISOString(),
+    html,
   };
   escribir(userData, conversacionId, hecho);
   return hecho;

@@ -50,6 +50,7 @@ import {
   type ResultadoEnvio,
 } from "./test-runner";
 import { sondear } from "./probe";
+import { entregarPdfDeInforme } from "./informe-pdf";
 import {
   crearConversacion,
   escribirErrorCaptura,
@@ -4232,7 +4233,7 @@ async function modoSesion(): Promise<void> {
  * ("fallo: no se capturo salida", "No se capturo informe del integrador").
  * Nunca sobrescribe un informe anterior: si el nombre existe, agrega la hora.
  */
-function armarInformeFinalDeRondaActiva(): { ok: boolean; mensaje: string; ruta?: string } {
+async function armarInformeFinalDeRondaActiva(): Promise<{ ok: boolean; mensaje: string; ruta?: string }> {
   const sinRonda = { ok: false, mensaje: "No hay una ronda activa para armar el informe." };
   if (!conversacionActual || !rondaActualId) return sinRonda;
   const userData = app.getPath("userData");
@@ -4306,8 +4307,7 @@ function armarInformeFinalDeRondaActiva(): { ok: boolean; mensaje: string; ruta?
   }
   // `wx`: falla antes que pisar un archivo existente.
   writeFileSync(ruta, texto, { encoding: "utf8", flag: "wx" });
-  shell.showItemInFolder(ruta);
-  return { ok: true, mensaje: `Informe guardado en: ${ruta}`, ruta };
+  return entregarPdfDeInforme(texto, ruta);
 }
 
 /** Ventana chica de "Proveedores al iniciar…". No abre ni cierra paneles: sólo edita el archivo aparte. */

@@ -17,7 +17,8 @@
   "dependencies": {
     "@chatcouncil/analysis": "workspace:*",
     "@chatcouncil/domain": "workspace:*",
-    "@chatcouncil/providers": "workspace:*"
+    "@chatcouncil/providers": "workspace:*",
+    "marked": "18.0.14"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

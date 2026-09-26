@@ -16,6 +16,8 @@
  * resto de `packages/analysis`.
  */
 
+import { ENCABEZADO_RESCATE, extraerSeccionRescate, extraerTituloDelInforme } from "./titulo-informe";
+
 export interface HallazgoResuelto {
   /** "H12" — el código que el integrador vio en la tabla. */
   codigo: string;
@@ -60,6 +62,13 @@ export interface ParticipacionOperador {
 export interface InformeFinalInput {
   pregunta: string;
   fecha: string;
+  /**
+   * Los ids del registro (Fase 5). Salieron del NOMBRE del archivo, que ahora
+   * es fecha y título, y pasaron acá: sin ellos el informe no se puede volver
+   * a atar al registro que lo produjo.
+   */
+  conversacionId: string;
+  rondaId: string;
   /**
    * `null` cuando el integrador falló y no se capturó ningún `InformeIntegrador`
    * — el instrumento tiene que poder producir el resto del informe igual: la
@@ -115,8 +124,22 @@ const SIN_INFORME_INTEGRADOR = "No se capturo informe del integrador para esta r
 
 export function armarInformeFinal(input: InformeFinalInput): string {
   const codigosExistentes = new Set(input.hallazgos.map((h) => h.codigo));
+  // La línea "TITULO:" no es prosa del informe: pasa a ser el encabezado y no
+  // se muestra en "Lectura del integrador". El texto crudo COMPLETO sigue
+  // guardado en el hecho `InformeIntegrador`, intacto.
+  const { titulo, cuerpo: cuerpoIntegrador } =
+    input.informeIntegradorCrudo === null
+      ? { titulo: null, cuerpo: null }
+      : extraerTituloDelInforme(input.informeIntegradorCrudo);
   const lecturaMarcada =
-    input.informeIntegradorCrudo === null ? SIN_INFORME_INTEGRADOR : marcarReferencias(input.informeIntegradorCrudo, codigosExistentes);
+    cuerpoIntegrador === null ? SIN_INFORME_INTEGRADOR : marcarReferencias(cuerpoIntegrador, codigosExistentes);
+  // Sección 5 del integrador ("QUE CONVIENE RESCATAR") al principio del
+  // informe: es lo que lee quien hizo la pregunta. `null` en rondas anteriores
+  // a ese cambio — ahí el encabezado no aparece, nunca vacío.
+  // Marcada igual que la lectura: es la sección sobre la que Juan actúa, y una
+  // referencia inventada tiene que verse ✗ ahí también, no sólo más abajo.
+  const rescateCrudo = cuerpoIntegrador === null ? null : extraerSeccionRescate(cuerpoIntegrador);
+  const rescate = rescateCrudo === null ? null : marcarReferencias(rescateCrudo, codigosExistentes);
 
   // Hallazgos REFERENCIADOS: sólo los que existen, en orden de PRIMERA aparición.
   const referenciados: HallazgoResuelto[] = [];
@@ -141,8 +164,9 @@ export function armarInformeFinal(input: InformeFinalInput): string {
   const seccionParticipacion = input.participacionOperadores.map(entradaParticipacion).join("\n");
 
   return [
-    "# Informe de ronda",
+    titulo === null ? "# Informe de ronda" : `# ${titulo}`,
     "",
+    ...(rescate === null ? [] : [ENCABEZADO_RESCATE, "", rescate, ""]),
     `**Pregunta:** ${input.pregunta}`,
     `**Fecha:** ${input.fecha}`,
     "**Eje de registro:** los tres (HECHOS, FUENTES, CONCLUSIONES)",
@@ -172,6 +196,9 @@ export function armarInformeFinal(input: InformeFinalInput): string {
     "| Proveedor | Etiqueta de modelo | Caracteres de su respuesta | Fuentes citadas |",
     "|---|---|---|---|",
     tablaCondiciones,
+    "",
+    `Conversación: ${input.conversacionId}`,
+    `Ronda: ${input.rondaId}`,
     "",
     `Integrador de esta ronda: ${input.integrador ?? "(no registrado)"}`,
     "",

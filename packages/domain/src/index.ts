@@ -268,6 +268,14 @@ export interface InformeIntegrador {
   operadorId: string;
   promptCompleto: string;
   informeCrudo: string;
+  /**
+   * Fase 5 — el título que el integrador escribió en la primera línea
+   * ("TITULO: …"), ya separado. Es un dato DERIVADO del `informeCrudo`, que
+   * sigue guardándose entero: se persiste aparte porque es lo que nombra el
+   * archivo del informe. `null` o ausente = no escribió título (rondas
+   * anteriores a este cambio).
+   */
+  titulo?: string | null;
   recibidaEn: string;
   /** HTML crudo del nodo capturado — ver `SalidaOperador.html`. */
   html?: string | null;

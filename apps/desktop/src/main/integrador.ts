@@ -160,6 +160,9 @@ export function calcularParticipacionOperadores(resultados: readonly ResultadoOp
 export function armarInformeFinalDeRonda(params: {
   pregunta: string;
   fecha: string;
+  /** Fase 5: los ids salieron del nombre del archivo y van DENTRO del informe. */
+  conversacionId: string;
+  rondaId: string;
   informeIntegrador: InformeIntegrador | null;
   tabla: TablaHallazgos;
   sello: readonly Sello[];
@@ -213,6 +216,8 @@ export function armarInformeFinalDeRonda(params: {
   return armarInformeFinal({
     pregunta: params.pregunta,
     fecha: params.fecha,
+    conversacionId: params.conversacionId,
+    rondaId: params.rondaId,
     informeIntegradorCrudo: params.informeIntegrador === null ? null : params.informeIntegrador.informeCrudo,
     referenciasEnOrden,
     hallazgos: hallazgosResueltos,

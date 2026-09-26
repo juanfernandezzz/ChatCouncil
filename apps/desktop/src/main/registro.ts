@@ -38,6 +38,7 @@ import {
   type SalidaOperador,
   type TipoCaptura,
 } from "@chatcouncil/domain";
+import { extraerTituloDelInforme } from "@chatcouncil/analysis";
 
 import { extraerCitas } from "./citas";
 import type { LecturaProveedor, ResultadoEnvio } from "./test-runner";
@@ -398,6 +399,7 @@ export function escribirInformeIntegrador(
     operadorId,
     promptCompleto,
     informeCrudo,
+    titulo: extraerTituloDelInforme(informeCrudo).titulo,
     recibidaEn: new Date().toISOString(),
     html,
   };

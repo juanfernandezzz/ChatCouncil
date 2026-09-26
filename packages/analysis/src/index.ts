@@ -34,4 +34,5 @@ export * from "./parsear-referencias-integrador";
 export * from "./prompt-integrador";
 export * from "./prompt-operacion";
 export * from "./provider-names";
+export * from "./titulo-informe";
 export * from "./verificar-fuentes";

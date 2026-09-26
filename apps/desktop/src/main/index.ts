@@ -40,6 +40,9 @@ import {
   insertarMarcasIntercaladas,
   hashSemilla,
   parsearHallazgos,
+  extraerTituloDelInforme,
+  nombreBaseDeInforme,
+  nombreLibreDeInforme,
 } from "@chatcouncil/analysis";
 
 import {
@@ -4280,10 +4283,15 @@ async function armarInformeFinalDeRondaActiva(): Promise<{ ok: boolean; mensaje:
   });
   const informes = deLaRonda<InformeIntegrador>("informe-integrador");
 
+  const informeIntegrador = informes[informes.length - 1] ?? null;
+  const pregunta = preguntaEfectivaDeRonda(hechos, ronda) ?? ronda.prompt;
+
   const texto = armarInformeFinalDeRonda({
-    pregunta: preguntaEfectivaDeRonda(hechos, ronda) ?? ronda.prompt,
+    pregunta,
     fecha: new Date().toISOString(),
-    informeIntegrador: informes[informes.length - 1] ?? null,
+    conversacionId: conversacionActual,
+    rondaId: ronda.id,
+    informeIntegrador,
     tabla,
     sello,
     respuestasDelPool,
@@ -4296,15 +4304,18 @@ async function armarInformeFinalDeRondaActiva(): Promise<{ ok: boolean; mensaje:
     integrador: integradorDeRonda(hechos, ronda.id),
   });
 
+  // Fase 5 (decisión de Juan, 2026-09-26): el nombre es "AAAA-MM-DD HHMM —
+  // <titulo>", con la fecha y hora LOCALES de este momento y el título que
+  // escribió el integrador (o las primeras seis palabras de la pregunta). Los
+  // dos UUID que nombraban el archivo antes ahora van DENTRO del informe.
   const dir = join(userData, "informes");
   mkdirSync(dir, { recursive: true });
-  const base = `${conversacionActual}-${ronda.id}`;
-  let ruta = join(dir, `${base}.md`);
-  if (existsSync(ruta)) {
-    const d = new Date();
-    const hhmmss = [d.getHours(), d.getMinutes(), d.getSeconds()].map((n) => String(n).padStart(2, "0")).join("");
-    ruta = join(dir, `${base}-${hhmmss}.md`);
-  }
+  const titulo =
+    informeIntegrador === null ? null : (informeIntegrador.titulo ?? extraerTituloDelInforme(informeIntegrador.informeCrudo).titulo);
+  const base = nombreBaseDeInforme({ titulo, pregunta, ahora: new Date() });
+  // El `.pdf` comparte nombre con el `.md`: un nombre está libre sólo si lo están los dos.
+  const nombre = nombreLibreDeInforme(base, (n) => existsSync(join(dir, `${n}.md`)) || existsSync(join(dir, `${n}.pdf`)));
+  const ruta = join(dir, `${nombre}.md`);
   // `wx`: falla antes que pisar un archivo existente.
   writeFileSync(ruta, texto, { encoding: "utf8", flag: "wx" });
   return entregarPdfDeInforme(texto, ruta);

@@ -12,6 +12,8 @@
  * integrador, el mismo principio que la regla 4 de `parsear-hallazgos.ts`.
  */
 
+import { esParrafoTitulo } from "./titulo-informe";
+
 const REFERENCIA_RE = /\[H\d+\]/g;
 const PREFIJO_NO_ALCANZA = "LA TABLA NO ALCANZA";
 
@@ -19,8 +21,14 @@ export interface ParrafoAnalizado {
   indice: number;
   texto: string;
   esLaTablaNoAlcanza: boolean;
+  /**
+   * `true` si el párrafo es la línea "TITULO: …" del integrador (Fase 5). No
+   * es prosa del informe: es el nombre del archivo. Exenta de la regla de
+   * referencias por el mismo motivo que "LA TABLA NO ALCANZA".
+   */
+  esTitulo: boolean;
   referencias: string[];
-  /** `true` si el párrafo no es "LA TABLA NO ALCANZA" y no trae ninguna referencia — viola la regla obligatoria. */
+  /** `true` si el párrafo no es "LA TABLA NO ALCANZA" ni la línea TITULO y no trae ninguna referencia — viola la regla obligatoria. */
   sinReferencias: boolean;
 }
 
@@ -56,6 +64,7 @@ export function parsearReferenciasIntegrador(
 
   parrafosTexto.forEach((texto, indice) => {
     const esLaTablaNoAlcanza = texto.startsWith(PREFIJO_NO_ALCANZA);
+    const esTitulo = indice === 0 && esParrafoTitulo(texto);
     const matches = texto.match(REFERENCIA_RE) ?? [];
     const idsDelParrafo = matches.map((m) => m.slice(1, -1));
 
@@ -67,10 +76,10 @@ export function parsearReferenciasIntegrador(
       });
     }
 
-    const sinReferencias = idsDelParrafo.length === 0 && !esLaTablaNoAlcanza;
+    const sinReferencias = idsDelParrafo.length === 0 && !esLaTablaNoAlcanza && !esTitulo;
     if (sinReferencias) parrafosSinReferencias.push(indice);
 
-    parrafos.push({ indice, texto, esLaTablaNoAlcanza, referencias: idsDelParrafo, sinReferencias });
+    parrafos.push({ indice, texto, esLaTablaNoAlcanza, esTitulo, referencias: idsDelParrafo, sinReferencias });
   });
 
   return { parrafos, referencias, parrafosSinReferencias };

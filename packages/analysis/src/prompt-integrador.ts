@@ -42,7 +42,13 @@ Cada linea tiene seis campos: el identificador del hallazgo, su categoria, su ej
 
 QUE TIENES QUE HACER
 
-Escribe un informe con cuatro secciones, en este orden:
+La primera linea de tu informe tiene que ser un titulo corto, de no mas de ocho palabras, que diga de que trata la pregunta. Escribelo asi:
+
+TITULO: el titulo aqui
+
+Despues del titulo, escribe el informe.
+
+Escribe un informe con cinco secciones, en este orden:
 
 1. TIPOS DE DIVERGENCIA
 Para cada divergencia registrada en la tabla, di de que tipo es:
@@ -61,6 +67,14 @@ Reune las ausencias registradas y di que partes de la pregunta original quedaron
 
 4. QUE HARIA FALTA
 Para cada divergencia, di que dato, que fuente o que decision permitiria resolverla. Si una divergencia no se puede resolver con mas informacion, dilo tambien.
+
+5. QUE CONVIENE RESCATAR
+Esta seccion es para quien hizo la pregunta y tiene que usar la respuesta. Escribela en lenguaje llano, sin listas de identificadores. Puede ser breve.
+Primero, lo que es firme: lo que la mayoria de las respuestas afirma y que ninguna contradice. Eso se puede tomar como base.
+Segundo, las contradicciones que mas importan: de todas las divergencias, elige las que tendrian consecuencias practicas mas serias si se toma la version equivocada, y di por que. No mas de cinco.
+Tercero, lo que nadie resolvio y sigue abierto: las ausencias que dejan a quien pregunto sin una respuesta que necesita.
+Cuarto, que hacer con esto: que conviene verificar primero y en que tipo de fuente, segun lo que la tabla muestra.
+Tambien en esta seccion cada parrafo tiene que referenciar los hallazgos en que se apoya, con su identificador entre corchetes. No agregues nada que no este en la tabla.
 
 COMO SE ESCRIBE
 

@@ -6,9 +6,11 @@
  */
 import { BrowserWindow, shell } from "electron";
 import { Marked } from "marked";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+import { SUBCARPETA_RESPUESTAS } from "@chatcouncil/analysis";
 
 const escapar = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -20,7 +22,7 @@ const PLANTILLA = `<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>Informe de ronda — ChatCouncil</title>
+<title>{{TITULO}}</title>
 <style>
   body { font-family: Georgia, "Times New Roman", serif; font-size: 11pt;
          line-height: 1.55; color: #1a1a1a; margin: 0; }
@@ -53,14 +55,16 @@ const PLANTILLA = `<!DOCTYPE html>
 const PIE =
   '<div style="width:100%;font-size:8px;color:#666;text-align:center;font-family:Georgia,serif;">ChatCouncil — página <span class="pageNumber"></span> de <span class="totalPages"></span></div>';
 
-export function informeAHtml(markdown: string): string {
+export function informeAHtml(markdown: string, titulo = "Informe de ronda — ChatCouncil"): string {
   // replace con función: un `$` del contenido no se interpreta como patrón.
-  return PLANTILLA.replace("{{CONTENIDO}}", () => marked.parse(markdown, { async: false }));
+  return PLANTILLA.replace("{{TITULO}}", () => escapar(titulo)).replace("{{CONTENIDO}}", () =>
+    marked.parse(markdown, { async: false }),
+  );
 }
 
 /** Escribe `rutaPdf` a partir del Markdown. Tira si algo falla; el llamador decide. */
-export async function generarPdfDeInforme(markdown: string, rutaPdf: string): Promise<void> {
-  const html = informeAHtml(markdown);
+export async function generarPdfDeInforme(markdown: string, rutaPdf: string, titulo?: string): Promise<void> {
+  const html = informeAHtml(markdown, titulo);
   // Archivo temporal y no data: URL — los data: URL tienen tope de tamaño.
   const dirTmp = mkdtempSync(join(tmpdir(), "cc-informe-"));
   const w = new BrowserWindow({
@@ -92,23 +96,113 @@ export async function generarPdfDeInforme(markdown: string, rutaPdf: string): Pr
 }
 
 /**
- * Al lado del `.md` (ya guardado, no se toca) va el `.pdf` con el mismo nombre
- * y se abre ESE. Si el PDF falla, el `.md` queda y se abre la carpeta como
- * antes: nunca se pierde el informe por el PDF.
+ * Fase 5 (decisión de Juan, 2026-09-26) — el informe final se entrega como una
+ * CARPETA, no como dos archivos sueltos:
+ *
+ *   AAAA-MM-DD HHMM — <titulo>/
+ *     AAAA-MM-DD HHMM — <titulo>.md      ← el dato original
+ *     AAAA-MM-DD HHMM — <titulo>.pdf     ← el mismo informe, para leer
+ *     Respuestas de los investigadores/
+ *       1 — chatgpt.pdf … 8 — qwen.pdf   ← las respuestas A LA PREGUNTA
+ *
+ * Carpeta y no ZIP: se escribe en el disco local de Juan, donde una carpeta se
+ * abre de un clic y un ZIP habría que descomprimirlo para leer nada.
+ *
+ * ORDEN DELIBERADO: primero el `.md`, que es el dato canónico; después los
+ * PDF, que son presentación. Si un PDF falla, el informe ya está en el disco y
+ * NO se pierde — igual que antes de este cambio. Cada respuesta se convierte
+ * por separado: una que falle no se lleva a las demás, y las que falten quedan
+ * NOMBRADAS en un archivo de texto dentro de la subcarpeta, nunca ausentes en
+ * silencio.
  */
-export async function entregarPdfDeInforme(
-  texto: string,
-  rutaMd: string,
-  generar: (md: string, rutaPdf: string) => Promise<void> = generarPdfDeInforme,
+export interface RespuestaEnCarpeta {
+  /** Nombre del archivo SIN extensión, ya limpio (`nombreArchivoRespuesta`). */
+  nombreArchivo: string;
+  /** Título de la ventana/documento del PDF. */
+  titulo: string;
+  markdown: string;
+}
+
+const NOMBRE_FALTANTES = "FALTAN — respuestas sin PDF.txt";
+
+export async function entregarCarpetaDeInforme(
+  params: {
+    /** La carpeta `informes` de `userData`; tiene que existir. */
+    dirInformes: string;
+    /** Nombre base YA libre (`nombreLibreDeInforme`): nombra la carpeta y los dos archivos del informe. */
+    nombreBase: string;
+    textoInforme: string;
+    respuestas: readonly RespuestaEnCarpeta[];
+  },
+  generar: (md: string, rutaPdf: string, titulo?: string) => Promise<void> = generarPdfDeInforme,
 ): Promise<{ ok: boolean; mensaje: string; ruta?: string }> {
-  const rutaPdf = rutaMd.replace(/\.md$/, ".pdf");
+  // Sin `recursive`: si la carpeta ya existe, tira antes de tocar nada — el
+  // mismo motivo que el flag `wx` del `.md`.
+  const carpeta = join(params.dirInformes, params.nombreBase);
+  mkdirSync(carpeta);
+
+  const rutaMd = join(carpeta, `${params.nombreBase}.md`);
+  writeFileSync(rutaMd, params.textoInforme, { encoding: "utf8", flag: "wx" });
+
+  const rutaPdf = join(carpeta, `${params.nombreBase}.pdf`);
+  let pdfDelInforme: string | null = null;
+  let falloInforme = "";
   try {
-    await generar(texto, rutaPdf);
+    await generar(params.textoInforme, rutaPdf, `${params.nombreBase} — ChatCouncil`);
+    pdfDelInforme = rutaPdf;
   } catch (e) {
-    shell.showItemInFolder(rutaMd);
-    const motivo = e instanceof Error ? e.message : String(e);
-    return { ok: true, mensaje: `Informe guardado solo en Markdown: no se pudo generar el PDF (${motivo}).`, ruta: rutaMd };
+    falloInforme = e instanceof Error ? e.message : String(e);
   }
-  void shell.openPath(rutaPdf);
-  return { ok: true, mensaje: `Informe guardado. Se abrió el PDF: ${rutaPdf}`, ruta: rutaPdf };
+
+  const faltantes: string[] = [];
+  if (params.respuestas.length > 0) {
+    const dirRespuestas = join(carpeta, SUBCARPETA_RESPUESTAS);
+    try {
+      mkdirSync(dirRespuestas);
+      for (const r of params.respuestas) {
+        try {
+          await generar(r.markdown, join(dirRespuestas, `${r.nombreArchivo}.pdf`), r.titulo);
+        } catch (e) {
+          faltantes.push(`${r.nombreArchivo}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      if (faltantes.length > 0) {
+        // Una respuesta que falta tiene que estar NOMBRADA en la carpeta: sin
+        // esto, la subcarpeta incompleta se lee como "ese proveedor no participó".
+        const nota = [
+          "Estas respuestas de investigador no se pudieron convertir a PDF.",
+          "El texto de cada una sigue entero en el registro de la conversacion.",
+          "",
+          ...faltantes.map((f) => `- ${f}`),
+          "",
+        ].join("\n");
+        try {
+          writeFileSync(join(dirRespuestas, NOMBRE_FALTANTES), nota, { encoding: "utf8", flag: "wx" });
+        } catch {
+          /* la cuenta igual va en el mensaje de pantalla */
+        }
+      }
+    } catch (e) {
+      faltantes.push(`no se pudo crear la subcarpeta: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  const hechas = params.respuestas.length - faltantes.length;
+  const detalleRespuestas =
+    params.respuestas.length === 0
+      ? "Sin respuestas de investigador en el registro de esta ronda."
+      : faltantes.length === 0
+        ? `${hechas} respuestas de investigador en PDF.`
+        : `${hechas} de ${params.respuestas.length} respuestas en PDF (las que faltan estan nombradas en "${NOMBRE_FALTANTES}").`;
+
+  if (pdfDelInforme === null) {
+    shell.showItemInFolder(rutaMd);
+    return {
+      ok: true,
+      mensaje: `Carpeta del informe: ${carpeta}. El informe quedo solo en Markdown: no se pudo generar el PDF (${falloInforme}). ${detalleRespuestas}`,
+      ruta: rutaMd,
+    };
+  }
+  void shell.openPath(pdfDelInforme);
+  return { ok: true, mensaje: `Carpeta del informe: ${carpeta}. Se abrio el PDF del informe. ${detalleRespuestas}`, ruta: carpeta };
 }

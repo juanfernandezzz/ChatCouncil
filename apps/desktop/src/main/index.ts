@@ -41,6 +41,8 @@ import {
   hashSemilla,
   parsearHallazgos,
   extraerTituloDelInforme,
+  markdownDeRespuestaInvestigador,
+  nombreArchivoRespuesta,
   nombreBaseDeInforme,
   nombreLibreDeInforme,
 } from "@chatcouncil/analysis";
@@ -53,7 +55,7 @@ import {
   type ResultadoEnvio,
 } from "./test-runner";
 import { sondear } from "./probe";
-import { entregarPdfDeInforme } from "./informe-pdf";
+import { entregarCarpetaDeInforme, type RespuestaEnCarpeta } from "./informe-pdf";
 import {
   crearConversacion,
   escribirErrorCaptura,
@@ -4313,12 +4315,38 @@ async function armarInformeFinalDeRondaActiva(): Promise<{ ok: boolean; mensaje:
   const titulo =
     informeIntegrador === null ? null : (informeIntegrador.titulo ?? extraerTituloDelInforme(informeIntegrador.informeCrudo).titulo);
   const base = nombreBaseDeInforme({ titulo, pregunta, ahora: new Date() });
-  // El `.pdf` comparte nombre con el `.md`: un nombre está libre sólo si lo están los dos.
-  const nombre = nombreLibreDeInforme(base, (n) => existsSync(join(dir, `${n}.md`)) || existsSync(join(dir, `${n}.pdf`)));
-  const ruta = join(dir, `${nombre}.md`);
-  // `wx`: falla antes que pisar un archivo existente.
-  writeFileSync(ruta, texto, { encoding: "utf8", flag: "wx" });
-  return entregarPdfDeInforme(texto, ruta);
+  // El nombre nombra la CARPETA y los dos archivos del informe: está libre sólo
+  // si no existe ninguno de los tres (informes viejos, anteriores a la carpeta,
+  // son `<nombre>.md`/`<nombre>.pdf` sueltos y también cuentan como ocupados).
+  const nombre = nombreLibreDeInforme(
+    base,
+    (n) => existsSync(join(dir, n)) || existsSync(join(dir, `${n}.md`)) || existsSync(join(dir, `${n}.pdf`)),
+  );
+
+  // Las respuestas de los INVESTIGADORES a la pregunta — las mismas que la
+  // tabla de condiciones, en el orden del pool. NUNCA las `SalidaOperador`:
+  // esas son la evaluación que cada uno hizo de las respuestas ajenas y ya
+  // están en la tabla de hallazgos del informe (decisión de Juan, 2026-09-26).
+  const respuestas: RespuestaEnCarpeta[] = POOL_OPERADORES.map((proveedorId, i) => {
+    const r = respuestasDelPool.find((x) => x.proveedorId === proveedorId);
+    if (!r) return null;
+    return {
+      nombreArchivo: nombreArchivoRespuesta(i, proveedorId),
+      titulo: `${proveedorId} — respuesta de investigador`,
+      markdown: markdownDeRespuestaInvestigador(pregunta, {
+        proveedorId,
+        etiquetaModelo: r.procedencia.modelLabel,
+        leidaEn: r.leidaEn,
+        textoOriginal: r.textoOriginal,
+        error: r.error,
+        fuentesCitadas: citas.filter((c) => c.respuestaId === r.id).length,
+        fuentesHref: r.fuentesHref,
+        finDe: r.procedencia.finDe,
+      }),
+    };
+  }).filter((r): r is RespuestaEnCarpeta => r !== null);
+
+  return entregarCarpetaDeInforme({ dirInformes: dir, nombreBase: nombre, textoInforme: texto, respuestas });
 }
 
 /** Ventana chica de "Proveedores al iniciar…". No abre ni cierra paneles: sólo edita el archivo aparte. */

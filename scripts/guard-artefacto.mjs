@@ -42,6 +42,12 @@ const EXIGIDO = {
     "cc:pegar-operacion-aqui",
     "cc:pegar-integrador",
     "cc:sesiones",
+    // Fase 5 — el informe final se entrega como CARPETA con las respuestas de
+    // los investigadores en PDF adentro. Sin estos marcadores, un tree-shaking
+    // que se lleve `entregarCarpetaDeInforme` deja el build en verde y "Armar
+    // informe final" fallando en la mano de Juan.
+    "Respuestas de los investigadores",
+    "Carpeta del informe:",
     "persist:",
     "--cc-test",
     "--cc-probe",

@@ -10,7 +10,7 @@
  * con 72 cookies sobreviviendo al cierre completo de la app.
  */
 
-import { app, BaseWindow, BrowserWindow, clipboard, Menu, WebContentsView, ipcMain, screen, session, shell } from "electron";
+import { app, BaseWindow, BrowserWindow, clipboard, dialog, Menu, WebContentsView, ipcMain, screen, session, shell } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -4362,6 +4362,59 @@ function abrirSeleccionProveedores(): void {
   void w.loadFile(join(__dirname, "../renderer/seleccion.html"));
 }
 
+/**
+ * Cambio de cuenta (decisión de Juan, 2026-09-27) — cerrar sesión de UN panel
+ * a pedido explícito.
+ *
+ * POR QUÉ ES UNA ACCIÓN APARTE Y NO EL BOTÓN "cerrar sesión" DEL PROVEEDOR.
+ * `crearVista` bloquea, a propósito y en todos los modos, cualquier navegación
+ * a un endpoint de cierre de sesión (`/logout`, etc.): ese bloqueo es lo que
+ * impide que el sondeo mate sesiones cuando `/new` rebota a `/logout`. El
+ * efecto colateral es que el "cerrar sesión" de la web del proveedor tampoco
+ * hace nada. En vez de perforar esa protección, esta acción deslogea el panel
+ * SIN navegar a logout: borra las cookies y el almacenamiento de ESA partición
+ * (`persist:<id>`, aislada por proveedor) y recarga el panel en su URL de
+ * arranque, que al no haber sesión cae en la pantalla de login.
+ *
+ * Es destructivo (hay que volver a entrar), así que pide confirmación. No toca
+ * las otras particiones: cada proveedor tiene la suya.
+ */
+async function cerrarSesionDeVista(objetivo: { id: string; view: WebContentsView }): Promise<void> {
+  const { id, view } = objetivo;
+  const { response } = await dialog.showMessageBox({
+    type: "warning",
+    buttons: ["Cerrar sesión", "Cancelar"],
+    defaultId: 0,
+    cancelId: 1,
+    title: "Cerrar sesión de este panel",
+    message: `¿Cerrar sesión de ${id}?`,
+    detail:
+      "Se borran las cookies y el almacenamiento de este panel para que puedas entrar con otra cuenta. " +
+      "Vas a tener que iniciar sesión de nuevo. No afecta a los otros paneles.",
+  });
+  if (response !== 0) return;
+  try {
+    await session.fromPartition(`persist:${id}`).clearStorageData();
+    decirPorSalida(`\n[cc] sesion CERRADA a pedido en ${id}: se borraron cookies y almacenamiento de esa particion.\n`);
+    if (!view.webContents.isDestroyed()) {
+      // A la URL de arranque, no un `reload()` de la página profunda: sin sesión,
+      // el proveedor la manda al login limpio en vez de encadenar redirecciones.
+      const inicio = PROVIDER_SPECS[id as ProviderId]?.newConversationUrl;
+      if (inicio) void view.webContents.loadURL(inicio);
+      else view.webContents.reload();
+    }
+  } catch (e) {
+    decirPorSalida(`\n[cc] no pude cerrar la sesion de ${id}: ${String(e)}\n`);
+    void dialog.showMessageBox({
+      type: "error",
+      buttons: ["Entendido"],
+      title: "No se pudo cerrar sesión",
+      message: `No se pudo cerrar la sesión de ${id}.`,
+      detail: String(e),
+    });
+  }
+}
+
 function construirMenu(): void {
   const recargarPanelActual = (forzar: boolean): void => {
     const v = vistaEnFrente();
@@ -4427,6 +4480,26 @@ function construirMenu(): void {
         { label: "Pegar pregunta en este panel", click: () => uiView?.webContents.send("cc:menu", "pegar-pregunta-aqui") },
         { label: "Pegar operación en este panel", click: () => uiView?.webContents.send("cc:menu", "pegar-operacion-aqui") },
         { label: "Capturar este panel", click: () => uiView?.webContents.send("cc:menu", "capturar-uno") },
+      ],
+    },
+    {
+      // Cambio de cuenta (2026-09-27): el "cerrar sesión" del proveedor no
+      // funciona a propósito (ver `cerrarSesionDeVista`). Esta acción deslogea
+      // el panel al frente sin navegar a logout, para poder entrar con otra
+      // cuenta.
+      label: "Cuenta",
+      submenu: [
+        {
+          label: "Cerrar sesión de este panel…",
+          click: () => {
+            const objetivo = vistaConIdEnFrente();
+            if (!objetivo) {
+              decirPorSalida("\n[cc] no hay ningun panel al frente para cerrar su sesion.\n");
+              return;
+            }
+            void cerrarSesionDeVista(objetivo);
+          },
+        },
       ],
     },
   ];

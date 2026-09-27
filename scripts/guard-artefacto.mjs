@@ -119,6 +119,11 @@ const EXIGIDO = {
     "will-redirect",
     "redireccionesBloqueadas",
     "logout",
+    // Cambio de cuenta (2026-09-27): cerrar sesion de un panel a pedido, sin
+    // navegar a logout. Si esto no esta compilado, el menu queda sin la accion
+    // y no hay forma de cambiar de cuenta, con el build en verde. ASCII a
+    // proposito (la etiqueta con acentos se escapa a \\uXXXX).
+    "sesion CERRADA a pedido en",
     // Banco de pruebas de persistencia sin cuentas ni humano.
     "--cc-sesion=",
     "cc_persistencia",

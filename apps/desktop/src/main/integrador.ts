@@ -109,8 +109,8 @@ export function etiquetasValidasDelOperador(
 export type RolRecapturable = "integrador" | "verificador";
 
 const SIN_PREVIO: Record<RolRecapturable, string> = {
-  integrador: 'No hay un informe de integrador en esta ronda todavía. Usá "Pegar integrador".',
-  verificador: 'No hay una verificación en esta ronda todavía. Usá "Pegar verificación".',
+  integrador: 'No hay un informe de integrador en esta ronda todavía. Usa "Pegar integrador".',
+  verificador: 'No hay una verificación en esta ronda todavía. Usa "Pegar verificación".',
 };
 
 function previosDeRol(hechos: readonly Hecho[], rondaId: string, rol: RolRecapturable): (InformeIntegrador | SalidaVerificador)[] {

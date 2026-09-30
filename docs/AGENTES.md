@@ -172,6 +172,10 @@ hace cada cosa**. Nada de "abrí X" sin decir cómo se abre X.
 
 ## Formato y lenguaje
 
+- Idioma: todo el texto dirigido al usuario y los mensajes de la interfaz van en
+  español latino neutral (uso de "tú", sin voseo ni modismos regionales). Los
+  textos literales de los prompts que reciben los modelos ya están en neutro y
+  no se modifican.
 - **Español neutro** en todo: respuestas, interfaz y documentación.
 - En texto en español de la interfaz, la palabra "council" no aparece: se dice
   **"consejo"**. "ChatCouncil" queda como marca sin traducir.

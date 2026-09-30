@@ -17,7 +17,17 @@
 
 import { randomUUID } from "node:crypto";
 
-import type { Cita, HallazgoHecho, InformeIntegrador, Respuesta, SalidaVerificador, Sello, UrlComprobada } from "@chatcouncil/domain";
+import type {
+  Cita,
+  HallazgoHecho,
+  Hecho,
+  InformeIntegrador,
+  Respuesta,
+  SalidaOperador,
+  SalidaVerificador,
+  Sello,
+  UrlComprobada,
+} from "@chatcouncil/domain";
 import type { EtapaRonda } from "@chatcouncil/domain";
 import {
   armarInformeFinal,
@@ -86,6 +96,29 @@ export function etiquetasValidasDelOperador(
       if (!codigo) throw new Error(`no hay codigo estable de sello para el proveedor ${id}`);
       return codigo;
     });
+}
+
+/**
+ * Las salidas de operador VIGENTES de una ronda, con sus hallazgos: la última
+ * captura de cada operador ("el hecho más reciente gana"), en el orden de su
+ * primera captura. Es la ÚNICA entrada de la tabla de hallazgos: el prompt del
+ * integrador, el del verificador y el informe final salen de acá, así que los
+ * H## (que numera la posición) coinciden entre los tres. Antes el prompt usaba
+ * todas las salidas y el informe la última por operador: con un operador
+ * recapturado, el integrador contaba dos veces sus hallazgos y el informe
+ * resolvía sus [H##] contra otra tabla.
+ */
+export function salidasVigentesDeRonda(
+  hechos: readonly Hecho[],
+  rondaId: string,
+): { operadorId: string; salidaId: string; hallazgos: HallazgoHecho[] }[] {
+  const ultima = new Map<string, SalidaOperador>();
+  for (const h of hechos) if (h.tipo === "salida-operador" && h.rondaId === rondaId) ultima.set(h.operadorId, h);
+  return [...ultima.values()].map((s) => ({
+    operadorId: s.operadorId,
+    salidaId: s.id,
+    hallazgos: hechos.filter((h): h is HallazgoHecho => h.tipo === "hallazgo" && h.salidaOperadorId === s.id),
+  }));
 }
 
 /**

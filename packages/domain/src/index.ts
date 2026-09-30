@@ -513,8 +513,11 @@ export function preguntaEfectivaDeRonda(hechos: readonly Hecho[], ronda: Ronda):
 
 export function etapaDeRonda(hechos: readonly Hecho[], rondaId: string, totalOperadores: number): EtapaRonda {
   if (hechos.some((h) => h.tipo === "informe-integrador" && h.rondaId === rondaId)) return "verificacion";
-  const salidasDeLaRonda = hechos.filter((h) => h.tipo === "salida-operador" && h.rondaId === rondaId).length;
-  if (salidasDeLaRonda >= totalOperadores) return "integracion";
+  // Operadores DISTINTOS, no salidas: un operador recapturado no cuenta dos veces.
+  const operadoresConSalida = new Set(
+    hechos.filter((h): h is SalidaOperador => h.tipo === "salida-operador" && h.rondaId === rondaId).map((h) => h.operadorId),
+  ).size;
+  if (operadoresConSalida >= totalOperadores) return "integracion";
   const huboConsolidacion = hechos.some((h) => h.tipo === "sello" && h.rondaId === rondaId);
   if (huboConsolidacion) return "operacion";
   return "investigacion";

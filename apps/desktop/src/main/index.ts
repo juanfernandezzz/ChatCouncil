@@ -82,6 +82,7 @@ import {
   clasificarLecturasPorEtapa,
   etiquetasValidasDelOperador,
   procesarSalidaOperador,
+  salidasVigentesDeRonda,
   puedeEscribirPromptIntegrador,
   avisoPromptsDeCaptura,
 } from "./integrador";
@@ -3695,17 +3696,7 @@ function tablaDeRondaActiva(rol: string):
   // etapa viaja en el resultado para que el botón lo informe en una línea.
   const etapa = etapaDeRonda(registro.hechos, ronda.id, POOL_OPERADORES.length);
 
-  const salidas = registro.hechos.filter((h): h is SalidaOperador => h.tipo === "salida-operador" && h.rondaId === ronda.id);
-  const hallazgosPorSalidaId = new Map<string, HallazgoHecho[]>();
-  for (const h of registro.hechos) {
-    if (h.tipo === "hallazgo") {
-      const lista = hallazgosPorSalidaId.get(h.salidaOperadorId) ?? [];
-      lista.push(h);
-      hallazgosPorSalidaId.set(h.salidaOperadorId, lista);
-    }
-  }
-  const hallazgosPorSalida = salidas.map((s) => ({ operadorId: s.operadorId, hallazgos: hallazgosPorSalidaId.get(s.id) ?? [] }));
-  const { tabla, prompt } = armarTablaYPromptIntegrador(pregunta, hallazgosPorSalida, POOL_OPERADORES, ronda.semilla);
+  const { tabla, prompt } = armarTablaYPromptIntegrador(pregunta, salidasVigentesDeRonda(registro.hechos, ronda.id), POOL_OPERADORES, ronda.semilla);
   return { hechos: registro.hechos, ronda, pregunta, etapa, tabla, prompt };
 }
 
@@ -4355,18 +4346,12 @@ async function armarInformeFinalDeRondaActiva(): Promise<{ ok: boolean; mensaje:
   );
   const idsRespuesta = new Set(respuestasDelPool.map((r) => r.id));
   const citas = hechos.filter((h): h is Cita => h.tipo === "cita" && idsRespuesta.has(h.respuestaId));
-  const salidas = ultimaPor(deLaRonda<SalidaOperador>("salida-operador"), (s) => s.operadorId);
-  const hallazgosDe = (salidaId: string): HallazgoHecho[] =>
-    hechos.filter((h): h is HallazgoHecho => h.tipo === "hallazgo" && h.salidaOperadorId === salidaId);
-  const { tabla } = armarTablaYPromptIntegrador(
-    ronda.prompt,
-    salidas.map((s) => ({ operadorId: s.operadorId, hallazgos: hallazgosDe(s.id) })),
-    POOL_OPERADORES,
-    semilla,
-  );
+  const vigentes = salidasVigentesDeRonda(hechos, ronda.id);
+  const { tabla } = armarTablaYPromptIntegrador(ronda.prompt, vigentes, POOL_OPERADORES, semilla);
   const resultadosOperadores = POOL_OPERADORES.map((id) => {
-    const s = salidas.find((x) => x.operadorId === id);
-    if (!s) return { operadorId: id, capturado: false, motivoFallo: "no hay salida de operador en el registro" };
+    const v = vigentes.find((x) => x.operadorId === id);
+    const s = v && hechos.find((h): h is SalidaOperador => h.tipo === "salida-operador" && h.id === v.salidaId);
+    if (!v || !s) return { operadorId: id, capturado: false, motivoFallo: "no hay salida de operador en el registro" };
     let lineasDescartadas: number | undefined;
     try {
       lineasDescartadas = parsearHallazgos(s.salidaCruda, etiquetasValidasDelOperador(id, POOL_OPERADORES, sello)).lineasDescartadas;
@@ -4376,7 +4361,7 @@ async function armarInformeFinalDeRondaActiva(): Promise<{ ok: boolean; mensaje:
     return {
       operadorId: id,
       capturado: true,
-      totalHallazgos: hallazgosDe(s.id).length,
+      totalHallazgos: v.hallazgos.length,
       ...(lineasDescartadas === undefined ? {} : { lineasDescartadas }),
     };
   });

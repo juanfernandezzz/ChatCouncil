@@ -3212,6 +3212,25 @@ ABIERTO:
 · Con una ronda que ya tiene informe del integrador, "Capturar" pasa a leer
   sólo el verificador: un informe del integrador capturado incompleto ya no
   se puede recapturar con los botones.
-· El prompt del integrador arma la tabla con TODAS las salidas de operador;
-  el informe final, con la última por operador. Si hay salidas duplicadas,
-  los H## no coinciden entre los dos. Previo a este cambio.
+
+### Tabla de hallazgos única (2026-09-29) — CERRADO
+
+El prompt del integrador armaba la tabla con TODAS las salidas de operador y
+el informe final con la última por operador. Como el H## sale de la posición,
+un operador recapturado hacía que el integrador contara dos veces sus
+hallazgos y que el informe resolviera sus [H##] contra otras filas. Y
+`etapaDeRonda` contaba salidas, no operadores: una recaptura adelantaba la
+etapa a "integracion" con un operador todavía sin capturar.
+
+Medido antes de tocar nada, en los cuatro registros reales: CERO operadores
+con más de una salida, así que ningún informe archivado cambia.
+
+Corregido en una sola función, `salidasVigentesDeRonda` (`integrador.ts`):
+la última captura de cada operador, en el orden de su primera captura. La usan
+el prompt del integrador, el del verificador y el informe final. `etapaDeRonda`
+cuenta operadores distintos. Con datos sembrados (gemini capturado dos veces):
+antes, H2 era "gemini VIEJO-1" para el integrador y "gemini NUEVO-1" para el
+informe, y H9 no existía en el informe; ahora las dos rutas dan la misma
+tabla de 7 filas y el informe resuelve [H2] [H6] a las mismas filas que vio
+el integrador. Con 6 operadores distintos y una recaptura, la etapa era
+"integracion" y ahora es "operacion".

@@ -37,6 +37,7 @@ import {
   type Sello,
   type SalidaOperador,
   type SalidaVerificador,
+  type UrlComprobada,
   type TipoCaptura,
 } from "@chatcouncil/domain";
 import { extraerTituloDelInforme } from "@chatcouncil/analysis";
@@ -74,6 +75,7 @@ function escribir(
     | HallazgoHecho
     | InformeIntegrador
     | SalidaVerificador
+    | UrlComprobada
     | CondicionHerramientas
     | ErrorCaptura
     | PreguntaDeclarada
@@ -436,6 +438,17 @@ export function escribirSalidaVerificador(
   };
   escribir(userData, conversacionId, hecho);
   return hecho;
+}
+
+/** 7-1-1 — el resultado mecánico de UNA URL de la sección 1 del verificador. */
+export function escribirUrlComprobada(
+  userData: string,
+  conversacionId: string,
+  hecho: Omit<UrlComprobada, "tipo" | "esquema" | "id">,
+): UrlComprobada {
+  const completo: UrlComprobada = { tipo: "url-comprobada", esquema: VERSION_ESQUEMA, id: randomUUID(), ...hecho };
+  escribir(userData, conversacionId, completo);
+  return completo;
 }
 
 /**

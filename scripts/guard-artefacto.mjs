@@ -47,6 +47,9 @@ const EXIGIDO = {
     // "Pegar verificación" y la captura del verificador (7-1-1).
     "cc:pegar-verificacion",
     "salida-verificador",
+    // Comprobacion mecanica de URLs del verificador: el modo y el hecho.
+    "--cc-comprobar-urls=",
+    "url-comprobada",
     "cc:sesiones",
     // Fase 5 — el informe final se entrega como CARPETA con las respuestas de
     // los investigadores en PDF adentro. Sin estos marcadores, un tree-shaking

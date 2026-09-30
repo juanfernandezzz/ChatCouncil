@@ -302,6 +302,25 @@ export interface SalidaVerificador {
 }
 
 /**
+ * 7-1-1 (2026-09-29) — comprobación MECÁNICA de una URL que el verificador
+ * citó en su sección 1 (VERIFICADO / CONTRADICHO): si existe y responde, nada
+ * más. No dice si la fuente sostiene la afirmación. `codigo` es el estado
+ * HTTP final; `null` = no resolvió (DNS, conexión o 10 s sin respuesta), con
+ * el motivo en `detalle`.
+ */
+export interface UrlComprobada {
+  tipo: "url-comprobada";
+  esquema: number;
+  id: string;
+  rondaId: string;
+  salidaVerificadorId: string;
+  url: string;
+  codigo: number | null;
+  detalle: string | null;
+  comprobadaEn: string;
+}
+
+/**
  * T7 (Fase 3, corrección de la ronda de la primera corrida real) — QUÉ
  * HERRAMIENTAS tenía cada parte en cada etapa es una CONDICIÓN DEL TURNO,
  * ya decidida como algo que se registra (§ "transferibilidad: registro de
@@ -427,6 +446,7 @@ export type Hecho =
   | HallazgoHecho
   | InformeIntegrador
   | SalidaVerificador
+  | UrlComprobada
   | CondicionHerramientas
   | ErrorCaptura
   | PreguntaDeclarada
@@ -545,6 +565,7 @@ const TIPOS = new Set([
   "hallazgo",
   "informe-integrador",
   "salida-verificador",
+  "url-comprobada",
   "condicion-herramientas",
   "error-captura",
   "pregunta-declarada",

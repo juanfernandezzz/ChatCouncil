@@ -73,6 +73,7 @@ import {
 } from "./registro";
 import { guardarSeleccion, leerRoles, leerSeleccion, poolDeInvestigadores } from "./seleccion-proveedores";
 import { armarCuerposDeRonda, armarYPersistirCuerposDeRonda } from "./operador";
+import { comprobarUrlsDeRonda } from "./comprobar-urls";
 import {
   armarInformeFinalDeRonda,
   armarPromptVerificadorDeRonda,
@@ -248,7 +249,8 @@ type Modo =
   | "consolidar"
   | "integrador"
   | "nuevo-chat"
-  | "declarar-pregunta";
+  | "declarar-pregunta"
+  | "comprobar-urls";
 
 /**
  * `--cc-difundir=<texto>`: dispara UNA ronda real —`difundir()` + espera de
@@ -348,6 +350,14 @@ const NUEVO_CHAT_SONDEO = ARGV.includes("--cc-nuevo-chat");
 const HISTORIAL_ID = (ARGV.find((a) => a.startsWith("--cc-historial=")) ?? "").split("=")[1] ?? "";
 
 /**
+ * `--cc-comprobar-urls=<conversacionId>:<rondaId>` (7-1-1, 2026-09-29): comprueba
+ * las URLs de la sección 1 del verificador de esa ronda (`comprobar-urls.ts`),
+ * las registra como `UrlComprobada`, vuelca el resultado y sale. No abre
+ * ninguna ventana ni panel.
+ */
+const COMPROBAR_URLS_ARG = (ARGV.find((a) => a.startsWith("--cc-comprobar-urls=")) ?? "").slice("--cc-comprobar-urls=".length);
+
+/**
  * `--cc-sesion=escribir` / `--cc-sesion=leer`: banco de pruebas de
  * PERSISTENCIA, sin cuentas y sin humano.
  *
@@ -377,6 +387,8 @@ const SESION = /^(escribir|leer)$/.exec((ARGV.find((a) => a.startsWith("--cc-ses
  */
 const MODO: Modo = HISTORIAL_ID
   ? "historial"
+  : COMPROBAR_URLS_ARG.length > 0
+  ? "comprobar-urls"
   : SESION
   ? "sesion"
   : DECLARAR_PREGUNTA_ARG.length > 0
@@ -2692,6 +2704,21 @@ function modoHistorial(): void {
   }
 }
 
+/** `--cc-comprobar-urls`: ver la constante `COMPROBAR_URLS_ARG`. */
+async function modoComprobarUrls(): Promise<void> {
+  try {
+    const [conversacionId, rondaId] = COMPROBAR_URLS_ARG.split(":");
+    if (!conversacionId || !rondaId) {
+      throw new Error(`--cc-comprobar-urls requiere "<conversacionId>:<rondaId>", recibido "${COMPROBAR_URLS_ARG}"`);
+    }
+    emitir("CC_COMPROBAR_URLS_JSON", await comprobarUrlsDeRonda(app.getPath("userData"), conversacionId, rondaId));
+  } catch (e) {
+    decirPorSalida(`\n===CC_COMPROBAR_URLS_ERROR===\n${e instanceof Error ? e.stack : String(e)}\n`);
+  } finally {
+    app.quit();
+  }
+}
+
 /**
  * Defecto 1 — `--cc-declarar-pregunta=<conversacionId>:<rondaId>`
  * `--cc-pregunta-archivo=<ruta>`: escribe UN hecho `PreguntaDeclarada`
@@ -4518,7 +4545,7 @@ void app.whenReady().then(() => {
   // toca cookies y `localStorage` propios— así que se salta `createWindow()`
   // y con eso la carga por red de las cuatro páginas reales, que no aporta
   // nada a esta prueba y sólo agrega tiempo y una fuente más de fallos.
-  if (MODO !== "sesion" && MODO !== "historial" && MODO !== "declarar-pregunta") createWindow();
+  if (MODO !== "sesion" && MODO !== "historial" && MODO !== "declarar-pregunta" && MODO !== "comprobar-urls") createWindow();
   if (MODO === "test") void modoPrueba();
   if (MODO === "probe") void modoSondeo();
   if (MODO === "login") modoLogin();
@@ -4526,6 +4553,7 @@ void app.whenReady().then(() => {
   if (MODO === "test-scroll") void modoTestScroll();
   if (MODO === "sesion") void modoSesion();
   if (MODO === "historial") modoHistorial();
+  if (MODO === "comprobar-urls") void modoComprobarUrls();
   if (MODO === "declarar-pregunta") modoDeclararPregunta();
   if (MODO === "difundir") void modoDifundir();
   if (MODO === "test-visibilidad") void modoVisibilidad();

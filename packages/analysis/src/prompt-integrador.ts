@@ -28,7 +28,7 @@ export interface HallazgoParaIntegrador {
 
 const PLANTILLA = `Vas a leer una tabla de hallazgos y escribir un informe.
 
-Ocho sistemas leyeron un mismo conjunto de respuestas y registraron lo que observaron. La tabla de abajo reune todos esos registros. Tu tarea es leer esa tabla y escribir un informe de lo que muestra.
+Siete sistemas leyeron un mismo conjunto de respuestas y registraron lo que observaron. La tabla de abajo reune todos esos registros. Tu tarea es leer esa tabla y escribir un informe de lo que muestra.
 
 LA PREGUNTA QUE ORIGINO TODO ESTO FUE:
 
@@ -90,7 +90,7 @@ No busques informacion. No uses lo que sabes del tema por fuera de la tabla. Tra
 
 No decidas quien tiene razon. Tu informe describe como se relacionan los registros, no cual es correcto.
 
-No trates de averiguar que sistema produjo cada respuesta. Los identificadores P1 a P8 y O1 a O8 son arbitrarios y cambian en cada ronda.`;
+No trates de averiguar que sistema produjo cada respuesta. Los identificadores P1 a P7 y O1 a O7 son arbitrarios y cambian en cada ronda.`;
 
 function filaDe(h: HallazgoParaIntegrador): string {
   const etiquetas = h.etiquetas.length === 0 ? "—" : h.etiquetas.join(",");

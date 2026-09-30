@@ -3203,10 +3203,13 @@ Nada de esto envió mensajes ni abrió paneles de proveedores.
   guard:artefacto (cinco marcadores nuevos), cada regla probada en rojo.
 
 ABIERTO:
-· Los textos literales de los prompts siguen diciendo "siete respuestas" y
-  "P1 a P8" (operación) y "Ocho sistemas", "P1 a P8 y O1 a O8" (integrador).
-  Con el pool de 7, cada operador recibe SEIS respuestas y operan siete. Los
-  textos son literales por decisión de Juan y no se tocaron.
+· CERRADO (decisión de Juan, 2026-09-29, opción A): los prompts decían
+  "siete respuestas" y "P1 a P8" (operación) y "Ocho sistemas", "P1 a P8 y
+  O1 a O8" (integrador). Cambiaron sólo esos números: "seis respuestas",
+  "P1 a P7", "Siete sistemas", "P1 a P7 y O1 a O7". Medido con el pool de 7:
+  cada operador recibe 6 respuestas, etiquetadas dentro de P1..P7.
+· "Lo que este informe no dice" (informe final, texto fijo) todavía dice
+  "ocho respuestas". No entraba en la opción A y no se tocó.
 · La escritura real en el panel del verificador no se probó: exige abrir su
   panel. El camino es el mismo que ya usa "Pegar integrador".
 · Con una ronda que ya tiene informe del integrador, "Capturar" pasa a leer

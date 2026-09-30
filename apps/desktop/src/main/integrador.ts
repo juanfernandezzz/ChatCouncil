@@ -428,7 +428,7 @@ export function puedeEscribirPromptIntegrador(
  * El aviso de "Capturar todos" sobre si los prompts de usuario coinciden entre
  * proveedores. Decisión de Juan (2026-09-25): corre SÓLO en la etapa de
  * investigación, donde los ocho reciben la misma pregunta. En operación cada
- * operador recibe a propósito un texto distinto (las siete respuestas que no
+ * operador recibe a propósito un texto distinto (las seis respuestas que no
  * son la suya), y ahí el aviso era una falsa alarma. `""` = sin aviso.
  */
 export function avisoPromptsDeCaptura(

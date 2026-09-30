@@ -487,7 +487,7 @@ export function armarCuerposPorOperador(
       bloques.push(`### Respuesta ${l.label}\n${textoLimpio}`);
       incluidos.push(proveedorDeEsteLabel);
       // DEFECTO 2 (corrida real de Juan, 2026-09-19): `armarPromptOperacion`
-      // es LITERAL y le dice al operador "los identificadores P1 a P8 son
+      // es LITERAL y le dice al operador "los identificadores P1 a P7 son
       // arbitrarios" — nunca "Modelo A".."H". `l.label` es la etiqueta
       // BARAJADA de `anonymizeReplies` (correcta para `bloques`/`seal`, que
       // siguen igual: hay que poder reconstruir el sello ya persistido de

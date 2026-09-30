@@ -3255,3 +3255,40 @@ en el compilado, probado en rojo.
 
 CERRADO (confirmado por Juan, 2026-09-30): lo usó en el panel de Qwen y Google
 le preguntó con qué cuenta entrar.
+
+### chatgpt: el informe de Deep Research vive en un iframe de otro origen (2026-09-30)
+
+Ronda `c3801f42…` de la conversación `2e1baf0a…`: chatgpt se capturó con 347
+caracteres, contra 7.367 a 60.170 de los otros seis. Medido con la app abierta
+sólo con chatgpt, en esa conversación, cuota cero:
+
+· La burbuja del asistente trae sólo el aviso "He iniciado la investigación
+  profunda…" (347). El usuario había activado Deep Research.
+· El informe NO está en el documento de chatgpt.com: vive en
+  `iframe[title="internal://deep-research"]`
+  (`connector-openai-deep-research.web-sandbox.oaiusercontent.com`), en el mismo
+  `conversation-turn` que ese mensaje, y dentro de él en un `iframe#root`
+  `about:blank` con `div._reportPage_<hash>`: **21.017 caracteres**. Ya montado,
+  sin abrir nada.
+· El preload corre en chatgpt.com y no puede entrar a un frame de otro origen.
+
+Corregido con el patrón de mistral: campo `informeEnIframe` en la spec de
+chatgpt; el preload marca la lectura cuando el iframe está en el turno del
+último mensaje, y `completarInformeEnIframe` (main) lee el frame con
+`WebFrameMain.executeJavaScript`. El texto del informe reemplaza al aviso; el
+html guarda los dos. Si el iframe está y no se puede leer, la lectura sale con
+error.
+
+Verificado por el camino real ("Capturar este panel"): **21.017 caracteres**,
+agregados como respuesta nueva de chatgpt en la misma ronda (la de 347 queda
+en el registro; la operación toma la última por proveedor). En una
+conversación sin Deep Research, el indicador da `false` y la lectura no
+cambia.
+
+**Aviso "2 versiones distintas" en esa ronda — causa medida, sin cambio.**
+Sólo chatgpt y gemini tienen `userMessage`; los otros cinco dan `null` y no
+entran a la comparación. El texto del prompt es idéntico en los dos,
+carácter por carácter. Lo que difiere es texto de interfaz capturado con él:
+chatgpt agrega "Investigación profunda" al principio y "Ver más / Mostrar
+menos" al final; gemini agrega "Tú dijiste" y una vista previa truncada de
+~100 caracteres terminada en "…" antes del texto completo.

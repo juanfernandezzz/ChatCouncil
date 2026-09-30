@@ -75,6 +75,12 @@ export interface LecturaProveedor {
    * se re-deriva OFFLINE sobre una captura vieja, sin gastar cuota.
    */
   html?: string | null;
+  /**
+   * El turno del último mensaje trae el iframe de `informeEnIframe` (spec):
+   * la respuesta real está en otro origen y la completa el proceso principal
+   * (`completarInformeEnIframe`), el único que puede entrar a ese frame.
+   */
+  informeEnIframe?: boolean;
   error?: string;
 }
 

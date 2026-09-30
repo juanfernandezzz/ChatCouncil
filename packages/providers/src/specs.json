@@ -19,6 +19,13 @@
         "selector": "[data-message-author-role=\"assistant\"]",
         "pick": "last"
       },
+      "informeEnIframe": {
+        "turno": "section[data-testid^=\"conversation-turn-\"]",
+        "iframe": "iframe[title=\"internal://deep-research\"]",
+        "frameUrl": "connector-openai-deep-research.web-sandbox.oaiusercontent.com",
+        "contenido": "[class*=\"_reportPage_\"]"
+      },
+      "_notaInforme": "Medido el 2026-09-30 sobre la conversacion de investigacion de Juan (Deep Research): la burbuja del asistente trae solo el aviso de inicio (347 caracteres); el informe vive en un iframe de otro origen (connector-openai-deep-research.web-sandbox.oaiusercontent.com, title 'internal://deep-research'), en el mismo conversation-turn que ese mensaje, y dentro de el en un iframe#root about:blank con div._reportPage_<hash> (21.017 caracteres). Ya montado sin abrir nada. _reportPage_ lleva un hash de modulo CSS: por eso [class*=].",
       "userMessage": {
         "selector": "[data-message-author-role=\"user\"]",
         "pick": "first"

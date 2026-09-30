@@ -47,6 +47,8 @@ interface PageSpec {
   assistantMessage: { selector: string; pick: "last"; exclude?: string[] };
   /** Respuesta escrita en un documento aparte (mistral): ver `leerCanvas`. */
   canvas?: { mensaje: string; abrir: string; contenido: string; cerrar: string };
+  /** Respuesta en un iframe de otro origen (chatgpt Deep Research): ver `completarInformeEnIframe` (main). */
+  informeEnIframe?: { turno: string; iframe: string; frameUrl: string; contenido: string };
   completion: CompletionSpec;
   timeouts?: { composerMs?: number; submitReadyMs?: number; submitConfirmMs?: number };
   modelLabel?: { selector: string };
@@ -1255,6 +1257,9 @@ contextBridge.exposeInMainWorld("__ccProvider", {
       // para el volumen que ya se mide acá (BLUEPRINT, decisión de la marca
       // canaria).
       html: node ? node.outerHTML + (canvas ? "\n" + canvas.html : "") : null,
+      // Sólo si el iframe está en el MISMO turno que el último mensaje: un
+      // informe de un turno anterior no reemplaza una respuesta normal nueva.
+      informeEnIframe: !!(spec.informeEnIframe && node?.closest(spec.informeEnIframe.turno)?.querySelector(spec.informeEnIframe.iframe)),
       generating: estaGenerando(spec),
       // Viaja con la lectura para que quien la consuma sepa si el fin se OBSERVA
       // o se INFIERE, sin tener que volver a mirar la spec.

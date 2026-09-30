@@ -1833,17 +1833,53 @@ async function difundir(prompt: string, destinatarios: readonly ProviderId[]): P
 
 async function leer(): Promise<LecturaProveedor[]> {
   const lecturas = await Promise.allSettled(
-    vistas.map((v) => {
+    vistas.map(async (v) => {
       const spec = JSON.stringify(PROVIDER_SPECS[v.id]);
-      return v.view.webContents.executeJavaScript(`window.__ccProvider.read(${spec})`, true);
+      const r = (await v.view.webContents.executeJavaScript(`window.__ccProvider.read(${spec})`, true)) as LecturaProveedor;
+      return completarInformeEnIframe(v, r);
     }),
   );
   return vistas.map((v, i) => {
     const r = lecturas[i]!;
     return r.status === "fulfilled"
-      ? { ...(r.value as LecturaProveedor), id: v.id }
+      ? { ...r.value, id: v.id }
       : { id: v.id, text: "", generating: false, modelLabel: null, error: String(r.reason) };
   });
+}
+
+/**
+ * chatgpt con Deep Research (medido 2026-09-30): la burbuja trae sólo el aviso
+ * de inicio (347 caracteres) y el informe (21.017) vive en un iframe de OTRO
+ * origen. El preload no puede entrar ahí; el proceso principal sí, con
+ * `WebFrameMain.executeJavaScript`. Mismo trato que el canvas de mistral: el
+ * texto del informe REEMPLAZA al aviso y el html guarda los dos. Sólo lee: no
+ * hace clic ni navega. Si el preload vio el iframe y aquí no se puede leer, la
+ * lectura sale con error — nunca pasa el aviso como si fuera la respuesta.
+ * ponytail: toma el ÚLTIMO frame con esa URL; dos informes en un mismo turno,
+ * sumarlos si aparece el caso.
+ */
+async function completarInformeEnIframe(
+  v: (typeof vistas)[number],
+  lectura: LecturaProveedor,
+): Promise<LecturaProveedor> {
+  const cfg = (PROVIDER_SPECS[v.id] as { informeEnIframe?: { frameUrl: string; contenido: string } } | undefined)
+    ?.informeEnIframe;
+  if (!cfg || !lectura.informeEnIframe) return lectura;
+  const frame = v.view.webContents.mainFrame.framesInSubtree.filter((f) => f.url.includes(cfg.frameUrl)).pop();
+  // El informe está en un iframe about:blank DENTRO de ese frame: se prueba el
+  // frame y sus hijos, el primero que tenga el contenido gana.
+  const fuente = `(() => { const el = Array.from(document.querySelectorAll(${JSON.stringify(cfg.contenido)})).pop(); if (!el) return null; const c = el.cloneNode(true); c.querySelectorAll("style, script").forEach((n) => n.remove()); return { texto: c.textContent || "", html: el.outerHTML }; })()`;
+  for (const f of frame?.framesInSubtree ?? []) {
+    try {
+      const r = (await f.executeJavaScript(fuente, true)) as { texto: string; html: string } | null;
+      if (r && r.texto.trim().length > 0) {
+        return { ...lectura, text: r.texto, html: (lectura.html ?? "") + "\n" + r.html };
+      }
+    } catch {
+      /* frame destruido o sin acceso: se prueba el siguiente */
+    }
+  }
+  return { ...lectura, error: `el informe de ${v.id} está en un iframe (${cfg.frameUrl}) que no se pudo leer: la burbuja sola no es la respuesta` };
 }
 
 /**
@@ -1855,7 +1891,7 @@ async function leerUno(v: (typeof vistas)[number]): Promise<LecturaProveedor> {
   const spec = JSON.stringify(PROVIDER_SPECS[v.id]);
   try {
     const r = (await v.view.webContents.executeJavaScript(`window.__ccProvider.read(${spec})`, true)) as LecturaProveedor;
-    return { ...r, id: v.id };
+    return { ...(await completarInformeEnIframe(v, r)), id: v.id };
   } catch (e) {
     return { id: v.id, text: "", generating: false, modelLabel: null, error: e instanceof Error ? e.message : String(e) };
   }

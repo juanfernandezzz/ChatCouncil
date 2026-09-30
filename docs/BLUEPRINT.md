@@ -3253,5 +3253,5 @@ cookies de Google de ese panel viven en la misma partición. Pide confirmación 
 no toca los otros paneles. `guard:artefacto` exige "sesion CERRADA a pedido en"
 en el compilado, probado en rojo.
 
-ABIERTO: el borrado real sobre una sesión de Juan no se probó desde el agente
-(destruiría la sesión que mide).
+CERRADO (confirmado por Juan, 2026-09-30): lo usó en el panel de Qwen y Google
+le preguntó con qué cuenta entrar.

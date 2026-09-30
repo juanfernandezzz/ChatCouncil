@@ -61,6 +61,26 @@ irrelevante incluso como dato, y que el objetivo no sea consenso sino
 **matiz**: complementariedad, validación cruzada de los puntos salientes, y
 alternativas que un solo modelo no daría.
 
+### Arquitectura vigente: 7-1-1 (decidida por Juan, 2026-09-29)
+
+> **Esto REEMPLAZA el "pool de 8" de la sección de abajo.** El pool pasa a
+> SIETE investigadores-operadores, más un integrador y un **verificador de
+> fuentes**, los dos elegibles en "Proveedores al iniciar…" (defectos:
+> deepseek y GLM) y los dos fuera del pool. Con esos defectos el pool es
+> `chatgpt · gemini · claude · grok · mistral · kimi · qwen`.
+>
+> El verificador va después del integrador: recibe la sección "QUE CONVIENE
+> RESCATAR" y los hallazgos que cita, verifica con búsqueda web, y agrega
+> puntos ciegos y preguntas derivadas. Su aporte va en el informe en dos
+> secciones marcadas como aporte de un solo modelo, no del consejo. Las URLs
+> de su sección 1 se comprueban con código (`comprobar-urls.ts`): es el
+> primer módulo que sale a la red por su cuenta — sólo a esas URLs, techo de
+> 20 por ronda y 10 s por URL, sin cookies ni sesión de los paneles.
+>
+> Los operadores tienen una quinta categoría de hallazgo: **TENSION** (mismo
+> dato, conclusiones o recomendaciones opuestas). Detalle y registro de
+> verificación en §10, "7-1-1 y TENSION".
+
 ### Arquitectura vigente: DOS partes, no tres (decidida por Juan, 2026-08-13)
 
 > **Esto REEMPLAZA la tabla de "tres roles" que seguía abajo hasta el
@@ -3157,3 +3177,41 @@ ABIERTO al cerrar la Fase 3:
   la de las 05:55 si (9027 caracteres). Motivo no determinado: una lectura
   del integrador con error se descarta sin dejar hecho en el registro.
 · La respuesta de Mistral de esa ronda quedó incompleta por el canvas.
+
+### 7-1-1 y TENSION — verificado con datos sembrados (2026-09-29), cuota cero
+
+Nada de esto envió mensajes ni abrió paneles de proveedores.
+
+· TENSION: salida de operador sembrada con las cinco categorías, prosa y una
+  etiqueta inexistente (P9). Con el soporte: 5 hallazgos, TENSION incluida,
+  3 líneas de prosa descartadas, P9 marcada. Sin TENSION en la lista del
+  parseo (rojo): la línea se descarta como prosa (4 descartadas).
+· Roles: "mismo proveedor en las dos listas" y "uno fuera de los cargados"
+  devuelven el texto literal y no escriben el archivo. Con deepseek/GLM el
+  pool es 7 y ninguno de los dos está en los destinatarios de la pregunta.
+· Prompt del verificador: con un informe sembrado que cita [H3] [H5] [H2]
+  [H99] en la sección 5, el prompt lleva la sección tal cual y sólo H3, H5,
+  H2 (H99 no existe en la tabla y no se inventa).
+· Parseo del verificador: las cinco clases de línea, 5 líneas de prosa
+  descartadas, un H77 inexistente conservado y marcado.
+· URLs, con `fetch` real: 200, 404 y un dominio `.invalid` registrados como
+  "responde 200", "responde 404" y "no resuelve"; HEAD rechazado cae a GET;
+  una URL colgada corta en el techo; la segunda llamada no sale a la red.
+· Informe: las dos secciones aparecen después de "Qué conviene rescatar" y
+  antes de la lectura; sin verificación, el informe es idéntico al anterior.
+· Gates: guard:specs (roles por defecto existen y son distintos) y
+  guard:artefacto (cinco marcadores nuevos), cada regla probada en rojo.
+
+ABIERTO:
+· Los textos literales de los prompts siguen diciendo "siete respuestas" y
+  "P1 a P8" (operación) y "Ocho sistemas", "P1 a P8 y O1 a O8" (integrador).
+  Con el pool de 7, cada operador recibe SEIS respuestas y operan siete. Los
+  textos son literales por decisión de Juan y no se tocaron.
+· La escritura real en el panel del verificador no se probó: exige abrir su
+  panel. El camino es el mismo que ya usa "Pegar integrador".
+· Con una ronda que ya tiene informe del integrador, "Capturar" pasa a leer
+  sólo el verificador: un informe del integrador capturado incompleto ya no
+  se puede recapturar con los botones.
+· El prompt del integrador arma la tabla con TODAS las salidas de operador;
+  el informe final, con la última por operador. Si hay salidas duplicadas,
+  los H## no coinciden entre los dos. Previo a este cambio.

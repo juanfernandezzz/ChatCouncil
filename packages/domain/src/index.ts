@@ -282,6 +282,26 @@ export interface InformeIntegrador {
 }
 
 /**
+ * 7-1-1 (2026-09-29) — la salida cruda del VERIFICADOR de fuentes, capturada
+ * en etapa "verificacion". Misma regla del dato canónico que
+ * `InformeIntegrador`: texto crudo completo, HTML y el `promptCompleto` que
+ * la produjo. Las líneas VERIFICADO / CONTRADICHO / NO_VERIFICADO /
+ * PUNTO_CIEGO / PREGUNTA se derivan al leerla (`parsearVerificacion`), no se
+ * guardan acá.
+ */
+export interface SalidaVerificador {
+  tipo: "salida-verificador";
+  esquema: number;
+  id: string;
+  rondaId: string;
+  verificadorId: string;
+  promptCompleto: string;
+  salidaCruda: string;
+  recibidaEn: string;
+  html?: string | null;
+}
+
+/**
  * T7 (Fase 3, corrección de la ronda de la primera corrida real) — QUÉ
  * HERRAMIENTAS tenía cada parte en cada etapa es una CONDICIÓN DEL TURNO,
  * ya decidida como algo que se registra (§ "transferibilidad: registro de
@@ -406,6 +426,7 @@ export type Hecho =
   | SalidaOperador
   | HallazgoHecho
   | InformeIntegrador
+  | SalidaVerificador
   | CondicionHerramientas
   | ErrorCaptura
   | PreguntaDeclarada
@@ -425,13 +446,18 @@ export type Hecho =
  *    respuestas de los OPERADORES al prompt de operación.
  *  · `"integracion"` — ya se capturaron las `totalOperadores` salidas de
  *    operador: el panel que queda por capturar es el del INTEGRADOR.
+ *  · `"verificacion"` (7-1-1, 2026-09-29) — ya hay un `InformeIntegrador`:
+ *    el panel que queda por capturar es el del VERIFICADOR. La ronda se queda
+ *    en esta etapa aunque la verificación ya se haya capturado, igual que
+ *    "integracion" con el informe: recapturar deja una salida nueva y la más
+ *    reciente gana.
  *
  * `totalOperadores` se recibe como parámetro, nunca se importa desde
  * `apps/desktop` (`POOL_OPERADORES`): el dominio no depende de la app (§4).
  */
-export type EtapaRonda = "investigacion" | "operacion" | "integracion";
+export type EtapaRonda = "investigacion" | "operacion" | "integracion" | "verificacion";
 
-export type TipoCaptura = "respuesta" | "salida-operador" | "informe-integrador";
+export type TipoCaptura = "respuesta" | "salida-operador" | "informe-integrador" | "salida-verificador";
 
 /**
  * Defecto 1 — "hay algo en el campo" no alcanza como validación: el
@@ -466,6 +492,7 @@ export function preguntaEfectivaDeRonda(hechos: readonly Hecho[], ronda: Ronda):
 }
 
 export function etapaDeRonda(hechos: readonly Hecho[], rondaId: string, totalOperadores: number): EtapaRonda {
+  if (hechos.some((h) => h.tipo === "informe-integrador" && h.rondaId === rondaId)) return "verificacion";
   const salidasDeLaRonda = hechos.filter((h) => h.tipo === "salida-operador" && h.rondaId === rondaId).length;
   if (salidasDeLaRonda >= totalOperadores) return "integracion";
   const huboConsolidacion = hechos.some((h) => h.tipo === "sello" && h.rondaId === rondaId);
@@ -481,6 +508,8 @@ export function tipoCapturaDeEtapa(etapa: EtapaRonda): TipoCaptura {
       return "salida-operador";
     case "integracion":
       return "informe-integrador";
+    case "verificacion":
+      return "salida-verificador";
   }
 }
 
@@ -515,6 +544,7 @@ const TIPOS = new Set([
   "salida-operador",
   "hallazgo",
   "informe-integrador",
+  "salida-verificador",
   "condicion-herramientas",
   "error-captura",
   "pregunta-declarada",

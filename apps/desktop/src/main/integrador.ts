@@ -22,7 +22,10 @@ import type { EtapaRonda } from "@chatcouncil/domain";
 import {
   armarInformeFinal,
   armarPromptIntegrador,
+  armarPromptVerificador,
   armarTablaHallazgos,
+  extraerSeccionRescate,
+  extraerTituloDelInforme,
   hashSemilla,
   parsearHallazgos,
   parsearReferenciasIntegrador,
@@ -108,6 +111,36 @@ export function armarTablaYPromptIntegrador(
   const tabla = armarTablaHallazgos(paraTabla, poolOperadores, hashSemilla(semilla));
   const prompt = armarPromptIntegrador(pregunta, tabla.paraPrompt);
   return { tabla, prompt };
+}
+
+/**
+ * 7-1-1 (2026-09-29) — el prompt del VERIFICADOR, desde el informe del
+ * integrador y la MISMA tabla que el integrador vio (`armarTablaYPromptIntegrador`
+ * con las mismas salidas). `{{RESCATE}}` es la sección "QUE CONVIENE RESCATAR"
+ * tal cual; `{{HALLAZGOS}}`, sólo los H## que esa sección referencia, en orden
+ * de primera aparición. Un H## que no está en la tabla no se inventa: queda
+ * fuera de la lista y se devuelve en `inexistentes`.
+ */
+export function armarPromptVerificadorDeRonda(
+  pregunta: string,
+  informeCrudo: string,
+  tabla: TablaHallazgos,
+): { ok: true; prompt: string; citados: string[]; inexistentes: string[] } | { ok: false; error: string } {
+  const rescate = extraerSeccionRescate(extraerTituloDelInforme(informeCrudo).cuerpo);
+  if (rescate === null) return { ok: false, error: "el informe del integrador no tiene la seccion QUE CONVIENE RESCATAR" };
+  const ids = [...new Set((rescate.match(/\[H\d+\]/g) ?? []).map((m) => m.slice(1, -1)))];
+  const porId = new Map(tabla.paraPrompt.map((h) => [h.id, h]));
+  const citados = ids.filter((id) => porId.has(id));
+  const hallazgos = citados.map((id) => {
+    const h = porId.get(id)!;
+    return { id: h.id, categoria: h.categoria, eje: h.eje, descripcion: h.descripcion };
+  });
+  return {
+    ok: true,
+    prompt: armarPromptVerificador(pregunta, rescate, hallazgos),
+    citados,
+    inexistentes: ids.filter((id) => !porId.has(id)),
+  };
 }
 
 /**
@@ -244,6 +277,7 @@ export function armarInformeFinalDeRonda(params: {
 export interface ClasificacionLecturas<T extends { id: string }> {
   lecturasOperacion: T[];
   lecturaIntegrador: T | undefined;
+  lecturaVerificador: T | undefined;
   lecturasComoRespuesta: T[];
 }
 
@@ -252,16 +286,18 @@ export function clasificarLecturasPorEtapa<T extends { id: string }>(
   etapa: EtapaRonda,
   poolOperadores: readonly string[],
   integradorId: string,
+  verificadorId: string,
 ): ClasificacionLecturas<T> {
+  const nada = { lecturaIntegrador: undefined, lecturaVerificador: undefined };
   if (etapa === "investigacion") {
     // Todavía no hay nada más que investigadores contestando la pregunta original.
-    return { lecturasOperacion: [], lecturaIntegrador: undefined, lecturasComoRespuesta: [...lecturas] };
+    return { lecturasOperacion: [], ...nada, lecturasComoRespuesta: [...lecturas] };
   }
   if (etapa === "operacion") {
     // Los 8 del pool operan; deepseek (que no opera) sigue siendo un investigador más.
     return {
       lecturasOperacion: lecturas.filter((l) => poolOperadores.includes(l.id)),
-      lecturaIntegrador: undefined,
+      ...nada,
       lecturasComoRespuesta: lecturas.filter((l) => !poolOperadores.includes(l.id)),
     };
   }
@@ -272,8 +308,13 @@ export function clasificarLecturasPorEtapa<T extends { id: string }>(
   // la etapa es "integracion") caía por descarte en `lecturasComoRespuesta` y
   // re-escribía una `Respuesta` obsoleta en cada captura -- probado en rojo con
   // el ensayo en seco de etapas antes de esta corrección.
+  if (etapa === "verificacion") {
+    // 7-1-1: el integrador ya escribió; sólo el verificador tiene algo nuevo.
+    return { lecturasOperacion: [], ...nada, lecturaVerificador: lecturas.find((l) => l.id === verificadorId), lecturasComoRespuesta: [] };
+  }
   return {
     lecturasOperacion: [],
+    ...nada,
     lecturaIntegrador: lecturas.find((l) => l.id === integradorId),
     lecturasComoRespuesta: [],
   };
@@ -301,12 +342,13 @@ export function puedeEscribirPromptIntegrador(
   destinoId: string,
   integradorId: string,
   compositorActual: string,
+  rol = "integrador",
 ): GuardaEnvioIntegrador {
   if (destinoId !== integradorId) {
-    return { puede: false, motivo: `el destino "${destinoId}" no es el integrador ("${integradorId}")` };
+    return { puede: false, motivo: `el destino "${destinoId}" no es el ${rol} ("${integradorId}")` };
   }
   if (compositorActual.trim().length > 0) {
-    return { puede: false, motivo: "el compositor del integrador no esta vacio: escribir encima lo perderia sin aviso" };
+    return { puede: false, motivo: `el compositor del ${rol} no esta vacio: escribir encima lo perderia sin aviso` };
   }
   return { puede: true };
 }

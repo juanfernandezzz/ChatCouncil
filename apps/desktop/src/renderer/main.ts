@@ -116,6 +116,7 @@ interface CcBridge {
   pegarOperacionEstado: () => Promise<EstadoConsolidacion>;
   pegarOperacionAqui: () => Promise<ResultadoConsolidarUno>;
   pegarIntegrador: () => Promise<ResultadoIntegrador>;
+  pegarVerificacion: () => Promise<ResultadoIntegrador>;
   armarInformeFinal: () => Promise<{ ok: boolean; mensaje: string; ruta?: string }>;
   alMenu: (fn: (accion: string) => void) => void;
 }
@@ -155,7 +156,6 @@ function marcar(id: string, texto: string, clase: "" | "ok" | "mal" = ""): void 
 // investigador de la Parte 1, así que "Pegar pregunta en todos" nunca lo
 // toca y nunca recibe un ok/mal de difusión. Se lo etiqueta distinto para
 // que ese gris no se lea como un fallo.
-let integradorId = "";
 
 /**
  * 2026-09-24: los chips son los de los paneles CARGADOS en este momento. El
@@ -164,7 +164,6 @@ let integradorId = "";
  */
 async function refrescarChips(): Promise<void> {
   const [ids, integrador] = await Promise.all([window.cc.investigadores(), window.cc.integrador()]);
-  integradorId = integrador;
   for (const id of [...estadoPanel.keys()]) if (!ids.includes(id)) estadoPanel.delete(id);
   for (const id of ids) {
     if (!estadoPanel.has(id)) marcar(id, id === integrador ? "en espera (integrador, no investiga)" : "en espera");
@@ -391,15 +390,18 @@ $("armar-informe-final").addEventListener("click", () => {
  * integrador, y lo escribe en deepseek (el proceso principal lo trae al
  * frente si no es el panel visible). Nunca envía. No se bloquea por etapa:
  * si la ronda no llegó a "integracion" todavía, se hace igual y se avisa.
+ *
+ * BOTÓN 6 — "Pegar verificación" (7-1-1, 2026-09-29): lo mismo, en el panel
+ * del verificador.
  */
-$("pegar-integrador").addEventListener("click", () => {
-  decir("Pegando el prompt del integrador…");
-  void window.cc.pegarIntegrador().then(async (r) => {
-    // "Pegar integrador" abre su panel: aparece su chip, y la barra de scroll
+function pegarRol(rol: string, pegar: () => Promise<ResultadoIntegrador>): void {
+  decir(`Pegando el prompt del ${rol}…`);
+  void pegar().then(async (r) => {
+    // Pegar abre el panel del rol: aparece su chip, y la barra de scroll
     // fino suma su panel al recorrido.
     await refrescarChips();
     void window.cc.posicion().then(pintarPosicion);
-    const id = r.operadorId ?? integradorId;
+    const id = r.operadorId ?? rol;
     if (r.ok) marcar(id, `listo · entrega ${r.entregaExacta ? "exacta" : "con diferencias"} (${r.caracteresPresentes}/${r.caracteresEscritos})`, r.entregaExacta ? "ok" : "mal");
     else marcar(id, r.error ?? "falló", "mal");
     pintarPaneles();
@@ -411,7 +413,9 @@ $("pegar-integrador").addEventListener("click", () => {
       r.ok && r.entregaExacta && r.navegacionesIntactas ? "ok" : "mal",
     );
   });
-});
+}
+$("pegar-integrador").addEventListener("click", () => pegarRol("integrador", window.cc.pegarIntegrador));
+$("pegar-verificacion").addEventListener("click", () => pegarRol("verificador", window.cc.pegarVerificacion));
 
 $("sesiones").addEventListener("click", () => {
   void window.cc.sesiones().then((ss) => {

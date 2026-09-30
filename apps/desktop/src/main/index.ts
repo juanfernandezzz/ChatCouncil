@@ -25,6 +25,7 @@ import type {
   Conversacion,
   EtapaRonda,
   HallazgoHecho,
+  Hecho,
   InformeIntegrador,
   Procedencia,
   Respuesta,
@@ -45,6 +46,7 @@ import {
   nombreArchivoRespuesta,
   nombreBaseDeInforme,
   nombreLibreDeInforme,
+  type TablaHallazgos,
 } from "@chatcouncil/analysis";
 
 import {
@@ -65,6 +67,7 @@ import {
   escribirRespuestas,
   escribirCondicionProveedoresCargados,
   escribirRonda,
+  escribirSalidaVerificador,
   generarSemilla,
   leerRegistroDeArchivo,
 } from "./registro";
@@ -72,6 +75,7 @@ import { guardarSeleccion, leerRoles, leerSeleccion, poolDeInvestigadores } from
 import { armarCuerposDeRonda, armarYPersistirCuerposDeRonda } from "./operador";
 import {
   armarInformeFinalDeRonda,
+  armarPromptVerificadorDeRonda,
   armarTablaYPromptIntegrador,
   clasificarLecturasPorEtapa,
   etiquetasValidasDelOperador,
@@ -765,6 +769,7 @@ function restaurarRondaActivaDesdeRegistro(): void {
  */
 const ultimoPromptOperadorPorId = new Map<string, string>();
 let ultimoPromptIntegrador: string | null = null;
+let ultimoPromptVerificador: string | null = null;
 const PROMPT_NO_DISPONIBLE = "(prompt no disponible: no se registró en este proceso — probablemente se reinició la app entre el envío y la captura)";
 
 /**
@@ -1060,11 +1065,12 @@ function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProvee
   const etapa = etapaDeRonda(registro.hechos, rondaId, POOL_OPERADORES.length);
   const sello = registro.hechos.filter((h): h is Sello => h.tipo === "sello" && h.rondaId === rondaId);
 
-  const { lecturasOperacion, lecturaIntegrador, lecturasComoRespuesta } = clasificarLecturasPorEtapa(
+  const { lecturasOperacion, lecturaIntegrador, lecturaVerificador, lecturasComoRespuesta } = clasificarLecturasPorEtapa(
     lecturas,
     etapa,
     POOL_OPERADORES,
     INTEGRADOR_ID,
+    VERIFICADOR_ID,
   );
 
   if (lecturasComoRespuesta.length > 0) {
@@ -1116,6 +1122,20 @@ function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProvee
       } catch (e) {
         escribirErrorCaptura(userData, conv, rondaId, etapa, "informe-integrador", e instanceof Error ? e.message : String(e), lecturaIntegrador.id);
       }
+    }
+  }
+
+  // 7-1-1 (2026-09-29): en la etapa de verificación sólo se captura el panel
+  // del verificador, con el mismo trato de errores que el integrador.
+  if (etapa === "verificacion") {
+    if (!lecturaVerificador) {
+      escribirErrorCaptura(userData, conv, rondaId, etapa, "salida-verificador",
+        `el panel del verificador (${VERIFICADOR_ID}) no estaba abierto al capturar`, VERIFICADOR_ID);
+    } else if (lecturaVerificador.error) {
+      escribirErrorCaptura(userData, conv, rondaId, etapa, "salida-verificador", lecturaVerificador.error, lecturaVerificador.id);
+    } else {
+      escribirSalidaVerificador(userData, conv, rondaId, lecturaVerificador.id, ultimoPromptVerificador ?? PROMPT_NO_DISPONIBLE,
+        lecturaVerificador.text, lecturaVerificador.html ?? null);
     }
   }
 
@@ -1980,6 +2000,8 @@ function registrarIpc(): void {
    * `enviarPromptAIntegrador`.
    */
   ipcMain.handle("cc:pegar-integrador", async () => enviarPromptAIntegrador());
+  /** 7-1-1 (2026-09-29) — "Pegar verificación": mismo camino que "Pegar integrador", en el panel del verificador. */
+  ipcMain.handle("cc:pegar-verificacion", async () => enviarPromptAVerificador());
 
   /**
    * Rediseño de la barra (2026-09-19) — "Capturar este panel": captura SÓLO
@@ -3606,32 +3628,36 @@ export interface ResultadoIntegrador {
   etapa?: EtapaRonda;
 }
 
-async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
-  if (!conversacionActual || !rondaActualId) {
-    return { ok: false, error: "no hay una ronda activa", caracteresEscritos: 0, caracteresPresentes: 0, entregaExacta: false, navegacionesIntactas: true };
-  }
-  const userData = app.getPath("userData");
-  const registro = leerRegistroDeArchivo(userData, conversacionActual);
+const sinEscribir = (error: string, etapa?: EtapaRonda): ResultadoIntegrador => ({
+  ok: false,
+  error,
+  caracteresEscritos: 0,
+  caracteresPresentes: 0,
+  entregaExacta: false,
+  navegacionesIntactas: true,
+  ...(etapa ? { etapa } : {}),
+});
+
+/**
+ * Lo común a "Pegar integrador" y "Pegar verificación" (2026-09-29): la ronda
+ * activa, su pregunta efectiva, su etapa y la tabla de hallazgos tal como la
+ * ve el integrador. El verificador cita los H## de ESA tabla, así que tiene
+ * que salir de la misma construcción.
+ */
+function tablaDeRondaActiva(rol: string):
+  | { error: string }
+  | { hechos: Hecho[]; ronda: Ronda; pregunta: string; etapa: EtapaRonda; tabla: TablaHallazgos; prompt: string } {
+  if (!conversacionActual || !rondaActualId) return { error: "no hay una ronda activa" };
+  const registro = leerRegistroDeArchivo(app.getPath("userData"), conversacionActual);
   const ronda = registro.hechos.find((h): h is Ronda => h.tipo === "ronda" && h.id === rondaActualId);
-  if (!ronda) {
-    return { ok: false, error: "no se encontró la ronda actual en el registro", caracteresEscritos: 0, caracteresPresentes: 0, entregaExacta: false, navegacionesIntactas: true };
-  }
-  if (ronda.semilla === null) {
-    return { ok: false, error: "la ronda no tiene semilla persistida", caracteresEscritos: 0, caracteresPresentes: 0, entregaExacta: false, navegacionesIntactas: true };
-  }
+  if (!ronda) return { error: "no se encontró la ronda actual en el registro" };
+  if (ronda.semilla === null) return { error: "la ronda no tiene semilla persistida" };
   // Defecto 1, aplicado también acá: la pregunta viaja por los TRES prompts
   // (BLUEPRINT §1) — si `Ronda.prompt` es el marcador interno, el prompt del
   // integrador lo heredaría igual que el de operación lo hacía antes.
   const pregunta = preguntaEfectivaDeRonda(registro.hechos, ronda);
   if (pregunta === null) {
-    return {
-      ok: false,
-      error: `la ronda ${ronda.id} no tiene pregunta registrada válida: declarala con --cc-declarar-pregunta antes de pegar el integrador`,
-      caracteresEscritos: 0,
-      caracteresPresentes: 0,
-      entregaExacta: false,
-      navegacionesIntactas: true,
-    };
+    return { error: `la ronda ${ronda.id} no tiene pregunta registrada válida: declarala con --cc-declarar-pregunta antes de pegar el ${rol}` };
   }
 
   // Rediseño de la barra (2026-09-19) — "los botones NO se bloquean por
@@ -3639,9 +3665,9 @@ async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
   // "integracion" (faltaban SalidaOperador). Ahora Juan decide: si arma la
   // tabla con menos hallazgos de los que habría con la ronda completa, la
   // etapa viaja en el resultado para que el botón lo informe en una línea.
-  const etapa = etapaDeRonda(registro.hechos, rondaActualId, POOL_OPERADORES.length);
+  const etapa = etapaDeRonda(registro.hechos, ronda.id, POOL_OPERADORES.length);
 
-  const salidas = registro.hechos.filter((h): h is SalidaOperador => h.tipo === "salida-operador" && h.rondaId === rondaActualId);
+  const salidas = registro.hechos.filter((h): h is SalidaOperador => h.tipo === "salida-operador" && h.rondaId === ronda.id);
   const hallazgosPorSalidaId = new Map<string, HallazgoHecho[]>();
   for (const h of registro.hechos) {
     if (h.tipo === "hallazgo") {
@@ -3651,12 +3677,42 @@ async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
     }
   }
   const hallazgosPorSalida = salidas.map((s) => ({ operadorId: s.operadorId, hallazgos: hallazgosPorSalidaId.get(s.id) ?? [] }));
-  const { prompt } = armarTablaYPromptIntegrador(pregunta, hallazgosPorSalida, POOL_OPERADORES, ronda.semilla);
+  const { tabla, prompt } = armarTablaYPromptIntegrador(pregunta, hallazgosPorSalida, POOL_OPERADORES, ronda.semilla);
+  return { hechos: registro.hechos, ronda, pregunta, etapa, tabla, prompt };
+}
 
-  const v = await cargarPanelDeRol(INTEGRADOR_ID);
-  if (!v) {
-    return { ok: false, error: `el integrador (${INTEGRADOR_ID}) no está entre los proveedores cargados`, caracteresEscritos: 0, caracteresPresentes: 0, entregaExacta: false, navegacionesIntactas: true, etapa };
-  }
+async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
+  const d = tablaDeRondaActiva("integrador");
+  if ("error" in d) return sinEscribir(d.error);
+  const r = await pegarEnPanelDeRol(INTEGRADOR_ID, "integrador", d.prompt, d.etapa);
+  if (r.ok) ultimoPromptIntegrador = d.prompt;
+  return r;
+}
+
+/**
+ * 7-1-1 (2026-09-29) — "Pegar verificación". Arma el prompt del verificador
+ * con la sección "QUE CONVIENE RESCATAR" del último informe del integrador de
+ * la ronda y los hallazgos que esa sección cita, y lo escribe en el panel del
+ * verificador: mismo camino que "Pegar integrador" (panel al frente, guardia,
+ * entrega comparada carácter por carácter) y, como él, NUNCA envía.
+ */
+async function enviarPromptAVerificador(): Promise<ResultadoIntegrador> {
+  const d = tablaDeRondaActiva("verificador");
+  if ("error" in d) return sinEscribir(d.error);
+  const informes = d.hechos.filter((h): h is InformeIntegrador => h.tipo === "informe-integrador" && h.rondaId === d.ronda.id);
+  const informe = informes[informes.length - 1];
+  if (!informe) return sinEscribir("la ronda todavía no tiene un informe del integrador capturado", d.etapa);
+  const armado = armarPromptVerificadorDeRonda(d.pregunta, informe.informeCrudo, d.tabla);
+  if (!armado.ok) return sinEscribir(armado.error, d.etapa);
+  const r = await pegarEnPanelDeRol(VERIFICADOR_ID, "verificador", armado.prompt, d.etapa);
+  if (r.ok) ultimoPromptVerificador = armado.prompt;
+  return r;
+}
+
+/** Abre el panel del rol, lo trae al frente y escribe `prompt` sin enviar. */
+async function pegarEnPanelDeRol(rolId: ProviderId, rol: string, prompt: string, etapa: EtapaRonda): Promise<ResultadoIntegrador> {
+  const v = await cargarPanelDeRol(rolId);
+  if (!v) return sinEscribir(`el ${rol} (${rolId}) no está entre los proveedores cargados`, etapa);
   // Su panel pasa a verse y queda al frente.
   desplazarA(todas().findIndex((x) => x.id === v.id) * anchoPanel());
 
@@ -3667,7 +3723,7 @@ async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
     true,
   )) as string;
 
-  const guardia = puedeEscribirPromptIntegrador(v.id, INTEGRADOR_ID, compositorActual);
+  const guardia = puedeEscribirPromptIntegrador(v.id, rolId, compositorActual, rol);
   if (!guardia.puede) {
     return {
       ok: false,
@@ -3693,7 +3749,6 @@ async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
       ]),
     )) as { ok: boolean; error?: string; textoFinal: string };
 
-    if (r.ok) ultimoPromptIntegrador = prompt;
     const navDespues = contadorNavegaciones.get(v.id) ?? 0;
 
     return {

@@ -58,6 +58,8 @@ contextBridge.exposeInMainWorld("cc", {
    * no es el panel visible). Antes sólo alcanzable por `--cc-integrador=<id>`.
    */
   pegarIntegrador: (): Promise<ResultadoIntegrador> => ipcRenderer.invoke("cc:pegar-integrador"),
+  /** 7-1-1 (2026-09-29) — "Pegar verificación": lo mismo, en el panel del verificador. */
+  pegarVerificacion: (): Promise<ResultadoIntegrador> => ipcRenderer.invoke("cc:pegar-verificacion"),
   /** Objetivo E — arma el informe final de la ronda activa y lo guarda en `informes/`. */
   armarInformeFinal: (): Promise<{ ok: boolean; mensaje: string; ruta?: string }> => ipcRenderer.invoke("cc:armar-informe-final"),
   /** Objetivo 3 — ventana de progreso de "Pegar operación en todos": estado actual y actualizaciones. */

@@ -36,6 +36,7 @@ import {
   type Ronda,
   type Sello,
   type SalidaOperador,
+  type SalidaVerificador,
   type TipoCaptura,
 } from "@chatcouncil/domain";
 import { extraerTituloDelInforme } from "@chatcouncil/analysis";
@@ -72,6 +73,7 @@ function escribir(
     | SalidaOperador
     | HallazgoHecho
     | InformeIntegrador
+    | SalidaVerificador
     | CondicionHerramientas
     | ErrorCaptura
     | PreguntaDeclarada
@@ -400,6 +402,35 @@ export function escribirInformeIntegrador(
     promptCompleto,
     informeCrudo,
     titulo: extraerTituloDelInforme(informeCrudo).titulo,
+    recibidaEn: new Date().toISOString(),
+    html,
+  };
+  escribir(userData, conversacionId, hecho);
+  return hecho;
+}
+
+/**
+ * 7-1-1 (2026-09-29) — la salida cruda del verificador, capturada en etapa
+ * "verificacion": texto crudo, HTML y el `promptCompleto` ENTERO, igual que el
+ * integrador.
+ */
+export function escribirSalidaVerificador(
+  userData: string,
+  conversacionId: string,
+  rondaId: string,
+  verificadorId: string,
+  promptCompleto: string,
+  salidaCruda: string,
+  html: string | null,
+): SalidaVerificador {
+  const hecho: SalidaVerificador = {
+    tipo: "salida-verificador",
+    esquema: VERSION_ESQUEMA,
+    id: randomUUID(),
+    rondaId,
+    verificadorId,
+    promptCompleto,
+    salidaCruda,
     recibidaEn: new Date().toISOString(),
     html,
   };

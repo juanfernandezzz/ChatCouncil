@@ -54,7 +54,7 @@ export interface ResultadoParseo {
 }
 
 /** Divide `linea` en exactamente `n` campos por "|", el último quedándose con el resto (puede contener "|"). */
-function splitCampos(linea: string, n: number): string[] | null {
+export function splitCampos(linea: string, n: number): string[] | null {
   const partes: string[] = [];
   let resto = linea;
   for (let i = 0; i < n - 1; i++) {

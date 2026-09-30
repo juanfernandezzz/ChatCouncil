@@ -44,6 +44,9 @@ const EXIGIDO = {
     // 7-1-1 (2026-09-29): el tercer rol. Sin este literal, un tree-shaking que se
     // lleve la regla de roles distintos deja guardar integrador = verificador.
     "El integrador y el verificador tienen que ser proveedores distintos.",
+    // "Pegar verificación" y la captura del verificador (7-1-1).
+    "cc:pegar-verificacion",
+    "salida-verificador",
     "cc:sesiones",
     // Fase 5 — el informe final se entrega como CARPETA con las respuestas de
     // los investigadores en PDF adentro. Sin estos marcadores, un tree-shaking
@@ -248,7 +251,7 @@ const EXIGIDO = {
   // solo boton, "Capturar", fusiona lo que hacian "Leer" y "Sondear"; el
   // sondeo de derivacion de specs sigue existiendo pero como modo de
   // diagnostico por bandera de linea de comando, no como paso del flujo).
-  "renderer/index.html": ["no-preguntar", "confirmacion", "paneles", "capturar"],
+  "renderer/index.html": ["no-preguntar", "confirmacion", "paneles", "capturar", "pegar-verificacion"],
 };
 
 /**

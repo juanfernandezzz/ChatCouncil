@@ -35,10 +35,11 @@ Lee las siete respuestas completas. Trabajalas como prefieras: puedes escribir e
 
 Un hallazgo es algo que observaste al comparar las respuestas entre si. Cada hallazgo se escribe en una linea propia.
 
-LAS CUATRO CATEGORIAS DE HALLAZGO
+LAS CINCO CATEGORIAS DE HALLAZGO
 
 CONVERGENCIA: varias respuestas afirman lo mismo.
 DIVERGENCIA: varias respuestas afirman cosas incompatibles entre si.
+TENSION: varias respuestas coinciden en el dato o el hecho, pero apuntan a conclusiones, recomendaciones o cursos de accion opuestos. No es divergencia, porque los hechos no se contradicen; es que a partir del mismo hecho llegan a decisiones distintas.
 SINGULARIDAD: algo que aparece en una sola respuesta y en ninguna otra.
 AUSENCIA: algo que la pregunta pedia y que ninguna de las siete respuestas trae.
 
@@ -62,6 +63,7 @@ Ejemplos:
 
 CONVERGENCIA|HECHOS|P1,P3,P6|las tres dan la misma fecha para el anuncio
 DIVERGENCIA|FUENTES|P2,P5|citan medios distintos para el mismo dato
+TENSION|CONCLUSIONES|P1,P4|coinciden en que el plazo es de 15 anios pero P1 recomienda conservar y P4 recomienda suprimir
 SINGULARIDAD|CONCLUSIONES|P4|solo P4 proyecta un cambio regulatorio
 AUSENCIA|HECHOS|—|ninguna respuesta entrega cifras de adopcion
 

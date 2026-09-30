@@ -3043,7 +3043,7 @@ let estadoConsolidacion: { enCurso: boolean; indice: number; total: number; oper
 };
 
 /**
- * Cambio 2 — las nueve cadenas que sólo pueden venir de haber armado el
+ * Cambio 2 — las diez cadenas que sólo pueden venir de haber armado el
  * prompt de operación de verdad (`armarPromptOperacion`, literal en
  * `prompt-operacion.ts`), nunca de un cuerpo pelado. Las marcas de
  * integridad verifican que el TEXTO llegó completo; esto verifica que el
@@ -3052,6 +3052,7 @@ let estadoConsolidacion: { enCurso: boolean; indice: number; total: number; oper
 const REQUISITOS_PROMPT_OPERACION = [
   "CONVERGENCIA",
   "DIVERGENCIA",
+  "TENSION",
   "SINGULARIDAD",
   "AUSENCIA",
   "LIMITACION:CORPUS",

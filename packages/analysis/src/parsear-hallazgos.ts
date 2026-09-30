@@ -16,7 +16,7 @@
  * sobre ESE operador — descartar la línea lo escondería.
  */
 
-export type CategoriaHallazgo = "CONVERGENCIA" | "DIVERGENCIA" | "SINGULARIDAD" | "AUSENCIA";
+export type CategoriaHallazgo = "CONVERGENCIA" | "DIVERGENCIA" | "TENSION" | "SINGULARIDAD" | "AUSENCIA";
 export type CategoriaLimitacion =
   | "LIMITACION:CORPUS"
   | "LIMITACION:AMBIGUEDAD"
@@ -26,6 +26,7 @@ export type CategoriaLimitacion =
 const CATEGORIAS_4_CAMPOS: readonly CategoriaHallazgo[] = [
   "CONVERGENCIA",
   "DIVERGENCIA",
+  "TENSION",
   "SINGULARIDAD",
   "AUSENCIA",
 ];

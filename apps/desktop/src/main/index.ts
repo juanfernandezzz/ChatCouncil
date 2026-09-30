@@ -31,6 +31,7 @@ import type {
   Respuesta,
   Ronda,
   SalidaOperador,
+  SalidaVerificador,
   Sello,
 } from "@chatcouncil/domain";
 import { etapaDeRonda, integradorDeRonda, preguntaEfectivaDeRonda, proveedoresCargadosDeRonda } from "@chatcouncil/domain";
@@ -4384,6 +4385,13 @@ async function armarInformeFinalDeRondaActiva(): Promise<{ ok: boolean; mensaje:
   const informeIntegrador = informes[informes.length - 1] ?? null;
   const pregunta = preguntaEfectivaDeRonda(hechos, ronda) ?? ronda.prompt;
 
+  // 7-1-1: si hubo verificación, sus URLs se comprueban ahora (una sola vez por
+  // verificación: si ya se comprobaron, no se vuelve a salir a la red).
+  const verificaciones = deLaRonda<SalidaVerificador>("salida-verificador");
+  const salidaVerificador = verificaciones[verificaciones.length - 1] ?? null;
+  const comprobacion = salidaVerificador ? await comprobarUrlsDeRonda(userData, conversacionActual, ronda.id) : null;
+  const urlsComprobadas = comprobacion?.ok ? comprobacion.urls : [];
+
   const texto = armarInformeFinalDeRonda({
     pregunta,
     fecha: new Date().toISOString(),
@@ -4400,6 +4408,8 @@ async function armarInformeFinalDeRondaActiva(): Promise<{ ok: boolean; mensaje:
     proveedoresCargados: proveedoresCargadosDeRonda(hechos, ronda.id),
     pool: POOL_OPERADORES,
     integrador: integradorDeRonda(hechos, ronda.id),
+    salidaVerificador,
+    urlsComprobadas,
   });
 
   // Fase 5 (decisión de Juan, 2026-09-26): el nombre es "AAAA-MM-DD HHMM —

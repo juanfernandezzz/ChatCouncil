@@ -93,6 +93,56 @@ export interface InformeFinalInput {
   proveedoresCargadosIncompletos?: readonly string[] | null;
   /** Proveedor real que integró esta ronda (2026-09-24): el integrador es una preferencia y puede cambiar entre rondas. */
   integrador?: string | null;
+  /** 7-1-1: `null` o ausente = no hubo verificación en la ronda, y sus dos secciones no aparecen. */
+  verificacion?: VerificacionParaInforme | null;
+}
+
+/**
+ * 7-1-1 (2026-09-29) — lo que aportó el verificador, ya resuelto: cada línea
+ * de su sección 1 con la descripción del H## que cita (`null` si no existe en
+ * la tabla) y el resultado de la comprobación mecánica de su URL.
+ */
+export interface VerificacionParaInforme {
+  items: readonly {
+    estado: string;
+    hallazgoId: string;
+    descripcion: string | null;
+    url: string | null;
+    /** "responde 200", "responde 404", "no resuelve" o "sin comprobar". */
+    comprobacion: string;
+    /** La cita textual; en NO_VERIFICADO, el motivo. */
+    texto: string;
+  }[];
+  puntosCiegos: readonly { descripcion: string; url: string | null }[];
+  preguntas: readonly string[];
+}
+
+const ENCABEZADO_VERIFICACION =
+  "## Verificación de fuentes (aporte de un modelo con búsqueda, no verificado por el consejo)";
+const ENCABEZADO_PUNTOS_CIEGOS = "## Puntos ciegos y preguntas derivadas (aporte del verificador)";
+
+function seccionesVerificacion(v: VerificacionParaInforme): string[] {
+  const items = v.items.map((i) =>
+    [
+      `${i.estado} — [${i.hallazgoId}] ${i.descripcion ?? "(ese hallazgo no existe en la tabla de la ronda)"}`,
+      i.url === null ? `Fuente: sin fuente — ${i.texto}` : `Fuente: ${i.url} — ${i.comprobacion}`,
+      ...(i.url !== null && i.texto.length > 0 ? [`> ${i.texto}`] : []),
+    ].join("\n"),
+  );
+  const aportes = [
+    ...v.puntosCiegos.map((p) => `- Punto ciego: ${p.descripcion} — Fuente: ${p.url ?? "sin fuente"}`),
+    ...v.preguntas.map((q) => `- Pregunta derivada: ${q}`),
+  ];
+  return [
+    ENCABEZADO_VERIFICACION,
+    "",
+    items.length > 0 ? items.join("\n\n") : "El verificador no registro lineas de verificacion.",
+    "",
+    ENCABEZADO_PUNTOS_CIEGOS,
+    "",
+    aportes.length > 0 ? aportes.join("\n") : "El verificador no registro puntos ciegos ni preguntas derivadas.",
+    "",
+  ];
 }
 
 function marcarReferencias(texto: string, existentes: ReadonlySet<string>): string {
@@ -167,6 +217,7 @@ export function armarInformeFinal(input: InformeFinalInput): string {
     titulo === null ? "# Informe de ronda" : `# ${titulo}`,
     "",
     ...(rescate === null ? [] : [ENCABEZADO_RESCATE, "", rescate, ""]),
+    ...(input.verificacion ? seccionesVerificacion(input.verificacion) : []),
     `**Pregunta:** ${input.pregunta}`,
     `**Fecha:** ${input.fecha}`,
     "**Eje de registro:** los tres (HECHOS, FUENTES, CONCLUSIONES)",

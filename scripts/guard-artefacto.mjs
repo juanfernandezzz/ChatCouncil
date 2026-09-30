@@ -50,6 +50,9 @@ const EXIGIDO = {
     // Comprobacion mecanica de URLs del verificador: el modo y el hecho.
     "--cc-comprobar-urls=",
     "url-comprobada",
+    // Las dos secciones del verificador en el informe final (el resto del
+    // encabezado lleva acentos y se escapa al compilar).
+    "(aporte del verificador)",
     "cc:sesiones",
     // Fase 5 — el informe final se entrega como CARPETA con las respuestas de
     // los investigadores en PDF adentro. Sin estos marcadores, un tree-shaking

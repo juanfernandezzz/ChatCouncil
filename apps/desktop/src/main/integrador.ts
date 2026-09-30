@@ -17,7 +17,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import type { Cita, HallazgoHecho, InformeIntegrador, Respuesta, Sello } from "@chatcouncil/domain";
+import type { Cita, HallazgoHecho, InformeIntegrador, Respuesta, SalidaVerificador, Sello, UrlComprobada } from "@chatcouncil/domain";
 import type { EtapaRonda } from "@chatcouncil/domain";
 import {
   armarInformeFinal,
@@ -29,11 +29,13 @@ import {
   hashSemilla,
   parsearHallazgos,
   parsearReferenciasIntegrador,
+  parsearVerificacion,
   type CondicionProveedor,
   type FilaTabla,
   type HallazgoResuelto,
   type ParticipacionOperador,
   type TablaHallazgos,
+  type VerificacionParaInforme,
 } from "@chatcouncil/analysis";
 
 import { escribirHallazgos, escribirSalidaOperador } from "./registro";
@@ -209,6 +211,9 @@ export function armarInformeFinalDeRonda(params: {
   pool?: readonly string[];
   /** Integrador real de la ronda: el que escribió el informe, o el registrado al abrirla. */
   integrador?: string | null;
+  /** 7-1-1: la última verificación de la ronda y sus URLs comprobadas; `null`/ausente = no hubo. */
+  salidaVerificador?: SalidaVerificador | null;
+  urlsComprobadas?: readonly UrlComprobada[];
 }): string {
   const cargados = params.proveedoresCargados ?? null;
   const incompletos =
@@ -260,7 +265,40 @@ export function armarInformeFinalDeRonda(params: {
     semilla: params.semilla,
     proveedoresCargadosIncompletos: incompletos,
     integrador: params.informeIntegrador?.operadorId ?? params.integrador ?? null,
+    verificacion: params.salidaVerificador
+      ? verificacionParaInforme(params.salidaVerificador, params.urlsComprobadas ?? [], hallazgosResueltos)
+      : null,
   });
+}
+
+/**
+ * 7-1-1 — resuelve la salida del verificador para el informe: cada H## con la
+ * descripción del hallazgo de la tabla, y cada URL con su comprobación
+ * mecánica ("responde 200", "responde 404", "no resuelve" o "sin comprobar").
+ */
+export function verificacionParaInforme(
+  salida: SalidaVerificador,
+  urls: readonly UrlComprobada[],
+  hallazgos: readonly HallazgoResuelto[],
+): VerificacionParaInforme {
+  const descripcion = new Map(hallazgos.map((h) => [h.codigo, h.descripcion]));
+  const comprobada = new Map(urls.filter((u) => u.salidaVerificadorId === salida.id).map((u) => [u.url, u]));
+  const p = parsearVerificacion(salida.salidaCruda, [...descripcion.keys()]);
+  return {
+    items: p.verificaciones.map((v) => {
+      const u = v.url === null ? undefined : comprobada.get(v.url);
+      return {
+        estado: v.estado,
+        hallazgoId: v.hallazgoId,
+        descripcion: descripcion.get(v.hallazgoId) ?? null,
+        url: v.url,
+        comprobacion: u === undefined ? "sin comprobar" : u.codigo === null ? "no resuelve" : `responde ${u.codigo}`,
+        texto: v.texto,
+      };
+    }),
+    puntosCiegos: p.puntosCiegos,
+    preguntas: p.preguntas,
+  };
 }
 
 /**

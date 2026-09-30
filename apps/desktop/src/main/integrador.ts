@@ -48,7 +48,7 @@ import {
   type VerificacionParaInforme,
 } from "@chatcouncil/analysis";
 
-import { escribirHallazgos, escribirSalidaOperador } from "./registro";
+import { escribirHallazgos, escribirInformeIntegrador, escribirSalidaOperador, escribirSalidaVerificador } from "./registro";
 
 /**
  * (a)/(b) — persiste la salida cruda de UN operador y deriva sus hallazgos.
@@ -96,6 +96,70 @@ export function etiquetasValidasDelOperador(
       if (!codigo) throw new Error(`no hay codigo estable de sello para el proveedor ${id}`);
       return codigo;
     });
+}
+
+/**
+ * Menú "Ventana" (2026-09-30) — recapturar el integrador o el verificador sin
+ * mirar la etapa. Una vez capturado un informe, la etapa pasa a "verificacion"
+ * y "Capturar todos" ya no lee el integrador; si ese informe salió incompleto
+ * (la captura de deepseek de las 05:35), no había forma de volver a leerlo.
+ * Recapturar AGREGA un hecho nuevo — el registro no se reescribe — y todo el
+ * código usa el último de la ronda, igual que con los operadores.
+ */
+export type RolRecapturable = "integrador" | "verificador";
+
+const SIN_PREVIO: Record<RolRecapturable, string> = {
+  integrador: 'No hay un informe de integrador en esta ronda todavía. Usá "Pegar integrador".',
+  verificador: 'No hay una verificación en esta ronda todavía. Usá "Pegar verificación".',
+};
+
+function previosDeRol(hechos: readonly Hecho[], rondaId: string, rol: RolRecapturable): (InformeIntegrador | SalidaVerificador)[] {
+  return hechos.filter(
+    (h): h is InformeIntegrador | SalidaVerificador =>
+      h.tipo === (rol === "integrador" ? "informe-integrador" : "salida-verificador") && h.rondaId === rondaId,
+  );
+}
+
+/** El hecho VIGENTE del rol en la ronda: el último capturado. Lo usan el informe final y "Pegar verificación". */
+export function ultimoDeRol(hechos: readonly Hecho[], rondaId: string, rol: "integrador"): InformeIntegrador | null;
+export function ultimoDeRol(hechos: readonly Hecho[], rondaId: string, rol: "verificador"): SalidaVerificador | null;
+export function ultimoDeRol(hechos: readonly Hecho[], rondaId: string, rol: RolRecapturable): InformeIntegrador | SalidaVerificador | null {
+  const previos = previosDeRol(hechos, rondaId, rol);
+  return previos[previos.length - 1] ?? null;
+}
+
+/** El aviso literal si la ronda no tiene todavía nada de ese rol; `null` si se puede recapturar. */
+export function avisoSinPrevio(hechos: readonly Hecho[], rondaId: string, rol: RolRecapturable): string | null {
+  return previosDeRol(hechos, rondaId, rol).length === 0 ? SIN_PREVIO[rol] : null;
+}
+
+/**
+ * Escribe la lectura nueva como un hecho más del rol. El prompt es el que se
+ * pegó en este proceso o, si la app se reinició, el del hecho anterior: es el
+ * mismo prompt que produjo lo que se está recapturando.
+ */
+export function registrarRecaptura(
+  userData: string,
+  hechos: readonly Hecho[],
+  conversacionId: string,
+  rondaId: string,
+  rol: RolRecapturable,
+  lectura: { id: string; text: string; html?: string | null },
+  promptEnMemoria: string | null,
+): { ok: boolean; mensaje: string } {
+  const previos = previosDeRol(hechos, rondaId, rol);
+  const previo = previos[previos.length - 1];
+  if (!previo) return { ok: false, mensaje: SIN_PREVIO[rol] };
+  const prompt = promptEnMemoria ?? previo.promptCompleto;
+  if (rol === "integrador") {
+    escribirInformeIntegrador(userData, conversacionId, rondaId, lectura.id, prompt, lectura.text, lectura.html ?? null);
+  } else {
+    escribirSalidaVerificador(userData, conversacionId, rondaId, lectura.id, prompt, lectura.text, lectura.html ?? null);
+  }
+  return {
+    ok: true,
+    mensaje: `${lectura.id}: ${rol} recapturado, ${lectura.text.length} caracteres (${previos.length + 1} en el registro; se usa el último)`,
+  };
 }
 
 /**

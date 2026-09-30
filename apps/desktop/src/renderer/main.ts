@@ -117,6 +117,7 @@ interface CcBridge {
   pegarOperacionAqui: () => Promise<ResultadoConsolidarUno>;
   pegarIntegrador: () => Promise<ResultadoIntegrador>;
   pegarVerificacion: () => Promise<ResultadoIntegrador>;
+  recapturar: (rol: "integrador" | "verificador") => Promise<{ ok: boolean; mensaje: string }>;
   armarInformeFinal: () => Promise<{ ok: boolean; mensaje: string; ruta?: string }>;
   alMenu: (fn: (accion: string) => void) => void;
 }
@@ -377,6 +378,15 @@ window.cc.alMenu((accion) => {
   if (accion === "pegar-pregunta-aqui") pegarPreguntaAqui();
   else if (accion === "pegar-operacion-aqui") pegarOperacionAqui();
   else if (accion === "capturar-uno") capturarUno();
+  else if (accion === "recapturar-integrador" || accion === "recapturar-verificador") {
+    const rol = accion === "recapturar-integrador" ? "integrador" : "verificador";
+    decir(`Recapturando el ${rol}…`);
+    // Recapturar abre el panel del rol si estaba cerrado: aparece su chip.
+    void window.cc.recapturar(rol).then(async (r) => {
+      await refrescarChips();
+      decir(r.mensaje, r.ok ? "ok" : "mal");
+    });
+  }
 });
 
 /** Objetivo E — "Armar informe final": lo guarda en informes/ y abre la carpeta. */

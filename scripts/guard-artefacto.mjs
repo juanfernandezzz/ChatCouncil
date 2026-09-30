@@ -53,6 +53,9 @@ const EXIGIDO = {
     // Las dos secciones del verificador en el informe final (el resto del
     // encabezado lleva acentos y se escapa al compilar).
     "(aporte del verificador)",
+    // Menu Ventana: recapturar el integrador sin mirar la etapa (2026-09-30).
+    "Recapturar integrador",
+    "cc:recapturar",
     "cc:sesiones",
     // Fase 5 — el informe final se entrega como CARPETA con las respuestas de
     // los investigadores en PDF adentro. Sin estos marcadores, un tree-shaking

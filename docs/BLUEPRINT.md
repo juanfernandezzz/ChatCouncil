@@ -3212,9 +3212,13 @@ ABIERTO:
   "ocho respuestas" a "siete respuestas".
 · La escritura real en el panel del verificador no se probó: exige abrir su
   panel. El camino es el mismo que ya usa "Pegar integrador".
-· Con una ronda que ya tiene informe del integrador, "Capturar" pasa a leer
-  sólo el verificador: un informe del integrador capturado incompleto ya no
-  se puede recapturar con los botones.
+· CERRADO (2026-09-30): menú "Ventana" → "Recapturar integrador" y
+  "Recapturar verificación". Leen el panel del rol con el panel al frente, sin
+  mirar la etapa, y AGREGAN un hecho nuevo; el informe final y "Pegar
+  verificación" usan el último (`ultimoDeRol`). Sin hecho previo en la ronda,
+  avisan y no abren el panel. Sembrado: informe vacío + recaptura = 2
+  InformeIntegrador en el registro y el informe final refleja el segundo.
+  La lectura real de un panel no se probó (cuota cero).
 
 ### Tabla de hallazgos única (2026-09-29) — CERRADO
 

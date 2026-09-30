@@ -82,6 +82,10 @@ import {
   clasificarLecturasPorEtapa,
   etiquetasValidasDelOperador,
   procesarSalidaOperador,
+  avisoSinPrevio,
+  registrarRecaptura,
+  ultimoDeRol,
+  type RolRecapturable,
   salidasVigentesDeRonda,
   puedeEscribirPromptIntegrador,
   avisoPromptsDeCaptura,
@@ -2014,6 +2018,9 @@ function registrarIpc(): void {
    * `enviarPromptAIntegrador`.
    */
   ipcMain.handle("cc:pegar-integrador", async () => enviarPromptAIntegrador());
+  ipcMain.handle("cc:recapturar", async (_e, rol: unknown) =>
+    rol === "integrador" || rol === "verificador" ? recapturarRol(rol) : { ok: false, mensaje: "rol desconocido" },
+  );
   /** 7-1-1 (2026-09-29) — "Pegar verificación": mismo camino que "Pegar integrador", en el panel del verificador. */
   ipcMain.handle("cc:pegar-verificacion", async () => enviarPromptAVerificador());
 
@@ -3718,14 +3725,39 @@ async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
 async function enviarPromptAVerificador(): Promise<ResultadoIntegrador> {
   const d = tablaDeRondaActiva("verificador");
   if ("error" in d) return sinEscribir(d.error);
-  const informes = d.hechos.filter((h): h is InformeIntegrador => h.tipo === "informe-integrador" && h.rondaId === d.ronda.id);
-  const informe = informes[informes.length - 1];
+  const informe = ultimoDeRol(d.hechos, d.ronda.id, "integrador");
   if (!informe) return sinEscribir("la ronda todavía no tiene un informe del integrador capturado", d.etapa);
   const armado = armarPromptVerificadorDeRonda(d.pregunta, informe.informeCrudo, d.tabla);
   if (!armado.ok) return sinEscribir(armado.error, d.etapa);
   const r = await pegarEnPanelDeRol(VERIFICADOR_ID, "verificador", armado.prompt, d.etapa);
   if (r.ok) ultimoPromptVerificador = armado.prompt;
   return r;
+}
+
+/**
+ * Menú "Ventana" — "Recapturar integrador" / "Recapturar verificación": lee
+ * el panel del rol con el panel al frente, sin mirar la etapa, y agrega un
+ * hecho nuevo (`registrarRecaptura`). Sin hecho previo en la ronda, avisa y
+ * no abre el panel.
+ */
+async function recapturarRol(rol: RolRecapturable): Promise<{ ok: boolean; mensaje: string }> {
+  if (!conversacionActual || !rondaActualId) return { ok: false, mensaje: "No hay una ronda activa." };
+  const userData = app.getPath("userData");
+  const hechos = leerRegistroDeArchivo(userData, conversacionActual).hechos;
+  const aviso = avisoSinPrevio(hechos, rondaActualId, rol);
+  if (aviso !== null) return { ok: false, mensaje: aviso };
+  const rolId = rol === "integrador" ? INTEGRADOR_ID : VERIFICADOR_ID;
+  const v = await cargarPanelDeRol(rolId);
+  if (!v) return { ok: false, mensaje: `el ${rol} (${rolId}) no está entre los proveedores cargados` };
+  desplazarA(todas().findIndex((x) => x.id === v.id) * anchoPanel());
+  const [l] = marcarLecturasVacias([await alFrente(v, () => leerUno(v))]);
+  if (l!.error) {
+    escribirErrorCaptura(userData, conversacionActual, rondaActualId, etapaDeRonda(hechos, rondaActualId, POOL_OPERADORES.length),
+      rol === "integrador" ? "informe-integrador" : "salida-verificador", l!.error, l!.id);
+    return { ok: false, mensaje: `${l!.id}: ${l!.error}` };
+  }
+  const enMemoria = rol === "integrador" ? ultimoPromptIntegrador : ultimoPromptVerificador;
+  return registrarRecaptura(userData, hechos, conversacionActual, rondaActualId, rol, l!, enMemoria);
 }
 
 /** Abre el panel del rol, lo trae al frente y escribe `prompt` sin enviar. */
@@ -4365,15 +4397,13 @@ async function armarInformeFinalDeRondaActiva(): Promise<{ ok: boolean; mensaje:
       ...(lineasDescartadas === undefined ? {} : { lineasDescartadas }),
     };
   });
-  const informes = deLaRonda<InformeIntegrador>("informe-integrador");
 
-  const informeIntegrador = informes[informes.length - 1] ?? null;
+  const informeIntegrador = ultimoDeRol(hechos, ronda.id, "integrador");
   const pregunta = preguntaEfectivaDeRonda(hechos, ronda) ?? ronda.prompt;
 
   // 7-1-1: si hubo verificación, sus URLs se comprueban ahora (una sola vez por
   // verificación: si ya se comprobaron, no se vuelve a salir a la red).
-  const verificaciones = deLaRonda<SalidaVerificador>("salida-verificador");
-  const salidaVerificador = verificaciones[verificaciones.length - 1] ?? null;
+  const salidaVerificador = ultimoDeRol(hechos, ronda.id, "verificador");
   const comprobacion = salidaVerificador ? await comprobarUrlsDeRonda(userData, conversacionActual, ronda.id) : null;
   const urlsComprobadas = comprobacion?.ok ? comprobacion.urls : [];
 
@@ -4518,6 +4548,9 @@ function construirMenu(): void {
         { label: "Pegar pregunta en este panel", click: () => uiView?.webContents.send("cc:menu", "pegar-pregunta-aqui") },
         { label: "Pegar operación en este panel", click: () => uiView?.webContents.send("cc:menu", "pegar-operacion-aqui") },
         { label: "Capturar este panel", click: () => uiView?.webContents.send("cc:menu", "capturar-uno") },
+        { type: "separator" },
+        { label: "Recapturar integrador", click: () => uiView?.webContents.send("cc:menu", "recapturar-integrador") },
+        { label: "Recapturar verificación", click: () => uiView?.webContents.send("cc:menu", "recapturar-verificador") },
       ],
     },
   ];

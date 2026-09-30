@@ -31,18 +31,38 @@ export function leerSeleccion(userData: string, conocidos: readonly string[]): s
 
 /** 2026-09-24: el integrador es una preferencia, con deepseek por defecto. */
 export const INTEGRADOR_POR_DEFECTO = "deepseek";
-export const ERROR_INTEGRADOR_DESMARCADO = "El integrador tiene que estar entre los proveedores cargados.";
+/** 2026-09-29: el verificador de fuentes, tercer rol fuera del pool, con GLM por defecto. */
+export const VERIFICADOR_POR_DEFECTO = "glm";
+export const ERROR_ROLES_IGUALES = "El integrador y el verificador tienen que ser proveedores distintos.";
+export const ERROR_ROLES_DESMARCADOS = "El integrador y el verificador tienen que estar entre los proveedores cargados.";
 
-/** El integrador guardado, o el de por defecto si no hay archivo o no es un proveedor conocido. */
-export function leerIntegrador(userData: string, conocidos: readonly string[]): string {
+export interface Roles {
+  integrador: string;
+  verificador: string;
+}
+
+/**
+ * Integrador y verificador guardados. Cada uno cae a su defecto si falta o no
+ * es un proveedor conocido; si el par guardado quedó con los dos iguales
+ * (archivo editado a mano: "Guardar" no lo permite), vuelven los dos defectos.
+ */
+export function leerRoles(userData: string, conocidos: readonly string[]): Roles {
+  const defecto = { integrador: INTEGRADOR_POR_DEFECTO, verificador: VERIFICADOR_POR_DEFECTO };
   const ruta = join(userData, ARCHIVO_SELECCION);
-  if (!existsSync(ruta)) return INTEGRADOR_POR_DEFECTO;
+  if (!existsSync(ruta)) return defecto;
   try {
-    const { integrador } = JSON.parse(readFileSync(ruta, "utf8")) as { integrador?: unknown };
-    return typeof integrador === "string" && conocidos.includes(integrador) ? integrador : INTEGRADOR_POR_DEFECTO;
+    const { integrador, verificador } = JSON.parse(readFileSync(ruta, "utf8")) as Record<string, unknown>;
+    const valido = (v: unknown, d: string): string => (typeof v === "string" && conocidos.includes(v) ? v : d);
+    const roles = { integrador: valido(integrador, defecto.integrador), verificador: valido(verificador, defecto.verificador) };
+    return roles.integrador === roles.verificador ? defecto : roles;
   } catch {
-    return INTEGRADOR_POR_DEFECTO;
+    return defecto;
   }
+}
+
+/** El pool de investigadores y operadores: todos, en su orden, MENOS los dos roles (7-1-1). */
+export function poolDeInvestigadores<T extends string>(todos: readonly T[], roles: Roles): T[] {
+  return todos.filter((id) => id !== roles.integrador && id !== roles.verificador);
 }
 
 export function guardarSeleccion(
@@ -50,13 +70,15 @@ export function guardarSeleccion(
   conocidos: readonly string[],
   marcados: readonly string[],
   integrador: string = INTEGRADOR_POR_DEFECTO,
+  verificador: string = VERIFICADOR_POR_DEFECTO,
 ): { ok: true } | { ok: false; error: string } {
   const validos = conocidos.filter((id) => marcados.includes(id));
   if (validos.length === 0) return { ok: false, error: ERROR_SELECCION_VACIA };
-  if (!validos.includes(integrador)) return { ok: false, error: ERROR_INTEGRADOR_DESMARCADO };
+  if (integrador === verificador) return { ok: false, error: ERROR_ROLES_IGUALES };
+  if (!validos.includes(integrador) || !validos.includes(verificador)) return { ok: false, error: ERROR_ROLES_DESMARCADOS };
   writeFileSync(
     join(userData, ARCHIVO_SELECCION),
-    JSON.stringify({ proveedores: validos, integrador, guardadoEn: new Date().toISOString() }, null, 2),
+    JSON.stringify({ proveedores: validos, integrador, verificador, guardadoEn: new Date().toISOString() }, null, 2),
     "utf8",
   );
   return { ok: true };

@@ -41,6 +41,9 @@ const EXIGIDO = {
     "cc:pegar-operacion-en-todos",
     "cc:pegar-operacion-aqui",
     "cc:pegar-integrador",
+    // 7-1-1 (2026-09-29): el tercer rol. Sin este literal, un tree-shaking que se
+    // lleve la regla de roles distintos deja guardar integrador = verificador.
+    "El integrador y el verificador tienen que ser proveedores distintos.",
     "cc:sesiones",
     // Fase 5 — el informe final se entrega como CARPETA con las respuestas de
     // los investigadores en PDF adentro. Sin estos marcadores, un tree-shaking

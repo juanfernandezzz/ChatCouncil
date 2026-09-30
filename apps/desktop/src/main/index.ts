@@ -68,7 +68,7 @@ import {
   generarSemilla,
   leerRegistroDeArchivo,
 } from "./registro";
-import { guardarSeleccion, leerIntegrador, leerSeleccion } from "./seleccion-proveedores";
+import { guardarSeleccion, leerRoles, leerSeleccion, poolDeInvestigadores } from "./seleccion-proveedores";
 import { armarCuerposDeRonda, armarYPersistirCuerposDeRonda } from "./operador";
 import {
   armarInformeFinalDeRonda,
@@ -556,19 +556,29 @@ const ACTIVOS: readonly ProviderId[] =
  * deepseek por defecto. Nunca opera ni investiga: sólo lee la tabla de
  * hallazgos y escribe el informe.
  */
-const INTEGRADOR_ID = leerIntegrador(app.getPath("userData"), INVESTIGADORES) as ProviderId;
+const ROLES = leerRoles(app.getPath("userData"), INVESTIGADORES);
+const INTEGRADOR_ID = ROLES.integrador as ProviderId;
 
 /**
- * El pool de investigadores y operadores: los nueve MENOS el integrador, en
+ * El VERIFICADOR de fuentes (2026-09-29, arquitectura 7-1-1): tercer rol fuera
+ * del pool, igual que el integrador, con GLM por defecto. No investiga ni
+ * opera: revisa con búsqueda web lo que el integrador marcó.
+ */
+const VERIFICADOR_ID = ROLES.verificador as ProviderId;
+
+/**
+ * El pool de investigadores y operadores: los nueve MENOS el integrador y el
+ * verificador (7-1-1), en
  * el orden fijo de los paneles (de ahí salen P1..P8). Se deriva del
  * integrador elegido; ya no es una lista escrita a mano.
  */
-const POOL_OPERADORES: readonly ProviderId[] = INVESTIGADORES.filter((id) => id !== INTEGRADOR_ID);
+const POOL_OPERADORES: readonly ProviderId[] = poolDeInvestigadores(INVESTIGADORES, ROLES);
 
 /**
  * El panel del integrador NO se carga durante las Partes 1 y 2 (decisión de
  * Juan, 2026-09-24): se abre recién con "Pegar integrador" y se vuelve a
- * cerrar al abrir una ronda nueva. Sólo en los modos de uso y en los que
+ * cerrar al abrir una ronda nueva. El del verificador, igual, con "Pegar
+ * verificación" (2026-09-29). Sólo en los modos de uso y en los que
  * verifican ese camino; los modos de sondeo siguen abriendo todo.
  */
 const CARGA_DIFERIDA_INTEGRADOR =
@@ -585,7 +595,7 @@ const CARGA_DIFERIDA_INTEGRADOR =
  * corrección de la instrucción de la primera corrida real). "Enviar a
  * todos" difunde a esta lista, nunca a `ACTIVOS` completo.
  */
-const DESTINATARIOS_INVESTIGACION: readonly ProviderId[] = ACTIVOS.filter((id) => id !== INTEGRADOR_ID);
+const DESTINATARIOS_INVESTIGACION: readonly ProviderId[] = ACTIVOS.filter((id) => POOL_OPERADORES.includes(id));
 
 /**
  * `--cc-salida=<ruta>` escribe además el informe a un archivo (append).
@@ -883,8 +893,8 @@ async function pegarPreguntaAqui(prompt: string): Promise<ResultadoEnvio> {
   if (!objetivo) {
     return { id: "(ninguno)", ok: false, error: "no hay ningún panel visible" };
   }
-  if (objetivo.id === INTEGRADOR_ID) {
-    return { id: objetivo.id, ok: false, error: "deepseek no recibe la pregunta: no es investigador de la Parte 1" };
+  if (objetivo.id === INTEGRADOR_ID || objetivo.id === VERIFICADOR_ID) {
+    return { id: objetivo.id, ok: false, error: `${objetivo.id} no recibe la pregunta: no es investigador de la Parte 1` };
   }
   const [resultado] = await difundir(prompt, [objetivo.id as ProviderId]);
   return resultado ?? { id: objetivo.id, ok: false, error: "difundir() no devolvió resultado" };
@@ -959,7 +969,7 @@ function abrirRonda(conv: string, prompt: string): string {
   const userData = app.getPath("userData");
   const id = escribirRonda(userData, conv, indiceRonda++, prompt, generarSemilla());
   escribirCondicionProveedoresCargados(userData, conv, id, ACTIVOS, INTEGRADOR_ID);
-  ocultarIntegrador();
+  ocultarPanelesDeRol();
   return id;
 }
 
@@ -979,17 +989,17 @@ function agregarVista(id: ProviderId): (typeof vistas)[number] {
 }
 
 /**
- * Abre el panel del integrador si todavía no está, y espera a que monte su
- * compositor (techo 45 s). `null` si el integrador no está entre los
+ * Abre el panel del integrador o del verificador si todavía no está, y espera
+ * a que monte su compositor (techo 45 s). `null` si ese rol no está entre los
  * proveedores cargados.
  */
-async function cargarIntegrador(): Promise<(typeof vistas)[number] | null> {
-  const existente = vistas.find((x) => x.id === INTEGRADOR_ID);
+async function cargarPanelDeRol(id: ProviderId): Promise<(typeof vistas)[number] | null> {
+  const existente = vistas.find((x) => x.id === id);
   if (existente) return existente;
-  if (!win || !ACTIVOS.includes(INTEGRADOR_ID)) return null;
-  const v = agregarVista(INTEGRADOR_ID);
+  if (!win || !ACTIVOS.includes(id)) return null;
+  const v = agregarVista(id);
   layout();
-  const selector = JSON.stringify(PROVIDER_SPECS[INTEGRADOR_ID].composer.selector);
+  const selector = JSON.stringify(PROVIDER_SPECS[id].composer.selector);
   const hasta = Date.now() + 45_000;
   while (Date.now() < hasta) {
     try {
@@ -1002,14 +1012,16 @@ async function cargarIntegrador(): Promise<(typeof vistas)[number] | null> {
   return v;
 }
 
-/** Cierra el panel del integrador (ronda nueva): sale del recorrido y de los chips. */
-function ocultarIntegrador(): void {
+/** Cierra los paneles del integrador y del verificador (ronda nueva): salen del recorrido y de los chips. */
+function ocultarPanelesDeRol(): void {
   if (!CARGA_DIFERIDA_INTEGRADOR) return;
-  const i = vistas.findIndex((x) => x.id === INTEGRADOR_ID);
-  if (i < 0) return;
-  const [v] = vistas.splice(i, 1);
-  win?.contentView.removeChildView(v!.view);
-  if (!v!.view.webContents.isDestroyed()) v!.view.webContents.close();
+  for (const id of [INTEGRADOR_ID, VERIFICADOR_ID]) {
+    const i = vistas.findIndex((x) => x.id === id);
+    if (i < 0) continue;
+    const [v] = vistas.splice(i, 1);
+    win?.contentView.removeChildView(v!.view);
+    if (!v!.view.webContents.isDestroyed()) v!.view.webContents.close();
+  }
   layout();
 }
 
@@ -1491,7 +1503,7 @@ function createWindow(): void {
   void uiView.webContents.loadFile(join(__dirname, "../renderer/index.html"));
 
   for (const id of ACTIVOS) {
-    if (CARGA_DIFERIDA_INTEGRADOR && id === INTEGRADOR_ID) continue;
+    if (CARGA_DIFERIDA_INTEGRADOR && (id === INTEGRADOR_ID || id === VERIFICADOR_ID)) continue;
     agregarVista(id);
   }
 
@@ -1875,14 +1887,15 @@ function registrarIpc(): void {
   ipcMain.handle("cc:seleccion-leer", () => ({
     conocidos: [...INVESTIGADORES],
     marcados: leerSeleccion(app.getPath("userData"), INVESTIGADORES) ?? [...INVESTIGADORES],
-    integrador: leerIntegrador(app.getPath("userData"), INVESTIGADORES),
+    ...leerRoles(app.getPath("userData"), INVESTIGADORES),
   }));
-  ipcMain.handle("cc:seleccion-guardar", (_e, marcados: unknown, integrador: unknown) =>
+  ipcMain.handle("cc:seleccion-guardar", (_e, marcados: unknown, integrador: unknown, verificador: unknown) =>
     guardarSeleccion(
       app.getPath("userData"),
       INVESTIGADORES,
       Array.isArray(marcados) ? marcados.filter((m): m is string => typeof m === "string") : [],
       typeof integrador === "string" ? integrador : undefined,
+      typeof verificador === "string" ? verificador : undefined,
     ),
   );
   /**
@@ -3640,7 +3653,7 @@ async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
   const hallazgosPorSalida = salidas.map((s) => ({ operadorId: s.operadorId, hallazgos: hallazgosPorSalidaId.get(s.id) ?? [] }));
   const { prompt } = armarTablaYPromptIntegrador(pregunta, hallazgosPorSalida, POOL_OPERADORES, ronda.semilla);
 
-  const v = await cargarIntegrador();
+  const v = await cargarPanelDeRol(INTEGRADOR_ID);
   if (!v) {
     return { ok: false, error: `el integrador (${INTEGRADOR_ID}) no está entre los proveedores cargados`, caracteresEscritos: 0, caracteresPresentes: 0, entregaExacta: false, navegacionesIntactas: true, etapa };
   }
@@ -4354,7 +4367,7 @@ async function armarInformeFinalDeRondaActiva(): Promise<{ ok: boolean; mensaje:
 function abrirSeleccionProveedores(): void {
   const w = new BrowserWindow({
     width: 440,
-    height: 560,
+    height: 760, // +209 px medidos del bloque del verificador (2026-09-29)
     title: "Proveedores al iniciar",
     autoHideMenuBar: true,
     resizable: false,

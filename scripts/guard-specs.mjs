@@ -96,6 +96,22 @@ for (const [id, spec] of Object.entries(specs)) {
   }
 }
 
+// Arquitectura 7-1-1 (2026-09-29): el integrador y el verificador declarados
+// por defecto tienen que existir entre las specs y ser distintos. Si fueran el
+// mismo proveedor, el pool quedaria en ocho y un rol sin panel propio.
+const RUTA_ROLES = "apps/desktop/src/main/seleccion-proveedores.ts";
+const fuenteRoles = readFileSync(join(process.cwd(), RUTA_ROLES), "utf8");
+const rolDeclarado = (nombre) => new RegExp(`export const ${nombre} = "([^"]+)"`).exec(fuenteRoles)?.[1] ?? null;
+const roles = { integrador: rolDeclarado("INTEGRADOR_POR_DEFECTO"), verificador: rolDeclarado("VERIFICADOR_POR_DEFECTO") };
+for (const [rol, id] of Object.entries(roles)) {
+  if (id === null) fallos.push(`${RUTA_ROLES}: no declara el ${rol} por defecto.`);
+  else if (!(id in specs)) fallos.push(`${RUTA_ROLES}: el ${rol} por defecto "${id}" no existe entre las specs.`);
+}
+if (roles.integrador !== null && roles.integrador === roles.verificador) {
+  fallos.push(`${RUTA_ROLES}: integrador y verificador por defecto son el mismo proveedor ("${roles.integrador}").`);
+}
+resumen.push(`roles por defecto: integrador ${roles.integrador}, verificador ${roles.verificador}`);
+
 if (fallos.length > 0) {
   console.error("[guard:specs] FALLO:");
   for (const f of fallos) console.error("  · " + f);

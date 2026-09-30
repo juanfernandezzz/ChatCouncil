@@ -28,6 +28,12 @@ frente y funciona como en uso real.</p>
     <select id="integrador"></select>
     <p class="nota">El integrador no investiga ni opera: lee la tabla de hallazgos y escribe el
 informe. Su panel aparece recién cuando llega su turno.</p>
+    <label for="verificador" class="titulo">Verificador de fuentes</label>
+    <select id="verificador"></select>
+    <p class="nota">El verificador no investiga ni opera con el resto. Después del integrador,
+revisa lo que el integrador marcó, con búsqueda web, y agrega puntos ciegos
+y preguntas derivadas. Su aporte va en una sección aparte, marcada como
+aporte de un solo modelo, no verificado por el consejo.</p>
     <div class="acciones">
       <button id="marcar-todos">Marcar todos</button>
       <button id="guardar" class="primario">Guardar</button>
@@ -42,8 +48,9 @@ informe. Su panel aparece recién cuando llega su turno.</p>
       const cc = window.cc;
       const casillas = document.getElementById("casillas");
       const error = document.getElementById("error");
-      const { conocidos, marcados, integrador } = await cc.seleccionLeer();
+      const { conocidos, marcados, integrador, verificador } = await cc.seleccionLeer();
       const lista = document.getElementById("integrador");
+      const listaVerificador = document.getElementById("verificador");
       for (const id of conocidos) {
         const label = document.createElement("label");
         const chk = document.createElement("input");
@@ -56,12 +63,14 @@ informe. Su panel aparece recién cuando llega su turno.</p>
         op.value = id;
         op.textContent = NOMBRES[id] ?? id;
         lista.append(op);
+        listaVerificador.append(op.cloneNode(true));
       }
       lista.value = integrador;
+      listaVerificador.value = verificador;
       const todas = () => [...casillas.querySelectorAll("input")];
       document.getElementById("marcar-todos").onclick = () => todas().forEach((c) => (c.checked = true));
       document.getElementById("guardar").onclick = async () => {
-        const r = await cc.seleccionGuardar(todas().filter((c) => c.checked).map((c) => c.value), lista.value);
+        const r = await cc.seleccionGuardar(todas().filter((c) => c.checked).map((c) => c.value), lista.value, listaVerificador.value);
         error.textContent = r.ok ? "" : r.error;
         if (r.ok) window.close();
       };

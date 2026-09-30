@@ -261,7 +261,7 @@ export function armarInformeFinal(input: InformeFinalInput): string {
     "",
     "## Lo que este informe no dice",
     "",
-    "Este informe describe como se relacionan ocho respuestas entre si. No",
+    "Este informe describe como se relacionan siete respuestas entre si. No",
     "determina cual es correcta. La verificacion mecanica comprueba que una fuente",
     "existe y coincide, no que sostenga la afirmacion. El informe del integrador es",
     "una afirmacion de un modelo con su procedencia registrada, no un resultado",

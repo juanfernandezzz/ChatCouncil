@@ -3241,3 +3241,17 @@ informe, y H9 no existía en el informe; ahora las dos rutas dan la misma
 tabla de 7 filas y el informe resuelve [H2] [H6] a las mismas filas que vio
 el integrador. Con 6 operadores distintos y una recaptura, la etapa era
 "integracion" y ahora es "operacion".
+
+### Menú "Cuenta" → "Cerrar sesión de este panel…" (traído a main 2026-09-30)
+
+Estaba en la rama `claude/eloquent-noether-bbu2w2` (`e013c90`, 2026-09-27) y
+nunca llegó a main. Borra cookies y almacenamiento de la partición del panel
+al frente (`persist:<id>`) y lo recarga en su `newConversationUrl`, sin navegar
+a logout: el bloqueo de cierre de sesión de `crearVista` sigue intacto. Sirve
+para que el login con Google no entre siempre con la misma cuenta, porque las
+cookies de Google de ese panel viven en la misma partición. Pide confirmación y
+no toca los otros paneles. `guard:artefacto` exige "sesion CERRADA a pedido en"
+en el compilado, probado en rojo.
+
+ABIERTO: el borrado real sobre una sesión de Juan no se probó desde el agente
+(destruiría la sesión que mide).

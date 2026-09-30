@@ -28,7 +28,7 @@ pnpm build:web
 
 1. **New site from Git** → elegir el repo `ChatCouncil`.
 2. Netlify va a intentar auto-detectar el monorepo. **No dejes que
-   fije un "Base directory" en `apps/web`** — si lo hace, corregilo a
+   fije un "Base directory" en `apps/web`** — si lo hace, corrígelo a
    vacío/raíz. Motivo verificado (ver `docs/BLUEPRINT.md`, ledger): con
    la base en `apps/web`, Netlify no encuentra `pnpm-lock.yaml` (que
    vive en la raíz del monorepo), cae a `npm install`, y el protocolo

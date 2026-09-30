@@ -298,8 +298,8 @@ export async function correrPruebaFase1(deps: {
   // Dos turnos: el segundo verifica que la conversación CONTINÚA en vez de
   // arrancar una nueva — que es lo que la persistencia de la vista promete.
   const prompts = [
-    `Respondé sólo con la palabra ${PALABRA_CLAVE}.`,
-    `¿Cuál fue exactamente mi mensaje anterior? Respondé sólo con ese texto.`,
+    `Responde sólo con la palabra ${PALABRA_CLAVE}.`,
+    `¿Cuál fue exactamente mi mensaje anterior? Responde sólo con ese texto.`,
   ];
 
   const envios: ResultadoEnvio[][] = [];

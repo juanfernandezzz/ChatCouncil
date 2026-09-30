@@ -3204,7 +3204,7 @@ function prepararRondaParaOperar():
       ok: false,
       error:
         `la ronda ${ronda.id} no tiene pregunta registrada (Ronda.prompt es el marcador interno o está vacío, ` +
-        `y no hay ninguna "pregunta declarada" válida): declarala con --cc-declarar-pregunta=${conversacionActual}:${ronda.id} ` +
+        `y no hay ninguna "pregunta declarada" válida): declárala con --cc-declarar-pregunta=${conversacionActual}:${ronda.id} ` +
         `--cc-pregunta-archivo=<ruta a un .txt con la pregunta> antes de consolidar`,
     };
   }
@@ -3693,7 +3693,7 @@ function tablaDeRondaActiva(rol: string):
   // integrador lo heredaría igual que el de operación lo hacía antes.
   const pregunta = preguntaEfectivaDeRonda(registro.hechos, ronda);
   if (pregunta === null) {
-    return { error: `la ronda ${ronda.id} no tiene pregunta registrada válida: declarala con --cc-declarar-pregunta antes de pegar el ${rol}` };
+    return { error: `la ronda ${ronda.id} no tiene pregunta registrada válida: declárala con --cc-declarar-pregunta antes de pegar el ${rol}` };
   }
 
   // Rediseño de la barra (2026-09-19) — "los botones NO se bloquean por

@@ -20,7 +20,7 @@ export interface HallazgoParaVerificador {
   descripcion: string;
 }
 
-const PLANTILLA = `Un grupo de sistemas comparó varias respuestas a una pregunta y otro sistema escribió un análisis. Tu tarea es tres cosas, en tres secciones separadas. Tenés búsqueda web: usala.
+const PLANTILLA = `Un grupo de sistemas comparó varias respuestas a una pregunta y otro sistema escribió un análisis. Tu tarea es tres cosas, en tres secciones separadas. Tienes búsqueda web: úsala.
 
 LA PREGUNTA ORIGINAL FUE:
 
@@ -35,20 +35,20 @@ LOS HALLAZGOS QUE EL ANÁLISIS CITA:
 {{HALLAZGOS}}
 
 SECCIÓN 1 — VERIFICACIÓN
-Para cada contradicción o afirmación de datos que el análisis señala como importante, buscá la fuente primaria y decidí una de tres:
-VERIFICADO: la fuente confirma la afirmación. Poné la URL y la cita textual entre comillas.
-CONTRADICHO: la fuente dice algo distinto. Poné la URL, la cita textual, y qué dice en realidad.
-NO_VERIFICADO: no encontraste fuente primaria. Decilo, no inventes una.
-No traigas fuentes sobre temas nuevos en esta sección: acá solo verificás lo que el análisis ya marcó. Máximo diez.
+Para cada contradicción o afirmación de datos que el análisis señala como importante, busca la fuente primaria y decide una de tres:
+VERIFICADO: la fuente confirma la afirmación. Pon la URL y la cita textual entre comillas.
+CONTRADICHO: la fuente dice algo distinto. Pon la URL, la cita textual, y qué dice en realidad.
+NO_VERIFICADO: no encontraste fuente primaria. Dilo, no inventes una.
+No traigas fuentes sobre temas nuevos en esta sección: aquí solo verificas lo que el análisis ya marcó. Máximo diez.
 Una línea por ítem, con este formato:
 VERIFICADO|H12|https://...|"cita textual del artículo"
 CONTRADICHO|H24|https://...|"lo que dice la fuente"
 NO_VERIFICADO|H58|no encontré fuente primaria
 
 SECCIÓN 2 — PUNTOS CIEGOS
-Acá sí podés traer fuentes nuevas. ¿Qué quedó sin cubrir que, para responder bien la pregunta original, hacía falta? Para cada punto ciego, si tenés una fuente que lo cubre, ponela con URL. Máximo cinco.
+Aquí sí puedes traer fuentes nuevas. ¿Qué quedó sin cubrir que, para responder bien la pregunta original, hacía falta? Para cada punto ciego, si tienes una fuente que lo cubre, ponla con URL. Máximo cinco.
 Una línea por punto:
-PUNTO_CIEGO|descripción|https://... (o "sin fuente" si no tenés una)
+PUNTO_CIEGO|descripción|https://... (o "sin fuente" si no tienes una)
 
 SECCIÓN 3 — PREGUNTAS DERIVADAS
 ¿Qué preguntas nuevas abre este análisis, que convendría investigar en otra ronda? Máximo cinco.
@@ -57,7 +57,7 @@ PREGUNTA|el texto de la pregunta
 
 TRES REGLAS
 No decidas quién tiene razón sobre las cosas que el análisis NO marcó: para eso está la sección 2, como aporte tuyo, no como veredicto.
-No uses el GDPR ni normas de otros países como si fueran la norma que se pregunta. Si las mencionás, aclará que son de otro país.
+No uses el GDPR ni normas de otros países como si fueran la norma que se pregunta. Si las mencionas, aclara que son de otro país.
 Las URLs tienen que ser páginas reales que abriste. Una URL que no lleva a la fuente es peor que un NO_VERIFICADO.`;
 
 /** Una línea por hallazgo: `H12|CONVERGENCIA|HECHOS|texto`. */

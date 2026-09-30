@@ -1,6 +1,6 @@
 # Deploy — de este zip a una URL pública en Netlify
 
-Esta guía asume que ya tenés el zip del scaffold y el repositorio
+Esta guía asume que ya tienes el zip del scaffold y el repositorio
 `juanfernandezzz/ChatCouncil` vacío en GitHub. Tres pasos: push del
 código, conexión a Netlify, y (antes de cualquier distribución real de
 la extensión) regenerar la clave de desarrollo.
@@ -10,8 +10,8 @@ la extensión) regenerar la clave de desarrollo.
 No lo hago yo directamente: esta sesión de Claude no tiene tus
 credenciales de git. Claude Code (la app de escritorio o CLI, con
 acceso a tu filesystem y a `git`) sí las tiene. El prompt para pegarle
-está en el mensaje de chat, no en este archivo — abrí Claude Code,
-apuntalo a una carpeta vacía, pegá ese prompt, y decile dónde quedó el
+está en el mensaje de chat, no en este archivo — abre Claude Code,
+apúntalo a una carpeta vacía, pega ese prompt y dile dónde quedó el
 zip descargado.
 
 Validación rápida post-push, desde cualquier terminal:
@@ -41,7 +41,7 @@ pnpm build:web
      publish = "apps/web/dist"
    ```
    Si la UI de Netlify pre-llena algo distinto en "Build settings", lo
-   que manda es el `netlify.toml` del repo — podés dejar los campos de
+   que manda es el `netlify.toml` del repo — puedes dejar los campos de
    la UI vacíos.
 4. **Variables de entorno** (Site settings → Environment variables) —
    opcional en esta primera versión porque el código ya trae defaults
@@ -72,7 +72,7 @@ El scaffold trae una clave RSA de **desarrollo** ya generada y
 verificada (coincide con `VITE_EXTENSION_ID` por defecto — ver ledger
 en `docs/BLUEPRINT.md`, §0.1) para que todo funcione en local sin pasos
 extra. Antes de compartir el `.zip` de la extensión con nadie fuera de
-tu propia máquina, generá tu propia clave:
+tu propia máquina, genera tu propia clave:
 
 ```bash
 openssl genpkey -algorithm RSA -out extension-key.pem -pkeyopt rsa_keygen_bits:2048
@@ -89,7 +89,7 @@ en el BLUEPRINT como diferido post-1.0.
 
 Ese output va en `apps/extension/wxt.config.ts`, campo `manifest.key`.
 Para saber qué `VITE_EXTENSION_ID` le corresponde (Chrome deriva el ID
-del hash SHA-256 de la clave pública, no es arbitrario), corré esto con
+del hash SHA-256 de la clave pública, no es arbitrario), corre esto con
 Node después de compilar la extensión una vez con la clave nueva:
 
 ```bash
@@ -109,9 +109,9 @@ console.log(id);
 "
 ```
 
-Guardá `extension-key.pem` (la privada) fuera del repo — no hace falta
+Guarda `extension-key.pem` (la privada) fuera del repo — no hace falta
 para "cargar descomprimida" ni para el build, solo para volver a firmar
-si algún día publicás en Chrome Web Store.
+si algún día publicas en Chrome Web Store.
 
 ## 5. Cargar la extensión en Chrome (desarrollo)
 

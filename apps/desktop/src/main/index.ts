@@ -343,7 +343,7 @@ const INTEGRADOR_CONV_ID = (ARGV.find((a) => a.startsWith("--cc-integrador=")) ?
  * `nuevoChatPara` (navegar a `newConversationUrl` + confirmar CERO
  * mensajes previos) es efectivo. Diagnóstico puro: no toca el registro, no
  * escribe ningún prompt, no envía nada — mismo espíritu que `--cc-probe`.
- * Existe porque "verificá que sea efectivo, no que el botón exista" no se
+ * Existe porque "verifica que sea efectivo, no que el botón exista" no se
  * responde leyendo código.
  */
 const NUEVO_CHAT_SONDEO = ARGV.includes("--cc-nuevo-chat");
@@ -545,7 +545,7 @@ const SOLO_LISTA = ((ARGV.find((a) => a.startsWith("--cc-solo=")) ?? "").split("
   .filter(Boolean);
 
 /**
- * `--cc-solo-candidatos` — atajo para "abrí sólo los que todavía no tienen
+ * `--cc-solo-candidatos` — atajo para "abre sólo los que todavía no tienen
  * spec". Se DERIVA de `CANDIDATOS_SONDEO` en vez de repetir los ids: una lista
  * paralela a un registro termina desincronizándose, y en este proyecto ya pasó
  * tres veces con la misma lista. Sumar un candidato sigue siendo agregarlo
@@ -2772,7 +2772,7 @@ function modoDeclararPregunta(): void {
  * que se usaron para probar el mecanismo de kimi.
  *
  * Existe SÓLO porque Juan lo pidió explícitamente para esta ronda ("ya
- * podés enviar el prompt de medición"). No es el default: el resto de esta
+ * puedes enviar el prompt de medición"). No es el default: el resto de esta
  * base de código sigue asumiendo que el envío real lo hace Juan desde la
  * ventana.
  */
@@ -3180,7 +3180,7 @@ function prepararRondaParaOperar():
   | { ok: true; ronda: Ronda; pregunta: string; respuestas: Respuesta[]; citas: Cita[]; etapa: EtapaRonda }
   | { ok: false; error: string } {
   if (!conversacionActual || !rondaActualId) {
-    return { ok: false, error: "no hay una ronda activa: capturá las 8 respuestas del pool antes de consolidar" };
+    return { ok: false, error: "no hay una ronda activa: captura las 8 respuestas del pool antes de consolidar" };
   }
   const userData = app.getPath("userData");
   const registro = leerRegistroDeArchivo(userData, conversacionActual);
@@ -3217,7 +3217,7 @@ function prepararRondaParaOperar():
   }
   const faltantes = POOL_OPERADORES.filter((id) => !respuestasDeLaRonda.has(id));
   if (faltantes.length > 0) {
-    return { ok: false, error: `faltan respuestas capturadas en esta ronda: ${faltantes.join(", ")} — usá "Capturar" antes de consolidar` };
+    return { ok: false, error: `faltan respuestas capturadas en esta ronda: ${faltantes.join(", ")} — usa "Capturar" antes de consolidar` };
   }
   const citas = registro.hechos.filter((h): h is Cita => h.tipo === "cita");
   // Rediseño de la barra (2026-09-19) — "los botones NO se bloquean por

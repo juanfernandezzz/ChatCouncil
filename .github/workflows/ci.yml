@@ -32,6 +32,9 @@ jobs:
       # hacer (BLUEPRINT 7.4: un requisito escrito no se hace cumplir solo).
       - name: Guard - packages/ no importa de apps/ y el dominio sigue portable
         run: pnpm guard:dominio
+      # Mismo hueco, otra vez: guard:trazabilidad existia y el CI no lo corria.
+      - name: Guard - cada parrafo del informe referencia un hallazgo
+        run: pnpm guard:trazabilidad
       # Compilar no es embarcar (BLUEPRINT 6): el gate mira el COMPILADO.
       - name: Build
         run: pnpm build

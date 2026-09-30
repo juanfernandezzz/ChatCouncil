@@ -26,7 +26,7 @@ docs/             → blueprint, guía de deploy, ADRs
 ## Requisitos
 
 - Node ≥ 22.12 (ver `.nvmrc`) — pnpm 11 no arranca en Node ≤ 21
-- pnpm 11.x (`corepack enable` si no lo tenés instalado global)
+- pnpm 11.x (`corepack enable` si no lo tienes instalado global)
 
 ## Quickstart
 

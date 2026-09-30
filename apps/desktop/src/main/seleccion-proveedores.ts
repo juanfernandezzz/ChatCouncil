@@ -14,7 +14,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const ARCHIVO_SELECCION = "seleccion-proveedores.json";
-export const ERROR_SELECCION_VACIA = "Tenés que marcar al menos un proveedor.";
+export const ERROR_SELECCION_VACIA = "Tienes que marcar al menos un proveedor.";
 
 export function leerSeleccion(userData: string, conocidos: readonly string[]): string[] | null {
   const ruta = join(userData, ARCHIVO_SELECCION);

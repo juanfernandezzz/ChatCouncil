@@ -238,7 +238,7 @@ $("confirmar").addEventListener("click", () => {
 function pegarPreguntaAqui(): void {
   const prompt = $<HTMLTextAreaElement>("prompt").value.trim();
   if (!prompt) {
-    decir("Escribí la pregunta en el cuadro de arriba antes de pegarla en este panel.", "mal");
+    decir("Escribe la pregunta en el cuadro de arriba antes de pegarla en este panel.", "mal");
     return;
   }
   decir("Pegando la pregunta en el panel al frente…");

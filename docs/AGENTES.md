@@ -1,8 +1,8 @@
 # Contrato de agentes — ChatCouncil
 
-**Leé este archivo entero antes de proponer, escribir o correr nada.**
+**Lee este archivo entero antes de proponer, escribir o correr nada.**
 
-## Por qué vive acá y no en la configuración de una herramienta
+## Por qué vive aquí y no en la configuración de una herramienta
 
 Este proyecto se trabaja desde varias superficies —la pestaña Chat, la pestaña
 Code, Cowork, Dispatch— y cada una tiene su propio alcance de instrucciones,
@@ -12,7 +12,7 @@ persistentes.
 
 Un contrato que vive en la configuración de una herramienta se pierde al
 cambiar de herramienta. Uno que vive en el repositorio lo lee cualquiera que
-tenga el repositorio, que es exactamente la condición para poder trabajar acá.
+tenga el repositorio, que es exactamente la condición para poder trabajar aquí.
 
 Es el mismo principio que sostiene `docs/BLUEPRINT.md`: la fuente de verdad
 está en el repositorio, no en la cabeza de nadie ni en la sesión de nadie.
@@ -20,15 +20,15 @@ está en el repositorio, no en la cabeza de nadie ni en la sesión de nadie.
 ## Arranque obligatorio, en este orden
 
 1. `git log --oneline -3` y `git status --porcelain`. Si hay cambios sin
-   commitear que no sean archivos sueltos `*.txt` de mediciones, **pará y
-   reportá**.
-2. Leé `docs/BLUEPRINT.md` **entero**. Es el plan vigente y el registro de
+   commitear que no sean archivos sueltos `*.txt` de mediciones, **detente y
+   repórtalo**.
+2. Lee `docs/BLUEPRINT.md` **entero**. Es el plan vigente y el registro de
    verificación. `docs/BLUEPRINT.v2.md` **no** es el plan: es archivo
    histórico de una arquitectura descartada.
-3. Leé el código real: `apps/desktop/` completo y los cuatro paquetes de
+3. Lee el código real: `apps/desktop/` completo y los cuatro paquetes de
    `packages/` (`domain`, `providers`, `analysis`, `ui`).
-4. Corré la línea base con salidas reales: `pnpm install`, `pnpm typecheck`,
-   los cinco gates, `pnpm build`.
+4. Corre la línea base con salidas reales: `pnpm install`, `pnpm typecheck`,
+   los seis gates, `pnpm build`.
 
 **Todo reclamo sobre el repositorio sale de leer archivos en la sesión actual.
 Nunca de memoria, nunca de un resumen, nunca de una sesión anterior.**
@@ -48,7 +48,7 @@ el usuario).
 ## Reglas duras
 
 Ninguna de estas se negocia dentro de una tarea. Si una tarea parece exigir
-romper una, la tarea está mal planteada: **pará y decilo.**
+romper una, la tarea está mal planteada: **detente y dilo.**
 
 ### Arquitectura
 
@@ -104,16 +104,16 @@ romper una, la tarea está mal planteada: **pará y decilo.**
 
 ### Gates
 
-Cinco, y los cinco tienen que dar verde:
+Seis, y los seis tienen que dar verde:
 
-    pnpm guard:sellado · guard:specs · guard:sondeo · guard:dominio · guard:artefacto
+    pnpm guard:sellado · guard:specs · guard:sondeo · guard:dominio · guard:trazabilidad · guard:artefacto
 
 - Todo requisito declarativo nuevo necesita un gate o una rama que lo consuma.
   Un campo de spec que nadie ramifica es decoración, y miente.
 - **Todo gate nuevo se prueba en rojo antes de confiar en él.** Un gate que
   pasa por el motivo equivocado es peor que no tenerlo.
-- **Si un gate te frena, cedés vos.** No se afloja. Si creés que un gate está
-  mal, **pará y decilo**: eso es decisión de diseño, no elección técnica.
+- **Si un gate te frena, cedes tú.** No se afloja. Si crees que un gate está
+  mal, **detente y dilo**: eso es decisión de diseño, no elección técnica.
 
 ### Git
 
@@ -127,9 +127,9 @@ Cinco, y los cinco tienen que dar verde:
 
 ## Cómo se trabaja
 
-Cada objetivo se ejecuta de forma **autónoma**: diagnosticás, escribís código,
-compilás, medís, commiteás y reiterás hasta cumplirlo. **No parás a reportar un
-problema: lo arreglás.**
+Cada objetivo se ejecuta de forma **autónoma**: diagnosticas, escribes código,
+compilas, mides, haces commit y reiteras hasta cumplirlo. **No te detienes a
+reportar un problema: lo arreglas.**
 
 Se escala **sólo** si:
 
@@ -141,11 +141,11 @@ Se escala **sólo** si:
 de código ni de documentación atribuye una decisión a Juan que Juan no haya
 escrito.**
 
-Antes de iterar sobre un arreglo, **separá el mecanismo bajo prueba de todo lo
+Antes de iterar sobre un arreglo, **separa el mecanismo bajo prueba de todo lo
 que exija a una persona**. Un ciclo de verificación que necesita a alguien no
 se puede iterar.
 
-### Skills que Juan tiene instaladas, y que aplican acá
+### Skills que Juan tiene instaladas, y que aplican aquí
 
 `systematic-debugging`, `verification-before-completion`,
 `incremental-implementation`, `planning-and-task-breakdown` y
@@ -168,7 +168,7 @@ Juan detesta la fatiga de decisión, y una recomendación sin alternativa visibl
 no es una decisión, es un anuncio.
 
 Instrucciones para Juan: **paso a paso, numeradas, en orden, diciendo quién
-hace cada cosa**. Nada de "abrí X" sin decir cómo se abre X.
+hace cada cosa**. Nada de "abre X" sin decir cómo se abre X.
 
 ## Formato y lenguaje
 

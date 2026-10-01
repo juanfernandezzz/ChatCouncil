@@ -3381,3 +3381,32 @@ ABIERTO:
   ocurre después de que ese paso da ok.
 · CERRADO (pedido de Juan, 2026-10-01): el prompt con archivo decía "P1 a P8";
   pasó a "P1 a P7", igual que el de la barra desde el 2026-09-29.
+
+### Los botones "este panel" ya no navegan (2026-10-01)
+
+Juan reportó que "Pegar operación en este panel" y "Pegar operación y
+descargar archivo (este panel)" recargaban o abrían una conversación nueva
+antes de pegar, en todos los proveedores. Auditado el camino: los dos llamaban
+a `consolidarUnPanel` → `alFrente` → `consolidarUnPanelAlFrente`, que corre
+`nuevoChatPara` (`loadURL(newConversationUrl)`, la navegación) y
+`esperarCompositorVacioEstable` antes de escribir. El cambio a5cc2c6 llevó el
+botón a la barra, pero siguió usando esa función.
+
+Ahora los dos llaman a `pegarEnPanelVisible`: lee una vez que el compositor
+esté vacío y que el chat no tenga mensajes (`estaVacioElChat`); si algo falla,
+avisa y no escribe. Después escribe con `escribirYVerificarOperacion`, la
+escritura pura extraída de `consolidarUnPanelAlFrente`. No navega, no recarga,
+no espera en bucle y no mueve el panel. La conversación nueva la abre Juan.
+`consolidarUnPanel` y `nuevoChatPara` quedan para "Pegar operación en todos"
+(sin botón), que sigue igual.
+
+"Pegar pregunta en este panel" no tenía el defecto: `difundir` → preload
+`run` sólo espera el compositor y escribe. Para kimi (`envioConfiable`) pasa
+por `difundirConEnfoque`, que reacomoda el panel al frente para tener foco;
+no navega.
+
+Verificado por lectura del código, cuota cero: cero `loadURL`, `reload`,
+`nuevoChatPara`, `alFrente`, `esperarCompositorVacioEstable`, `setBounds` en
+`pegarOperacionAqui`, `pegarOperacionConArchivoAqui`, `pegarEnPanelVisible`,
+`escribirYVerificarOperacion` y `pegarPreguntaAqui`. ABIERTO: la prueba en
+vivo la hace Juan.

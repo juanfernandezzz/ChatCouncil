@@ -3384,6 +3384,23 @@ async function consolidarUnPanelAlFrente(
     };
   }
 
+  return escribirYVerificarOperacion(v, operadorId, textoAEscribir, marcasDeEsteOperador, chatNuevo.quedoLimpio);
+}
+
+/**
+ * La escritura pura del prompt de operación: escribe en el compositor que
+ * haya, con el método de la spec, y verifica lo escrito. No navega, no
+ * recarga y no mueve el panel. La usan el camino secuencial (después de su
+ * "Nuevo chat") y los botones "este panel" (sin él).
+ */
+async function escribirYVerificarOperacion(
+  v: (typeof vistas)[number],
+  operadorId: string,
+  textoAEscribir: string,
+  marcasDeEsteOperador: string[],
+  chatNuevoOk: boolean,
+): Promise<ResultadoConsolidarPanel> {
+  const lineasPrompt = textoAEscribir.replace(/\r\n/g, "\n").split("\n").length;
   const spec = PROVIDER_SPECS[v.id as keyof typeof PROVIDER_SPECS];
   const specJson = JSON.stringify(spec);
   const TECHO_EXTERNO_MS = 90_000;
@@ -3443,7 +3460,7 @@ async function consolidarUnPanelAlFrente(
       lineasCompositor,
       igualCaracterPorCaracter,
       interrumpido: false,
-      chatNuevoOk: chatNuevo.quedoLimpio,
+      chatNuevoOk,
     };
   } catch (e) {
     return {
@@ -3452,7 +3469,7 @@ async function consolidarUnPanelAlFrente(
       error: e instanceof Error ? e.message : String(e),
       estadoIntegridad: "indeterminado",
       marcasEsperadas: marcasDeEsteOperador.length,
-      chatNuevoOk: chatNuevo.quedoLimpio,
+      chatNuevoOk,
       marcasPresentes: 0,
       promptCompleto: false,
       faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
@@ -3620,6 +3637,49 @@ async function pegarOperacionEnTodos(): Promise<ResultadoConsolidar> {
   };
 }
 
+/**
+ * Los dos botones "este panel" (2026-10-01, pedido de Juan): SÓLO escriben
+ * donde está el cursor. Juan abre la conversación nueva a mano; esto lo
+ * comprueba leyendo (compositor vacío, chat sin mensajes) y, si algo no
+ * cuadra, avisa y no escribe. No navega, no recarga, no espera en bucle y no
+ * mueve el panel: el que está al frente es el que Juan está mirando.
+ */
+async function pegarEnPanelVisible(
+  v: (typeof vistas)[number],
+  operadorId: string,
+  textoAEscribir: string,
+  marcasDeEsteOperador: string[],
+): Promise<ResultadoConsolidarPanel> {
+  const specJson = JSON.stringify(PROVIDER_SPECS[v.id]);
+  const sinEscribir = (error: string): ResultadoConsolidarPanel => ({
+    operadorId,
+    ok: false,
+    error,
+    estadoIntegridad: "indeterminado",
+    marcasEsperadas: marcasDeEsteOperador.length,
+    marcasPresentes: 0,
+    promptCompleto: false,
+    faltantesPrompt: [...REQUISITOS_PROMPT_OPERACION],
+    lineasPrompt: textoAEscribir.replace(/\r\n/g, "\n").split("\n").length,
+    lineasCompositor: 0,
+    igualCaracterPorCaracter: false,
+    interrumpido: false,
+    chatNuevoOk: false,
+  });
+  let compositor: string | null;
+  let chatVacio: boolean;
+  try {
+    compositor = (await v.view.webContents.executeJavaScript(`window.__ccProvider.leerTextoCompositor(${specJson})`, true)) as string | null;
+    chatVacio = (await v.view.webContents.executeJavaScript(`window.__ccProvider.estaVacioElChat(${specJson})`, true)) as boolean;
+  } catch (e) {
+    return sinEscribir(e instanceof Error ? e.message : String(e));
+  }
+  if (compositor === null) return sinEscribir("compositor no encontrado: no se escribió nada");
+  if (compositor.trim().length > 0) return sinEscribir("el compositor ya tenía texto: no se escribe encima de un borrador de Juan");
+  if (!chatVacio) return sinEscribir("la conversación ya tiene mensajes: abre una conversación nueva a mano y vuelve a apretar el botón");
+  return escribirYVerificarOperacion(v, operadorId, textoAEscribir, marcasDeEsteOperador, true);
+}
+
 export interface ResultadoConsolidarUno {
   ok: boolean;
   error?: string;
@@ -3631,7 +3691,7 @@ export interface ResultadoConsolidarUno {
 /**
  * Cambio 4 — "Consolidar este panel": hace lo mismo que "Consolidar
  * respuestas" pero SÓLO sobre el panel visible en pantalla en ese momento
- * ("Nuevo chat", escribe el prompt de operación de ESE operador, sin
+ * (escribe el prompt de operación de ESE operador donde está el cursor, sin
  * enviar). Usa la MISMA ronda y la MISMA semilla que la consolidación
  * general — `armarCuerposDeRonda` es determinista sobre `ronda.semilla`, así
  * que recalcularla para un solo panel da el MISMO barajado, nunca uno nuevo
@@ -3680,15 +3740,15 @@ async function pegarOperacionAqui(): Promise<ResultadoConsolidarUno> {
   );
   // Ya se verificó arriba que `objetivo.id` está en POOL_OPERADORES (⊂ ProviderId).
   const v = { id: objetivo.id as ProviderId, view: objetivo.view };
-  const panel = await consolidarUnPanel(v, objetivo.id, textoAEscribir, marcasDeEsteOperador);
+  const panel = await pegarEnPanelVisible(v, objetivo.id, textoAEscribir, marcasDeEsteOperador);
   return { ok: panel.ok, panel, etapa, ...(panel.error ? { error: panel.error } : {}) };
 }
 
 /**
  * Menú "Ventana" → "Pegar operación y descargar archivo (este panel)"
  * (2026-10-01). Lo mismo que `pegarOperacionAqui` —misma ronda, misma
- * semilla, mismo sello, mismas comprobaciones de chat nuevo y compositor
- * vacío—, pero escribe el prompt SIN el cuerpo y baja el cuerpo de ESE
+ * semilla, mismo sello, mismas comprobaciones de compositor vacío y chat sin
+ * mensajes—, pero escribe el prompt SIN el cuerpo y baja el cuerpo de ESE
  * operador, con sus marcas, a la carpeta de descargas. El preámbulo se repite
  * a propósito: el botón de la barra no se toca.
  */
@@ -3719,7 +3779,7 @@ async function pegarOperacionConArchivoAqui(): Promise<ResultadoConsolidarUno & 
   const v = { id: objetivo.id as ProviderId, view: objetivo.view };
   // Sin marcas en el prompt: las marcas viven en el archivo, y el prompt le
   // pide al operador la primera y la última.
-  const panel = await consolidarUnPanel(v, objetivo.id, prompt, []);
+  const panel = await pegarEnPanelVisible(v, objetivo.id, prompt, []);
   if (!panel.ok) return { ok: false, panel, etapa, ...(panel.error ? { error: panel.error } : {}) };
 
   const ruta = join(app.getPath("downloads"), nombreArchivo);

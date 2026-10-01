@@ -115,6 +115,7 @@ interface CcBridge {
   pegarOperacionEnTodos: () => Promise<ResultadoConsolidar>;
   pegarOperacionEstado: () => Promise<EstadoConsolidacion>;
   pegarOperacionAqui: () => Promise<ResultadoConsolidarUno>;
+  pegarOperacionConArchivoAqui: () => Promise<ResultadoConsolidarUno>;
   avisoOperacionPendiente: () => Promise<boolean>;
   pegarIntegrador: () => Promise<ResultadoIntegrador>;
   pegarVerificacion: () => Promise<ResultadoIntegrador>;
@@ -403,6 +404,18 @@ $("aviso-operacion-pegar").addEventListener("click", () => {
 window.cc.alMenu((accion) => {
   if (accion === "pegar-pregunta-aqui") pegarPreguntaAqui();
   else if (accion === "capturar-uno") capturarUno();
+  else if (accion === "pegar-operacion-archivo") {
+    decir("Pegando operación en el panel al frente…");
+    void window.cc.pegarOperacionConArchivoAqui().then((r) => {
+      if (!r.ok) {
+        decir(`No se pudo pegar la operación en este panel: ${r.error ?? "sin detalle"}${etiquetaEtapa(r.etapa)}`, "mal");
+        return;
+      }
+      if (r.panel) marcar(r.panel.operadorId, "listo · archivo descargado", "ok");
+      pintarPaneles();
+      decir("Listo. Pegué el prompt y descargué el archivo de respuestas. Adjúntalo a mano en el panel antes de enviar.", "ok");
+    });
+  }
   else if (accion === "recapturar-integrador" || accion === "recapturar-verificador") {
     const rol = accion === "recapturar-integrador" ? "integrador" : "verificador";
     decir(`Recapturando el ${rol}…`);

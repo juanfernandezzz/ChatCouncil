@@ -73,7 +73,7 @@ import {
   leerRegistroDeArchivo,
 } from "./registro";
 import { guardarSeleccion, leerRoles, leerSeleccion, poolDeInvestigadores } from "./seleccion-proveedores";
-import { armarCuerposDeRonda, armarYPersistirCuerposDeRonda } from "./operador";
+import { armarCuerposDeRonda, armarOperacionConArchivo, armarYPersistirCuerposDeRonda } from "./operador";
 import { comprobarUrlsDeRonda } from "./comprobar-urls";
 import {
   armarInformeFinalDeRonda,
@@ -2044,6 +2044,7 @@ function registrarIpc(): void {
    * Ver `pegarOperacionAqui`.
    */
   ipcMain.handle("cc:pegar-operacion-aqui", async () => pegarOperacionAqui());
+  ipcMain.handle("cc:pegar-operacion-archivo", async () => pegarOperacionConArchivoAqui());
 
   /**
    * Aviso "Antes de pegar la operación" (pedido de Juan, 2026-09-30): una vez
@@ -3684,6 +3685,57 @@ async function pegarOperacionAqui(): Promise<ResultadoConsolidarUno> {
 }
 
 /**
+ * Menú "Ventana" → "Pegar operación y descargar archivo (este panel)"
+ * (2026-10-01). Lo mismo que `pegarOperacionAqui` —misma ronda, misma
+ * semilla, mismo sello, mismas comprobaciones de chat nuevo y compositor
+ * vacío—, pero escribe el prompt SIN el cuerpo y baja el cuerpo de ESE
+ * operador, con sus marcas, a la carpeta de descargas. El preámbulo se repite
+ * a propósito: el botón de la barra no se toca.
+ */
+async function pegarOperacionConArchivoAqui(): Promise<ResultadoConsolidarUno & { ruta?: string }> {
+  const prep = prepararRondaParaOperar();
+  if (!prep.ok) return { ok: false, error: prep.error };
+  const { ronda, pregunta, respuestas, citas, etapa } = prep;
+
+  const objetivo = vistaConIdEnFrente();
+  if (!objetivo) return { ok: false, error: "no hay ningún panel visible" };
+  if (!(POOL_OPERADORES as readonly string[]).includes(objetivo.id)) {
+    return { ok: false, error: `el panel al frente ("${objetivo.id}") no es un operador del pool: no tiene cuerpo que consolidar` };
+  }
+
+  let resultadoArmado;
+  try {
+    resultadoArmado = armarYPersistirCuerposDeRonda(app.getPath("userData"), conversacionActual!, ronda, respuestas, citas, POOL_OPERADORES);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+  const cuerpoOperador = resultadoArmado.cuerpos.find((c) => c.operadorId === objetivo.id);
+  const codigo = resultadoArmado.sello.find((s) => s.panelSourceId === objetivo.id)?.codigoEstable;
+  if (!cuerpoOperador || !codigo) {
+    return { ok: false, error: `no se encontró el cuerpo de "${objetivo.id}" entre los del pool` };
+  }
+
+  const { prompt, cuerpoArchivo, nombreArchivo } = armarOperacionConArchivo(pregunta, cuerpoOperador, codigo, new Date());
+  const v = { id: objetivo.id as ProviderId, view: objetivo.view };
+  // Sin marcas en el prompt: las marcas viven en el archivo, y el prompt le
+  // pide al operador la primera y la última.
+  const panel = await consolidarUnPanel(v, objetivo.id, prompt, []);
+  if (!panel.ok) return { ok: false, panel, etapa, ...(panel.error ? { error: panel.error } : {}) };
+
+  const ruta = join(app.getPath("downloads"), nombreArchivo);
+  try {
+    writeFileSync(ruta, cuerpoArchivo, "utf8");
+  } catch (e) {
+    return { ok: false, panel, etapa, error: `pegué el prompt pero no pude guardar el archivo en ${ruta}: ${String(e)}` };
+  }
+  // Lo que el operador recibe es prompt + archivo: la captura de la operación
+  // guarda las dos piezas (`SalidaOperador.promptCompleto`).
+  ultimoPromptOperadorPorId.set(objetivo.id, `${prompt}\n\n=== ARCHIVO ADJUNTO: ${nombreArchivo} ===\n${cuerpoArchivo}`);
+  decirPorSalida(`\n[cc] operacion por archivo para ${objetivo.id}: ${ruta}\n`);
+  return { ok: true, panel, etapa, ruta };
+}
+
+/**
  * T7 (Fase 3) — "Enviar prompt al integrador" (Parte 2 de la interfaz, paso
  * (e) del cableado). Mismo patrón que `pegarOperacionEnTodos()`: arma el
  * dato, escribe en el panel al frente, y NUNCA envía — Juan sigue teniendo
@@ -4658,6 +4710,7 @@ function construirMenu(): void {
         { type: "separator" },
         { label: "Pegar pregunta en este panel", click: () => uiView?.webContents.send("cc:menu", "pegar-pregunta-aqui") },
         // "Pegar operación en este panel" pasó a la barra (2026-09-30): no se duplica acá.
+        { label: "Pegar operación y descargar archivo (este panel)", click: () => uiView?.webContents.send("cc:menu", "pegar-operacion-archivo") },
         { label: "Capturar este panel", click: () => uiView?.webContents.send("cc:menu", "capturar-uno") },
         { type: "separator" },
         { label: "Recapturar integrador", click: () => uiView?.webContents.send("cc:menu", "recapturar-integrador") },

@@ -14,7 +14,15 @@
  */
 
 import type { Cita, Respuesta, Ronda, Sello } from "@chatcouncil/domain";
-import { armarCuerposPorOperador, hashSemilla, type CuerposPorOperador, type EntradaSelloConCodigo } from "@chatcouncil/analysis";
+import {
+  armarCuerposPorOperador,
+  armarPromptOperacionConArchivo,
+  hashSemilla,
+  insertarMarcasIntercaladas,
+  type CuerposPorOperador,
+  type EntradaSelloConCodigo,
+  type RespuestaEtiquetada,
+} from "@chatcouncil/analysis";
 import { randomUUID } from "node:crypto";
 
 import { escribirSello, leerRegistroDeArchivo } from "./registro";
@@ -162,4 +170,31 @@ export function armarYPersistirCuerposDeRonda(
 
   escribirSello(userData, conversacionId, ronda.id, resultado.sello);
   return resultado;
+}
+
+/**
+ * Vía de archivo de "Pegar operación y descargar archivo (este panel)": el
+ * prompt sin cuerpo, y el cuerpo con las marcas de integridad intercaladas y
+ * la de FIN, igual que `armarPromptDeOperacionConMarcas` (index.ts) las pone
+ * sobre el prompt completo. `codigoOperador` es el P# del propio operador
+ * (`codigoEstable`), que nunca aparece dentro de su cuerpo.
+ */
+export function armarOperacionConArchivo(
+  pregunta: string,
+  cuerpoOperador: { respuestasParaOperador: RespuestaEtiquetada[] },
+  codigoOperador: string,
+  ahora: Date,
+  token: string = randomUUID(),
+): { prompt: string; cuerpoArchivo: string; marcas: string[]; nombreArchivo: string } {
+  const { prompt, cuerpoArchivo } = armarPromptOperacionConArchivo(pregunta, cuerpoOperador.respuestasParaOperador);
+  const { textoConMarcas, marcas } = insertarMarcasIntercaladas(cuerpoArchivo, token);
+  const marcaFin = `[[CC-MARCA-FIN-${token}]]`;
+  const d2 = (n: number): string => String(n).padStart(2, "0");
+  const sello = `${ahora.getFullYear()}-${d2(ahora.getMonth() + 1)}-${d2(ahora.getDate())}-${d2(ahora.getHours())}${d2(ahora.getMinutes())}`;
+  return {
+    prompt,
+    cuerpoArchivo: `${textoConMarcas}\n${marcaFin}\n`,
+    marcas: [...marcas, marcaFin],
+    nombreArchivo: `operacion-${codigoOperador}-${sello}.txt`,
+  };
 }

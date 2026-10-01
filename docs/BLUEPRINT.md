@@ -3330,3 +3330,54 @@ Verificado, cuota cero:
 
 ABIERTO: la lectura real de los paneles en "Capturar todos" no se ejercitó
 (cuota cero); la ronda del 2026-09-25 es el antecedente real de ese camino.
+
+### Vía de archivo: "Pegar operación y descargar archivo (este panel)" (2026-10-01)
+
+Decisión de Juan: el cuerpo de operación llega a ~180.000 caracteres y no
+entra en el compositor de ChatGPT (límite de pegado medido por Juan). El
+prompt se PEGA y el cuerpo de las 6 respuestas baja como .txt para que Juan
+lo adjunte a mano. No se recorta ninguna respuesta.
+
+· `armarPromptOperacionConArchivo(pregunta, respuestas)` (`prompt-operacion.ts`)
+  devuelve `prompt` (texto literal, sin el cuerpo) y `cuerpoArchivo` (las
+  respuestas con sus `=== P# ===`, lo mismo que `armarPromptOperacion` embebe
+  en `{{CUERPO}}`). `armarPromptOperacion` y el botón de la barra no cambian.
+· Las marcas de integridad se intercalan sobre el cuerpo, más la de FIN
+  (`armarOperacionConArchivo`, `operador.ts`): el módulo del prompt sigue sin
+  imports. El prompt no lleva marcas.
+· Menú "Ventana" → "Pegar operación y descargar archivo (este panel)": misma
+  ronda, semilla y sello que "Pegar operación en este panel", mismas
+  comprobaciones (chat nuevo, compositor vacío). Si fallan, avisa con el mismo
+  texto y no escribe ni descarga. Si pasan, escribe el prompt y guarda
+  `operacion-<P# del operador>-<AAAA-MM-DD-HHMM>.txt` en Descargas. La captura
+  de la operación guarda prompt + archivo como `promptCompleto`.
+
+**Lo que Juan tiene que mirar en la ronda real, por proveedor.** El control es
+la primera línea que el prompt pide:
+· Empieza con las dos marcas correctas —la primera y la última del archivo—:
+  leyó el archivo entero.
+· Dice "ARCHIVO: no pude leer el archivo adjunto": la vía de archivo no sirve
+  en ese proveedor.
+· Da marcas que no son las del archivo, o se saltó la primera línea: leyó
+  parcial o resumió. Tampoco sirve, y es un hallazgo sobre ese proveedor.
+Esto no se puede medir con datos sembrados: depende de cómo cada proveedor
+procesa un adjunto.
+
+Verificado, cuota cero (registro sembrado en una carpeta temporal, 7 en el
+pool, operadores chatgpt y mistral): prompt de 3.586 caracteres sin ninguna
+respuesta ni `=== P`; cuerpo con 6 separadores, las 6 respuestas de los
+otros, sin la propia ni su P#; 5 marcas (primera `CC-MARCA-0000`, última
+`CC-MARCA-FIN`); prompt con la línea "ARCHIVO: primera marca = …" y las cinco
+categorías, TENSION incluida; nombre `operacion-P1-2026-10-01-0905.txt`.
+Renderer compilado con un `window.cc` de prueba: con el compositor lleno avisa
+"No se pudo pegar la operación en este panel: el compositor no quedó vacío…";
+con éxito, el texto exacto pedido. `guard:artefacto` exige
+`cc:pegar-operacion-archivo` en main y preload, probado en rojo.
+
+ABIERTO:
+· La entrada del menú sobre un panel de proveedor real no se ejercitó: exige
+  abrir su partición (cuota cero). Lo que no hace nada con el compositor lleno
+  es el mismo `consolidarUnPanel` del botón de la barra; la descarga sólo
+  ocurre después de que ese paso da ok.
+· El texto literal pedido termina con "P1 a P8"; el prompt de la barra dice
+  "P1 a P7" desde la decisión del 2026-09-29 (pool de 7). Se dejó literal.

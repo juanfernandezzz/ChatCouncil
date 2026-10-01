@@ -40,6 +40,8 @@ const EXIGIDO = {
     "cc:capturar-uno",
     "cc:pegar-operacion-en-todos",
     "cc:pegar-operacion-aqui",
+    // Menu Ventana: prompt pegado + cuerpo como .txt (2026-10-01).
+    "cc:pegar-operacion-archivo",
     // Aviso de una vez por ronda antes de pegar la operación (2026-09-30).
     "cc:aviso-operacion-pendiente",
     "cc:pegar-integrador",
@@ -260,6 +262,7 @@ const EXIGIDO = {
     "cc:pegar-pregunta-aqui",
     "cc:capturar-todos",
     "cc:capturar-uno",
+    "cc:pegar-operacion-archivo",
     "cc:sesiones",
     "cc:sondear",
   ],

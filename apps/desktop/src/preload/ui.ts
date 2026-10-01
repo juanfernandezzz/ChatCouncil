@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld("cc", {
    * semilla — no vuelve a barajar.
    */
   pegarOperacionAqui: (): Promise<ResultadoConsolidarUno> => ipcRenderer.invoke("cc:pegar-operacion-aqui"),
+  /** Menú "Ventana": pega el prompt sin el cuerpo y baja el cuerpo de ese operador como .txt. */
+  pegarOperacionConArchivoAqui: (): Promise<ResultadoConsolidarUno> => ipcRenderer.invoke("cc:pegar-operacion-archivo"),
   /** `true` la primera vez en la ronda activa (y la marca): el renderer muestra el aviso antes de pegar. */
   avisoOperacionPendiente: (): Promise<boolean> => ipcRenderer.invoke("cc:aviso-operacion-pendiente"),
   /**

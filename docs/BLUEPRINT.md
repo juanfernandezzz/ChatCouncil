@@ -3379,5 +3379,5 @@ ABIERTO:
   abrir su partición (cuota cero). Lo que no hace nada con el compositor lleno
   es el mismo `consolidarUnPanel` del botón de la barra; la descarga sólo
   ocurre después de que ese paso da ok.
-· El texto literal pedido termina con "P1 a P8"; el prompt de la barra dice
-  "P1 a P7" desde la decisión del 2026-09-29 (pool de 7). Se dejó literal.
+· CERRADO (pedido de Juan, 2026-10-01): el prompt con archivo decía "P1 a P8";
+  pasó a "P1 a P7", igual que el de la barra desde el 2026-09-29.

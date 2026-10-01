@@ -168,7 +168,7 @@ Registrar una limitacion es tan valido como registrar un hallazgo.
 
 UNA COSA MAS
 
-No sabes que sistema produjo cada respuesta, y no necesitas saberlo. Los identificadores P1 a P8 son arbitrarios y cambian en cada ronda.`;
+No sabes que sistema produjo cada respuesta, y no necesitas saberlo. Los identificadores P1 a P7 son arbitrarios y cambian en cada ronda.`;
 
 /**
  * Las dos piezas de la vía de archivo: `prompt` (se pega) y `cuerpoArchivo`

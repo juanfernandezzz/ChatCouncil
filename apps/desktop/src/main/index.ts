@@ -696,6 +696,9 @@ const PARTICIONES_CONOCIDAS: readonly string[] = [
 let conversacionActual: string | null = null;
 let indiceRonda = 0;
 let rondaActualId: string | null = null;
+/** Ronda en la que ya se mostró el aviso de "Pegar operación en este panel" (ver `cc:aviso-operacion-pendiente`). */
+let avisoOperacionMostrado = false;
+let rondaConAvisoOperacion: string | null = null;
 
 /**
  * DEFECTO REAL, medido leyendo el registro de Juan (2026-09-18): reinició la
@@ -2030,6 +2033,8 @@ function registrarIpc(): void {
    * `cc:pegar-operacion-estado` para saber en qué panel va (2,5 min sin
    * señal se lee como cuelgue — medido, ya pasó en esta fase).
    */
+  // Sin llamador desde el 2026-09-30: el botón salió de la barra (ver
+  // renderer/index.html). Queda registrado por si se quiere volver.
   ipcMain.handle("cc:pegar-operacion-en-todos", async () => pegarOperacionEnTodos());
   ipcMain.handle("cc:pegar-operacion-estado", () => estadoConsolidacion);
 
@@ -2039,6 +2044,19 @@ function registrarIpc(): void {
    * Ver `pegarOperacionAqui`.
    */
   ipcMain.handle("cc:pegar-operacion-aqui", async () => pegarOperacionAqui());
+
+  /**
+   * Aviso "Antes de pegar la operación" (pedido de Juan, 2026-09-30): una vez
+   * por ronda. La primera consulta en la ronda activa devuelve `true` y la
+   * marca; una ronda nueva tiene otro id y vuelve a mostrarlo. Sólo en
+   * memoria de este proceso.
+   */
+  ipcMain.handle("cc:aviso-operacion-pendiente", () => {
+    if (avisoOperacionMostrado && rondaConAvisoOperacion === rondaActualId) return false;
+    avisoOperacionMostrado = true;
+    rondaConAvisoOperacion = rondaActualId;
+    return true;
+  });
 
   /**
    * Rediseño de la barra (2026-09-19) — "Pegar pregunta aquí": escribe la
@@ -3617,10 +3635,14 @@ export interface ResultadoConsolidarUno {
  * general — `armarCuerposDeRonda` es determinista sobre `ronda.semilla`, así
  * que recalcularla para un solo panel da el MISMO barajado, nunca uno nuevo
  * (si cambiara, ese operador vería las respuestas en otro orden que el
- * resto y la ronda quedaría inconsistente). A diferencia de
- * `armarYPersistirCuerposDeRonda`, NO vuelve a escribir el `Sello`: ya se
- * escribió una vez al consolidar por primera vez, y `escribirSello` es
- * append-only — escribirlo de nuevo lo duplicaría.
+ * resto y la ronda quedaría inconsistente).
+ *
+ * Desde que "Pegar operación en todos" salió de la barra (2026-09-30), éste
+ * es el único camino que pega la operación, así que es el que escribe el
+ * `Sello`: `armarYPersistirCuerposDeRonda` lo escribe la primera vez y las
+ * siguientes sólo lo compara con el ya persistido (append-only, no duplica).
+ * Sin sello, la captura de la operación no tiene etiquetas válidas y el
+ * informe no puede desanonimizar.
  *
  * Si no hay ninguna ronda en etapa de operación (falta alguna de las 8
  * respuestas capturadas, o no hay ronda activa), no hace nada y avisa.
@@ -3642,7 +3664,7 @@ async function pegarOperacionAqui(): Promise<ResultadoConsolidarUno> {
 
   let resultadoArmado;
   try {
-    resultadoArmado = armarCuerposDeRonda(ronda, respuestas, citas, POOL_OPERADORES);
+    resultadoArmado = armarYPersistirCuerposDeRonda(app.getPath("userData"), conversacionActual!, ronda, respuestas, citas, POOL_OPERADORES);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -4635,7 +4657,7 @@ function construirMenu(): void {
         { label: "Solo si un panel se comporta mal", enabled: false },
         { type: "separator" },
         { label: "Pegar pregunta en este panel", click: () => uiView?.webContents.send("cc:menu", "pegar-pregunta-aqui") },
-        { label: "Pegar operación en este panel", click: () => uiView?.webContents.send("cc:menu", "pegar-operacion-aqui") },
+        // "Pegar operación en este panel" pasó a la barra (2026-09-30): no se duplica acá.
         { label: "Capturar este panel", click: () => uiView?.webContents.send("cc:menu", "capturar-uno") },
         { type: "separator" },
         { label: "Recapturar integrador", click: () => uiView?.webContents.send("cc:menu", "recapturar-integrador") },

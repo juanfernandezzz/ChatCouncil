@@ -115,6 +115,7 @@ interface CcBridge {
   pegarOperacionEnTodos: () => Promise<ResultadoConsolidar>;
   pegarOperacionEstado: () => Promise<EstadoConsolidacion>;
   pegarOperacionAqui: () => Promise<ResultadoConsolidarUno>;
+  avisoOperacionPendiente: () => Promise<boolean>;
   pegarIntegrador: () => Promise<ResultadoIntegrador>;
   pegarVerificacion: () => Promise<ResultadoIntegrador>;
   recapturar: (rol: "integrador" | "verificador") => Promise<{ ok: boolean; mensaje: string }>;
@@ -292,13 +293,18 @@ function capturarUno(): void {
 }
 
 /**
- * BOTÓN 3 — "Pegar operación en todos" (antes "Consolidar respuestas").
+ * "Pegar operación en todos" (antes "Consolidar respuestas") — SIN LLAMADOR
+ * desde el 2026-09-30: Juan pidió sacarlo de la barra (tardaba, un panel que
+ * pasaba los 90 s fallaba, y tocar la ventana lo cortaba) y operar panel por
+ * panel. El código queda por si se quiere volver: basta reponer el botón
+ * `#pegar-operacion-en-todos` en index.html y llamar a esta función en su
+ * clic.
+ *
  * Arma los 8 cuerpos, los escribe secuencial y al frente, sin enviar. Puede
  * tardar minutos (medido: ~150s los 8), así que se sondea el progreso — sin
  * señal de avance por dos minutos y medio se lee como cuelgue, y ya pasó en
  * esta fase.
  */
-const botonPegarOperacionEnTodos = $<HTMLButtonElement>("pegar-operacion-en-todos");
 let sondeoProgreso: ReturnType<typeof setInterval> | null = null;
 
 function detenerSondeoProgreso(): void {
@@ -316,8 +322,8 @@ function detalleConsolidarPanel(p: ResultadoConsolidarPanel): string {
       : `  ${p.operadorId}: ${p.error ?? "falló"}`;
 }
 
-botonPegarOperacionEnTodos.addEventListener("click", () => {
-  botonPegarOperacionEnTodos.disabled = true;
+export function pegarOperacionEnTodos(boton: HTMLButtonElement): void {
+  boton.disabled = true;
   decir("Pegando operación: armando los 8 cuerpos…");
 
   sondeoProgreso = setInterval(() => {
@@ -330,7 +336,7 @@ botonPegarOperacionEnTodos.addEventListener("click", () => {
 
   void window.cc.pegarOperacionEnTodos().then((r) => {
     detenerSondeoProgreso();
-    botonPegarOperacionEnTodos.disabled = false;
+    boton.disabled = false;
 
     if (r.error) {
       decir(`No se pudo pegar la operación: ${r.error}${etiquetaEtapa(r.etapa)}`, "mal");
@@ -348,12 +354,13 @@ botonPegarOperacionEnTodos.addEventListener("click", () => {
       : "\n\n⚠ El contador de navegaciones cambió durante la operación — alguna vista pudo haberse recargado.";
     decir(`Pegar operación${etiquetaEtapa(r.etapa)}:\n${detalle}${avisoNav}`, r.ok && r.navegacionesIntactas ? "ok" : "mal");
   });
-});
+}
 
 /**
- * BOTÓN 4 — "Pegar operación aquí" (antes "Consolidar este panel"). Igual
- * que el 3 pero sólo para el panel al frente: no re-arma el sello ni vuelve
- * a barajar, usa la misma ronda tal cual está.
+ * BOTÓN 3 — "Pegar operación en este panel" (antes "Consolidar este
+ * panel"; desde el 2026-09-30 en la barra, donde estaba "en todos", y no en
+ * el menú "Ventana"). Sólo el panel al frente: misma ronda y misma semilla,
+ * no vuelve a barajar. El primero que se pega en la ronda escribe el sello.
  */
 function pegarOperacionAqui(): void {
   decir("Pegando operación en el panel al frente…");
@@ -370,13 +377,31 @@ function pegarOperacionAqui(): void {
 }
 
 /**
- * Objetivo D — menú "Ventana": las tres acciones de UN panel (salida de
+ * Aviso antes de pegar la operación: una vez por ronda. Quién lleva la
+ * cuenta es el proceso principal (sabe cuál es la ronda activa); la primera
+ * consulta de cada ronda devuelve `true` y la marca como mostrada, así que
+ * después de "Cancelar" el siguiente clic ya no lo vuelve a mostrar.
+ */
+const avisoOperacion = $<HTMLDialogElement>("aviso-operacion");
+$("pegar-operacion-aqui").addEventListener("click", () => {
+  void window.cc.avisoOperacionPendiente().then((mostrar) => {
+    if (mostrar) avisoOperacion.showModal();
+    else pegarOperacionAqui();
+  });
+});
+$("aviso-operacion-cancelar").addEventListener("click", () => avisoOperacion.close());
+$("aviso-operacion-pegar").addEventListener("click", () => {
+  avisoOperacion.close();
+  pegarOperacionAqui();
+});
+
+/**
+ * Objetivo D — menú "Ventana": las acciones de UN panel (salida de
  * emergencia, no flujo). Corren exactamente las mismas funciones que antes
  * colgaban de sus botones.
  */
 window.cc.alMenu((accion) => {
   if (accion === "pegar-pregunta-aqui") pegarPreguntaAqui();
-  else if (accion === "pegar-operacion-aqui") pegarOperacionAqui();
   else if (accion === "capturar-uno") capturarUno();
   else if (accion === "recapturar-integrador" || accion === "recapturar-verificador") {
     const rol = accion === "recapturar-integrador" ? "integrador" : "verificador";

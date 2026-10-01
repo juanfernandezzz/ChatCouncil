@@ -3292,3 +3292,41 @@ carácter por carácter. Lo que difiere es texto de interfaz capturado con él:
 chatgpt agrega "Investigación profunda" al principio y "Ver más / Mostrar
 menos" al final; gemini agrega "Tú dijiste" y una vista previa truncada de
 ~100 caracteres terminada en "…" antes del texto completo.
+
+### "Pegar operación en este panel" pasa a la barra; "en todos" sale (2026-09-30)
+
+Pedido de Juan: "Pegar operación en todos" tardaba, fallaba si un panel pasaba
+los 90 s y se cortaba si se tocaba la ventana. Ahora se opera panel por panel.
+
+· La barra tiene "Pegar operación en este panel" donde estaba "en todos"; el
+  menú "Ventana" ya no lo repite. "En todos" queda sin llamador
+  (`pegarOperacionEnTodos` en el renderer y `cc:pegar-operacion-en-todos` en
+  main), comentado, por si se quiere volver.
+· Como "en todos" era el único camino que escribía el `Sello`, "en este panel"
+  pasa a usar `armarYPersistirCuerposDeRonda`: el primer pegado de la ronda lo
+  escribe y los siguientes sólo lo comparan. Sin sello, la captura de la
+  operación no tendría etiquetas válidas.
+· Aviso "Antes de pegar la operación", una vez por ronda, en memoria del
+  proceso (`cc:aviso-operacion-pendiente`): la primera consulta de la ronda
+  activa lo muestra y la marca.
+
+Verificado, cuota cero:
+· Barra (HTML compilado en un navegador real, con un `window.cc` de prueba):
+  "Pegar operación en este panel" en la segunda posición, sin "en todos". Menú
+  "Ventana" del compilado: pregunta, capturar y las dos recapturas, sin operación.
+· Aviso: primer clic lo muestra con el texto exacto; "Cancelar" no pega; el
+  segundo clic pega sin aviso; en una ronda nueva vuelve a salir y "Entendido,
+  pegar" pega.
+· Captura sin difusión (registro sembrado en una carpeta temporal, mismas
+  funciones que `registrarRespuestasDeRondaActual`): ronda con el marcador
+  `PROMPT_SIN_RONDA` y 0 intentos; 9 de 9 lecturas escritas como respuesta en
+  etapa "investigacion". Sin pregunta declarada la ronda no tiene pregunta; con
+  `escribirPreguntaDeclarada`, sí. El pegado arma 7 cuerpos sin la respuesta
+  propia y deja 7 entradas de sello tras el primero y 7 tras el segundo.
+  "Capturar todos" no exigía difusión: `asegurarRondaAbierta()` ya abría la
+  ronda; no hizo falta cambiarlo.
+· `guard:artefacto` exige `cc:aviso-operacion-pendiente`, `pegar-operacion-aqui`
+  y `aviso-operacion-pegar`; probado en rojo sobre el compilado.
+
+ABIERTO: la lectura real de los paneles en "Capturar todos" no se ejercitó
+(cuota cero); la ronda del 2026-09-25 es el antecedente real de ese camino.

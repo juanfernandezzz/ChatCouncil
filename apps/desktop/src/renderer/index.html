@@ -74,7 +74,12 @@
     </div>
     <div class="fila fila-botones">
       <button id="pegar-pregunta-en-todos" class="primario" title="Escribe la pregunta del cuadro de arriba en los ocho paneles del pool (nunca en deepseek) y la registra como la pregunta de la ronda. Nunca envía.">Pegar pregunta en todos</button>
-      <button id="pegar-operacion-en-todos" title="Arma los 8 cuerpos por operador (anonimizados, barajados) y los escribe en los ocho paneles a la vez, SIN enviar, para que los revises.">Pegar operación en todos</button>
+      <!-- "Pegar operación en todos" salió de la barra (pedido de Juan, 2026-09-30):
+           tardaba, fallaba a los 90 s y se cortaba si se tocaba la ventana.
+           Su código queda sin llamador (renderer/main.ts, cc:pegar-operacion-en-todos)
+           por si se quiere volver. Su botón era:
+           <button id="pegar-operacion-en-todos" title="Arma los 8 cuerpos por operador (anonimizados, barajados) y los escribe en los ocho paneles a la vez, SIN enviar, para que los revises.">Pegar operación en todos</button> -->
+      <button id="pegar-operacion-aqui" title="En el panel al frente: abre una conversación nueva y escribe el prompt de operación de ese operador (las respuestas de los otros, nunca la suya). Nunca envía.">Pegar operación en este panel</button>
       <button id="pegar-integrador" title="Arma la tabla de hallazgos y el prompt del integrador, y lo escribe en el panel de deepseek (lo trae al frente si no es el visible). Nunca envía.">Pegar integrador</button>
       <button id="pegar-verificacion" title="Arma el prompt del verificador con la sección de rescate del integrador y los hallazgos que cita, y lo escribe en el panel del verificador (lo trae al frente). Nunca envía.">Pegar verificación</button>
       <button id="capturar-todos" title="Lee, por cada panel: ultimo mensaje del usuario, respuesta completa, modelLabel. No navega, no recarga y no escribe en ningun compositor. Cuota cero.">Capturar todos</button>
@@ -104,6 +109,26 @@
       <div class="acciones">
         <button id="cancelar">Cancelar</button>
         <button id="confirmar" class="primario">Pegar</button>
+      </div>
+    </dialog>
+
+    <dialog id="aviso-operacion">
+      <h2>Antes de pegar la operación</h2>
+      <p>
+        En cada panel, abre una conversación NUEVA antes de que se pegue el texto, y
+        deja activado el modo de razonamiento avanzado y la búsqueda si el proveedor
+        los tiene.
+      </p>
+      <p>
+        La conversación nueva es obligatoria: si el operador sigue el hilo anterior,
+        lee su propia respuesta de investigación y la evaluación deja de ser ciega.
+      </p>
+      <p>
+        Nada se envía. Cuando el texto esté pegado, lo revisas y lo envías a mano.
+      </p>
+      <div class="acciones">
+        <button id="aviso-operacion-cancelar">Cancelar</button>
+        <button id="aviso-operacion-pegar" class="primario">Entendido, pegar</button>
       </div>
     </dialog>
 

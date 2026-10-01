@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld("cc", {
    * semilla — no vuelve a barajar.
    */
   pegarOperacionAqui: (): Promise<ResultadoConsolidarUno> => ipcRenderer.invoke("cc:pegar-operacion-aqui"),
+  /** `true` la primera vez en la ronda activa (y la marca): el renderer muestra el aviso antes de pegar. */
+  avisoOperacionPendiente: (): Promise<boolean> => ipcRenderer.invoke("cc:aviso-operacion-pendiente"),
   /**
    * Rediseño de la barra — "Pegar integrador": arma la tabla de hallazgos y
    * el prompt del integrador, y lo escribe en deepseek (lo trae al frente si

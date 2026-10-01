@@ -40,6 +40,8 @@ const EXIGIDO = {
     "cc:capturar-uno",
     "cc:pegar-operacion-en-todos",
     "cc:pegar-operacion-aqui",
+    // Aviso de una vez por ronda antes de pegar la operación (2026-09-30).
+    "cc:aviso-operacion-pendiente",
     "cc:pegar-integrador",
     // 7-1-1 (2026-09-29): el tercer rol. Sin este literal, un tree-shaking que se
     // lleve la regla de roles distintos deja guardar integrador = verificador.
@@ -265,7 +267,8 @@ const EXIGIDO = {
   // solo boton, "Capturar", fusiona lo que hacian "Leer" y "Sondear"; el
   // sondeo de derivacion de specs sigue existiendo pero como modo de
   // diagnostico por bandera de linea de comando, no como paso del flujo).
-  "renderer/index.html": ["no-preguntar", "confirmacion", "paneles", "capturar", "pegar-verificacion"],
+  // 2026-09-30: "Pegar operación en este panel" en la barra, con su aviso.
+  "renderer/index.html": ["no-preguntar", "confirmacion", "paneles", "capturar", "pegar-verificacion", "pegar-operacion-aqui", "aviso-operacion-pegar"],
 };
 
 /**

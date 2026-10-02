@@ -43,6 +43,7 @@ import {
   hashSemilla,
   parsearHallazgos,
   extraerTituloDelInforme,
+  textoDelInformeIntegrador,
   markdownDeRespuestaInvestigador,
   nombreArchivoRespuesta,
   nombreBaseDeInforme,
@@ -3897,7 +3898,7 @@ async function enviarPromptAVerificador(): Promise<ResultadoIntegrador> {
   if ("error" in d) return sinEscribir(d.error);
   const informe = ultimoDeRol(d.hechos, d.ronda.id, "integrador");
   if (!informe) return sinEscribir("la ronda todavía no tiene un informe del integrador capturado", d.etapa);
-  const armado = armarPromptVerificadorDeRonda(d.pregunta, informe.informeCrudo, d.tabla);
+  const armado = armarPromptVerificadorDeRonda(d.pregunta, textoDelInformeIntegrador(informe), d.tabla);
   if (!armado.ok) return sinEscribir(armado.error, d.etapa);
   const r = await pegarEnPanelDeRol(VERIFICADOR_ID, "verificador", armado.prompt, d.etapa);
   if (r.ok) ultimoPromptVerificador = armado.prompt;
@@ -4604,7 +4605,7 @@ async function armarInformeFinalDeRondaActiva(): Promise<{ ok: boolean; mensaje:
   const dir = join(userData, "informes");
   mkdirSync(dir, { recursive: true });
   const titulo =
-    informeIntegrador === null ? null : (informeIntegrador.titulo ?? extraerTituloDelInforme(informeIntegrador.informeCrudo).titulo);
+    informeIntegrador === null ? null : (informeIntegrador.html ? extraerTituloDelInforme(textoDelInformeIntegrador(informeIntegrador)).titulo : (informeIntegrador.titulo ?? extraerTituloDelInforme(informeIntegrador.informeCrudo).titulo));
   const base = nombreBaseDeInforme({ titulo, pregunta, ahora: new Date() });
   // El nombre nombra la CARPETA y los dos archivos del informe: está libre sólo
   // si no existe ninguno de los tres (informes viejos, anteriores a la carpeta,

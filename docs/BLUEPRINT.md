@@ -3410,3 +3410,42 @@ Verificado por lectura del código, cuota cero: cero `loadURL`, `reload`,
 `pegarOperacionAqui`, `pegarOperacionConArchivoAqui`, `pegarEnPanelVisible`,
 `escribirYVerificarOperacion` y `pegarPreguntaAqui`. ABIERTO: la prueba en
 vivo la hace Juan.
+
+### "Pegar verificación" no encontraba la sección 5 del integrador (2026-10-02)
+
+Juan, en la ronda real `c3801f42`: "Pegar verificación" decía que el informe
+del integrador no tenía "QUE CONVIENE RESCATAR", y el panel de GLM no
+aparecía. La sección sí estaba.
+
+Medido offline sobre el registro (sin reescribirlo): el `informeCrudo` de
+deepseek SÍ contiene "QUE CONVIENE RESCATAR", pero con 0 saltos de línea y sin
+el "5.". deepseek escribe cada sección como
+`<ol start="5"><li><p>QUE CONVIENE RESCATAR</p></li></ol>`, y el preload lee
+con `textContent`, que pierde los cortes de bloque y el número de la lista.
+El parseo busca el encabezado al principio de una línea: con el informe en
+una sola línea no lo encontraba, y el `titulo` guardado se tragó el informe
+entero (24.743 caracteres). No era el bloque de pensamiento: el texto
+capturado empieza en "TITULO:", así que no se revisaron otros proveedores por
+esa causa.
+
+El panel no aparecía por lo mismo: "Pegar verificación" y "Pegar integrador"
+usan el mismo `pegarEnPanelDeRol`, que trae el panel al frente, pero el error
+de la sección 5 salía antes de llegar ahí.
+
+Corregido:
+· `textoDeHtmlEnBloques` (`packages/analysis/src/texto-de-html.ts`): texto
+  desde el html, con un salto por bloque y el número de cada `<ol>` según su
+  `start`. `textoDelInformeIntegrador` lo usa cuando hay html; si no, el
+  `informeCrudo`. Lo usan el prompt del verificador, el título y las
+  referencias del informe final, y el `titulo` que se guarda al capturar.
+· El encabezado de la sección 5 acepta el número opcional.
+· Sin sección 5, el aviso agrega los primeros 100 caracteres de lo capturado.
+
+Verificado offline sobre `c3801f42`: el texto re-derivado tiene 21 saltos de
+línea y los encabezados "1. TIPOS DE DIVERGENCIA" … "5. QUE CONVIENE
+RESCATAR"; título "Marco documental y legal para psicólogo remoto"; sección 5
+de 5.025 caracteres; prompt del verificador de 30.151 caracteres con 101 H##
+citados y 0 inexistentes. Con el texto guardado, el aviso nuevo muestra
+"TITULO: Marco documental y legal para psicólogo remotoTIPOS DE
+DIVERGENCIA…". ABIERTO: el informe de la ronda `c26c40de` no tiene html y
+sigue sin poder re-derivarse; la prueba en vivo la hace Juan.

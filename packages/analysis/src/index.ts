@@ -37,5 +37,6 @@ export * from "./prompt-integrador";
 export * from "./prompt-operacion";
 export * from "./prompt-verificador";
 export * from "./provider-names";
+export * from "./texto-de-html";
 export * from "./titulo-informe";
 export * from "./verificar-fuentes";

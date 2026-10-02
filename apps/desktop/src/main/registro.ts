@@ -40,7 +40,7 @@ import {
   type UrlComprobada,
   type TipoCaptura,
 } from "@chatcouncil/domain";
-import { extraerTituloDelInforme } from "@chatcouncil/analysis";
+import { extraerTituloDelInforme, textoDelInformeIntegrador } from "@chatcouncil/analysis";
 
 import { extraerCitas } from "./citas";
 import type { LecturaProveedor, ResultadoEnvio } from "./test-runner";
@@ -403,7 +403,7 @@ export function escribirInformeIntegrador(
     operadorId,
     promptCompleto,
     informeCrudo,
-    titulo: extraerTituloDelInforme(informeCrudo).titulo,
+    titulo: extraerTituloDelInforme(textoDelInformeIntegrador({ informeCrudo, html })).titulo,
     recibidaEn: new Date().toISOString(),
     html,
   };

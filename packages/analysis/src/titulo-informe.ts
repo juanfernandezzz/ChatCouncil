@@ -37,7 +37,7 @@ export interface TituloDeInforme {
 const LINEA_TITULO = /^\s*(?:#{1,6}\s*)?(?:\*\*|__)?\s*t[ií]tulo\s*:\s*(.*?)\s*(?:\*\*|__)?\s*$/i;
 
 /** El encabezado de la quinta sección, con la misma tolerancia de formato. */
-const LINEA_RESCATE = /^\s*(?:#{1,6}\s*)?(?:\*\*|__)?\s*5\s*[.)-]?\s*(?:\*\*|__)?\s*qu[eé]\s+conviene\s+rescatar\b/i;
+const LINEA_RESCATE = /^\s*(?:#{1,6}\s*)?(?:\*\*|__)?\s*(?:5\s*[.)-]?\s*)?(?:\*\*|__)?\s*qu[eé]\s+conviene\s+rescatar\b/i;
 
 /**
  * Separa la línea "TITULO: …" del resto del informe. Sólo mira la PRIMERA

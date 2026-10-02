@@ -36,6 +36,7 @@ import {
   armarTablaHallazgos,
   extraerSeccionRescate,
   extraerTituloDelInforme,
+  textoDelInformeIntegrador,
   hashSemilla,
   parsearHallazgos,
   parsearReferenciasIntegrador,
@@ -226,7 +227,10 @@ export function armarPromptVerificadorDeRonda(
   tabla: TablaHallazgos,
 ): { ok: true; prompt: string; citados: string[]; inexistentes: string[] } | { ok: false; error: string } {
   const rescate = extraerSeccionRescate(extraerTituloDelInforme(informeCrudo).cuerpo);
-  if (rescate === null) return { ok: false, error: "el informe del integrador no tiene la seccion QUE CONVIENE RESCATAR" };
+  if (rescate === null) {
+    const inicio = informeCrudo.replace(/\s+/g, " ").trim().slice(0, 100);
+    return { ok: false, error: `el informe del integrador no tiene la seccion QUE CONVIENE RESCATAR. Se capturó (primeros 100 caracteres): "${inicio}"` };
+  }
   const ids = [...new Set((rescate.match(/\[H\d+\]/g) ?? []).map((m) => m.slice(1, -1)))];
   const porId = new Map(tabla.paraPrompt.map((h) => [h.id, h]));
   const citados = ids.filter((id) => porId.has(id));
@@ -332,7 +336,7 @@ export function armarInformeFinalDeRonda(params: {
   const referenciasEnOrden =
     params.informeIntegrador === null
       ? []
-      : parsearReferenciasIntegrador(params.informeIntegrador.informeCrudo, idsValidos).referencias.map((r) => ({
+      : parsearReferenciasIntegrador(textoDelInformeIntegrador(params.informeIntegrador), idsValidos).referencias.map((r) => ({
           codigo: r.hallazgoId,
           existe: !r.referenciaInvalida,
         }));
@@ -353,7 +357,7 @@ export function armarInformeFinalDeRonda(params: {
     fecha: params.fecha,
     conversacionId: params.conversacionId,
     rondaId: params.rondaId,
-    informeIntegradorCrudo: params.informeIntegrador === null ? null : params.informeIntegrador.informeCrudo,
+    informeIntegradorCrudo: params.informeIntegrador === null ? null : textoDelInformeIntegrador(params.informeIntegrador),
     referenciasEnOrden,
     hallazgos: hallazgosResueltos,
     participacionOperadores: calcularParticipacionOperadores(params.resultadosOperadores),

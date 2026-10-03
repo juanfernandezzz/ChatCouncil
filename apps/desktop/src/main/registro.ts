@@ -265,6 +265,28 @@ export function escribirRespuestas(
 }
 
 /**
+ * "Ronda nueva con las respuestas de la anterior" (2026-10-03): copia cada
+ * respuesta a la ronda nueva con un id propio, marcada `copiadaDe`, y vuelve
+ * a derivar sus citas del mismo html. El texto, el html y la procedencia no
+ * se tocan: es el dato que se leyó entonces, no una lectura nueva.
+ */
+export function copiarRespuestas(
+  userData: string,
+  conversacionId: string,
+  rondaNueva: string,
+  respuestas: readonly Respuesta[],
+): Respuesta[] {
+  return respuestas.map((r) => {
+    const hecho: Respuesta = { ...r, id: randomUUID(), rondaId: rondaNueva, copiadaDe: { rondaId: r.rondaId, respuestaId: r.id } };
+    escribir(userData, conversacionId, hecho);
+    if (hecho.html !== null) {
+      for (const cita of extraerCitas(hecho.html, hecho.id).citas) escribir(userData, conversacionId, cita);
+    }
+    return hecho;
+  });
+}
+
+/**
  * Persiste el `seal` que produce `anonymizeReplies` (`packages/analysis`):
  * la correspondencia etiqueta-ciega → identidad real, UNA VEZ, en el
  * momento en que se anonimiza una ronda. Sin este hecho, "el informe lo

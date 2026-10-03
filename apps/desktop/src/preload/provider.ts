@@ -47,6 +47,8 @@ interface PageSpec {
   assistantMessage: { selector: string; pick: "last"; exclude?: string[] };
   /** Respuesta escrita en un documento aparte (mistral): ver `leerCanvas`. */
   canvas?: { mensaje: string; abrir: string; contenido: string; cerrar: string };
+  /** Archivos creados por el proveedor que sólo se ven en una vista previa (kimi): ver `leerArchivosVistaPrevia`. */
+  archivos?: { tarjeta: string; titulo: string; iframe: string; contenido: string };
   /** Respuesta en un iframe de otro origen (chatgpt Deep Research): ver `completarInformeEnIframe` (main). */
   informeEnIframe?: { turno: string; iframe: string; frameUrl: string; contenido: string };
   completion: CompletionSpec;
@@ -469,6 +471,57 @@ async function leerCanvas(spec: PageSpec, node: Element | null): Promise<{ texto
   } finally {
     if (!yaAbierto) (document.querySelector(c.cerrar) as HTMLElement | null)?.click();
   }
+}
+
+/**
+ * Ronda real de Juan (c3801f42, medido 2026-10-03): kimi en modo agente creó
+ * 12 archivos .md y en el mensaje sólo quedaron sus tarjetas con el nombre. El
+ * contenido no existe hasta abrir la tarjeta: se monta en un iframe del MISMO
+ * origen (`/pages/kimink/embed.html`), en `.kme-editor-content` (27.041
+ * caracteres el primero). Se abre cada tarjeta del último mensaje, se espera a
+ * que la vista previa cambie y se lee. Abrir no envía nada. Un archivo que no
+ * se pudo leer queda dicho en el texto, nunca se saltea en silencio.
+ */
+async function leerArchivosVistaPrevia(
+  spec: PageSpec,
+  node: Element | null,
+): Promise<{ texto: string; html: string; leidos: number; total: number } | null> {
+  const a = spec.archivos;
+  if (!a || !node) return null;
+  const tarjetas = Array.from(node.querySelectorAll(a.tarjeta)) as HTMLElement[];
+  if (tarjetas.length === 0) return null;
+  const contenidoActual = (): Element | null => {
+    const f = document.querySelector(a.iframe) as HTMLIFrameElement | null;
+    try {
+      return f?.contentDocument?.querySelector(a.contenido) ?? null;
+    } catch {
+      return null;
+    }
+  };
+  const textoDe = (el: Element): string => ((el as HTMLElement).innerText ?? el.textContent ?? "").trim();
+  const partes: string[] = [];
+  const htmls: string[] = [];
+  let anterior = "";
+  let leidos = 0;
+  for (const t of tarjetas) {
+    const titulo = (t.querySelector(a.titulo)?.textContent ?? "").trim() || "(archivo sin nombre)";
+    t.click();
+    const hasta = Date.now() + 15_000;
+    let el = contenidoActual();
+    while ((!el || textoDe(el).length === 0 || textoDe(el) === anterior) && Date.now() < hasta) {
+      await sleep(200);
+      el = contenidoActual();
+    }
+    if (el && textoDe(el).length > 0 && textoDe(el) !== anterior) {
+      anterior = textoDe(el);
+      partes.push(`=== ARCHIVO: ${titulo} ===\n${anterior}`);
+      htmls.push(el.outerHTML);
+      leidos++;
+    } else {
+      partes.push(`=== ARCHIVO: ${titulo} ===\n(no se pudo leer el contenido de este archivo en 15 s)`);
+    }
+  }
+  return { texto: partes.join("\n\n"), html: htmls.join("\n"), leidos, total: tarjetas.length };
 }
 
 /**
@@ -1239,8 +1292,12 @@ contextBridge.exposeInMainWorld("__ccProvider", {
     const node = ultimoNodoAsistente(spec);
     // Con canvas, su texto REEMPLAZA al aviso; el html guarda los dos, en orden.
     const canvas = await leerCanvas(spec, node);
+    // Con archivos de vista previa (kimi), su contenido se AGREGA a la respuesta, con el nombre de cada uno.
+    const archivos = await leerArchivosVistaPrevia(spec, node);
+    const base = canvas ? canvas.texto : readAssistant(spec);
     return {
-      text: canvas ? canvas.texto : readAssistant(spec),
+      text: archivos ? `${base}\n\n${archivos.texto}` : base,
+      archivos: archivos ? { leidos: archivos.leidos, total: archivos.total } : null,
       userText: readUserMessage(spec),
       // Ver contarEnlacesDeFuente: cuenta <a href> REALES en el DOM, nunca en
       // el texto extraido. Decide si "no hay URLs en textoOriginal" es (a) un
@@ -1256,7 +1313,7 @@ contextBridge.exposeInMainWorld("__ccProvider", {
       // `readAssistant`. Nueve subárboles por corrida es un costo irrelevante
       // para el volumen que ya se mide acá (BLUEPRINT, decisión de la marca
       // canaria).
-      html: node ? node.outerHTML + (canvas ? "\n" + canvas.html : "") : null,
+      html: node ? node.outerHTML + (canvas ? "\n" + canvas.html : "") + (archivos ? "\n" + archivos.html : "") : null,
       // Sólo si el iframe está en el MISMO turno que el último mensaje: un
       // informe de un turno anterior no reemplaza una respuesta normal nueva.
       informeEnIframe: !!(spec.informeEnIframe && node?.closest(spec.informeEnIframe.turno)?.querySelector(spec.informeEnIframe.iframe)),

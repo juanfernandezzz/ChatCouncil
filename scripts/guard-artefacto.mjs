@@ -64,6 +64,8 @@ const EXIGIDO = {
     "cc:pegar-redactor",
     "cc:capturar-redactor",
     "respuesta-redactor",
+    // 2026-10-03: ronda nueva con respuestas copiadas de la anterior.
+    "copiadaDe",
     "cc:sesiones",
     // Fase 5 — el informe final se entrega como CARPETA con las respuestas de
     // los investigadores en PDF adentro. Sin estos marcadores, un tree-shaking
@@ -231,6 +233,8 @@ const EXIGIDO = {
   // primera corrida, que es exactamente para lo que está.
   "preload/provider.cjs": [
     "__ccProvider",
+    // 2026-10-03: archivos de vista previa de kimi agregados a la respuesta.
+    "=== ARCHIVO: ",
     // "beforeinput" SALIÓ de esta lista el 2026-09-13 (ronda de camino de
     // entrada portable, Objetivo 1 y 2). Ya no se construye ese evento a
     // mano: `writePrompt` escribe con `document.execCommand('insertText')`,

@@ -73,6 +73,7 @@ import {
   escribirRespuestas,
   escribirCondicionProveedoresCargados,
   escribirRonda,
+  copiarRespuestas,
   escribirRespuestaRedactor,
   escribirSalidaVerificador,
   generarSemilla,
@@ -4066,6 +4067,53 @@ function registrarRedaccion(
   return controles;
 }
 
+/**
+ * Menú "Ventana" → "Ronda nueva con las respuestas de la anterior…"
+ * (2026-10-03, opción A de Juan). Una respuesta corregida no puede entrar a una
+ * ronda ya operada: el sello compara el `replyId`. Esto abre una ronda nueva
+ * con la misma pregunta y copia la última respuesta de cada proveedor del
+ * pool, marcada `copiadaDe`. Lo que haya que corregir (los archivos de kimi)
+ * se recaptura después con "Capturar este panel": la última gana. La ronda
+ * anterior queda intacta. No envía nada.
+ */
+async function rondaNuevaConRespuestasDeLaAnterior(): Promise<string> {
+  if (!conversacionActual || !rondaActualId) return "No hay una ronda activa de la que copiar.";
+  const userData = app.getPath("userData");
+  const hechos = leerRegistroDeArchivo(userData, conversacionActual).hechos;
+  const anterior = hechos.find((h): h is Ronda => h.tipo === "ronda" && h.id === rondaActualId);
+  if (!anterior) return "No se encontró la ronda activa en el registro.";
+  const pregunta = preguntaEfectivaDeRonda(hechos, anterior);
+  if (pregunta === null) return "La ronda activa no tiene una pregunta registrada válida: no se puede repetir.";
+  const ultimas = new Map<string, Respuesta>();
+  for (const h of hechos) {
+    if (h.tipo === "respuesta" && h.rondaId === anterior.id && (POOL_OPERADORES as readonly string[]).includes(h.proveedorId)) ultimas.set(h.proveedorId, h);
+  }
+  if (ultimas.size === 0) return "La ronda activa no tiene respuestas del pool para copiar.";
+  const { response } = await dialog.showMessageBox({
+    type: "question",
+    buttons: ["Abrir ronda nueva", "Cancelar"],
+    defaultId: 0,
+    cancelId: 1,
+    title: "Ronda nueva con las respuestas de la anterior",
+    message: `¿Abrir una ronda nueva con la misma pregunta y las ${ultimas.size} respuestas de la ronda ${anterior.id.slice(0, 8)}?`,
+    detail:
+      `Se copian: ${[...ultimas.keys()].join(", ")}.\n\n` +
+      'Después, en el panel que quieras corregir (por ejemplo Kimi), abre su conversación y usa "Capturar este panel": esa captura reemplaza la copia. ' +
+      "La ronda anterior no se toca y no se envía nada.",
+  });
+  if (response !== 0) return "Cancelado: no se abrió ninguna ronda.";
+  const rondaNueva = abrirRonda(conversacionActual, pregunta);
+  rondaActualId = rondaNueva;
+  copiarRespuestas(userData, conversacionActual, rondaNueva, [...ultimas.values()]);
+  ultimoPromptOperadorPorId.clear();
+  ultimoPromptIntegrador = null;
+  ultimoPromptVerificador = null;
+  ultimoPromptRedactor = null;
+  ultimasMarcasRedactor = null;
+  decirPorSalida(`\n[cc] ronda nueva ${rondaNueva} con ${ultimas.size} respuestas copiadas de ${anterior.id}\n`);
+  return `Ronda nueva abierta (${rondaNueva.slice(0, 8)}) con ${ultimas.size} respuestas copiadas de la ronda ${anterior.id.slice(0, 8)}. Recaptura con "Capturar este panel" lo que quieras corregir.`;
+}
+
 /** Menú "Ventana" → "Capturar redactor": lee su panel al frente en cualquier etapa y agrega un hecho. */
 async function capturarRedactor(): Promise<{ ok: boolean; mensaje: string }> {
   if (!conversacionActual || !rondaActualId) return { ok: false, mensaje: "No hay una ronda activa." };
@@ -4978,6 +5026,13 @@ function construirMenu(): void {
         { label: "Recapturar integrador", click: () => uiView?.webContents.send("cc:menu", "recapturar-integrador") },
         { label: "Recapturar verificación", click: () => uiView?.webContents.send("cc:menu", "recapturar-verificador") },
         { label: "Capturar redactor", click: () => uiView?.webContents.send("cc:menu", "capturar-redactor") },
+        { type: "separator" },
+        {
+          label: "Ronda nueva con las respuestas de la anterior…",
+          click: () => {
+            void rondaNuevaConRespuestasDeLaAnterior().then((texto) => uiView?.webContents.send("cc:aviso", texto));
+          },
+        },
       ],
     },
     {

@@ -3540,3 +3540,35 @@ los paneles de los roles en cualquier momento.
 
 ABIERTO: dónde vive el contenido de la vista previa de Kimi (próximo sondeo de
 Juan) y cómo armar la ronda nueva (decisión de Juan pendiente).
+
+#### Kimi, resuelto: dónde vive el archivo y cómo se lee (2026-10-03)
+
+Sondeo vivo de Juan con un archivo de kimi abierto: la vista previa es un
+iframe del MISMO origen, `www.kimi.ai/pages/kimink/embed.html`, y el texto del
+archivo está en `.kme-editor-content` (27.041 caracteres el "Marco legal…").
+La spec de kimi declara `archivos` (tarjeta `.preview-card.card-hover-animate`,
+`.title`, el iframe y `.kme-editor-content`); `leerArchivosVistaPrevia`
+(preload) abre cada tarjeta del último mensaje, espera a que la vista previa
+cambie (15 s por archivo) y AGREGA cada archivo a la respuesta como
+`=== ARCHIVO: <nombre> ===`. Un archivo que no carga queda dicho, no se
+saltea. "Todos los archivos" no lleva `card-hover-animate` y queda fuera.
+Abrir no envía nada.
+
+Menú Ventana → "Ronda nueva con las respuestas de la anterior…" (opción A de
+Juan): ronda nueva con la misma pregunta; copia la última respuesta de cada
+proveedor del pool (`Respuesta.copiadaDe`) y re-deriva sus citas del mismo
+html. Lo que haya que corregir se recaptura con "Capturar este panel"; la
+última gana. La ronda anterior queda intacta.
+
+Verificado, cuota cero: sobre una COPIA del registro real (8 de 8): 7
+respuestas copiadas con `copiadaDe`, mismo texto e id nuevo, 175 citas
+re-derivadas, misma pregunta, los 7 sellos de `c3801f42` intactos; la
+recaptura de kimi reemplaza a la copia; la operación arma 7 cuerpos y escribe
+7 sellos sin conflicto y los otros 6 operadores reciben los archivos de kimi.
+La función del preload, extraída tal cual, en un navegador real contra una
+página que imita tarjetas e iframe: 2 de 3 archivos leídos con su nombre, el
+tercero marcado "no se pudo leer", "Todos los archivos" fuera.
+`guard:artefacto` exige `=== ARCHIVO: ` y `copiadaDe`, probado en rojo.
+
+ABIERTO: la lectura real de los 12 archivos en el panel de kimi la hace Juan
+(cuota cero: abrir no envía).

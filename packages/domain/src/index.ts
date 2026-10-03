@@ -110,6 +110,12 @@ export interface Respuesta {
    */
   promptCoincideEnPool: boolean | null;
   /**
+   * 2026-10-03: la respuesta no se leyó de un panel en esta ronda: se copió
+   * tal cual de otra ronda ("Ronda nueva con las respuestas de la anterior").
+   * Ausente en las leídas.
+   */
+  copiadaDe?: { rondaId: string; respuestaId: string };
+  /**
    * `<a href="http...">` REALES en el DOM del cuerpo, contados en la MISMA
    * captura que `textoOriginal`. Decide entre las dos causas de "no hay URL
    * en el texto": (a) el selector pierde una fuente que sí está en el DOM

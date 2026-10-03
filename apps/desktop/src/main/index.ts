@@ -87,6 +87,7 @@ import {
   armarPromptVerificadorDeRonda,
   armarTablaYPromptIntegrador,
   clasificarLecturasPorEtapa,
+  copiarOperacionDeRondaAnterior,
   etiquetasValidasDelOperador,
   procesarSalidaOperador,
   avisoSinPrevio,
@@ -5027,6 +5028,21 @@ function construirMenu(): void {
         { label: "Recapturar verificación", click: () => uiView?.webContents.send("cc:menu", "recapturar-verificador") },
         { label: "Capturar redactor", click: () => uiView?.webContents.send("cc:menu", "capturar-redactor") },
         { type: "separator" },
+        {
+          // 2026-10-03: reutilizar la operación del panel al frente si todo lo
+          // que ese operador lee son copias sin cambios (ver copiarOperacionDeRondaAnterior).
+          label: "Usar la operación de este panel de la ronda anterior",
+          click: () => {
+            const objetivo = vistaConIdEnFrente();
+            if (!objetivo || !conversacionActual || !rondaActualId) {
+              uiView?.webContents.send("cc:aviso", "No hay un panel al frente o una ronda activa.");
+              return;
+            }
+            const hechos = leerRegistroDeArchivo(app.getPath("userData"), conversacionActual).hechos;
+            const r = copiarOperacionDeRondaAnterior(app.getPath("userData"), hechos, conversacionActual, rondaActualId, objetivo.id, POOL_OPERADORES);
+            uiView?.webContents.send("cc:aviso", r.mensaje);
+          },
+        },
         {
           label: "Ronda nueva con las respuestas de la anterior…",
           click: () => {

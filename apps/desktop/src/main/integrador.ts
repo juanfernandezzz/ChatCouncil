@@ -72,11 +72,53 @@ export function procesarSalidaOperador(
   salidaCruda: string,
   html: string | null,
   etiquetasValidas: readonly string[],
+  copiadaDe?: { rondaId: string; salidaOperadorId: string },
 ): { salida: ReturnType<typeof escribirSalidaOperador>; hallazgos: HallazgoHecho[]; lineasDescartadas: number } {
-  const salida = escribirSalidaOperador(userData, conversacionId, rondaId, operadorId, promptCompleto, salidaCruda, html);
+  const salida = escribirSalidaOperador(userData, conversacionId, rondaId, operadorId, promptCompleto, salidaCruda, html, copiadaDe);
   const resultado = parsearHallazgos(salidaCruda, etiquetasValidas);
   const hallazgos = escribirHallazgos(userData, conversacionId, salida.id, resultado.hallazgos);
   return { salida, hallazgos, lineasDescartadas: resultado.lineasDescartadas };
+}
+
+/**
+ * Reutilizar la operación de UN operador desde la ronda de la que se copiaron
+ * las respuestas (2026-10-03, pedido de Juan). Sólo vale si su cuerpo es el
+ * mismo: TODAS las respuestas que ese operador lee (las del pool menos la
+ * suya) tienen que ser copias sin cambios. Si alguna se recapturó, el operador
+ * leería otra cosa y tiene que operar de nuevo. Las etiquetas P# no cambian
+ * entre rondas (salen del orden del pool); los hallazgos se vuelven a derivar
+ * contra el sello de esta ronda, así que una etiqueta inválida queda marcada.
+ */
+export function copiarOperacionDeRondaAnterior(
+  userData: string,
+  hechos: readonly Hecho[],
+  conversacionId: string,
+  rondaId: string,
+  operadorId: string,
+  poolOperadores: readonly string[],
+): { ok: boolean; mensaje: string } {
+  if (!poolOperadores.includes(operadorId)) return { ok: false, mensaje: `"${operadorId}" no es un operador del pool.` };
+  const sello = hechos.filter((h): h is Sello => h.tipo === "sello" && h.rondaId === rondaId);
+  if (sello.length === 0) return { ok: false, mensaje: 'Esta ronda todavía no tiene sello: pega primero la operación en algún panel ("Pegar operación en este panel").' };
+  const vigentes = new Map<string, Respuesta>();
+  for (const h of hechos) if (h.tipo === "respuesta" && h.rondaId === rondaId) vigentes.set(h.proveedorId, h);
+  const leidas = poolOperadores.filter((id) => id !== operadorId);
+  const cambiadas = leidas.filter((id) => !vigentes.get(id)?.copiadaDe);
+  if (cambiadas.length > 0) {
+    return { ok: false, mensaje: `No se puede reutilizar: ${operadorId} lee respuestas que cambiaron en esta ronda (${cambiadas.join(", ")}). Tiene que operar de nuevo.` };
+  }
+  const origenes = new Set(leidas.map((id) => vigentes.get(id)!.copiadaDe!.rondaId));
+  if (origenes.size !== 1) return { ok: false, mensaje: `Las respuestas copiadas vienen de ${origenes.size} rondas distintas: no hay una operación anterior equivalente.` };
+  const origen = [...origenes][0]!;
+  const vieja = hechos.filter((h): h is SalidaOperador => h.tipo === "salida-operador" && h.rondaId === origen && h.operadorId === operadorId).pop();
+  if (!vieja) return { ok: false, mensaje: `No hay una operación de ${operadorId} en la ronda ${origen.slice(0, 8)}.` };
+  const r = procesarSalidaOperador(userData, conversacionId, rondaId, operadorId, vieja.promptCompleto, vieja.salidaCruda, vieja.html ?? null,
+    etiquetasValidasDelOperador(operadorId, poolOperadores, sello), { rondaId: origen, salidaOperadorId: vieja.id });
+  const invalidas = r.hallazgos.filter((h) => h.etiquetaInvalida).length;
+  return {
+    ok: true,
+    mensaje: `${operadorId}: se reutilizó su operación de la ronda ${origen.slice(0, 8)} (${r.hallazgos.length} hallazgos${invalidas > 0 ? `, ${invalidas} con etiqueta inválida` : ""}). No hace falta pegarle la operación de nuevo.`,
+  };
 }
 
 /**

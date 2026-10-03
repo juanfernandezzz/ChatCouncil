@@ -358,6 +358,7 @@ export function escribirSalidaOperador(
   promptCompleto: string,
   salidaCruda: string,
   html: string | null,
+  copiadaDe?: { rondaId: string; salidaOperadorId: string },
 ): SalidaOperador {
   const hecho: SalidaOperador = {
     tipo: "salida-operador",
@@ -369,6 +370,7 @@ export function escribirSalidaOperador(
     salidaCruda,
     recibidaEn: new Date().toISOString(),
     html,
+    ...(copiadaDe ? { copiadaDe } : {}),
   };
   escribir(userData, conversacionId, hecho);
   return hecho;

@@ -3572,3 +3572,21 @@ tercero marcado "no se pudo leer", "Todos los archivos" fuera.
 
 ABIERTO: la lectura real de los 12 archivos en el panel de kimi la hace Juan
 (cuota cero: abrir no envía).
+
+#### Reutilizar la operación de un panel (2026-10-03)
+
+Pedido de Juan en la ronda `ae35d675` (copiada de `c3801f42`, con kimi
+recapturado: 101.186 caracteres y sus 12 archivos): kimi como operador lee
+las seis respuestas que no son la suya, y esas seis son copias sin cambios,
+así que su operación anterior sigue valiendo. Menú Ventana → "Usar la
+operación de este panel de la ronda anterior": sólo procede si TODAS las
+respuestas que ese operador lee son copias (`copiadaDe`) de una misma ronda;
+si alguna se recapturó, se niega y dice cuál. Copia la `SalidaOperador`
+(marcada `copiadaDe`) y re-deriva sus hallazgos contra el sello nuevo (las P#
+salen del orden del pool y no cambian entre rondas). El orden barajado del
+cuerpo de esa operación fue el de la ronda anterior: mismo contenido, otra
+posición.
+
+Verificado sobre una copia del registro real: chatgpt rechazado ("lee
+respuestas que cambiaron: kimi"); kimi reutilizado, salida idéntica, 77
+hallazgos re-derivados (77 antes).

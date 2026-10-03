@@ -229,6 +229,12 @@ export interface SalidaOperador {
   salidaCruda: string;
   recibidaEn: string;
   /**
+   * 2026-10-03: la salida no se capturó en esta ronda: se reutilizó la de otra
+   * ronda cuyo cuerpo para este operador era idéntico (todas las respuestas que
+   * lee son copias sin cambios). Ausente en las capturadas.
+   */
+  copiadaDe?: { rondaId: string; salidaOperadorId: string };
+  /**
    * HTML crudo del nodo capturado, misma regla que `Respuesta.html`: de acá
    * se re-deriva el texto si cambia un `exclude`. Ausente en los hechos
    * escritos antes del 2026-09-25.

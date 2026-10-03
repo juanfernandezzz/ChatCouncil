@@ -3512,3 +3512,31 @@ o ≠ integrador) y `guard:artefacto` (5 marcadores), probados en rojo.
 ABIERTO: la prueba en vivo es de Juan, y es lo que mide si deepseek lee de
 verdad un adjunto de ~300.000 caracteres (el control de la línea ARCHIVO lo
 dice solo al capturar).
+
+### Kimi: sus archivos nunca entraron a la ronda (2026-10-03)
+
+Medido en el registro de la ronda `c3801f42`, sin abrir paneles: Kimi trabajó
+en modo agente y creó 12 archivos (`write_file`): el marco legal, las
+consideraciones de la Ley 21.719 y las plantillas T1 a T10. Lo capturado son
+7.367 caracteres (su resumen y su razonamiento); de los archivos sólo quedó el
+nombre ("Archivo creado T1 - Plantilla…"), en tarjetas `preview-card`. El
+contenido no está en el documento hasta abrir o descargar cada archivo. Los
+operadores, el integrador y el informe evaluaron a Kimi sin sus entregables.
+Los otros seis no tienen este problema (los PDF que nombra Claude son fuentes
+citadas; las tarjetas de Qwen son vistas previas de enlaces).
+
+Corregir Kimi dentro de la misma ronda no se puede: el sello compara el
+`replyId` de cada respuesta, así que una respuesta nueva de Kimi hace que
+"Pegar operación" se niegue. Hace falta una ronda nueva.
+
+Sondeo vivo con un archivo de Kimi abierto en vista previa: la página mide
+93.750 caracteres y la conversación 93.448; la vista previa casi no aporta al
+documento y el sondeo sólo contaba "iframes: 1". Por eso el sondeo describe
+ahora cada iframe (origen y ruta sin query, largo del texto visible, muestra y
+contenedores más largos), con el mismo mecanismo de solo lectura que
+`completarInformeEnIframe`. "Sondear" avisa en la barra dónde quedó el
+archivo (antes sólo en la consola). Menú Ver: casilla para mostrar u ocultar
+los paneles de los roles en cualquier momento.
+
+ABIERTO: dónde vive el contenido de la vista previa de Kimi (próximo sondeo de
+Juan) y cómo armar la ronda nueva (decisión de Juan pendiente).

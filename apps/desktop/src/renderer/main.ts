@@ -127,6 +127,7 @@ interface CcBridge {
   recapturar: (rol: "integrador" | "verificador") => Promise<{ ok: boolean; mensaje: string }>;
   armarInformeFinal: () => Promise<{ ok: boolean; mensaje: string; ruta?: string }>;
   alMenu: (fn: (accion: string) => void) => void;
+  alAviso: (fn: (texto: string) => void) => void;
 }
 declare global {
   interface Window {
@@ -406,6 +407,12 @@ $("aviso-operacion-pegar").addEventListener("click", () => {
  * emergencia, no flujo). Corren exactamente las mismas funciones que antes
  * colgaban de sus botones.
  */
+/** Avisos del proceso principal (Sondear, paneles de los roles): al abrir o cerrar paneles cambian los chips. */
+window.cc.alAviso((texto) => {
+  decir(texto);
+  void refrescarChips().then(() => window.cc.posicion().then(pintarPosicion));
+});
+
 window.cc.alMenu((accion) => {
   if (accion === "pegar-pregunta-aqui") pegarPreguntaAqui();
   else if (accion === "capturar-uno") capturarUno();

@@ -1915,6 +1915,53 @@ async function completarInformeEnIframe(
 }
 
 /**
+ * Sondeo (2026-10-03): qué hay DENTRO de cada iframe de cada panel. El sondeo
+ * del preload sólo contaba iframes ("iframes: 1" en kimi, con un archivo
+ * abierto en vista previa), y el contenido de un iframe de otro origen no se
+ * ve desde la página. Sólo lectura, mismo mecanismo que
+ * `completarInformeEnIframe`: texto visible y los contenedores más largos, sin
+ * clics ni almacenamiento. La URL va sin query (puede llevar identificadores).
+ */
+async function describirSubframes(): Promise<
+  { id: string; frames: { url: string; nombre: string; largoTexto: number; muestra: string; contenedores: unknown }[] }[]
+> {
+  const fuente = `(() => {
+    const t = (document.body && document.body.innerText) || "";
+    const hojas = Array.from(document.querySelectorAll("body *"))
+      .filter((e) => !["SCRIPT", "STYLE", "HEAD"].includes(e.tagName))
+      .map((e) => ({ e, n: (e.innerText || "").length }))
+      .filter((x) => x.n > 300 && !Array.from(x.e.children).some((c) => (c.innerText || "").length === x.n))
+      .sort((a, b) => b.n - a.n).slice(0, 8)
+      .map((x) => ({ tag: x.e.tagName.toLowerCase(), id: x.e.id, clase: String(x.e.className).slice(0, 120), largoTexto: x.n, muestra: x.e.innerText.slice(0, 100) }));
+    return { largoTexto: t.length, muestra: t.slice(0, 150), contenedores: hojas };
+  })()`;
+  return Promise.all(
+    todas().map(async (v) => ({
+      id: v.id,
+      frames: await Promise.all(
+        v.view.webContents.mainFrame.framesInSubtree
+          .filter((f) => f !== v.view.webContents.mainFrame)
+          .map(async (f) => {
+            let url = f.url;
+            try {
+              const u = new URL(f.url);
+              url = u.origin === "null" ? u.protocol + u.pathname : u.origin + u.pathname;
+            } catch {
+              /* about:blank y similares quedan tal cual */
+            }
+            try {
+              const r = (await f.executeJavaScript(fuente, true)) as { largoTexto: number; muestra: string; contenedores: unknown };
+              return { url, nombre: f.name, ...r };
+            } catch (e) {
+              return { url, nombre: f.name, largoTexto: -1, muestra: `no se pudo leer: ${String(e)}`, contenedores: [] };
+            }
+          }),
+      ),
+    })),
+  );
+}
+
+/**
  * Rediseño de la barra (2026-09-19) — "Capturar este panel": lee UN solo
  * panel, con la MISMA vía de sólo lectura que `leer()` usa para los nueve
  * (`window.__ccProvider.read`) — nunca una segunda implementación.
@@ -2210,7 +2257,7 @@ async function sondeoVivo(): Promise<{
     const dir = join(app.getPath("userData"), "sondeos");
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const ruta = join(dir, `sondeo-${informe.cuando.replace(/[:.]/g, "-")}.json`);
-    writeFileSync(ruta, JSON.stringify(informe, null, 2), "utf8");
+    writeFileSync(ruta, JSON.stringify({ ...informe, subframes: await describirSubframes() }, null, 2), "utf8");
     emitir("CC_SONDEO_VIVO_JSON", informe);
     return { ok: true, ruta, paneles: informe.paneles.length };
   } catch (e) {
@@ -4874,13 +4921,34 @@ function construirMenu(): void {
           // normal — exactamente la distinción que pidió Juan.
           label: "Sondear (diagnóstico, cuota cero)",
           click: () => {
+            uiView?.webContents.send("cc:aviso", "Sondeando los paneles (sólo lectura)…");
             void sondeoVivo().then((r) => {
-              decirPorSalida(
-                r.ok
-                  ? `\n[cc] sondeo guardado en: ${r.ruta} (${r.paneles} panel/es)\n`
-                  : `\n[cc] el sondeo fallo: ${r.error ?? "sin detalle"}\n`,
-              );
+              const texto = r.ok
+                ? `Sondeo guardado (${r.paneles} paneles): ${r.ruta}`
+                : `El sondeo falló: ${r.error ?? "sin detalle"}`;
+              decirPorSalida(`\n[cc] ${texto}\n`);
+              uiView?.webContents.send("cc:aviso", texto);
             });
+          },
+        },
+        {
+          // 2026-10-03, pedido de Juan: mostrar u ocultar los paneles de los
+          // roles en cualquier momento, sin pegar nada. Ocultar los cierra
+          // (como al abrir una ronda nueva); la conversación queda en el
+          // historial del proveedor.
+          label: "Mostrar paneles de los roles (integrador, verificador, redactor)",
+          type: "checkbox",
+          checked: false,
+          click: (item) => {
+            if (!item.checked) {
+              ocultarPanelesDeRol();
+              uiView?.webContents.send("cc:aviso", "Paneles de los roles ocultos.");
+              return;
+            }
+            void (async () => {
+              for (const id of new Set([INTEGRADOR_ID, VERIFICADOR_ID, REDACTOR_ID])) await cargarPanelDeRol(id);
+              uiView?.webContents.send("cc:aviso", `Paneles de los roles abiertos: ${[...new Set([INTEGRADOR_ID, VERIFICADOR_ID, REDACTOR_ID])].join(", ")}.`);
+            })();
           },
         },
         { type: "separator" },

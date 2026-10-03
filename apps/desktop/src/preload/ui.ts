@@ -80,6 +80,10 @@ contextBridge.exposeInMainWorld("cc", {
   alMenu: (fn: (accion: string) => void): void => {
     ipcRenderer.on("cc:menu", (_e, accion: string) => fn(accion));
   },
+  /** 2026-10-03: avisos del proceso principal (Sondear, paneles de los roles) que se muestran en la barra. */
+  alAviso: (fn: (texto: string) => void): void => {
+    ipcRenderer.on("cc:aviso", (_e, texto: string) => fn(texto));
+  },
   /** Ventana "Proveedores al iniciar": lee/guarda el archivo aparte de selección. Se aplica al reiniciar. */
   seleccionLeer: (): Promise<{ conocidos: string[]; marcados: string[]; integrador: string; verificador: string; redactor: string }> =>
     ipcRenderer.invoke("cc:seleccion-leer"),

@@ -101,6 +101,9 @@ const PROHIBIDOS_WINDOWS = /[\\/:*?"<>|]/g;
 export function limpiarTituloParaArchivo(titulo: string): string {
   const limpio = titulo
     .replace(PROHIBIDOS_WINDOWS, " ")
+    // 2026-10-03, pedido de Juan: los guiones largos y medios en el nombre le
+    // impedían comprimir la carpeta en un ZIP. Pasan a guion simple.
+    .replace(/[–—]/g, "-")
     // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001f\u007f]/g, " ")
     .replace(/\s+/g, " ")
@@ -138,7 +141,7 @@ export function nombreBaseDeInforme(params: { titulo: string | null; pregunta: s
   const delIntegrador = params.titulo === null ? "" : limpiarTituloParaArchivo(params.titulo);
   const dePregunta = delIntegrador.length > 0 ? "" : limpiarTituloParaArchivo(tituloDesdePregunta(params.pregunta));
   const titulo = delIntegrador || dePregunta || TITULO_DE_RESERVA;
-  return `${sellofechaLocal(params.ahora)} — ${titulo}`;
+  return `${sellofechaLocal(params.ahora)} - ${titulo}`;
 }
 
 /** Tope del contador de desambiguación: si hay 999 informes con el mismo nombre, el problema no es el nombre. */

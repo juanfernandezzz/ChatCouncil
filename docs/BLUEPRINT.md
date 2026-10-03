@@ -3590,3 +3590,18 @@ posición.
 Verificado sobre una copia del registro real: chatgpt rechazado ("lee
 respuestas que cambiaron: kimi"); kimi reutilizado, salida idéntica, 77
 hallazgos re-derivados (77 antes).
+
+### Nombres sin guion largo y respuestas en .md (2026-10-03)
+
+Pedido de Juan: los guiones largos (—) en los nombres de la carpeta del
+informe y de sus archivos le impedían comprimirla en un ZIP. Ahora
+`nombreBaseDeInforme` usa " - ", `nombreArchivoRespuesta` también ("1 -
+chatgpt"), "FALTAN - respuestas sin PDF.txt" igual, y `limpiarTituloParaArchivo`
+pasa a "-" cualquier guion largo o medio del título del integrador. El título y
+el pie DENTRO de los PDF no cambian. El informe ya se escribía en .md junto al
+PDF; ahora cada respuesta de investigador también va en .md (antes sólo PDF),
+escrita antes que su PDF.
+
+Verificado con `entregarCarpetaDeInforme` en una carpeta temporal y un
+generador de PDF falso, con un título que trae "—" y "–": carpeta, informe y
+respuestas sin guion largo ni medio, y el informe y las respuestas en .md.

@@ -87,5 +87,5 @@ export function markdownDeRespuestaInvestigador(pregunta: string, r: RespuestaPa
  */
 export function nombreArchivoRespuesta(indiceEnPool: number, proveedorId: string): string {
   const limpio = limpiarTituloParaArchivo(proveedorId);
-  return `${indiceEnPool + 1} — ${limpio.length > 0 ? limpio : "proveedor"}`;
+  return `${indiceEnPool + 1} - ${limpio.length > 0 ? limpio : "proveedor"}`;
 }

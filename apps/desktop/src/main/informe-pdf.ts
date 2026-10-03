@@ -123,7 +123,7 @@ export interface RespuestaEnCarpeta {
   markdown: string;
 }
 
-const NOMBRE_FALTANTES = "FALTAN — respuestas sin PDF.txt";
+const NOMBRE_FALTANTES = "FALTAN - respuestas sin PDF.txt";
 
 export async function entregarCarpetaDeInforme(
   params: {
@@ -160,6 +160,9 @@ export async function entregarCarpetaDeInforme(
     try {
       mkdirSync(dirRespuestas);
       for (const r of params.respuestas) {
+        // 2026-10-03, pedido de Juan: cada respuesta también en .md, para que
+        // otro modelo la lea sin pasar por el PDF. Va primero: es el texto.
+        writeFileSync(join(dirRespuestas, `${r.nombreArchivo}.md`), r.markdown, { encoding: "utf8", flag: "wx" });
         try {
           await generar(r.markdown, join(dirRespuestas, `${r.nombreArchivo}.pdf`), r.titulo);
         } catch (e) {

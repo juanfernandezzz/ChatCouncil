@@ -95,7 +95,14 @@ export interface InformeFinalInput {
   integrador?: string | null;
   /** 7-1-1: `null` o ausente = no hubo verificación en la ronda, y sus dos secciones no aparecen. */
   verificacion?: VerificacionParaInforme | null;
+  /**
+   * Redactor (2026-10-02): su respuesta va PRIMERO, antes del mapa. `null` o
+   * ausente = no hubo redacción en la ronda y el informe queda como antes.
+   */
+  redaccion?: { redactorId: string; controles: readonly string[]; cuerpo: string } | null;
 }
+
+const ENCABEZADO_REDACCION = "## Respuesta a la pregunta (aporte del redactor)";
 
 /**
  * 7-1-1 (2026-09-29) — lo que aportó el verificador, ya resuelto: cada línea
@@ -216,6 +223,18 @@ export function armarInformeFinal(input: InformeFinalInput): string {
   return [
     titulo === null ? "# Informe de ronda" : `# ${titulo}`,
     "",
+    ...(input.redaccion
+      ? [
+          ENCABEZADO_REDACCION,
+          "",
+          `Aporte de un solo modelo (${input.redaccion.redactorId}), basado en el análisis que sigue. No es un resultado del consejo.`,
+          "",
+          ...input.redaccion.controles,
+          "",
+          marcarReferencias(input.redaccion.cuerpo, codigosExistentes),
+          "",
+        ]
+      : []),
     ...(rescate === null ? [] : [ENCABEZADO_RESCATE, "", rescate, ""]),
     ...(input.verificacion ? seccionesVerificacion(input.verificacion) : []),
     `**Pregunta:** ${input.pregunta}`,

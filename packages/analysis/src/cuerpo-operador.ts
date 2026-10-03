@@ -427,6 +427,12 @@ export interface CuerpoOperador {
 export interface CuerposPorOperador {
   cuerpos: CuerpoOperador[];
   sello: EntradaSelloConCodigo[];
+  /**
+   * Las respuestas de TODO el pool, en el mismo orden barajado y con las
+   * mismas etiquetas y textos limpios que reciben los operadores: lo que lee
+   * el redactor (2026-10-02), que no es del pool y no excluye ninguna.
+   */
+  respuestasTodas: RespuestaEtiquetada[];
 }
 
 /**
@@ -541,5 +547,9 @@ export function armarCuerposPorOperador(
     };
   });
 
-  return { cuerpos, sello: selloConCodigo };
+  const respuestasTodas: RespuestaEtiquetada[] = labeled.map((l, i) => {
+    const proveedor = seal[i]!.panelSourceId;
+    return { etiqueta: codigos.get(proveedor) ?? "", texto: armarCuerpoConFuentes(l.text, urlsPor.get(proveedor) ?? []) };
+  });
+  return { cuerpos, sello: selloConCodigo, respuestasTodas };
 }

@@ -23,6 +23,7 @@ import type {
   Hecho,
   InformeIntegrador,
   Respuesta,
+  RespuestaRedactor,
   SalidaOperador,
   SalidaVerificador,
   Sello,
@@ -34,6 +35,8 @@ import {
   armarPromptIntegrador,
   armarPromptVerificador,
   armarTablaHallazgos,
+  controlesRedaccion,
+  lineasDeControl,
   extraerSeccionRescate,
   extraerTituloDelInforme,
   textoDelInformeIntegrador,
@@ -315,6 +318,8 @@ export function armarInformeFinalDeRonda(params: {
   /** 7-1-1: la última verificación de la ronda y sus URLs comprobadas; `null`/ausente = no hubo. */
   salidaVerificador?: SalidaVerificador | null;
   urlsComprobadas?: readonly UrlComprobada[];
+  /** Redactor (2026-10-02): la última respuesta del redactor; `null`/ausente = no hubo. */
+  respuestaRedactor?: RespuestaRedactor | null;
 }): string {
   const cargados = params.proveedoresCargados ?? null;
   const incompletos =
@@ -369,7 +374,23 @@ export function armarInformeFinalDeRonda(params: {
     verificacion: params.salidaVerificador
       ? verificacionParaInforme(params.salidaVerificador, params.urlsComprobadas ?? [], hallazgosResueltos)
       : null,
+    redaccion: params.respuestaRedactor ? redaccionParaInforme(params.respuestaRedactor, idsValidos) : null,
   });
+}
+
+/** Redactor: sus controles mecánicos y el texto a mostrar, para la sección que va primero en el informe. */
+export function redaccionParaInforme(
+  r: RespuestaRedactor,
+  idsValidos: readonly string[],
+): { redactorId: string; controles: string[]; cuerpo: string } {
+  const c = controlesRedaccion(r, idsValidos);
+  return { redactorId: r.redactorId, controles: lineasDeControl(c), cuerpo: c.cuerpo };
+}
+
+/** La respuesta VIGENTE del redactor en la ronda: la última capturada. */
+export function ultimaRedaccion(hechos: readonly Hecho[], rondaId: string): RespuestaRedactor | null {
+  const r = hechos.filter((h): h is RespuestaRedactor => h.tipo === "respuesta-redactor" && h.rondaId === rondaId);
+  return r[r.length - 1] ?? null;
 }
 
 /**
@@ -417,6 +438,7 @@ export interface ClasificacionLecturas<T extends { id: string }> {
   lecturasOperacion: T[];
   lecturaIntegrador: T | undefined;
   lecturaVerificador: T | undefined;
+  lecturaRedactor?: T | undefined;
   lecturasComoRespuesta: T[];
 }
 
@@ -426,8 +448,13 @@ export function clasificarLecturasPorEtapa<T extends { id: string }>(
   poolOperadores: readonly string[],
   integradorId: string,
   verificadorId: string,
+  redactorId: string = integradorId,
 ): ClasificacionLecturas<T> {
   const nada = { lecturaIntegrador: undefined, lecturaVerificador: undefined };
+  if (etapa === "redaccion") {
+    // Ya hay verificación: sólo el redactor tiene algo nuevo.
+    return { lecturasOperacion: [], ...nada, lecturaRedactor: lecturas.find((l) => l.id === redactorId), lecturasComoRespuesta: [] };
+  }
   if (etapa === "investigacion") {
     // Todavía no hay nada más que investigadores contestando la pregunta original.
     return { lecturasOperacion: [], ...nada, lecturasComoRespuesta: [...lecturas] };

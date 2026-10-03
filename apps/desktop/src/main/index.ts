@@ -38,6 +38,10 @@ import { etapaDeRonda, integradorDeRonda, preguntaEfectivaDeRonda, proveedoresCa
 import {
   armarCuerposPorOperador,
   armarPromptOperacion,
+  armarPromptRedactor,
+  controlesRedaccion,
+  lineasDeControl,
+  tablaDe,
   evaluarIntegridad,
   insertarMarcasIntercaladas,
   hashSemilla,
@@ -69,12 +73,13 @@ import {
   escribirRespuestas,
   escribirCondicionProveedoresCargados,
   escribirRonda,
+  escribirRespuestaRedactor,
   escribirSalidaVerificador,
   generarSemilla,
   leerRegistroDeArchivo,
 } from "./registro";
 import { guardarSeleccion, leerRoles, leerSeleccion, poolDeInvestigadores } from "./seleccion-proveedores";
-import { armarCuerposDeRonda, armarOperacionConArchivo, armarYPersistirCuerposDeRonda } from "./operador";
+import { armarArchivoRedactorConMarcas, armarCuerposDeRonda, armarOperacionConArchivo, armarYPersistirCuerposDeRonda } from "./operador";
 import { comprobarUrlsDeRonda } from "./comprobar-urls";
 import {
   armarInformeFinalDeRonda,
@@ -86,6 +91,7 @@ import {
   avisoSinPrevio,
   registrarRecaptura,
   ultimoDeRol,
+  ultimaRedaccion,
   type RolRecapturable,
   salidasVigentesDeRonda,
   puedeEscribirPromptIntegrador,
@@ -590,6 +596,12 @@ const INTEGRADOR_ID = ROLES.integrador as ProviderId;
 const VERIFICADOR_ID = ROLES.verificador as ProviderId;
 
 /**
+ * El REDACTOR (2026-10-02): escribe la respuesta a la pregunta con el material
+ * de la ronda, al final. Por defecto es el integrador; nunca del pool.
+ */
+const REDACTOR_ID = ROLES.redactor as ProviderId;
+
+/**
  * El pool de investigadores y operadores: los nueve MENOS el integrador y el
  * verificador (7-1-1), en
  * el orden fijo de los paneles (de ahí salen P1..P8). Se deriva del
@@ -792,6 +804,9 @@ function restaurarRondaActivaDesdeRegistro(): void {
 const ultimoPromptOperadorPorId = new Map<string, string>();
 let ultimoPromptIntegrador: string | null = null;
 let ultimoPromptVerificador: string | null = null;
+/** Redactor: el prompt + archivo que se pegó, y la primera y última marca del archivo, para la captura. */
+let ultimoPromptRedactor: string | null = null;
+let ultimasMarcasRedactor: { primera: string; ultima: string } | null = null;
 const PROMPT_NO_DISPONIBLE = "(prompt no disponible: no se registró en este proceso — probablemente se reinició la app entre el envío y la captura)";
 
 /**
@@ -920,7 +935,7 @@ async function pegarPreguntaAqui(prompt: string): Promise<ResultadoEnvio> {
   if (!objetivo) {
     return { id: "(ninguno)", ok: false, error: "no hay ningún panel visible" };
   }
-  if (objetivo.id === INTEGRADOR_ID || objetivo.id === VERIFICADOR_ID) {
+  if (objetivo.id === INTEGRADOR_ID || objetivo.id === VERIFICADOR_ID || objetivo.id === REDACTOR_ID) {
     return { id: objetivo.id, ok: false, error: `${objetivo.id} no recibe la pregunta: no es investigador de la Parte 1` };
   }
   const [resultado] = await difundir(prompt, [objetivo.id as ProviderId]);
@@ -1042,7 +1057,7 @@ async function cargarPanelDeRol(id: ProviderId): Promise<(typeof vistas)[number]
 /** Cierra los paneles del integrador y del verificador (ronda nueva): salen del recorrido y de los chips. */
 function ocultarPanelesDeRol(): void {
   if (!CARGA_DIFERIDA_INTEGRADOR) return;
-  for (const id of [INTEGRADOR_ID, VERIFICADOR_ID]) {
+  for (const id of new Set([INTEGRADOR_ID, VERIFICADOR_ID, REDACTOR_ID])) {
     const i = vistas.findIndex((x) => x.id === id);
     if (i < 0) continue;
     const [v] = vistas.splice(i, 1);
@@ -1087,12 +1102,13 @@ function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProvee
   const etapa = etapaDeRonda(registro.hechos, rondaId, POOL_OPERADORES.length);
   const sello = registro.hechos.filter((h): h is Sello => h.tipo === "sello" && h.rondaId === rondaId);
 
-  const { lecturasOperacion, lecturaIntegrador, lecturaVerificador, lecturasComoRespuesta } = clasificarLecturasPorEtapa(
+  const { lecturasOperacion, lecturaIntegrador, lecturaVerificador, lecturaRedactor, lecturasComoRespuesta } = clasificarLecturasPorEtapa(
     lecturas,
     etapa,
     POOL_OPERADORES,
     INTEGRADOR_ID,
     VERIFICADOR_ID,
+    REDACTOR_ID,
   );
 
   if (lecturasComoRespuesta.length > 0) {
@@ -1158,6 +1174,18 @@ function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProvee
     } else {
       escribirSalidaVerificador(userData, conv, rondaId, lecturaVerificador.id, ultimoPromptVerificador ?? PROMPT_NO_DISPONIBLE,
         lecturaVerificador.text, lecturaVerificador.html ?? null);
+    }
+  }
+
+  // Redactor (2026-10-02): en la etapa de redacción sólo se captura su panel.
+  if (etapa === "redaccion") {
+    if (!lecturaRedactor) {
+      escribirErrorCaptura(userData, conv, rondaId, etapa, "respuesta-redactor",
+        `el panel del redactor (${REDACTOR_ID}) no estaba abierto al capturar`, REDACTOR_ID);
+    } else if (lecturaRedactor.error) {
+      escribirErrorCaptura(userData, conv, rondaId, etapa, "respuesta-redactor", lecturaRedactor.error, lecturaRedactor.id);
+    } else {
+      registrarRedaccion(userData, registro.hechos, conv, rondaId, lecturaRedactor);
     }
   }
 
@@ -1545,7 +1573,7 @@ function createWindow(): void {
   void uiView.webContents.loadFile(join(__dirname, "../renderer/index.html"));
 
   for (const id of ACTIVOS) {
-    if (CARGA_DIFERIDA_INTEGRADOR && (id === INTEGRADOR_ID || id === VERIFICADOR_ID)) continue;
+    if (CARGA_DIFERIDA_INTEGRADOR && (id === INTEGRADOR_ID || id === VERIFICADOR_ID || id === REDACTOR_ID)) continue;
     agregarVista(id);
   }
 
@@ -1967,13 +1995,14 @@ function registrarIpc(): void {
     marcados: leerSeleccion(app.getPath("userData"), INVESTIGADORES) ?? [...INVESTIGADORES],
     ...leerRoles(app.getPath("userData"), INVESTIGADORES),
   }));
-  ipcMain.handle("cc:seleccion-guardar", (_e, marcados: unknown, integrador: unknown, verificador: unknown) =>
+  ipcMain.handle("cc:seleccion-guardar", (_e, marcados: unknown, integrador: unknown, verificador: unknown, redactor: unknown) =>
     guardarSeleccion(
       app.getPath("userData"),
       INVESTIGADORES,
       Array.isArray(marcados) ? marcados.filter((m): m is string => typeof m === "string") : [],
       typeof integrador === "string" ? integrador : undefined,
       typeof verificador === "string" ? verificador : undefined,
+      typeof redactor === "string" ? redactor : undefined,
     ),
   );
   /**
@@ -2079,6 +2108,9 @@ function registrarIpc(): void {
   );
   /** 7-1-1 (2026-09-29) — "Pegar verificación": mismo camino que "Pegar integrador", en el panel del verificador. */
   ipcMain.handle("cc:pegar-verificacion", async () => enviarPromptAVerificador());
+  /** Redactor (2026-10-02): pegar su prompt y bajar el archivo; capturarlo desde el menú Ventana. */
+  ipcMain.handle("cc:pegar-redactor", async () => enviarPromptARedactor());
+  ipcMain.handle("cc:capturar-redactor", async () => capturarRedactor());
 
   /**
    * Rediseño de la barra (2026-09-19) — "Capturar este panel": captura SÓLO
@@ -3906,6 +3938,106 @@ async function enviarPromptAVerificador(): Promise<ResultadoIntegrador> {
 }
 
 /**
+ * Redactor (2026-10-02) — "Pegar redactor". Arma el archivo con el material
+ * de la ronda (informe re-derivado del html, verificación, la tabla H## que vio
+ * el integrador y las siete respuestas con sus P#), pega el prompt en el panel
+ * del redactor —al frente, en una conversación que Juan abrió nueva— y baja el
+ * archivo a Descargas para adjuntarlo a mano. Nunca envía. Sin verificación
+ * capturada pega igual y lo avisa: los botones no se bloquean por etapa.
+ */
+async function enviarPromptARedactor(): Promise<ResultadoIntegrador & { ruta?: string; aviso?: string }> {
+  const d = tablaDeRondaActiva("redactor");
+  if ("error" in d) return sinEscribir(d.error);
+  const informe = ultimoDeRol(d.hechos, d.ronda.id, "integrador");
+  if (!informe) return sinEscribir("la ronda todavía no tiene un informe del integrador capturado", d.etapa);
+  const verificacion = ultimoDeRol(d.hechos, d.ronda.id, "verificador");
+  const prep = prepararRondaParaOperar();
+  if (!prep.ok) return sinEscribir(prep.error, d.etapa);
+  let respuestas;
+  try {
+    respuestas = armarCuerposDeRonda(prep.ronda, prep.respuestas, prep.citas, POOL_OPERADORES).respuestasTodas;
+  } catch (e) {
+    return sinEscribir(e instanceof Error ? e.message : String(e), d.etapa);
+  }
+  const { cuerpoArchivo, marcas, nombreArchivo } = armarArchivoRedactorConMarcas(
+    { informe: textoDelInformeIntegrador(informe), verificacion: verificacion?.salidaCruda ?? null, tabla: tablaDe(d.tabla.paraPrompt), respuestas },
+    new Date(),
+  );
+  const prompt = armarPromptRedactor(d.pregunta);
+
+  // La conversación nueva la abre Juan; acá sólo se comprueba, sin navegar.
+  const v = await cargarPanelDeRol(REDACTOR_ID);
+  if (!v) return sinEscribir(`el redactor (${REDACTOR_ID}) no está entre los proveedores cargados`, d.etapa);
+  desplazarA(todas().findIndex((x) => x.id === v.id) * anchoPanel());
+  const chatVacio = (await v.view.webContents
+    .executeJavaScript(`window.__ccProvider.estaVacioElChat(${JSON.stringify(PROVIDER_SPECS[v.id])})`, true)
+    .catch(() => false)) as boolean;
+  if (!chatVacio) {
+    return sinEscribir("la conversación del redactor ya tiene mensajes: abre una conversación nueva en ese panel y vuelve a apretar el botón", d.etapa);
+  }
+
+  const r = await pegarEnPanelDeRol(REDACTOR_ID, "redactor", prompt, d.etapa);
+  if (!r.ok) return r;
+  const ruta = join(app.getPath("downloads"), nombreArchivo);
+  try {
+    writeFileSync(ruta, cuerpoArchivo, "utf8");
+  } catch (e) {
+    return { ...r, ok: false, error: `pegué el prompt pero no pude guardar el archivo en ${ruta}: ${String(e)}` };
+  }
+  ultimoPromptRedactor = `${prompt}\n\n=== ARCHIVO ADJUNTO: ${nombreArchivo} ===\n${cuerpoArchivo}`;
+  ultimasMarcasRedactor = marcas;
+  decirPorSalida(`\n[cc] archivo del redactor: ${ruta} (${cuerpoArchivo.length} caracteres)\n`);
+  return {
+    ...r,
+    ruta,
+    ...(verificacion ? {} : { aviso: "No hay verificación capturada en esta ronda: el archivo lo dice y el redactor trabaja sin ella." }),
+  };
+}
+
+/**
+ * Escribe la lectura del redactor como hecho, con el prompt y las marcas del
+ * archivo que se pegó en este proceso o, si la app se reinició, los de la
+ * redacción anterior de la ronda. Devuelve los controles en una línea cada uno.
+ */
+function registrarRedaccion(
+  userData: string,
+  hechos: readonly Hecho[],
+  conv: string,
+  rondaId: string,
+  lectura: { id: string; text: string; html?: string | null },
+): string[] {
+  const previo = ultimaRedaccion(hechos, rondaId);
+  const marcas =
+    ultimasMarcasRedactor ??
+    (previo?.marcaPrimera && previo.marcaUltima ? { primera: previo.marcaPrimera, ultima: previo.marcaUltima } : null);
+  const hecho = escribirRespuestaRedactor(userData, conv, rondaId, lectura.id,
+    ultimoPromptRedactor ?? previo?.promptCompleto ?? PROMPT_NO_DISPONIBLE, lectura.text, lectura.html ?? null, marcas);
+  const d = tablaDeRondaActiva("redactor");
+  const ids = "error" in d ? [] : d.tabla.paraPrompt.map((h) => h.id);
+  const controles = lineasDeControl(controlesRedaccion(hecho, ids));
+  decirPorSalida(`\n[cc] redactor capturado (${lectura.text.length} caracteres):\n${controles.join("\n")}\n`);
+  return controles;
+}
+
+/** Menú "Ventana" → "Capturar redactor": lee su panel al frente en cualquier etapa y agrega un hecho. */
+async function capturarRedactor(): Promise<{ ok: boolean; mensaje: string }> {
+  if (!conversacionActual || !rondaActualId) return { ok: false, mensaje: "No hay una ronda activa." };
+  const userData = app.getPath("userData");
+  const hechos = leerRegistroDeArchivo(userData, conversacionActual).hechos;
+  const v = await cargarPanelDeRol(REDACTOR_ID);
+  if (!v) return { ok: false, mensaje: `el redactor (${REDACTOR_ID}) no está entre los proveedores cargados` };
+  desplazarA(todas().findIndex((x) => x.id === v.id) * anchoPanel());
+  const [l] = marcarLecturasVacias([await alFrente(v, () => leerUno(v))]);
+  if (l!.error) {
+    escribirErrorCaptura(userData, conversacionActual, rondaActualId, etapaDeRonda(hechos, rondaActualId, POOL_OPERADORES.length),
+      "respuesta-redactor", l!.error, l!.id);
+    return { ok: false, mensaje: `${l!.id}: ${l!.error}` };
+  }
+  const controles = registrarRedaccion(userData, hechos, conversacionActual, rondaActualId, l!);
+  return { ok: true, mensaje: `${l!.id}: redactor capturado, ${l!.text.length} caracteres.\n${controles.join("\n")}` };
+}
+
+/**
  * Menú "Ventana" — "Recapturar integrador" / "Recapturar verificación": lee
  * el panel del rol con el panel al frente, sin mirar la etapa, y agrega un
  * hecho nuevo (`registrarRecaptura`). Sin hecho previo en la ronda, avisa y
@@ -4596,6 +4728,7 @@ async function armarInformeFinalDeRondaActiva(): Promise<{ ok: boolean; mensaje:
     integrador: integradorDeRonda(hechos, ronda.id),
     salidaVerificador,
     urlsComprobadas,
+    respuestaRedactor: ultimaRedaccion(hechos, ronda.id),
   });
 
   // Fase 5 (decisión de Juan, 2026-09-26): el nombre es "AAAA-MM-DD HHMM —
@@ -4776,6 +4909,7 @@ function construirMenu(): void {
         { type: "separator" },
         { label: "Recapturar integrador", click: () => uiView?.webContents.send("cc:menu", "recapturar-integrador") },
         { label: "Recapturar verificación", click: () => uiView?.webContents.send("cc:menu", "recapturar-verificador") },
+        { label: "Capturar redactor", click: () => uiView?.webContents.send("cc:menu", "capturar-redactor") },
       ],
     },
     {

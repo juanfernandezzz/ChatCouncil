@@ -302,6 +302,29 @@ export interface SalidaVerificador {
 }
 
 /**
+ * Redactor (2026-10-02, decisión de Juan): la respuesta a la pregunta
+ * original, escrita sólo con el material de la ronda (informe, verificación,
+ * tabla y las siete respuestas) que recibe por archivo. Misma regla del dato
+ * canónico. `marcaPrimera`/`marcaUltima` son la primera y la última marca de
+ * integridad del archivo que se le entregó: con ellas se comprueba la primera
+ * línea que el prompt le pide. `null` = no se conocen (la app se reinició
+ * entre pegar y capturar).
+ */
+export interface RespuestaRedactor {
+  tipo: "respuesta-redactor";
+  esquema: number;
+  id: string;
+  rondaId: string;
+  redactorId: string;
+  promptCompleto: string;
+  textoCrudo: string;
+  html: string | null;
+  marcaPrimera: string | null;
+  marcaUltima: string | null;
+  recibidaEn: string;
+}
+
+/**
  * 7-1-1 (2026-09-29) — comprobación MECÁNICA de una URL que el verificador
  * citó en su sección 1 (VERIFICADO / CONTRADICHO): si existe y responde, nada
  * más. No dice si la fuente sostiene la afirmación. `codigo` es el estado
@@ -446,6 +469,7 @@ export type Hecho =
   | HallazgoHecho
   | InformeIntegrador
   | SalidaVerificador
+  | RespuestaRedactor
   | UrlComprobada
   | CondicionHerramientas
   | ErrorCaptura
@@ -471,13 +495,15 @@ export type Hecho =
  *    en esta etapa aunque la verificación ya se haya capturado, igual que
  *    "integracion" con el informe: recapturar deja una salida nueva y la más
  *    reciente gana.
+ *  · `"redaccion"` (2026-10-02) — ya hay una `SalidaVerificador`: el panel que
+ *    queda por capturar es el del REDACTOR. Mismo criterio de permanencia.
  *
  * `totalOperadores` se recibe como parámetro, nunca se importa desde
  * `apps/desktop` (`POOL_OPERADORES`): el dominio no depende de la app (§4).
  */
-export type EtapaRonda = "investigacion" | "operacion" | "integracion" | "verificacion";
+export type EtapaRonda = "investigacion" | "operacion" | "integracion" | "verificacion" | "redaccion";
 
-export type TipoCaptura = "respuesta" | "salida-operador" | "informe-integrador" | "salida-verificador";
+export type TipoCaptura = "respuesta" | "salida-operador" | "informe-integrador" | "salida-verificador" | "respuesta-redactor";
 
 /**
  * Defecto 1 — "hay algo en el campo" no alcanza como validación: el
@@ -512,6 +538,7 @@ export function preguntaEfectivaDeRonda(hechos: readonly Hecho[], ronda: Ronda):
 }
 
 export function etapaDeRonda(hechos: readonly Hecho[], rondaId: string, totalOperadores: number): EtapaRonda {
+  if (hechos.some((h) => h.tipo === "salida-verificador" && h.rondaId === rondaId)) return "redaccion";
   if (hechos.some((h) => h.tipo === "informe-integrador" && h.rondaId === rondaId)) return "verificacion";
   // Operadores DISTINTOS, no salidas: un operador recapturado no cuenta dos veces.
   const operadoresConSalida = new Set(
@@ -533,6 +560,8 @@ export function tipoCapturaDeEtapa(etapa: EtapaRonda): TipoCaptura {
       return "informe-integrador";
     case "verificacion":
       return "salida-verificador";
+    case "redaccion":
+      return "respuesta-redactor";
   }
 }
 
@@ -568,6 +597,7 @@ const TIPOS = new Set([
   "hallazgo",
   "informe-integrador",
   "salida-verificador",
+  "respuesta-redactor",
   "url-comprobada",
   "condicion-herramientas",
   "error-captura",

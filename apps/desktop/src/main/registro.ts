@@ -36,6 +36,7 @@ import {
   type Ronda,
   type Sello,
   type SalidaOperador,
+  type RespuestaRedactor,
   type SalidaVerificador,
   type UrlComprobada,
   type TipoCaptura,
@@ -75,6 +76,7 @@ function escribir(
     | HallazgoHecho
     | InformeIntegrador
     | SalidaVerificador
+    | RespuestaRedactor
     | UrlComprobada
     | CondicionHerramientas
     | ErrorCaptura
@@ -435,6 +437,34 @@ export function escribirSalidaVerificador(
     salidaCruda,
     recibidaEn: new Date().toISOString(),
     html,
+  };
+  escribir(userData, conversacionId, hecho);
+  return hecho;
+}
+
+/** Redactor (2026-10-02): su respuesta cruda, con las marcas del archivo que recibió. */
+export function escribirRespuestaRedactor(
+  userData: string,
+  conversacionId: string,
+  rondaId: string,
+  redactorId: string,
+  promptCompleto: string,
+  textoCrudo: string,
+  html: string | null,
+  marcas: { primera: string; ultima: string } | null,
+): RespuestaRedactor {
+  const hecho: RespuestaRedactor = {
+    tipo: "respuesta-redactor",
+    esquema: VERSION_ESQUEMA,
+    id: randomUUID(),
+    rondaId,
+    redactorId,
+    promptCompleto,
+    textoCrudo,
+    html,
+    marcaPrimera: marcas?.primera ?? null,
+    marcaUltima: marcas?.ultima ?? null,
+    recibidaEn: new Date().toISOString(),
   };
   escribir(userData, conversacionId, hecho);
   return hecho;

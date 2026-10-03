@@ -60,6 +60,10 @@ const EXIGIDO = {
     // Menu Ventana: recapturar el integrador sin mirar la etapa (2026-09-30).
     "Recapturar integrador",
     "cc:recapturar",
+    // Redactor (2026-10-02): pegar, capturar y su hecho en el registro.
+    "cc:pegar-redactor",
+    "cc:capturar-redactor",
+    "respuesta-redactor",
     "cc:sesiones",
     // Fase 5 — el informe final se entrega como CARPETA con las respuestas de
     // los investigadores en PDF adentro. Sin estos marcadores, un tree-shaking
@@ -257,6 +261,8 @@ const EXIGIDO = {
     "data-test-id",
   ],
   "preload/ui.cjs": [
+    "cc:pegar-redactor",
+    "cc:capturar-redactor",
     "cc:investigadores",
     "cc:pegar-pregunta-en-todos",
     "cc:pegar-pregunta-aqui",
@@ -271,7 +277,7 @@ const EXIGIDO = {
   // sondeo de derivacion de specs sigue existiendo pero como modo de
   // diagnostico por bandera de linea de comando, no como paso del flujo).
   // 2026-09-30: "Pegar operación en este panel" en la barra, con su aviso.
-  "renderer/index.html": ["no-preguntar", "confirmacion", "paneles", "capturar", "pegar-verificacion", "pegar-operacion-aqui", "aviso-operacion-pegar"],
+  "renderer/index.html": ["no-preguntar", "confirmacion", "paneles", "capturar", "pegar-verificacion", "pegar-operacion-aqui", "aviso-operacion-pegar", "pegar-redactor"],
 };
 
 /**

@@ -64,6 +64,9 @@ contextBridge.exposeInMainWorld("cc", {
   pegarIntegrador: (): Promise<ResultadoIntegrador> => ipcRenderer.invoke("cc:pegar-integrador"),
   /** 7-1-1 (2026-09-29) — "Pegar verificación": lo mismo, en el panel del verificador. */
   pegarVerificacion: (): Promise<ResultadoIntegrador> => ipcRenderer.invoke("cc:pegar-verificacion"),
+  /** Redactor (2026-10-02): pega su prompt y baja el archivo con el material de la ronda. */
+  pegarRedactor: (): Promise<ResultadoIntegrador> => ipcRenderer.invoke("cc:pegar-redactor"),
+  capturarRedactor: (): Promise<{ ok: boolean; mensaje: string }> => ipcRenderer.invoke("cc:capturar-redactor"),
   /** Menú "Ventana" (2026-09-30) — recaptura el integrador o el verificador sin mirar la etapa. */
   recapturar: (rol: "integrador" | "verificador"): Promise<{ ok: boolean; mensaje: string }> => ipcRenderer.invoke("cc:recapturar", rol),
   /** Objetivo E — arma el informe final de la ronda activa y lo guarda en `informes/`. */
@@ -78,10 +81,10 @@ contextBridge.exposeInMainWorld("cc", {
     ipcRenderer.on("cc:menu", (_e, accion: string) => fn(accion));
   },
   /** Ventana "Proveedores al iniciar": lee/guarda el archivo aparte de selección. Se aplica al reiniciar. */
-  seleccionLeer: (): Promise<{ conocidos: string[]; marcados: string[]; integrador: string; verificador: string }> =>
+  seleccionLeer: (): Promise<{ conocidos: string[]; marcados: string[]; integrador: string; verificador: string; redactor: string }> =>
     ipcRenderer.invoke("cc:seleccion-leer"),
-  seleccionGuardar: (marcados: string[], integrador: string, verificador: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke("cc:seleccion-guardar", marcados, integrador, verificador),
+  seleccionGuardar: (marcados: string[], integrador: string, verificador: string, redactor: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("cc:seleccion-guardar", marcados, integrador, verificador, redactor),
 });
 
 interface ResultadoConsolidarPanel {

@@ -94,6 +94,9 @@ interface ResultadoIntegrador {
   entregaExacta: boolean;
   navegacionesIntactas: boolean;
   etapa?: string;
+  /** Sólo "Pegar redactor": dónde quedó el archivo, y un aviso si falta la verificación. */
+  ruta?: string;
+  aviso?: string;
 }
 interface ResultadoCapturarUno {
   ok: boolean;
@@ -119,6 +122,8 @@ interface CcBridge {
   avisoOperacionPendiente: () => Promise<boolean>;
   pegarIntegrador: () => Promise<ResultadoIntegrador>;
   pegarVerificacion: () => Promise<ResultadoIntegrador>;
+  pegarRedactor: () => Promise<ResultadoIntegrador>;
+  capturarRedactor: () => Promise<{ ok: boolean; mensaje: string }>;
   recapturar: (rol: "integrador" | "verificador") => Promise<{ ok: boolean; mensaje: string }>;
   armarInformeFinal: () => Promise<{ ok: boolean; mensaje: string; ruta?: string }>;
   alMenu: (fn: (accion: string) => void) => void;
@@ -404,6 +409,13 @@ $("aviso-operacion-pegar").addEventListener("click", () => {
 window.cc.alMenu((accion) => {
   if (accion === "pegar-pregunta-aqui") pegarPreguntaAqui();
   else if (accion === "capturar-uno") capturarUno();
+  else if (accion === "capturar-redactor") {
+    decir("Capturando el redactor…");
+    void window.cc.capturarRedactor().then(async (r) => {
+      await refrescarChips();
+      decir(r.mensaje, r.ok ? "ok" : "mal");
+    });
+  }
   else if (accion === "pegar-operacion-archivo") {
     decir("Pegando operación en el panel al frente…");
     void window.cc.pegarOperacionConArchivoAqui().then((r) => {
@@ -454,9 +466,12 @@ function pegarRol(rol: string, pegar: () => Promise<ResultadoIntegrador>): void 
     else marcar(id, r.error ?? "falló", "mal");
     pintarPaneles();
     const avisoNav = r.navegacionesIntactas ? "" : "\n\n⚠ El contador de navegaciones cambió — el panel pudo haberse recargado.";
+    const archivo = r.ruta
+      ? `\nDescargué el archivo con el material de la ronda: ${r.ruta}. Adjúntalo a mano en el panel antes de enviar.${r.aviso ? `\n⚠ ${r.aviso}` : ""}`
+      : "";
     decir(
       r.ok
-        ? `${id}: listo, entrega ${r.entregaExacta ? "exacta" : "CON DIFERENCIAS"} (${r.caracteresPresentes}/${r.caracteresEscritos} caracteres)${etiquetaEtapa(r.etapa)}${avisoNav}`
+        ? `${id}: listo, entrega ${r.entregaExacta ? "exacta" : "CON DIFERENCIAS"} (${r.caracteresPresentes}/${r.caracteresEscritos} caracteres)${etiquetaEtapa(r.etapa)}${avisoNav}${archivo}`
         : `${id}: ${r.error ?? "falló"}${etiquetaEtapa(r.etapa)}`,
       r.ok && r.entregaExacta && r.navegacionesIntactas ? "ok" : "mal",
     );
@@ -464,6 +479,7 @@ function pegarRol(rol: string, pegar: () => Promise<ResultadoIntegrador>): void 
 }
 $("pegar-integrador").addEventListener("click", () => pegarRol("integrador", window.cc.pegarIntegrador));
 $("pegar-verificacion").addEventListener("click", () => pegarRol("verificador", window.cc.pegarVerificacion));
+$("pegar-redactor").addEventListener("click", () => pegarRol("redactor", window.cc.pegarRedactor));
 
 $("sesiones").addEventListener("click", () => {
   void window.cc.sesiones().then((ss) => {

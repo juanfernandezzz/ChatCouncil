@@ -34,6 +34,11 @@ informe. Su panel aparece recién cuando llega su turno.</p>
 revisa lo que el integrador marcó, con búsqueda web, y agrega puntos ciegos
 y preguntas derivadas. Su aporte va en una sección aparte, marcada como
 aporte de un solo modelo, no verificado por el consejo.</p>
+    <label for="redactor" class="titulo">Redactor</label>
+    <select id="redactor"></select>
+    <p class="nota">El redactor escribe la respuesta a la pregunta con el material de la ronda,
+sin buscar en internet. Va al final, después del verificador. Puede ser el mismo
+que el integrador; si eliges otro proveedor, ese sale del pool de investigadores.</p>
     <div class="acciones">
       <button id="marcar-todos">Marcar todos</button>
       <button id="guardar" class="primario">Guardar</button>
@@ -48,9 +53,10 @@ aporte de un solo modelo, no verificado por el consejo.</p>
       const cc = window.cc;
       const casillas = document.getElementById("casillas");
       const error = document.getElementById("error");
-      const { conocidos, marcados, integrador, verificador } = await cc.seleccionLeer();
+      const { conocidos, marcados, integrador, verificador, redactor } = await cc.seleccionLeer();
       const lista = document.getElementById("integrador");
       const listaVerificador = document.getElementById("verificador");
+      const listaRedactor = document.getElementById("redactor");
       for (const id of conocidos) {
         const label = document.createElement("label");
         const chk = document.createElement("input");
@@ -64,13 +70,15 @@ aporte de un solo modelo, no verificado por el consejo.</p>
         op.textContent = NOMBRES[id] ?? id;
         lista.append(op);
         listaVerificador.append(op.cloneNode(true));
+        listaRedactor.append(op.cloneNode(true));
       }
       lista.value = integrador;
       listaVerificador.value = verificador;
+      listaRedactor.value = redactor;
       const todas = () => [...casillas.querySelectorAll("input")];
       document.getElementById("marcar-todos").onclick = () => todas().forEach((c) => (c.checked = true));
       document.getElementById("guardar").onclick = async () => {
-        const r = await cc.seleccionGuardar(todas().filter((c) => c.checked).map((c) => c.value), lista.value, listaVerificador.value);
+        const r = await cc.seleccionGuardar(todas().filter((c) => c.checked).map((c) => c.value), lista.value, listaVerificador.value, listaRedactor.value);
         error.textContent = r.ok ? "" : r.error;
         if (r.ok) window.close();
       };

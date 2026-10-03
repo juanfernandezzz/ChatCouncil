@@ -80,6 +80,13 @@ alternativas que un solo modelo no daría.
 > Los operadores tienen una quinta categoría de hallazgo: **TENSION** (mismo
 > dato, conclusiones o recomendaciones opuestas). Detalle y registro de
 > verificación en §10, "7-1-1 y TENSION".
+>
+> **Redactor (decidido por Juan, 2026-10-02):** un cuarto rol, último, que
+> escribe la RESPUESTA a la pregunta con el material de la ronda (informe,
+> verificación, tabla y las siete respuestas), sin buscar en internet. Va
+> primero en el informe final, marcado como aporte de un solo modelo; el mapa
+> del integrador no cambia. Por defecto es deepseek (el integrador). Detalle en
+> §10, "El redactor".
 
 ### Arquitectura vigente: DOS partes, no tres (decidida por Juan, 2026-08-13)
 
@@ -3449,3 +3456,59 @@ citados y 0 inexistentes. Con el texto guardado, el aviso nuevo muestra
 "TITULO: Marco documental y legal para psicólogo remotoTIPOS DE
 DIVERGENCIA…". ABIERTO: el informe de la ronda `c26c40de` no tiene html y
 sigue sin poder re-derivarse; la prueba en vivo la hace Juan.
+
+### El redactor (2026-10-02)
+
+Juan, sobre el informe de la ronda `c3801f42`: los entregables son completos
+y útiles, pero no responden las demandas de la pregunta original. Correcto, y
+por diseño: el integrador tiene prohibido resolver (§1, "matiz, no
+consenso"), así que el informe es un mapa, no una respuesta. Decisión de Juan
+(opción A): un rol nuevo, el redactor, que resuelve; el mapa queda igual.
+
+Elegido por Juan, con estos datos medidos en su ronda real: las siete
+respuestas suman 206.198 caracteres; deepseek integró sin salir a la red (0
+enlaces externos en su html). Redactor por defecto: **deepseek**, el único
+fuera del pool (ninguna de las siete respuestas es suya: sin sesgo de
+autopreferencia). Regla dura: nunca del pool ni el verificador; puede ser el
+integrador. Si Juan elige otro proveedor, ese sale del pool y el pool queda en
+seis, pero los prompts literales dicen "siete": `guard:specs` exige que el
+redactor por defecto sea el integrador.
+
+· **Prompt literal** (`prompt-redactor.ts`, sellado), aprobado por Juan: usar
+  sólo el material del archivo, sin internet ni memoria; orden de autoridad
+  VERIFICADO > lo firme del informe > una sola respuesta (dicho) > discrepancia
+  sin resolver (no elegir); plantillas desde las respuestas; citar [H##],
+  [P#] o [VERIFICADO H##]; cumplir las reglas de la pregunta; sección
+  PENDIENTE al final; primera línea ARCHIVO con las marcas.
+· **"Pegar redactor"** (barra): trae su panel al frente, exige conversación
+  nueva (la abre Juan; el botón sólo comprueba) y compositor vacío, pega el
+  prompt y baja `redactor-AAAA-MM-DD-HHMM.txt` a Descargas: INFORME
+  (re-derivado del html), VERIFICACION (o "sin verificacion capturada"),
+  HALLAZGOS (la tabla que vio el integrador) y RESPUESTAS (las siete, con sus
+  P#), con marcas de integridad. Sin verificación, pega igual y avisa.
+· **Captura**: etapa nueva "redaccion" (hay `SalidaVerificador`); "Capturar
+  todos" lee sólo el redactor. Menú Ventana → "Capturar redactor", en
+  cualquier etapa. Hecho nuevo `RespuestaRedactor`, con la primera y la última
+  marca del archivo.
+· **Tres controles mecánicos**: si la línea ARCHIVO trae las marcas correctas
+  (aquí lo comprueba el código, no Juan), cuántos enlaces externos hay en el
+  html (si salió a la red) y qué [H##] citados no existen.
+· **Informe final**: "Respuesta a la pregunta (aporte del redactor)" va
+  primero, con los tres controles, antes de "Qué conviene rescatar".
+
+Verificado, cuota cero (24 de 24): reglas de roles en una carpeta temporal
+(defecto deepseek con pool 7; redactor = verificador y redactor desmarcado
+rechazados; redactor kimi saca a kimi del pool; archivo anterior → redactor =
+integrador); etapa "redaccion" y su clasificación; archivo armado sobre la
+ronda real `c3801f42` (312.516 caracteres, 296 marcas, las cuatro partes en
+orden, 7 respuestas P1..P7 que cubren todas las P# de la tabla, las 259 filas
+H##, "5. QUE CONVIENE RESCATAR"; esa ronda no tiene verificación capturada y
+el archivo lo dice); prompt de 6.802 caracteres; los cinco estados de lectura,
+enlaces y H## inexistentes; informe con la sección primero y sin ella cuando
+no hay redactor. Barra y "Proveedores al iniciar…" compilados, en un
+navegador real con un puente de prueba. `guard:specs` (redactor = verificador
+o ≠ integrador) y `guard:artefacto` (5 marcadores), probados en rojo.
+
+ABIERTO: la prueba en vivo es de Juan, y es lo que mide si deepseek lee de
+verdad un adjunto de ~300.000 caracteres (el control de la línea ARCHIVO lo
+dice solo al capturar).

@@ -15,12 +15,14 @@
 
 import type { Cita, Respuesta, Ronda, Sello } from "@chatcouncil/domain";
 import {
+  armarArchivoRedactor,
   armarCuerposPorOperador,
   armarPromptOperacionConArchivo,
   hashSemilla,
   insertarMarcasIntercaladas,
   type CuerposPorOperador,
   type EntradaSelloConCodigo,
+  type MaterialRedactor,
   type RespuestaEtiquetada,
 } from "@chatcouncil/analysis";
 import { randomUUID } from "node:crypto";
@@ -196,5 +198,26 @@ export function armarOperacionConArchivo(
     cuerpoArchivo: `${textoConMarcas}\n${marcaFin}\n`,
     marcas: [...marcas, marcaFin],
     nombreArchivo: `operacion-${codigoOperador}-${sello}.txt`,
+  };
+}
+
+/**
+ * Redactor (2026-10-02): el archivo con el material de la ronda, con las
+ * marcas intercaladas y la de FIN. La primera y la última marca se guardan
+ * con la captura para comprobar la línea "ARCHIVO:" que pide el prompt.
+ */
+export function armarArchivoRedactorConMarcas(
+  material: MaterialRedactor,
+  ahora: Date,
+  token: string = randomUUID(),
+): { cuerpoArchivo: string; marcas: { primera: string; ultima: string }; nombreArchivo: string } {
+  const { textoConMarcas, marcas } = insertarMarcasIntercaladas(armarArchivoRedactor(material), token);
+  const marcaFin = `[[CC-MARCA-FIN-${token}]]`;
+  const d2 = (n: number): string => String(n).padStart(2, "0");
+  const sello = `${ahora.getFullYear()}-${d2(ahora.getMonth() + 1)}-${d2(ahora.getDate())}-${d2(ahora.getHours())}${d2(ahora.getMinutes())}`;
+  return {
+    cuerpoArchivo: `${textoConMarcas}\n${marcaFin}\n`,
+    marcas: { primera: marcas[0] ?? marcaFin, ultima: marcaFin },
+    nombreArchivo: `redactor-${sello}.txt`,
   };
 }

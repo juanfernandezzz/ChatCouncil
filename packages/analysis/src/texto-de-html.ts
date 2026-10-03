@@ -45,6 +45,10 @@ export function textoDeHtmlEnBloques(html: string): string {
       salida += "\n";
       continue;
     }
+    if (cierre && (tag === "td" || tag === "th")) {
+      salida += " | ";
+      continue;
+    }
     if (!BLOQUES.test(tag)) continue;
     if (trasPrefijo && !cierre) continue;
     if (!salida.endsWith("\n") && salida.length > 0) salida += "\n";

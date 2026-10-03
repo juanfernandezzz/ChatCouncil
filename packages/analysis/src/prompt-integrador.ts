@@ -97,7 +97,7 @@ function filaDe(h: HallazgoParaIntegrador): string {
   return [h.id, h.categoria, h.eje ?? "", etiquetas, h.descripcion, h.operador].join("|");
 }
 
-function tablaDe(hallazgos: readonly HallazgoParaIntegrador[]): string {
+export function tablaDe(hallazgos: readonly HallazgoParaIntegrador[]): string {
   return hallazgos.map(filaDe).join("\n");
 }
 

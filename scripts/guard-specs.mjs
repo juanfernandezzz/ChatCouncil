@@ -102,7 +102,11 @@ for (const [id, spec] of Object.entries(specs)) {
 const RUTA_ROLES = "apps/desktop/src/main/seleccion-proveedores.ts";
 const fuenteRoles = readFileSync(join(process.cwd(), RUTA_ROLES), "utf8");
 const rolDeclarado = (nombre) => new RegExp(`export const ${nombre} = "([^"]+)"`).exec(fuenteRoles)?.[1] ?? null;
-const roles = { integrador: rolDeclarado("INTEGRADOR_POR_DEFECTO"), verificador: rolDeclarado("VERIFICADOR_POR_DEFECTO") };
+const roles = {
+  integrador: rolDeclarado("INTEGRADOR_POR_DEFECTO"),
+  verificador: rolDeclarado("VERIFICADOR_POR_DEFECTO"),
+  redactor: rolDeclarado("REDACTOR_POR_DEFECTO"),
+};
 for (const [rol, id] of Object.entries(roles)) {
   if (id === null) fallos.push(`${RUTA_ROLES}: no declara el ${rol} por defecto.`);
   else if (!(id in specs)) fallos.push(`${RUTA_ROLES}: el ${rol} por defecto "${id}" no existe entre las specs.`);
@@ -110,7 +114,15 @@ for (const [rol, id] of Object.entries(roles)) {
 if (roles.integrador !== null && roles.integrador === roles.verificador) {
   fallos.push(`${RUTA_ROLES}: integrador y verificador por defecto son el mismo proveedor ("${roles.integrador}").`);
 }
-resumen.push(`roles por defecto: integrador ${roles.integrador}, verificador ${roles.verificador}`);
+// Redactor (2026-10-02): nunca el verificador. Puede ser el integrador; si es
+// otro, sale del pool y los prompts literales ("siete") dejan de cuadrar.
+if (roles.redactor !== null && roles.redactor === roles.verificador) {
+  fallos.push(`${RUTA_ROLES}: redactor y verificador por defecto son el mismo proveedor ("${roles.redactor}").`);
+}
+if (roles.redactor !== null && roles.redactor !== roles.integrador) {
+  fallos.push(`${RUTA_ROLES}: el redactor por defecto ("${roles.redactor}") no es el integrador: sacaria un proveedor del pool de siete.`);
+}
+resumen.push(`roles por defecto: integrador ${roles.integrador}, verificador ${roles.verificador}, redactor ${roles.redactor}`);
 
 if (fallos.length > 0) {
   console.error("[guard:specs] FALLO:");

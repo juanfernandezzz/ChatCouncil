@@ -15,8 +15,20 @@ import { SUBCARPETA_RESPUESTAS } from "@chatcouncil/analysis";
 const escapar = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-// Bloques y fragmentos de HTML del Markdown pasan por `html()`: salen como texto.
-const marked = new Marked({ renderer: { html: ({ text }) => escapar(text) } });
+/**
+ * `breaks: true` — MEDIDO el 2026-10-04: sin él, el PDF perdía la estructura de
+ * líneas del `.md`. Markdown junta en un párrafo las líneas separadas por un
+ * solo salto, y el informe las usa como líneas sueltas a propósito: los siete
+ * operadores de "Participacion de operadores" salían en un bloque corrido
+ * ("ChatGPT — ok: 37 hallazgos Gemini — ok: 37 hallazgos …"), las tres líneas
+ * de cada hallazgo (código, quién lo registró, qué respuestas lo sostienen) se
+ * pegaban en una, y la línea "Fuente: <URL> — responde 200" de cada ítem del
+ * verificador se pegaba al final de su descripción. Con `breaks` el PDF
+ * reproduce el `.md` línea por línea, que es lo que el PDF tiene que hacer.
+ *
+ * Bloques y fragmentos de HTML del Markdown pasan por `html()`: salen como texto.
+ */
+const marked = new Marked({ breaks: true, renderer: { html: ({ text }) => escapar(text) } });
 
 const PLANTILLA = `<!DOCTYPE html>
 <html lang="es">
@@ -24,8 +36,23 @@ const PLANTILLA = `<!DOCTYPE html>
 <meta charset="utf-8">
 <title>{{TITULO}}</title>
 <style>
+  /* overflow-wrap — MEDIDO el 2026-10-04: sin esto, un trozo de texto sin
+     ningun punto de corte y mas ancho que la caja se DESBORDA, y Chromium lo
+     RECORTA en el borde de la pagina, EN SILENCIO. Medido sobre una respuesta
+     de investigador: 240 caracteres seguidos sin espacio salian 116 en el PDF
+     (124 perdidos), y una linea de 167 caracteres dentro de un bloque de
+     codigo salia 148. Es perdida de dato de investigacion, no un problema
+     estetico. Se hereda: cubre p, li, td, th, blockquote y code de una vez.
+
+     "break-word" y no "anywhere", medido con las dos: "anywhere" tambien
+     achica el ancho minimo de una celda, y con eso partio palabras cortas de
+     una tabla a la mitad ("Sancion" en "Sanci"/"on", "permanente" en
+     "permane"/"nte") — quedan ilegibles y no se pueden buscar en el PDF.
+     Con "break-word" los dos trozos largos salen enteros y las celdas de la
+     tabla ancha quedan completas: cero palabras ausentes en las tres medidas. */
   body { font-family: Georgia, "Times New Roman", serif; font-size: 11pt;
-         line-height: 1.55; color: #1a1a1a; margin: 0; }
+         line-height: 1.55; color: #1a1a1a; margin: 0;
+         overflow-wrap: break-word; }
   h1 { font-size: 20pt; margin: 0 0 0.3em 0; padding-bottom: 0.3em;
        border-bottom: 2px solid #1a1a1a; }
   h2 { font-size: 14pt; margin: 1.6em 0 0.5em 0; padding-bottom: 0.2em;
@@ -43,6 +70,12 @@ const PLANTILLA = `<!DOCTYPE html>
   th { background: #eee; }
   code { font-family: Consolas, "Courier New", monospace; font-size: 9.5pt;
          background: #f0f0f0; padding: 0 2px; }
+  /* pre no tenia estilo: con el white-space:pre del navegador, una linea
+     larga de un bloque de codigo —una plantilla, una tabla en texto— se sale
+     de la pagina y se recorta. pre-wrap la parte en vez de perderla. */
+  pre { white-space: pre-wrap; margin: 0.4em 0 1em 0; padding: 0.5em 0.7em;
+        background: #f0f0f0; border-left: 3px solid #ddd; }
+  pre code { background: none; padding: 0; }
   ul, ol { margin: 0 0 0.8em 1.2em; padding: 0; }
   li { margin-bottom: 0.3em; }
 </style>

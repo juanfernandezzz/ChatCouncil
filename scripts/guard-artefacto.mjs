@@ -82,6 +82,19 @@ const EXIGIDO = {
     // informe final" fallando en la mano de Juan.
     "Respuestas de los investigadores",
     "Carpeta del informe:",
+    // Fidelidad del PDF (2026-10-04, MEDIDO). Los tres arreglan perdida de
+    // contenido o de estructura al convertir el .md, y los tres son faciles de
+    // borrar sin que nada falle:
+    //  · "breaks: true" — sin el, Markdown junta en un parrafo las lineas que
+    //    el informe usa sueltas: los siete operadores salian en un bloque
+    //    corrido y la linea "Fuente: <URL>" se pegaba a su descripcion.
+    //  · overflow-wrap / white-space — sin ellos, un trozo de texto sin punto
+    //    de corte se DESBORDA y Chromium lo RECORTA: medido, 240 caracteres
+    //    seguidos salian 116 en el PDF, y 167 dentro de un bloque de codigo
+    //    salian 148.
+    "breaks: true",
+    "overflow-wrap: break-word",
+    "white-space: pre-wrap",
     "persist:",
     "--cc-test",
     "--cc-probe",

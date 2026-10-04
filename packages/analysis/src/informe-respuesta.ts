@@ -18,6 +18,7 @@
  * carpeta se leería como "este proveedor no participó".
  */
 
+import { nombreProveedor } from "./nombre-proveedor";
 import { limpiarTituloParaArchivo } from "./titulo-informe";
 
 /** Nombre literal de la subcarpeta, dentro de la carpeta del informe. */
@@ -52,7 +53,7 @@ const SIN_TEXTO = "No se capturo texto de esta respuesta.";
 export function markdownDeRespuestaInvestigador(pregunta: string, r: RespuestaParaPdf): string {
   const cuerpo = r.textoOriginal.trim();
   return [
-    `# ${r.proveedorId}`,
+    `# ${nombreProveedor(r.proveedorId)}`,
     "",
     `**Etiqueta de modelo:** ${r.etiquetaModelo ?? "(no observada)"}`,
     `**Leida:** ${r.leidaEn}`,
@@ -86,6 +87,6 @@ export function markdownDeRespuestaInvestigador(pregunta: string, r: RespuestaPa
  * informe.
  */
 export function nombreArchivoRespuesta(indiceEnPool: number, proveedorId: string): string {
-  const limpio = limpiarTituloParaArchivo(proveedorId);
+  const limpio = limpiarTituloParaArchivo(nombreProveedor(proveedorId));
   return `${indiceEnPool + 1} - ${limpio.length > 0 ? limpio : "proveedor"}`;
 }

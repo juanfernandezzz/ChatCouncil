@@ -16,6 +16,7 @@
  * resto de `packages/analysis`.
  */
 
+import { nombreProveedor } from "./nombre-proveedor";
 import { ENCABEZADO_RESCATE, extraerSeccionRescate, extraerTituloDelInforme } from "./titulo-informe";
 
 export interface HallazgoResuelto {
@@ -160,9 +161,9 @@ function marcarReferencias(texto: string, existentes: ReadonlySet<string>): stri
 }
 
 function entradaHallazgo(h: HallazgoResuelto): string {
-  const lineas = [`**${h.codigo}** — ${h.categoria}${h.eje !== null ? ` · ${h.eje}` : ""}`, `Registrado por: ${h.operadorReal}`];
+  const lineas = [`**${h.codigo}** — ${h.categoria}${h.eje !== null ? ` · ${h.eje}` : ""}`, `Registrado por: ${nombreProveedor(h.operadorReal)}`];
   if (h.respuestasReales.length > 0) {
-    lineas.push(`Respuestas que lo sostienen: ${h.respuestasReales.join(", ")}`);
+    lineas.push(`Respuestas que lo sostienen: ${h.respuestasReales.map(nombreProveedor).join(", ")}`);
   }
   lineas.push(`> ${h.descripcion}`);
   return lineas.join("\n");
@@ -170,11 +171,11 @@ function entradaHallazgo(h: HallazgoResuelto): string {
 
 function filaCondicion(c: CondicionProveedor): string {
   const etiqueta = c.etiquetaModelo ?? "(no observada)";
-  return `| ${c.proveedorId} | ${etiqueta} | ${c.caracteresRespuesta} | ${c.fuentesCitadas} |`;
+  return `| ${nombreProveedor(c.proveedorId)} | ${etiqueta} | ${c.caracteresRespuesta} | ${c.fuentesCitadas} |`;
 }
 
 function entradaParticipacion(p: ParticipacionOperador): string {
-  return `**${p.operadorId}** — ${p.estado}: ${p.detalle}`;
+  return `**${nombreProveedor(p.operadorId)}** —${p.estado}: ${p.detalle}`;
 }
 
 const SIN_INFORME_INTEGRADOR = "No se capturo informe del integrador para esta ronda.";
@@ -227,7 +228,7 @@ export function armarInformeFinal(input: InformeFinalInput): string {
       ? [
           ENCABEZADO_REDACCION,
           "",
-          `Aporte de un solo modelo (${input.redaccion.redactorId}), basado en el análisis que sigue. No es un resultado del consejo.`,
+          `Aporte de un solo modelo (${nombreProveedor(input.redaccion.redactorId)}), basado en el análisis que sigue. No es un resultado del consejo.`,
           "",
           ...input.redaccion.controles,
           "",
@@ -270,10 +271,10 @@ export function armarInformeFinal(input: InformeFinalInput): string {
     `Conversación: ${input.conversacionId}`,
     `Ronda: ${input.rondaId}`,
     "",
-    `Integrador de esta ronda: ${input.integrador ?? "(no registrado)"}`,
+    `Integrador de esta ronda: ${input.integrador ? nombreProveedor(input.integrador) : "(no registrado)"}`,
     "",
     ...(input.proveedoresCargadosIncompletos
-      ? ["Proveedores cargados en esta ronda:", ...input.proveedoresCargadosIncompletos.map((p) => `- ${p}`), ""]
+      ? ["Proveedores cargados en esta ronda:", ...input.proveedoresCargadosIncompletos.map((p) => `- ${nombreProveedor(p)}`), ""]
       : []),
     `**Integridad de entrega:** ${input.integridadEntrega}`,
     `**Semilla de la ronda:** ${input.semilla}`,

@@ -1,3 +1,4 @@
+import { nombreProveedor } from "@chatcouncil/analysis";
 /**
  * renderer/main.ts — el compositor del consejo.
  *
@@ -152,7 +153,7 @@ function pintarPaneles(): void {
   for (const [id, e] of estadoPanel) {
     const chip = document.createElement("span");
     chip.className = `chip ${e.clase}`.trim();
-    chip.textContent = `${id} · ${e.texto}`;
+    chip.textContent = `${nombreProveedor(id)} · ${e.texto}`;
     paneles.appendChild(chip);
   }
 }
@@ -209,7 +210,7 @@ async function pegarPreguntaEnTodos(prompt: string): Promise<void> {
   }
   pintarPaneles();
   const detalle = rs
-    .map((r) => (r.ok ? `  ${r.id}: pegado${r.modelLabel ? ` · ${r.modelLabel}` : ""}` : `  ${r.id}: ${r.error ?? "falló"}`))
+    .map((r) => (r.ok ? `  ${nombreProveedor(r.id)}: pegado${r.modelLabel ? ` · ${r.modelLabel}` : ""}` : `  ${nombreProveedor(r.id)}: ${r.error ?? "falló"}`))
     .join("\n");
   decir(
     `${bien.length} de ${rs.length} recibieron la pregunta pegada (sin enviar).\n${detalle}`,
@@ -253,7 +254,7 @@ function pegarPreguntaAqui(): void {
   void window.cc.pegarPreguntaAqui(prompt).then((r) => {
     marcar(r.id, r.ok ? `pegado${r.modelLabel ? ` · ${r.modelLabel}` : ""}` : r.error ?? "falló", r.ok ? "ok" : "mal");
     pintarPaneles();
-    decir(r.ok ? `${r.id}: pegado${r.modelLabel ? ` · ${r.modelLabel}` : ""}` : `${r.id}: ${r.error ?? "falló"}`, r.ok ? "ok" : "mal");
+    decir(r.ok ? `${nombreProveedor(r.id)}: pegado${r.modelLabel ? ` · ${r.modelLabel}` : ""}` : `${nombreProveedor(r.id)}: ${r.error ?? "falló"}`, r.ok ? "ok" : "mal");
   });
 }
 
@@ -271,7 +272,7 @@ $("capturar-todos").addEventListener("click", () => {
     }
     pintarPaneles();
     const detalle = ls
-      .map((l) => (l.error ? `  ${l.id}: ${l.error}` : `  ${l.id}: ${l.text.length} caracteres${estadoLectura(l)}`))
+      .map((l) => (l.error ? `  ${nombreProveedor(l.id)}: ${l.error}` : `  ${nombreProveedor(l.id)}: ${l.text.length} caracteres${estadoLectura(l)}`))
       .join("\n");
     // Aviso de la cobertura del riesgo de "sin historial": lo calcula el
     // proceso principal (`avisoPromptsDeCaptura`), que conoce la etapa de la
@@ -295,7 +296,7 @@ function capturarUno(): void {
     if (l.error) marcar(l.id, l.error, "mal");
     else marcar(l.id, `${l.text.length} car.${estadoLectura(l)}`, l.text.length > 0 ? "ok" : "");
     pintarPaneles();
-    decir(l.error ? `${l.id}: ${l.error}` : `${l.id}: ${l.text.length} caracteres${estadoLectura(l)}`, l.error ? "mal" : "ok");
+    decir(l.error ? `${nombreProveedor(l.id)}: ${l.error}` : `${nombreProveedor(l.id)}: ${l.text.length} caracteres${estadoLectura(l)}`, l.error ? "mal" : "ok");
   });
 }
 
@@ -323,10 +324,10 @@ function detenerSondeoProgreso(): void {
 
 function detalleConsolidarPanel(p: ResultadoConsolidarPanel): string {
   return p.interrumpido
-    ? `  ${p.operadorId}: interrumpido — ${p.error ?? ""}`
+    ? `  ${nombreProveedor(p.operadorId)}: interrumpido — ${p.error ?? ""}`
     : p.ok
-      ? `  ${p.operadorId}: listo, integridad ${p.estadoIntegridad} (${p.marcasPresentes}/${p.marcasEsperadas} marcas)`
-      : `  ${p.operadorId}: ${p.error ?? "falló"}`;
+      ? `  ${nombreProveedor(p.operadorId)}: listo, integridad ${p.estadoIntegridad} (${p.marcasPresentes}/${p.marcasEsperadas} marcas)`
+      : `  ${nombreProveedor(p.operadorId)}: ${p.error ?? "falló"}`;
 }
 
 export function pegarOperacionEnTodos(boton: HTMLButtonElement): void {
@@ -478,8 +479,8 @@ function pegarRol(rol: string, pegar: () => Promise<ResultadoIntegrador>): void 
       : "";
     decir(
       r.ok
-        ? `${id}: listo, entrega ${r.entregaExacta ? "exacta" : "CON DIFERENCIAS"} (${r.caracteresPresentes}/${r.caracteresEscritos} caracteres)${etiquetaEtapa(r.etapa)}${avisoNav}${archivo}`
-        : `${id}: ${r.error ?? "falló"}${etiquetaEtapa(r.etapa)}`,
+        ? `${nombreProveedor(id)}: listo, entrega ${r.entregaExacta ? "exacta" : "CON DIFERENCIAS"} (${r.caracteresPresentes}/${r.caracteresEscritos} caracteres)${etiquetaEtapa(r.etapa)}${avisoNav}${archivo}`
+        : `${nombreProveedor(id)}: ${r.error ?? "falló"}${etiquetaEtapa(r.etapa)}`,
       r.ok && r.entregaExacta && r.navegacionesIntactas ? "ok" : "mal",
     );
   });
@@ -493,7 +494,7 @@ $("sesiones").addEventListener("click", () => {
     for (const s of ss) marcar(s.id, `${s.cookies} cookies`, s.cookies > 0 ? "ok" : "mal");
     pintarPaneles();
     const detalle = ss
-      .map((s) => `  ${s.id}: ${s.cookies} cookies${s.cookies === 0 ? "  ← sin sesión, inicia sesión en su panel" : ""}`)
+      .map((s) => `  ${nombreProveedor(s.id)}: ${s.cookies} cookies${s.cookies === 0 ? "  ← sin sesión, inicia sesión en su panel" : ""}`)
       .join("\n");
     decir(`Sesiones persistentes:\n${detalle}`, ss.every((s) => s.cookies > 0) ? "ok" : undefined);
   });

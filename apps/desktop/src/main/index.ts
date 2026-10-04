@@ -51,6 +51,7 @@ import {
   textoDeLaSalidaVerificador,
   markdownDeRespuestaInvestigador,
   nombreArchivoRespuesta,
+  nombreProveedor,
   nombreBaseDeInforme,
   nombreLibreDeInforme,
   type TablaHallazgos,
@@ -939,7 +940,7 @@ async function pegarPreguntaAqui(prompt: string): Promise<ResultadoEnvio> {
     return { id: "(ninguno)", ok: false, error: "no hay ningún panel visible" };
   }
   if (objetivo.id === INTEGRADOR_ID || objetivo.id === VERIFICADOR_ID || objetivo.id === REDACTOR_ID) {
-    return { id: objetivo.id, ok: false, error: `${objetivo.id} no recibe la pregunta: no es investigador de la Parte 1` };
+    return { id: objetivo.id, ok: false, error: `${nombreProveedor(objetivo.id)} no recibe la pregunta: no es investigador de la Parte 1` };
   }
   const [resultado] = await difundir(prompt, [objetivo.id as ProviderId]);
   return resultado ?? { id: objetivo.id, ok: false, error: "difundir() no devolvió resultado" };
@@ -1220,7 +1221,7 @@ async function capturarPanelActual(): Promise<ResultadoCapturarUno> {
   }
   const v = vistas.find((x) => x.id === objetivo.id);
   if (!v) {
-    return { ok: false, error: `el panel "${objetivo.id}" no tiene spec de investigador: no se puede capturar` };
+    return { ok: false, error: `el panel "${nombreProveedor(objetivo.id)}" no tiene spec de investigador: no se puede capturar` };
   }
   const lectura = await leerUno(v);
   registrarRespuestasDeRondaActual([lectura]);
@@ -1914,7 +1915,7 @@ async function completarInformeEnIframe(
       /* frame destruido o sin acceso: se prueba el siguiente */
     }
   }
-  return { ...lectura, error: `el informe de ${v.id} está en un iframe (${cfg.frameUrl}) que no se pudo leer: la burbuja sola no es la respuesta` };
+  return { ...lectura, error: `el informe de ${nombreProveedor(v.id)} está en un iframe (${cfg.frameUrl}) que no se pudo leer: la burbuja sola no es la respuesta` };
 }
 
 /**
@@ -3024,7 +3025,7 @@ async function modoPruebaEnvioJS(): Promise<void> {
       emitir("CC_PRUEBA_ENVIO_JS_JSON", {
         id: v.id,
         ok: false,
-        error: `destino incorrecto: la vista de "${v.id}" está en "${origenReal}", se esperaba "${origenEsperado}". No se escribió ni se envió nada.`,
+        error: `destino incorrecto: la vista de "${nombreProveedor(v.id)}" está en "${origenReal}", se esperaba "${origenEsperado}". No se escribió ni se envió nada.`,
       });
       return;
     }
@@ -3564,17 +3565,6 @@ async function escribirYVerificarOperacion(
   }
 }
 
-/** Objetivo 3 — nombres de panel en la ventana de progreso, en este orden y con esta escritura. */
-const NOMBRE_PANEL: Record<string, string> = {
-  chatgpt: "ChatGPT",
-  gemini: "Gemini",
-  claude: "Claude",
-  grok: "Grok",
-  mistral: "Mistral",
-  glm: "GLM",
-  kimi: "Kimi",
-  qwen: "Qwen",
-};
 
 interface EstadoProgreso {
   inicio: number;
@@ -3652,7 +3642,7 @@ async function pegarOperacionEnTodos(): Promise<ResultadoConsolidar> {
   const progreso: EstadoProgreso = {
     inicio: Date.now(),
     actual: null,
-    paneles: POOL_OPERADORES.map((id) => ({ id, nombre: NOMBRE_PANEL[id] ?? id, estado: "pendiente" })),
+    paneles: POOL_OPERADORES.map((id) => ({ id, nombre: nombreProveedor(id), estado: "pendiente" })),
     duraciones: [],
     terminado: false,
   };
@@ -3803,7 +3793,7 @@ async function pegarOperacionAqui(): Promise<ResultadoConsolidarUno> {
     return { ok: false, error: "no hay ningún panel visible" };
   }
   if (!(POOL_OPERADORES as readonly string[]).includes(objetivo.id)) {
-    return { ok: false, error: `el panel al frente ("${objetivo.id}") no es un operador del pool: no tiene cuerpo que consolidar` };
+    return { ok: false, error: `el panel al frente ("${nombreProveedor(objetivo.id)}") no es un operador del pool: no tiene cuerpo que consolidar` };
   }
 
   let resultadoArmado;
@@ -3814,7 +3804,7 @@ async function pegarOperacionAqui(): Promise<ResultadoConsolidarUno> {
   }
   const cuerpoOperador = resultadoArmado.cuerpos.find((c) => c.operadorId === objetivo.id);
   if (!cuerpoOperador) {
-    return { ok: false, error: `no se encontró el cuerpo de "${objetivo.id}" entre los del pool` };
+    return { ok: false, error: `no se encontró el cuerpo de "${nombreProveedor(objetivo.id)}" entre los del pool` };
   }
 
   const { texto: textoAEscribir, marcas: marcasDeEsteOperador } = armarPromptDeOperacionConMarcas(
@@ -3843,7 +3833,7 @@ async function pegarOperacionConArchivoAqui(): Promise<ResultadoConsolidarUno & 
   const objetivo = vistaConIdEnFrente();
   if (!objetivo) return { ok: false, error: "no hay ningún panel visible" };
   if (!(POOL_OPERADORES as readonly string[]).includes(objetivo.id)) {
-    return { ok: false, error: `el panel al frente ("${objetivo.id}") no es un operador del pool: no tiene cuerpo que consolidar` };
+    return { ok: false, error: `el panel al frente ("${nombreProveedor(objetivo.id)}") no es un operador del pool: no tiene cuerpo que consolidar` };
   }
 
   let resultadoArmado;
@@ -3855,7 +3845,7 @@ async function pegarOperacionConArchivoAqui(): Promise<ResultadoConsolidarUno & 
   const cuerpoOperador = resultadoArmado.cuerpos.find((c) => c.operadorId === objetivo.id);
   const codigo = resultadoArmado.sello.find((s) => s.panelSourceId === objetivo.id)?.codigoEstable;
   if (!cuerpoOperador || !codigo) {
-    return { ok: false, error: `no se encontró el cuerpo de "${objetivo.id}" entre los del pool` };
+    return { ok: false, error: `no se encontró el cuerpo de "${nombreProveedor(objetivo.id)}" entre los del pool` };
   }
 
   const { prompt, cuerpoArchivo, nombreArchivo } = armarOperacionConArchivo(pregunta, cuerpoOperador, codigo, new Date());
@@ -4148,7 +4138,7 @@ async function recapturarRol(rol: RolRecapturable): Promise<{ ok: boolean; mensa
   if (aviso !== null) return { ok: false, mensaje: aviso };
   const rolId = rol === "integrador" ? INTEGRADOR_ID : VERIFICADOR_ID;
   const v = await cargarPanelDeRol(rolId);
-  if (!v) return { ok: false, mensaje: `el ${rol} (${rolId}) no está entre los proveedores cargados` };
+  if (!v) return { ok: false, mensaje: `el ${rol} (${nombreProveedor(rolId)}) no está entre los proveedores cargados` };
   desplazarA(todas().findIndex((x) => x.id === v.id) * anchoPanel());
   const [l] = marcarLecturasVacias([await alFrente(v, () => leerUno(v))]);
   if (l!.error) {
@@ -4854,7 +4844,7 @@ async function armarInformeFinalDeRondaActiva(): Promise<{ ok: boolean; mensaje:
     if (!r) return null;
     return {
       nombreArchivo: nombreArchivoRespuesta(i, proveedorId),
-      titulo: `${proveedorId} — respuesta de investigador`,
+      titulo: `${nombreProveedor(proveedorId)} — respuesta de investigador`,
       markdown: markdownDeRespuestaInvestigador(pregunta, {
         proveedorId,
         etiquetaModelo: r.procedencia.modelLabel,

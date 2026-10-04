@@ -42,6 +42,7 @@ import {
   textoDelInformeIntegrador,
   textoDeLaSalidaVerificador,
   hashSemilla,
+  nombreProveedor,
   parsearHallazgos,
   parsearReferenciasIntegrador,
   parsearVerificacion,
@@ -98,7 +99,7 @@ export function copiarOperacionDeRondaAnterior(
   operadorId: string,
   poolOperadores: readonly string[],
 ): { ok: boolean; mensaje: string } {
-  if (!poolOperadores.includes(operadorId)) return { ok: false, mensaje: `"${operadorId}" no es un operador del pool.` };
+  if (!poolOperadores.includes(operadorId)) return { ok: false, mensaje: `"${nombreProveedor(operadorId)}" no es un operador del pool.` };
   const sello = hechos.filter((h): h is Sello => h.tipo === "sello" && h.rondaId === rondaId);
   if (sello.length === 0) return { ok: false, mensaje: 'Esta ronda todavía no tiene sello: pega primero la operación en algún panel ("Pegar operación en este panel").' };
   const vigentes = new Map<string, Respuesta>();
@@ -106,19 +107,19 @@ export function copiarOperacionDeRondaAnterior(
   const leidas = poolOperadores.filter((id) => id !== operadorId);
   const cambiadas = leidas.filter((id) => !vigentes.get(id)?.copiadaDe);
   if (cambiadas.length > 0) {
-    return { ok: false, mensaje: `No se puede reutilizar: ${operadorId} lee respuestas que cambiaron en esta ronda (${cambiadas.join(", ")}). Tiene que operar de nuevo.` };
+    return { ok: false, mensaje: `No se puede reutilizar: ${nombreProveedor(operadorId)} lee respuestas que cambiaron en esta ronda (${cambiadas.map(nombreProveedor).join(", ")}). Tiene que operar de nuevo.` };
   }
   const origenes = new Set(leidas.map((id) => vigentes.get(id)!.copiadaDe!.rondaId));
   if (origenes.size !== 1) return { ok: false, mensaje: `Las respuestas copiadas vienen de ${origenes.size} rondas distintas: no hay una operación anterior equivalente.` };
   const origen = [...origenes][0]!;
   const vieja = hechos.filter((h): h is SalidaOperador => h.tipo === "salida-operador" && h.rondaId === origen && h.operadorId === operadorId).pop();
-  if (!vieja) return { ok: false, mensaje: `No hay una operación de ${operadorId} en la ronda ${origen.slice(0, 8)}.` };
+  if (!vieja) return { ok: false, mensaje: `No hay una operación de ${nombreProveedor(operadorId)} en la ronda ${origen.slice(0, 8)}.` };
   const r = procesarSalidaOperador(userData, conversacionId, rondaId, operadorId, vieja.promptCompleto, vieja.salidaCruda, vieja.html ?? null,
     etiquetasValidasDelOperador(operadorId, poolOperadores, sello), { rondaId: origen, salidaOperadorId: vieja.id });
   const invalidas = r.hallazgos.filter((h) => h.etiquetaInvalida).length;
   return {
     ok: true,
-    mensaje: `${operadorId}: se reutilizó su operación de la ronda ${origen.slice(0, 8)} (${r.hallazgos.length} hallazgos${invalidas > 0 ? `, ${invalidas} con etiqueta inválida` : ""}). No hace falta pegarle la operación de nuevo.`,
+    mensaje: `${nombreProveedor(operadorId)}: se reutilizó su operación de la ronda ${origen.slice(0, 8)} (${r.hallazgos.length} hallazgos${invalidas > 0 ? `, ${invalidas} con etiqueta inválida` : ""}). No hace falta pegarle la operación de nuevo.`,
   };
 }
 
@@ -205,7 +206,7 @@ export function registrarRecaptura(
   }
   return {
     ok: true,
-    mensaje: `${lectura.id}: ${rol} recapturado, ${lectura.text.length} caracteres (${previos.length + 1} en el registro; se usa el último)`,
+    mensaje: `${nombreProveedor(lectura.id)}: ${rol} recapturado, ${lectura.text.length} caracteres (${previos.length + 1} en el registro; se usa el último)`,
   };
 }
 
@@ -554,7 +555,7 @@ export function puedeEscribirPromptIntegrador(
   rol = "integrador",
 ): GuardaEnvioIntegrador {
   if (destinoId !== integradorId) {
-    return { puede: false, motivo: `el destino "${destinoId}" no es el ${rol} ("${integradorId}")` };
+    return { puede: false, motivo: `el destino "${nombreProveedor(destinoId)}" no es el ${rol} ("${nombreProveedor(integradorId)}")` };
   }
   if (compositorActual.trim().length > 0) {
     return { puede: false, motivo: `el compositor del ${rol} no esta vacio: escribir encima lo perderia sin aviso` };

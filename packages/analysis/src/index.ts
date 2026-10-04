@@ -30,6 +30,7 @@ export * from "./build-analyst-prompt";
 export * from "./cuerpo-operador";
 export * from "./informe-final";
 export * from "./informe-respuesta";
+export * from "./nombre-proveedor";
 export * from "./parsear-hallazgos";
 export * from "./parsear-referencias-integrador";
 export * from "./parsear-verificacion";

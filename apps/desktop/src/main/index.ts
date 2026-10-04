@@ -4747,8 +4747,31 @@ async function modoSesion(): Promise<void> {
  * integrador lo arma igual, y esas faltas quedan nombradas en el informe
  * ("fallo: no se capturo salida", "No se capturo informe del integrador").
  * Nunca sobrescribe un informe anterior: si el nombre existe, agrega la hora.
+ *
+ * El `try` de abajo NO es decorativo (2026-10-04). El camino tiene al menos
+ * cuatro puntos que TIRAN, y ninguno estaba atajado: `armarTablaHallazgos`
+ * tira si un hallazgo ya persistido es de un proveedor que ya no esta en el
+ * pool —pasa con sólo cambiar el integrador, el verificador o el redactor en
+ * "Proveedores al iniciar…" entre pegar la operacion y armar el informe, que
+ * es cuando el pool se achica—, `nombreLibreDeInforme` tira a los 999
+ * homonimos, y `mkdirSync`/`writeFileSync` tiran por permisos, disco lleno o
+ * ruta demasiado larga. `ipcMain.handle` convierte un throw en una promesa
+ * rechazada, y el renderer la consumia con `.then()` sin `.catch`: la barra
+ * quedaba en "Armando el informe final…" para siempre, sin decir nada. Ahora
+ * el fallo sale como mensaje, con el motivo.
  */
 async function armarInformeFinalDeRondaActiva(): Promise<{ ok: boolean; mensaje: string; ruta?: string }> {
+  try {
+    return await armarInformeFinalDeRondaActivaOTirar();
+  } catch (e) {
+    return {
+      ok: false,
+      mensaje: `No se pudo armar el informe final: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+}
+
+async function armarInformeFinalDeRondaActivaOTirar(): Promise<{ ok: boolean; mensaje: string; ruta?: string }> {
   const sinRonda = { ok: false, mensaje: "No hay una ronda activa para armar el informe." };
   if (!conversacionActual || !rondaActualId) return sinRonda;
   const userData = app.getPath("userData");

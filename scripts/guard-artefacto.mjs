@@ -95,6 +95,12 @@ const EXIGIDO = {
     "breaks: true",
     "overflow-wrap: break-word",
     "white-space: pre-wrap",
+    // "Armar informe final" tenia cuatro puntos que TIRAN y ninguno atajado:
+    // `ipcMain.handle` convierte el throw en una promesa rechazada y el
+    // renderer la consumia sin `.catch`, asi que la barra quedaba en "Armando
+    // el informe final…" para siempre, sin decir nada. Sin este literal, el
+    // try/catch se puede borrar y nada falla en rojo.
+    "No se pudo armar el informe final:",
     "persist:",
     "--cc-test",
     "--cc-probe",

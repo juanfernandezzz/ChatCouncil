@@ -450,7 +450,15 @@ window.cc.alMenu((accion) => {
 /** Objetivo E — "Armar informe final": lo guarda en informes/ y abre la carpeta. */
 $("armar-informe-final").addEventListener("click", () => {
   decir("Armando el informe final…");
-  void window.cc.armarInformeFinal().then((r) => decir(r.mensaje, r.ok ? "ok" : "mal"));
+  // El `.catch` es la red de abajo: el proceso principal ya atrapa lo que
+  // puede fallar al armar, pero un fallo del canal IPC en si (la ventana se
+  // cierra, el proceso principal se cae) tambien rechaza esta promesa — y sin
+  // `.catch` la barra se quedaba en "Armando el informe final…" sin decir
+  // nada, que es indistinguible de "sigue trabajando".
+  void window.cc
+    .armarInformeFinal()
+    .then((r) => decir(r.mensaje, r.ok ? "ok" : "mal"))
+    .catch((e: unknown) => decir(`No se pudo armar el informe final: ${e instanceof Error ? e.message : String(e)}`, "mal"));
 });
 
 /**

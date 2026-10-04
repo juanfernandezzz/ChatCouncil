@@ -36,8 +36,8 @@ LOS HALLAZGOS QUE EL ANÁLISIS CITA:
 
 SECCIÓN 1 — VERIFICACIÓN
 Para cada contradicción o afirmación de datos que el análisis señala como importante, busca la fuente primaria y decide una de tres:
-VERIFICADO: la fuente confirma la afirmación. Pon la URL y la cita textual entre comillas.
-CONTRADICHO: la fuente dice algo distinto. Pon la URL, la cita textual, y qué dice en realidad.
+VERIFICADO: una fuente primaria confirma la afirmación. Fuente primaria es el texto de la norma o del organismo que la dicta (por ejemplo bcn.cl, el Diario Oficial, fonasa.gob.cl, minsal.cl). Un blog, un estudio jurídico o un sitio comercial no es fuente primaria: si es lo único que encontraste, es NO_VERIFICADO y lo dices en el motivo. La cita va textual y entre comillas; si no puedes citar textual, no está verificado.
+CONTRADICHO: la fuente dice algo distinto, o confirma solo una parte. Pon la URL, la cita textual entre comillas y, después de la cita, qué dice en realidad o qué parte no se confirma.
 NO_VERIFICADO: no encontraste fuente primaria. Dilo, no inventes una.
 No traigas fuentes sobre temas nuevos en esta sección: aquí solo verificas lo que el análisis ya marcó. Máximo diez.
 Una línea por ítem, con este formato:
@@ -58,7 +58,14 @@ PREGUNTA|el texto de la pregunta
 TRES REGLAS
 No decidas quién tiene razón sobre las cosas que el análisis NO marcó: para eso está la sección 2, como aporte tuyo, no como veredicto.
 No uses el GDPR ni normas de otros países como si fueran la norma que se pregunta. Si las mencionas, aclara que son de otro país.
-Las URLs tienen que ser páginas reales que abriste. Una URL que no lleva a la fuente es peor que un NO_VERIFICADO.`;
+Las URLs tienen que ser páginas reales que abriste. Una URL que no lleva a la fuente es peor que un NO_VERIFICADO.
+
+FORMATO DE SALIDA — OBLIGATORIO
+Tu respuesta la procesa un programa. Solo se leen las líneas que empiezan con VERIFICADO|, CONTRADICHO|, NO_VERIFICADO|, PUNTO_CIEGO| o PREGUNTA|; todo lo demás se pierde.
+- Cada ítem en su propia línea, empezando por la palabra clave en mayúsculas: sin viñetas, números, negritas ni texto delante.
+- Una sola URL por línea, en su campo. No agregues otras fuentes después de la cita.
+- Si una misma fuente cubre varios hallazgos, júntalos con /: VERIFICADO|H13/H118|https://...|"cita".
+- Nada de introducciones, resúmenes ni conclusiones fuera de esas líneas.`;
 
 /** Una línea por hallazgo: `H12|CONVERGENCIA|HECHOS|texto`. */
 function lineasDe(hallazgos: readonly HallazgoParaVerificador[]): string {

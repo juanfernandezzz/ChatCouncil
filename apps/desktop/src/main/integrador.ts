@@ -54,6 +54,7 @@ import {
   type VerificacionParaInforme,
 } from "@chatcouncil/analysis";
 
+import { TECHO_URLS_POR_RONDA } from "./comprobar-urls";
 import { escribirHallazgos, escribirInformeIntegrador, escribirSalidaOperador, escribirSalidaVerificador } from "./registro";
 
 /**
@@ -420,7 +421,7 @@ export function armarInformeFinalDeRonda(params: {
     proveedoresCargadosIncompletos: incompletos,
     integrador: params.informeIntegrador?.operadorId ?? params.integrador ?? null,
     verificacion: params.salidaVerificador
-      ? verificacionParaInforme(params.salidaVerificador, params.urlsComprobadas ?? [], hallazgosResueltos)
+      ? verificacionParaInforme(params.salidaVerificador, params.urlsComprobadas ?? [], hallazgosResueltos, TECHO_URLS_POR_RONDA)
       : null,
     redaccion: params.respuestaRedactor
       ? redaccionParaInforme(params.respuestaRedactor, idsValidos, params.citas.map((c) => c.url))
@@ -458,11 +459,33 @@ export function verificacionParaInforme(
   salida: SalidaVerificador,
   urls: readonly UrlComprobada[],
   hallazgos: readonly HallazgoResuelto[],
+  /** `TECHO_URLS_POR_RONDA`; entra como parámetro para no atar esta pieza al módulo que sale a la red. */
+  techoUrls?: number,
 ): VerificacionParaInforme {
   const descripcion = new Map(hallazgos.map((h) => [h.codigo, h.descripcion]));
   const comprobada = new Map(urls.filter((u) => u.salidaVerificadorId === salida.id).map((u) => [u.url, u]));
   const p = parsearVerificacion(textoDeLaSalidaVerificador(salida), [...descripcion.keys()]);
+
+  // "sin comprobar" colapsaba dos cosas distintas: el techo de URLs por ronda
+  // corto la lista, o la comprobacion no corrio en absoluto. Se dicen aparte.
+  const unicas = new Set(
+    p.correspondencias.filter((v) => v.correspondencia !== "NO_ENCONTRADA" && v.url !== null).map((v) => v.url as string),
+  ).size;
+  // El techo se nombra SOLO si de verdad se alcanzo. Con 2 URL citadas y 1
+  // comprobada, el techo de 20 no es la causa: decir que lo es seria el mismo
+  // sobre-reclamo que esta correccion existe para sacar.
+  const faltan = unicas - comprobada.size;
+  const avisoSinComprobar =
+    unicas === 0 || faltan <= 0
+      ? null
+      : comprobada.size === 0
+        ? `Ninguna de las ${unicas} URL de esta seccion se comprobo con codigo: las ${unicas} salen "sin comprobar".`
+        : techoUrls !== undefined && comprobada.size >= techoUrls
+          ? `El verificador cito ${unicas} URL distintas y la comprobacion mecanica tiene un techo de ${techoUrls} por ronda: se comprobaron ${comprobada.size} y ${otras(faltan)} "sin comprobar" POR EL TECHO, no por haber fallado.`
+          : `Se ${comprobada.size === 1 ? "comprobo 1" : `comprobaron ${comprobada.size}`} de las ${unicas} URL distintas de esta seccion; ${otras(faltan)} "sin comprobar" porque el registro no tiene una comprobacion para ${faltan === 1 ? "ella" : "ellas"}.`;
+
   return {
+    avisoSinComprobar,
     items: p.correspondencias.map((v) => {
       const u = v.url === null ? undefined : comprobada.get(v.url);
       return {
@@ -597,6 +620,11 @@ export function avisoPromptsDeCaptura(
   return distintos.size > 1
     ? `⚠ Los prompts de usuario capturados NO coinciden entre proveedores (${distintos.size} versiones distintas) — revisar antes de comparar respuestas.`
     : `Prompt de usuario: coincide en los ${conPrompt.length} proveedores donde se pudo leer.`;
+}
+
+/** "la otra sale" / "las otras 3 salen": las lee Juan, no un parser. */
+function otras(n: number): string {
+  return n === 1 ? "la otra sale" : `las otras ${n} salen`;
 }
 
 /** Sólo para que la corrida simulada pueda fabricar ids de hecho sin tocar el registro real. */

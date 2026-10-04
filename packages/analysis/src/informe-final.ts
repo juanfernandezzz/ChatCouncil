@@ -144,6 +144,17 @@ export interface VerificacionParaInforme {
   })[];
   puntosCiegos: readonly (TiposParaInforme & { descripcion: string; url: string | null })[];
   preguntas: readonly string[];
+  /**
+   * Por qué quedaron URLs en "sin comprobar", cuando quedaron. `null` = no
+   * quedó ninguna.
+   *
+   * AGREGADO (2026-10-04): "sin comprobar" colapsaba dos cosas distintas —el
+   * techo de 20 URLs por ronda cortó la lista, o la comprobación no corrió en
+   * absoluto— y quien lee el informe no podía distinguirlas. Medido con 30
+   * URLs únicas: 20 salían "responde 200" y 10 "sin comprobar", sin una
+   * palabra sobre el techo.
+   */
+  avisoSinComprobar?: string | null;
 }
 
 const ENCABEZADO_VERIFICACION =
@@ -181,6 +192,7 @@ function seccionesVerificacion(v: VerificacionParaInforme): string[] {
   return [
     ENCABEZADO_VERIFICACION,
     "",
+    ...(v.avisoSinComprobar ? [v.avisoSinComprobar, ""] : []),
     items.length > 0 ? items.join("\n\n") : "El verificador no registro lineas de correspondencia con la fuente.",
     "",
     ENCABEZADO_PUNTOS_CIEGOS,

@@ -119,6 +119,11 @@ const EXIGIDO = {
     "no se pudo escribir el .md (",
     "no se pudo generar el PDF (",
     "respuestas completas;",
+    // "sin comprobar" colapsaba dos cosas: el techo de 20 URLs por ronda corto
+    // la lista, o no hay comprobacion registrada para esas URLs. El aviso de la
+    // seccion de verificacion las separa, y solo nombra al techo si se alcanzo.
+    "POR EL TECHO, no por haber fallado",
+    "no tiene una comprobacion para",
     "persist:",
     "--cc-test",
     "--cc-probe",

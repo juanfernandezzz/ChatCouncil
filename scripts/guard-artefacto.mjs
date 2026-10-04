@@ -107,6 +107,11 @@ const EXIGIDO = {
     // filtro se puede borrar y el informe vuelve a mostrarlas sin que nada
     // falle en rojo.
     "marca(s) de integridad",
+    // El control de "salio a la red" del redactor compara los enlaces del html
+    // contra las URLs que el material de la ronda ya traia. Sin la comparacion,
+    // un enlace que el redactor copio del material se contaba como salida a la
+    // red: el archivo que recibe LLEVA las URLs de las siete respuestas.
+    "en el material de la ronda",
     "persist:",
     "--cc-test",
     "--cc-probe",

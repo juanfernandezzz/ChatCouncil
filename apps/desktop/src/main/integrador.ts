@@ -422,16 +422,24 @@ export function armarInformeFinalDeRonda(params: {
     verificacion: params.salidaVerificador
       ? verificacionParaInforme(params.salidaVerificador, params.urlsComprobadas ?? [], hallazgosResueltos)
       : null,
-    redaccion: params.respuestaRedactor ? redaccionParaInforme(params.respuestaRedactor, idsValidos) : null,
+    redaccion: params.respuestaRedactor
+      ? redaccionParaInforme(params.respuestaRedactor, idsValidos, params.citas.map((c) => c.url))
+      : null,
   });
 }
 
-/** Redactor: sus controles mecánicos y el texto a mostrar, para la sección que va primero en el informe. */
+/**
+ * Redactor: sus controles mecánicos y el texto a mostrar, para la sección que
+ * va primero en el informe. `urlsDelMaterial` son las URLs que el archivo que
+ * recibió ya traía (las `Cita` de las respuestas de la ronda): sin ellas, un
+ * enlace que el redactor copió del material se contaba como salida a la red.
+ */
 export function redaccionParaInforme(
   r: RespuestaRedactor,
   idsValidos: readonly string[],
+  urlsDelMaterial: readonly string[] = [],
 ): { redactorId: string; controles: string[]; cuerpo: string } {
-  const c = controlesRedaccion(r, idsValidos);
+  const c = controlesRedaccion(r, idsValidos, urlsDelMaterial);
   return { redactorId: r.redactorId, controles: lineasDeControl(c), cuerpo: c.cuerpo };
 }
 

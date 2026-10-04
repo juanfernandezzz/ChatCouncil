@@ -176,6 +176,50 @@ for (const l of lineas) {
 cerrar();
 if (vacias.length > 0) problemas.push("secciones vacias en el informe armado: " + JSON.stringify(vacias));
 
+/**
+ * Los tres casos en que el armado dejaba una seccion vacia o afirmaba algo
+ * falso, medidos antes de corregirlos:
+ *  · sin informe del integrador -> "Hallazgos referenciados" salia VACIA (259
+ *    hallazgos en la tabla, encabezado y nada debajo) y "Hallazgos no
+ *    referenciados" decia "El integrador referencio todos los hallazgos."
+ *  · tabla vacia -> las dos secciones de hallazgos vacias o mintiendo.
+ *  · sin respuestas -> tabla de condiciones con encabezado y cero filas.
+ */
+const base = {
+  pregunta: "p", fecha: "f", conversacionId: "c", rondaId: "r",
+  participacionOperadores: [{ operadorId: "gemini", estado: "ok", detalle: "1 hallazgos" }],
+  condiciones: [{ proveedorId: "claude", etiquetaModelo: null, caracteresRespuesta: 10, fuentesCitadas: 0, codigoEstable: "P3" }],
+  integridadEntrega: "x", semilla: "s",
+};
+const secciones = (t) => {
+  const out = {}; let k = null;
+  for (const l of t.split("\\n")) { if (/^## /.test(l)) { k = l; out[k] = []; } else if (k !== null) out[k].push(l); }
+  return out;
+};
+const casos = [
+  ["sin informe del integrador", { ...base, informeIntegradorCrudo: null, referenciasEnOrden: [], hallazgos }],
+  ["tabla de hallazgos vacia", { ...base, informeIntegradorCrudo: "TITULO: t\\nTexto [H1].", referenciasEnOrden: [{ codigo: "H1", existe: false }], hallazgos: [] }],
+  ["integrador que no referencia nada", { ...base, informeIntegradorCrudo: "TITULO: t\\nTexto sin referencias.", referenciasEnOrden: [], hallazgos }],
+  ["sin respuestas de investigador", { ...base, informeIntegradorCrudo: null, referenciasEnOrden: [], hallazgos, condiciones: [] }],
+];
+for (const [nombre, input] of casos) {
+  const t = armarInformeFinal(input);
+  const s = secciones(t);
+  for (const [enc, cuerpo] of Object.entries(s)) {
+    if (cuerpo.join("").trim().length === 0) problemas.push(\`caso "\${nombre}": la seccion \${JSON.stringify(enc)} quedo VACIA\`);
+  }
+  const noRef = (s["## Hallazgos no referenciados"] ?? []).join(" ");
+  if (input.informeIntegradorCrudo === null && /referencio todos los hallazgos/.test(noRef)) {
+    problemas.push(\`caso "\${nombre}": el informe afirma que el integrador referencio todos los hallazgos, y no hubo integrador\`);
+  }
+  if (input.hallazgos.length === 0 && /referencio todos los hallazgos/.test(noRef)) {
+    problemas.push(\`caso "\${nombre}": el informe afirma que el integrador referencio todos los hallazgos, y la tabla esta vacia\`);
+  }
+  if (input.condiciones.length === 0 && /\\|---\\|/.test(t)) {
+    problemas.push(\`caso "\${nombre}": se imprimio una tabla de condiciones sin ninguna fila\`);
+  }
+}
+
 if (problemas.length > 0) {
   console.error("PROBLEMAS:" + JSON.stringify(problemas));
   process.exit(1);

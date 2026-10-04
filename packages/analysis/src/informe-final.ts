@@ -267,15 +267,41 @@ export function armarInformeFinal(input: InformeFinalInput): string {
   const noReferenciados = input.hallazgos.filter((h) => !vistos.has(h.codigo));
   const limitaciones = input.hallazgos.filter((h) => h.categoria.startsWith("LIMITACION:"));
 
-  const seccionReferenciados = referenciados.map(entradaHallazgo).join("\n\n");
-  const seccionNoReferenciados =
-    noReferenciados.length > 0
+  // CORREGIDO (2026-10-04). Dos defectos de armado, medidos sobre el informe
+  // de una ronda sembrada con 259 hallazgos:
+  //  · "Hallazgos referenciados" salía VACÍA —encabezado y nada debajo— cada
+  //    vez que no había referencias que resolver (sin informe del integrador,
+  //    o con un informe que no citó ningún H## de la tabla). Es la única
+  //    sección que no tenía texto de reserva, así que un encabezado en blanco
+  //    no se distinguía de un defecto de armado.
+  //  · "El integrador referencio todos los hallazgos." se imprimía también
+  //    cuando NO HABÍA integrador y cuando la tabla estaba vacía: afirmaba
+  //    algo falso en los dos casos.
+  // Los tres estados se dicen por separado, nunca se colapsan.
+  const sinTabla = input.hallazgos.length === 0;
+  const sinIntegrador = cuerpoIntegrador === null;
+  const SIN_TABLA = "La tabla de hallazgos de esta ronda esta vacia: ningun operador dejo hallazgos parseables.";
+  const seccionReferenciados = sinTabla
+    ? SIN_TABLA
+    : referenciados.length > 0
+      ? referenciados.map(entradaHallazgo).join("\n\n")
+      : sinIntegrador
+        ? `${SIN_INFORME_INTEGRADOR} Sin informe no hay referencias que resolver: los ${input.hallazgos.length} hallazgos de la tabla estan completos en "Hallazgos no referenciados".`
+        : "El integrador no referencio ningun hallazgo de la tabla.";
+  const seccionNoReferenciados = sinTabla
+    ? SIN_TABLA
+    : noReferenciados.length > 0
       ? noReferenciados.map(entradaHallazgo).join("\n\n")
       : "El integrador referencio todos los hallazgos.";
-  const seccionLimitaciones =
-    limitaciones.length > 0 ? limitaciones.map(entradaHallazgo).join("\n\n") : "Ningun operador registro limitaciones.";
-  const tablaCondiciones = input.condiciones.map(filaCondicion).join("\n");
-  const seccionParticipacion = input.participacionOperadores.map(entradaParticipacion).join("\n");
+  const seccionLimitaciones = sinTabla
+    ? SIN_TABLA
+    : limitaciones.length > 0
+      ? limitaciones.map(entradaHallazgo).join("\n\n")
+      : "Ningun operador registro limitaciones.";
+  const seccionParticipacion =
+    input.participacionOperadores.length > 0
+      ? input.participacionOperadores.map(entradaParticipacion).join("\n")
+      : "No hay operadores registrados para esta ronda.";
 
   return [
     titulo === null ? "# Informe de ronda" : `# ${titulo}`,
@@ -320,12 +346,18 @@ export function armarInformeFinal(input: InformeFinalInput): string {
     "",
     "## Condiciones de la ronda",
     "",
-    "La columna Codigo es la clave de los [P#] que aparecen en el texto del",
-    "redactor y del integrador: es el codigo estable del sello de esta ronda.",
-    "",
-    "| Codigo | Proveedor | Etiqueta de modelo | Caracteres de su respuesta | Fuentes citadas |",
-    "|---|---|---|---|---|",
-    tablaCondiciones,
+    // Sin respuestas en el registro no se imprime una tabla con encabezado y
+    // ninguna fila: se dice que no hay con qué llenarla.
+    ...(input.condiciones.length === 0
+      ? ["No hay respuestas de investigador en el registro de esta ronda."]
+      : [
+          "La columna Codigo es la clave de los [P#] que aparecen en el texto del",
+          "redactor y del integrador: es el codigo estable del sello de esta ronda.",
+          "",
+          "| Codigo | Proveedor | Etiqueta de modelo | Caracteres de su respuesta | Fuentes citadas |",
+          "|---|---|---|---|---|",
+          input.condiciones.map(filaCondicion).join("\n"),
+        ]),
     "",
     `Conversación: ${input.conversacionId}`,
     `Ronda: ${input.rondaId}`,

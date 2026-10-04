@@ -394,11 +394,15 @@ export function armarInformeFinalDeRonda(params: {
   for (const c of params.citas) {
     citasPorRespuestaId.set(c.respuestaId, (citasPorRespuestaId.get(c.respuestaId) ?? 0) + 1);
   }
+  // El código estable sale del sello por proveedor: es la clave que resuelve
+  // los [P#] que el redactor y el integrador escriben en su prosa.
+  const codigoDeProveedor = new Map(params.sello.map((s) => [s.panelSourceId, s.codigoEstable]));
   const condiciones: CondicionProveedor[] = params.respuestasDelPool.map((r) => ({
     proveedorId: r.proveedorId,
     etiquetaModelo: r.procedencia.modelLabel,
     caracteresRespuesta: r.textoOriginal.length,
     fuentesCitadas: citasPorRespuestaId.get(r.id) ?? 0,
+    codigoEstable: codigoDeProveedor.get(r.proveedorId) ?? null,
   }));
 
   return armarInformeFinal({

@@ -32,6 +32,7 @@ import { execFileSync } from "node:child_process";
 
 const ROOT = process.cwd();
 const PARSER_PATH = join(ROOT, "packages/analysis/src/parsear-referencias-integrador.ts");
+const INFORME_PATH = join(ROOT, "packages/analysis/src/informe-final.ts");
 const LOADER_HOOKS_PATH = join(ROOT, "scripts/_ts-loader-hooks.mjs");
 
 function fail(lines) {
@@ -42,6 +43,9 @@ function fail(lines) {
 
 if (!existsSync(PARSER_PATH)) {
   fail([`no existe ${PARSER_PATH.slice(ROOT.length + 1)} — si parsearReferenciasIntegrador se movió, actualizar este gate.`]);
+}
+if (!existsSync(INFORME_PATH)) {
+  fail([`no existe ${INFORME_PATH.slice(ROOT.length + 1)} — si armarInformeFinal se movió, actualizar este gate.`]);
 }
 
 // Informe sembrado, cuota cero — nunca se envía nada. Los IDs válidos de
@@ -112,25 +116,100 @@ if (problemas.length > 0) {
 console.log("FIXTURE_OK");
 `;
 
-const tmpFile = join(mkdtempSync(join(tmpdir(), "guard-trazabilidad-")), "fixture.mjs");
-writeFileSync(tmpFile, FIXTURE_RUNNER, "utf8");
-try {
-  const salida = execFileSync(process.execPath, ["--experimental-strip-types", tmpFile], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  if (!salida.includes("FIXTURE_OK")) {
-    fail([`salida inesperada del runner de fixtures: ${salida.trim()}`]);
-  }
-} catch (err) {
-  const detalle = (err.stdout ?? "") + (err.stderr ?? "");
-  fail([`el runner de fixtures de parsearReferenciasIntegrador falló: ${detalle.trim() || err.message}`]);
-} finally {
-  unlinkSync(tmpFile);
+/**
+ * Regla 2 (2026-10-04) — el otro extremo de la trazabilidad: que el informe
+ * ARMADO marque cada H## citado y publique la clave de los [P#].
+ *
+ * Los dos defectos que esta regla agarra, los dos medidos antes de escribirla:
+ *  · `marcarReferencias` exigía el corchete exacto `[H12]`, así que no marcaba
+ *    `[CONFIRMA H12]` — una de las formas que el prompt del redactor le PIDE
+ *    usar. Un `[CONFIRMA H999]` se contaba como inexistente en la línea de
+ *    control del redactor y salía limpio en el cuerpo del informe.
+ *  · los `[P#]` que el redactor y el integrador escriben en su prosa no tenían
+ *    clave en ninguna parte del informe: "coinciden P3 y P5" era ilegible.
+ */
+const FIXTURE_INFORME = `
+import { register } from "node:module";
+import { pathToFileURL } from "node:url";
+register(pathToFileURL(${JSON.stringify(LOADER_HOOKS_PATH)}).href, import.meta.url);
+const { armarInformeFinal } = await import(pathToFileURL(${JSON.stringify(INFORME_PATH)}).href);
+
+const hallazgos = [
+  { codigo: "H1", categoria: "CONVERGENCIA", eje: "HECHOS", respuestasReales: ["chatgpt"], descripcion: "d1", operadorReal: "gemini" },
+  { codigo: "H2", categoria: "DIVERGENCIA", eje: "FUENTES", respuestasReales: ["claude"], descripcion: "d2", operadorReal: "grok" },
+];
+const texto = armarInformeFinal({
+  pregunta: "p", fecha: "f", conversacionId: "c", rondaId: "r",
+  informeIntegradorCrudo: "TITULO: t\\n5. QUE CONVIENE RESCATAR\\nLo firme [H1] y lo disputado [H2].",
+  referenciasEnOrden: [{ codigo: "H1", existe: true }, { codigo: "H2", existe: true }],
+  hallazgos,
+  participacionOperadores: [{ operadorId: "gemini", estado: "ok", detalle: "1 hallazgos" }],
+  condiciones: [
+    { proveedorId: "claude", etiquetaModelo: null, caracteresRespuesta: 10, fuentesCitadas: 0, codigoEstable: "P3" },
+    { proveedorId: "mistral", etiquetaModelo: null, caracteresRespuesta: 10, fuentesCitadas: 0, codigoEstable: null },
+  ],
+  integridadEntrega: "x", semilla: "s",
+  redaccion: {
+    redactorId: "deepseek", controles: ["- control"],
+    cuerpo: "Firme [CONFIRMA H1] y tambien [H2], segun P3 y P5. Inventado [CONFIRMA H999] y [H888].",
+  },
+});
+
+const problemas = [];
+const exige = (frag, porque) => { if (!texto.includes(frag)) problemas.push(porque + ' — falta ' + JSON.stringify(frag)); };
+
+exige("[CONFIRMA H1 \\u2713]", "un H## dentro de [CONFIRMA H##] no se marco como existente");
+exige("[H2 \\u2713]", "un [H##] suelto dejo de marcarse (regresion)");
+exige("[CONFIRMA H999 \\u2717 referencia inexistente]", "un H## inexistente dentro de [CONFIRMA H##] no se marco como inexistente");
+exige("[H888 \\u2717 referencia inexistente]", "un [H##] inexistente suelto dejo de marcarse (regresion)");
+exige("| P3 | Claude |", "la clave de los [P#] no esta en la tabla de condiciones");
+exige("| (sin sello) | Mistral |", "un proveedor sin sello no declara que no lo tiene");
+
+// Ninguna seccion del informe puede quedar vacia por el armado.
+const lineas = texto.split("\\n");
+let actual = null, cuerpo = [];
+const vacias = [];
+const cerrar = () => { if (actual !== null && cuerpo.join("").trim().length === 0) vacias.push(actual); };
+for (const l of lineas) {
+  if (/^## /.test(l)) { cerrar(); actual = l; cuerpo = []; } else if (actual !== null) cuerpo.push(l);
 }
+cerrar();
+if (vacias.length > 0) problemas.push("secciones vacias en el informe armado: " + JSON.stringify(vacias));
+
+if (problemas.length > 0) {
+  console.error("PROBLEMAS:" + JSON.stringify(problemas));
+  process.exit(1);
+}
+console.log("FIXTURE_OK");
+`;
+
+const dirTmp = mkdtempSync(join(tmpdir(), "guard-trazabilidad-"));
+function correr(fuente, queEs) {
+  const tmpFile = join(dirTmp, "fixture.mjs");
+  writeFileSync(tmpFile, fuente, "utf8");
+  try {
+    const salida = execFileSync(process.execPath, ["--experimental-strip-types", tmpFile], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    if (!salida.includes("FIXTURE_OK")) {
+      fail([`salida inesperada del runner de fixtures de ${queEs}: ${salida.trim()}`]);
+    }
+  } catch (err) {
+    const detalle = (err.stdout ?? "") + (err.stderr ?? "");
+    fail([`el runner de fixtures de ${queEs} falló: ${detalle.trim() || err.message}`]);
+  } finally {
+    unlinkSync(tmpFile);
+  }
+}
+
+correr(FIXTURE_RUNNER, "parsearReferenciasIntegrador");
+correr(FIXTURE_INFORME, "armarInformeFinal");
 
 console.log(
   "[guard:trazabilidad] OK — sobre un informe sembrado de 7 párrafos: detecta el párrafo sin referencias " +
     "de la sección 5, no exige referencia ni en 'LA TABLA NO ALCANZA' ni en la línea TITULO, y conserva " +
-    "una referencia inventada (H999) marcada referenciaInvalida sin descartar su párrafo.",
+    "una referencia inventada (H999) marcada referenciaInvalida sin descartar su párrafo. Y sobre el " +
+    "informe ARMADO: marca los H## de [CONFIRMA H##] y de [H##] (existentes e inexistentes), publica la " +
+    "clave de los [P#] en la tabla de condiciones, y ninguna sección queda vacía.",
 );

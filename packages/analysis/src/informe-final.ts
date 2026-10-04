@@ -41,6 +41,16 @@ export interface CondicionProveedor {
   etiquetaModelo: string | null;
   caracteresRespuesta: number;
   fuentesCitadas: number;
+  /**
+   * El `codigoEstable` del `Sello` de esta ronda ("P1".."P7"). AGREGADO
+   * (2026-10-04): el informe desanonimiza los H## y los nombres de proveedor,
+   * pero los `[P#]` que el redactor y el integrador escriben en su PROSA
+   * quedaban sin clave en ninguna parte del informe — quien lo lee veía
+   * "coinciden P3 y P5" sin forma de saber quiénes son. El sello ya tiene la
+   * correspondencia; esta columna la publica. `null` = esa ronda no dejó sello
+   * para ese proveedor (nunca se pegó la operación).
+   */
+  codigoEstable: string | null;
 }
 
 /**
@@ -180,11 +190,29 @@ function seccionesVerificacion(v: VerificacionParaInforme): string[] {
   ];
 }
 
+/**
+ * Marca cada H## citado como existente o inexistente.
+ *
+ * CORREGIDO (2026-10-04): la versión anterior exigía el corchete EXACTO
+ * `[H12]`, así que no marcaba ninguna de las formas que el prompt del redactor
+ * le pide usar — `[CONFIRMA H12]`, `[CONTRADICE H12]` (antes
+ * `[VERIFICADO H12]`). Medido sobre un informe armado: en el mismo párrafo,
+ * `[H2]` salía `[H2 ✓]` y `[CONFIRMA H1]` salía sin marca. Y la asimetría era
+ * peor que cosmética: `controlesRedaccion` (`redaccion.ts`) SÍ lee los H## de
+ * cualquier corchete, así que un `[CONFIRMA H9999]` se contaba como hallazgo
+ * inexistente en la línea de control del redactor y se mostraba limpio en el
+ * cuerpo — quien lee no podía saber CUÁL de las citas era la inventada.
+ *
+ * Ahora recorre cada grupo entre corchetes y marca cada H## de adentro, con la
+ * MISMA regla que `redaccion.ts` usa para detectarlos. Un `[H12]` sigue
+ * saliendo `[H12 ✓]`, igual que antes.
+ */
 function marcarReferencias(texto: string, existentes: ReadonlySet<string>): string {
-  return texto.replace(/\[H\d+\]/g, (m) => {
-    const codigo = m.slice(1, -1);
-    return existentes.has(codigo) ? `[${codigo} ✓]` : `[${codigo} ✗ referencia inexistente]`;
-  });
+  return texto.replace(/\[[^\]\n]*\]/g, (grupo) =>
+    grupo.replace(/\bH\d+\b/g, (codigo) =>
+      existentes.has(codigo) ? `${codigo} ✓` : `${codigo} ✗ referencia inexistente`,
+    ),
+  );
 }
 
 function entradaHallazgo(h: HallazgoResuelto): string {
@@ -198,7 +226,8 @@ function entradaHallazgo(h: HallazgoResuelto): string {
 
 function filaCondicion(c: CondicionProveedor): string {
   const etiqueta = c.etiquetaModelo ?? "(no observada)";
-  return `| ${nombreProveedor(c.proveedorId)} | ${etiqueta} | ${c.caracteresRespuesta} | ${c.fuentesCitadas} |`;
+  const codigo = c.codigoEstable ?? "(sin sello)";
+  return `| ${codigo} | ${nombreProveedor(c.proveedorId)} | ${etiqueta} | ${c.caracteresRespuesta} | ${c.fuentesCitadas} |`;
 }
 
 function entradaParticipacion(p: ParticipacionOperador): string {
@@ -291,8 +320,11 @@ export function armarInformeFinal(input: InformeFinalInput): string {
     "",
     "## Condiciones de la ronda",
     "",
-    "| Proveedor | Etiqueta de modelo | Caracteres de su respuesta | Fuentes citadas |",
-    "|---|---|---|---|",
+    "La columna Codigo es la clave de los [P#] que aparecen en el texto del",
+    "redactor y del integrador: es el codigo estable del sello de esta ronda.",
+    "",
+    "| Codigo | Proveedor | Etiqueta de modelo | Caracteres de su respuesta | Fuentes citadas |",
+    "|---|---|---|---|---|",
     tablaCondiciones,
     "",
     `Conversación: ${input.conversacionId}`,

@@ -28,7 +28,7 @@ function decodificar(texto: string): string {
 
 /** Texto del html con un salto por bloque y el número de cada ítem de `<ol>` (respetando `start`). */
 export function textoDeHtmlEnBloques(html: string): string {
-  const limpio = html.replace(/<(style|script)\b[\s\S]*?<\/\1>/gi, "");
+  const limpio = html.replace(/<!--[\s\S]*?-->/g, "").replace(/<(style|script)\b[\s\S]*?<\/\1>/gi, "");
   const listas: { ordenada: boolean; n: number }[] = [];
   let salida = "";
   // Justo después de "5. " (o "- ") el `<p>` del ítem no corta la línea.
@@ -81,4 +81,9 @@ export function textoDeHtmlEnBloques(html: string): string {
  */
 export function textoDelInformeIntegrador(informe: { informeCrudo: string; html?: string | null }): string {
   return informe.html ? textoDeHtmlEnBloques(informe.html) : informe.informeCrudo;
+}
+
+/** Igual para la salida del verificador: GLM (svelte) deja cada párrafo en un `<p>` y el textContent los pega. */
+export function textoDeLaSalidaVerificador(salida: { salidaCruda: string; html?: string | null }): string {
+  return salida.html ? textoDeHtmlEnBloques(salida.html) : salida.salidaCruda;
 }

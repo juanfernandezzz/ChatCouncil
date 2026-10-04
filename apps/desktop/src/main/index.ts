@@ -48,6 +48,7 @@ import {
   parsearHallazgos,
   extraerTituloDelInforme,
   textoDelInformeIntegrador,
+  textoDeLaSalidaVerificador,
   markdownDeRespuestaInvestigador,
   nombreArchivoRespuesta,
   nombreBaseDeInforme,
@@ -4009,7 +4010,7 @@ async function enviarPromptARedactor(): Promise<ResultadoIntegrador & { ruta?: s
     return sinEscribir(e instanceof Error ? e.message : String(e), d.etapa);
   }
   const { cuerpoArchivo, marcas, nombreArchivo } = armarArchivoRedactorConMarcas(
-    { informe: textoDelInformeIntegrador(informe), verificacion: verificacion?.salidaCruda ?? null, tabla: tablaDe(d.tabla.paraPrompt), respuestas },
+    { informe: textoDelInformeIntegrador(informe), verificacion: verificacion === null ? null : textoDeLaSalidaVerificador(verificacion), tabla: tablaDe(d.tabla.paraPrompt), respuestas },
     new Date(),
   );
   const prompt = armarPromptRedactor(d.pregunta);

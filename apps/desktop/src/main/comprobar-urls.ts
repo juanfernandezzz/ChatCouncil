@@ -21,7 +21,7 @@
  */
 
 import type { SalidaVerificador, UrlComprobada } from "@chatcouncil/domain";
-import { parsearVerificacion } from "@chatcouncil/analysis";
+import { parsearVerificacion, textoDeLaSalidaVerificador } from "@chatcouncil/analysis";
 
 import { escribirUrlComprobada, leerRegistroDeArchivo } from "./registro";
 
@@ -76,7 +76,7 @@ export async function comprobarUrlsDeRonda(
 
   const urls = [
     ...new Set(
-      parsearVerificacion(salida.salidaCruda, [])
+      parsearVerificacion(textoDeLaSalidaVerificador(salida), [])
         .verificaciones.filter((v) => v.estado !== "NO_VERIFICADO" && v.url !== null)
         .map((v) => v.url as string),
     ),

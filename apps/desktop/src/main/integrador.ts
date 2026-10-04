@@ -40,6 +40,7 @@ import {
   extraerSeccionRescate,
   extraerTituloDelInforme,
   textoDelInformeIntegrador,
+  textoDeLaSalidaVerificador,
   hashSemilla,
   parsearHallazgos,
   parsearReferenciasIntegrador,
@@ -447,7 +448,7 @@ export function verificacionParaInforme(
 ): VerificacionParaInforme {
   const descripcion = new Map(hallazgos.map((h) => [h.codigo, h.descripcion]));
   const comprobada = new Map(urls.filter((u) => u.salidaVerificadorId === salida.id).map((u) => [u.url, u]));
-  const p = parsearVerificacion(salida.salidaCruda, [...descripcion.keys()]);
+  const p = parsearVerificacion(textoDeLaSalidaVerificador(salida), [...descripcion.keys()]);
   return {
     items: p.verificaciones.map((v) => {
       const u = v.url === null ? undefined : comprobada.get(v.url);

@@ -3605,3 +3605,66 @@ escrita antes que su PDF.
 Verificado con `entregarCarpetaDeInforme` en una carpeta temporal y un
 generador de PDF falso, con un título que trae "—" y "–": carpeta, informe y
 respuestas sin guion largo ni medio, y el informe y las respuestas en .md.
+
+### Correspondencia con la fuente y tipo de fuente, separados (2026-10-04)
+
+Decisión de Juan: el verificador deja de dar un veredicto y registra dos cosas
+por separado, para servir a cualquier dominio y no sólo al caso legal chileno.
+La CORRESPONDENCIA dice si la fuente sostiene la afirmación (CONFIRMA /
+CONTRADICE / NO_ENCONTRADA). El TIPO DE FUENTE la describe (OFICIAL /
+PRIMARIA / ACADEMICA / SECUNDARIA, una o varias). El verificador no juzga si
+el tipo alcanza: eso lo decide quien lee.
+
+· `prompt-verificador.ts`: texto nuevo, literal, entregado por Juan.
+· `parsear-verificacion.ts`: línea `PALABRA|TIPOS|H##|URL|cita` (NO_ENCONTRADA
+  sin URL) y `PUNTO_CIEGO|descripción|URL|tipo`. Conserva la tolerancia
+  anterior: palabra clave en cualquier punto de la línea, mayúsculas o
+  minúsculas, viñetas, negritas, `&quot;` y comillas tipográficas, y varios H##
+  por línea. Un tipo que no es de los cuatro se conserva como "no reconocido".
+  Si el modelo omite el campo de tipo, la línea se lee igual, sin tipo. Las
+  líneas del formato anterior (VERIFICADO / CONTRADICHO / NO_VERIFICADO) se
+  siguen leyendo, marcadas `formatoAnterior`: son las de las rondas ya
+  capturadas y el registro no se reescribe.
+· Lo que se persiste: `SalidaVerificador` no cambia de forma. Sus líneas ya se
+  derivaban al leerla y no se guardaban, y el tipo de cada fuente viaja dentro
+  del texto crudo. Una copia parseada habría quedado congelada con el parseo
+  del día de la captura: en la ronda `ae35d675` ese parseo daba 0 líneas y el
+  de hoy da 33. El campo de tipos se agrega por línea en lo derivado
+  (`ItemCorrespondencia`, `VerificacionParaInforme`) y en el informe en disco.
+· Informe final, por línea: `<CORRESPONDENCIA> · <tipos> — [H##] <descripción>`,
+  `Fuente: <URL> — <comprobación mecánica>` y la cita. El encabezado de la
+  sección no cambia. La comprobación de URLs tampoco: sólo filtra
+  NO_ENCONTRADA en vez de NO_VERIFICADO.
+· `prompt-redactor.ts`: el redactor lee la salida del verificador y su prompt
+  nombraba VERIFICADO / CONTRADICHO / NO_VERIFICADO, que ya no aparecen. Se
+  cambió sólo ese vocabulario y se le pide decir el tipo de la fuente al
+  usarla. `redaccion.ts` sigue rastreando `[CONFIRMA H12]`: lee cualquier H##
+  entre corchetes.
+
+Verificado, cuota cero:
+· Siembra con prosa alrededor, las tres correspondencias con tipos, un H999
+  inexistente, un tipo no reconocido, viñeta, minúsculas, `&quot;` y comillas
+  tipográficas: 6 correspondencias con su tipo, H999 conservado con
+  `hallazgoInvalido`, 2 puntos ciegos (uno con tipo OFICIAL), 1 pregunta y 8
+  líneas de prosa descartadas. El informe, armado con `verificacionParaInforme`
+  y `armarInformeFinal`, muestra la correspondencia y el tipo separados en cada
+  línea, con la comprobación de la URL.
+· Ronda real `ae35d675` (formato anterior): sigue dando 33 correspondencias (22
+  CONFIRMA, 4 CONTRADICE, 7 NO_ENCONTRADA), 5 puntos ciegos y 5 preguntas.
+· `guard:artefacto`: cinco marcadores nuevos, cada uno probado en rojo sobre el
+  compilado.
+
+ABIERTO: la primera salida real con el formato nuevo la produce Juan en su
+próxima ronda.
+
+---
+
+## 11. Guía para escribir la pregunta
+
+El instrumento no redacta la pregunta de Juan: lo que la pregunta pide a los
+investigadores lo decide quien la escribe. Notas para usar cuando convenga.
+
+Si querés que el verificador pueda cotejar el tipo de cada fuente, pedí en tu
+pregunta que cada respuesta, al citar una fuente, declare de qué tipo es:
+oficial, primaria, académica o secundaria. El verificador comprobará después
+si esa clasificación es correcta.

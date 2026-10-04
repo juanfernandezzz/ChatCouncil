@@ -13,7 +13,7 @@
  * las marcas de integridad las intercala quien llama.
  */
 
-const PLANTILLA = `Vas a escribir la respuesta a una pregunta de investigacion. No partes de cero: siete sistemas ya la respondieron, otros sistemas compararon esas respuestas entre si, un sistema escribio un analisis de esa comparacion y otro verifico en fuentes primarias lo mas importante. Todo ese material esta en el archivo de texto adjunto a este mensaje. Tu tarea es usarlo para entregar exactamente lo que la pregunta pide.
+const PLANTILLA = `Vas a escribir la respuesta a una pregunta de investigacion. No partes de cero: siete sistemas ya la respondieron, otros sistemas compararon esas respuestas entre si, un sistema escribio un analisis de esa comparacion y otro busco fuentes para lo mas importante. Todo ese material esta en el archivo de texto adjunto a este mensaje. Tu tarea es usarlo para entregar exactamente lo que la pregunta pide.
 
 LA PREGUNTA ORIGINAL FUE:
 
@@ -35,7 +35,7 @@ QUE CONTIENE EL ARCHIVO
 
 Cuatro partes, en este orden:
 INFORME: el analisis de la comparacion. Dice en que coinciden las respuestas, en que discrepan, que no trae ninguna, que haria falta para resolver cada discrepancia y que conviene rescatar.
-VERIFICACION: lo que se comprobo en fuentes primarias. Cada linea VERIFICADO, CONTRADICHO o NO_VERIFICADO se refiere a un hallazgo H##. Puede venir vacia si no se verifico nada.
+VERIFICACION: la correspondencia con la fuente de lo mas importante del informe. Cada linea CONFIRMA, CONTRADICE o NO_ENCONTRADA se refiere a un hallazgo H## y dice de que tipo es la fuente: OFICIAL, PRIMARIA, ACADEMICA o SECUNDARIA. Puede venir vacia si no se busco nada.
 HALLAZGOS: la tabla de hallazgos H## que el informe y la verificacion citan, con las respuestas P# que sostienen cada uno.
 RESPUESTAS: las siete respuestas completas, P1 a P7, con sus fuentes.
 
@@ -44,7 +44,7 @@ DE DONDE SALE CADA COSA QUE ESCRIBAS
 Solo puedes usar el material del archivo. No busques en internet aunque tengas como hacerlo, y no agregues nada de tu memoria: ningun articulo, plazo, cifra, norma ni fuente que no este en el archivo. Si la pregunta pide algo que el archivo no trae, no lo completes: dejalo como pendiente.
 
 Cuando el material no coincide, decide en este orden:
-1. Lo que la VERIFICACION marca VERIFICADO es firme. Si marca CONTRADICHO, vale lo que dice la fuente, no lo que decian las respuestas.
+1. Lo que la VERIFICACION marca CONFIRMA es firme. Si marca CONTRADICE, vale lo que dice la fuente, no lo que decian las respuestas. En los dos casos, di de que tipo es la fuente, tal como lo registra la VERIFICACION: quien lee decide si ese tipo alcanza.
 2. Lo que el INFORME presenta como firme o como coincidencia entre respuestas es la base.
 3. Lo que dice una sola respuesta lo puedes usar, pero dilo: viene de una sola respuesta.
 4. Si dos o mas respuestas discrepan y la VERIFICACION no lo resolvio, no elijas. Presenta las versiones, di que respuestas sostienen cada una y que haria falta para decidir, como lo dice el INFORME.
@@ -53,7 +53,7 @@ Las plantillas, los textos y los documentos concretos que la pregunta pida tomal
 
 COMO CITAS
 
-Despues de cada afirmacion, entre corchetes, de donde la sacaste: el hallazgo [H12], la respuesta [P3] o la verificacion [VERIFICADO H12]. Puedes poner varias. Una afirmacion sin cita no se puede rastrear: no la escribas.
+Despues de cada afirmacion, entre corchetes, de donde la sacaste: el hallazgo [H12], la respuesta [P3] o la correspondencia con la fuente [CONFIRMA H12]. Puedes poner varias. Una afirmacion sin cita no se puede rastrear: no la escribas.
 En las plantillas basta con citar, al principio de cada una, de que respuestas sale.
 
 QUE ENTREGAS

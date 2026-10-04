@@ -297,9 +297,11 @@ export interface InformeIntegrador {
  * 7-1-1 (2026-09-29) — la salida cruda del VERIFICADOR de fuentes, capturada
  * en etapa "verificacion". Misma regla del dato canónico que
  * `InformeIntegrador`: texto crudo completo, HTML y el `promptCompleto` que
- * la produjo. Las líneas VERIFICADO / CONTRADICHO / NO_VERIFICADO /
- * PUNTO_CIEGO / PREGUNTA se derivan al leerla (`parsearVerificacion`), no se
- * guardan acá.
+ * la produjo. Las líneas CONFIRMA / CONTRADICE / NO_ENCONTRADA (cada una con
+ * su tipo de fuente, desde el 2026-10-04) / PUNTO_CIEGO / PREGUNTA se derivan
+ * al leerla (`parsearVerificacion`), no se guardan acá: el tipo de cada
+ * fuente ya está en el texto crudo, y una copia parseada quedaría congelada
+ * con el parseo del día de la captura.
  */
 export interface SalidaVerificador {
   tipo: "salida-verificador";
@@ -338,7 +340,7 @@ export interface RespuestaRedactor {
 
 /**
  * 7-1-1 (2026-09-29) — comprobación MECÁNICA de una URL que el verificador
- * citó en su sección 1 (VERIFICADO / CONTRADICHO): si existe y responde, nada
+ * citó en su sección 1 (CONFIRMA / CONTRADICE): si existe y responde, nada
  * más. No dice si la fuente sostiene la afirmación. `codigo` es el estado
  * HTTP final; `null` = no resolvió (DNS, conexión o 10 s sin respuesta), con
  * el motivo en `detalle`.

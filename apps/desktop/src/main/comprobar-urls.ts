@@ -1,6 +1,6 @@
 /**
  * comprobar-urls.ts — 7-1-1 (2026-09-29): comprobación MECÁNICA de las URLs
- * que el verificador citó en su sección 1 (VERIFICADO / CONTRADICHO).
+ * que el verificador citó en su sección 1 (CONFIRMA / CONTRADICE).
  * ------------------------------------------------------------------------
  * El ÚNICO lugar de la app que sale a la red por su cuenta. Vive acá y no en
  * `packages/analysis` porque `guard:dominio` mantiene ese paquete sin red; y
@@ -77,7 +77,7 @@ export async function comprobarUrlsDeRonda(
   const urls = [
     ...new Set(
       parsearVerificacion(textoDeLaSalidaVerificador(salida), [])
-        .verificaciones.filter((v) => v.estado !== "NO_VERIFICADO" && v.url !== null)
+        .correspondencias.filter((v) => v.correspondencia !== "NO_ENCONTRADA" && v.url !== null)
         .map((v) => v.url as string),
     ),
   ].slice(0, TECHO_URLS_POR_RONDA);

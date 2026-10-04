@@ -57,6 +57,15 @@ const EXIGIDO = {
     // Las dos secciones del verificador en el informe final (el resto del
     // encabezado lleva acentos y se escapa al compilar).
     "(aporte del verificador)",
+    // Correspondencia con la fuente y tipo de fuente, separados (2026-10-04):
+    // el prompt nuevo del verificador, las palabras clave que lee el parseo
+    // (las nuevas y las del formato anterior, para las rondas ya capturadas),
+    // el tipo en el informe final y la cita que usa el redactor.
+    "CONFIRMA|OFICIAL,PRIMARIA|H12|",
+    "NO_ENCONTRADA|NO_VERIFICADO|VERIFICADO|CONFIRMA|CONTRADICE|CONTRADICHO|PUNTO_CIEGO|PREGUNTA",
+    "tipo no reconocido: ",
+    "tipo de fuente no registrado (formato anterior)",
+    "[CONFIRMA H12]",
     // Menu Ventana: recapturar el integrador sin mirar la etapa (2026-09-30).
     "Recapturar integrador",
     "cc:recapturar",

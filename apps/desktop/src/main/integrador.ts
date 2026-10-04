@@ -451,10 +451,13 @@ export function verificacionParaInforme(
   const comprobada = new Map(urls.filter((u) => u.salidaVerificadorId === salida.id).map((u) => [u.url, u]));
   const p = parsearVerificacion(textoDeLaSalidaVerificador(salida), [...descripcion.keys()]);
   return {
-    items: p.verificaciones.map((v) => {
+    items: p.correspondencias.map((v) => {
       const u = v.url === null ? undefined : comprobada.get(v.url);
       return {
-        estado: v.estado,
+        correspondencia: v.correspondencia,
+        tiposFuente: v.tiposFuente,
+        tiposNoReconocidos: v.tiposNoReconocidos,
+        formatoAnterior: v.formatoAnterior,
         hallazgoId: v.hallazgoId,
         descripcion: descripcion.get(v.hallazgoId) ?? null,
         url: v.url,

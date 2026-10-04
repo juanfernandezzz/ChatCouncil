@@ -105,23 +105,34 @@ export interface InformeFinalInput {
 
 const ENCABEZADO_REDACCION = "## Respuesta a la pregunta (aporte del redactor)";
 
+/** Los tipos de fuente que declaró el verificador, tal como los registró (los no reconocidos también). */
+interface TiposParaInforme {
+  tiposFuente: readonly string[];
+  tiposNoReconocidos: readonly string[];
+}
+
 /**
  * 7-1-1 (2026-09-29) — lo que aportó el verificador, ya resuelto: cada línea
  * de su sección 1 con la descripción del H## que cita (`null` si no existe en
- * la tabla) y el resultado de la comprobación mecánica de su URL.
+ * la tabla) y el resultado de la comprobación mecánica de su URL. Desde el
+ * 2026-10-04, la correspondencia con la fuente y el tipo de fuente van en
+ * campos separados.
  */
 export interface VerificacionParaInforme {
-  items: readonly {
-    estado: string;
+  items: readonly (TiposParaInforme & {
+    /** CONFIRMA, CONTRADICE o NO_ENCONTRADA. */
+    correspondencia: string;
     hallazgoId: string;
     descripcion: string | null;
     url: string | null;
     /** "responde 200", "responde 404", "no resuelve" o "sin comprobar". */
     comprobacion: string;
-    /** La cita textual; en NO_VERIFICADO, el motivo. */
+    /** La cita textual; en NO_ENCONTRADA, el motivo. */
     texto: string;
-  }[];
-  puntosCiegos: readonly { descripcion: string; url: string | null }[];
+    /** Línea del formato anterior, que no traía tipo de fuente. */
+    formatoAnterior: boolean;
+  })[];
+  puntosCiegos: readonly (TiposParaInforme & { descripcion: string; url: string | null })[];
   preguntas: readonly string[];
 }
 
@@ -129,22 +140,38 @@ const ENCABEZADO_VERIFICACION =
   "## Verificación de fuentes (aporte de un modelo con búsqueda, no verificado por el consejo)";
 const ENCABEZADO_PUNTOS_CIEGOS = "## Puntos ciegos y preguntas derivadas (aporte del verificador)";
 
+/** "OFICIAL, PRIMARIA"; lo no reconocido va aparte y dicho, nunca se pierde. */
+function tiposLegibles(t: TiposParaInforme, sinFuente: string): string {
+  const partes = [
+    ...(t.tiposFuente.length > 0 ? [t.tiposFuente.join(", ")] : []),
+    ...(t.tiposNoReconocidos.length > 0 ? [`tipo no reconocido: ${t.tiposNoReconocidos.join(", ")}`] : []),
+  ];
+  return partes.length > 0 ? partes.join("; ") : sinFuente;
+}
+
 function seccionesVerificacion(v: VerificacionParaInforme): string[] {
-  const items = v.items.map((i) =>
-    [
-      `${i.estado} — [${i.hallazgoId}] ${i.descripcion ?? "(ese hallazgo no existe en la tabla de la ronda)"}`,
+  const items = v.items.map((i) => {
+    const tipos = i.formatoAnterior
+      ? "tipo de fuente no registrado (formato anterior)"
+      : tiposLegibles(i, i.correspondencia === "NO_ENCONTRADA" ? "sin fuente" : "tipo no declarado");
+    return [
+      `${i.correspondencia} · ${tipos} — [${i.hallazgoId}] ${i.descripcion ?? "(ese hallazgo no existe en la tabla de la ronda)"}`,
       i.url === null ? `Fuente: sin fuente — ${i.texto}` : `Fuente: ${i.url} — ${i.comprobacion}`,
       ...(i.url !== null && i.texto.length > 0 ? [`> ${i.texto}`] : []),
-    ].join("\n"),
-  );
+    ].join("\n");
+  });
   const aportes = [
-    ...v.puntosCiegos.map((p) => `- Punto ciego: ${p.descripcion} — Fuente: ${p.url ?? "sin fuente"}`),
+    ...v.puntosCiegos.map((p) =>
+      p.url === null
+        ? `- Punto ciego: ${p.descripcion} — Fuente: sin fuente`
+        : `- Punto ciego: ${p.descripcion} — Fuente: ${p.url} (${tiposLegibles(p, "tipo no declarado")})`,
+    ),
     ...v.preguntas.map((q) => `- Pregunta derivada: ${q}`),
   ];
   return [
     ENCABEZADO_VERIFICACION,
     "",
-    items.length > 0 ? items.join("\n\n") : "El verificador no registro lineas de verificacion.",
+    items.length > 0 ? items.join("\n\n") : "El verificador no registro lineas de correspondencia con la fuente.",
     "",
     ENCABEZADO_PUNTOS_CIEGOS,
     "",
@@ -175,7 +202,7 @@ function filaCondicion(c: CondicionProveedor): string {
 }
 
 function entradaParticipacion(p: ParticipacionOperador): string {
-  return `**${nombreProveedor(p.operadorId)}** —${p.estado}: ${p.detalle}`;
+  return `**${nombreProveedor(p.operadorId)}** — ${p.estado}: ${p.detalle}`;
 }
 
 const SIN_INFORME_INTEGRADOR = "No se capturo informe del integrador para esta ronda.";

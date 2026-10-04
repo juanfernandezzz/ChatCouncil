@@ -112,6 +112,13 @@ const EXIGIDO = {
     // un enlace que el redactor copio del material se contaba como salida a la
     // red: el archivo que recibe LLEVA las URLs de las siete respuestas.
     "en el material de la ronda",
+    // Cada respuesta de investigador se escribe en su propio try (el .md y el
+    // PDF por separado). Sin esto, un fallo al escribir UN .md abortaba el
+    // bucle: las siguientes respuestas no se escribian, la nota "FALTAN" no se
+    // escribia, y el mensaje afirmaba una completitud que no habia.
+    "no se pudo escribir el .md (",
+    "no se pudo generar el PDF (",
+    "respuestas completas;",
     "persist:",
     "--cc-test",
     "--cc-probe",

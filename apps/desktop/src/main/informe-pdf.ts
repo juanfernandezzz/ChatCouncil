@@ -187,26 +187,56 @@ export async function entregarCarpetaDeInforme(
     falloInforme = e instanceof Error ? e.message : String(e);
   }
 
+  /**
+   * CORREGIDO (2026-10-04). La versión anterior escribía el `.md` de cada
+   * respuesta FUERA del `try` por respuesta, así que un fallo ahí salía al
+   * `catch` de la subcarpeta y se llevaba la ronda entera. MEDIDO sembrando
+   * un fallo al escribir el `.md` de la cuarta de ocho respuestas:
+   *  · el bucle abortaba — la 5, la 6 y la 7 no se escribían NI en .md NI en
+   *    PDF, sin dejar rastro;
+   *  · el archivo "FALTAN" nunca se escribía, porque el `if` que lo escribe
+   *    quedaba por encima del `catch` que lo registraba;
+   *  · y el mensaje de pantalla decía "7 de 8 respuestas en PDF (las que
+   *    faltan estan nombradas en FALTAN…)": había 3 PDF, no 7; faltaban 5, no
+   *    1; y el archivo al que mandaba no existía.
+   * Tres afirmaciones falsas sobre su propia completitud, que es exactamente
+   * lo que el archivo "FALTAN" existe para evitar.
+   *
+   * Ahora cada respuesta se escribe dentro de su propio `try` —el `.md` y el
+   * PDF por separado, porque son dos pérdidas distintas: sin el `.md` el
+   * texto no está en la carpeta en absoluto— y lo que falló queda nombrado
+   * con su motivo. El `catch` de afuera es sólo para la subcarpeta.
+   */
   const faltantes: string[] = [];
+  let falloSubcarpeta = "";
+  let notaEscrita = false;
   if (params.respuestas.length > 0) {
     const dirRespuestas = join(carpeta, SUBCARPETA_RESPUESTAS);
     try {
       mkdirSync(dirRespuestas);
+    } catch (e) {
+      falloSubcarpeta = e instanceof Error ? e.message : String(e);
+    }
+    if (falloSubcarpeta === "") {
       for (const r of params.respuestas) {
         // 2026-10-03, pedido de Juan: cada respuesta también en .md, para que
         // otro modelo la lea sin pasar por el PDF. Va primero: es el texto.
-        writeFileSync(join(dirRespuestas, `${r.nombreArchivo}.md`), r.markdown, { encoding: "utf8", flag: "wx" });
+        try {
+          writeFileSync(join(dirRespuestas, `${r.nombreArchivo}.md`), r.markdown, { encoding: "utf8", flag: "wx" });
+        } catch (e) {
+          faltantes.push(`${r.nombreArchivo}: no se pudo escribir el .md (${e instanceof Error ? e.message : String(e)})`);
+        }
         try {
           await generar(r.markdown, join(dirRespuestas, `${r.nombreArchivo}.pdf`), r.titulo);
         } catch (e) {
-          faltantes.push(`${r.nombreArchivo}: ${e instanceof Error ? e.message : String(e)}`);
+          faltantes.push(`${r.nombreArchivo}: no se pudo generar el PDF (${e instanceof Error ? e.message : String(e)})`);
         }
       }
       if (faltantes.length > 0) {
         // Una respuesta que falta tiene que estar NOMBRADA en la carpeta: sin
         // esto, la subcarpeta incompleta se lee como "ese proveedor no participó".
         const nota = [
-          "Estas respuestas de investigador no se pudieron convertir a PDF.",
+          "Estos archivos de respuesta de investigador no se pudieron escribir.",
           "El texto de cada una sigue entero en el registro de la conversacion.",
           "",
           ...faltantes.map((f) => `- ${f}`),
@@ -214,22 +244,27 @@ export async function entregarCarpetaDeInforme(
         ].join("\n");
         try {
           writeFileSync(join(dirRespuestas, NOMBRE_FALTANTES), nota, { encoding: "utf8", flag: "wx" });
+          notaEscrita = true;
         } catch {
           /* la cuenta igual va en el mensaje de pantalla */
         }
       }
-    } catch (e) {
-      faltantes.push(`no se pudo crear la subcarpeta: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
-  const hechas = params.respuestas.length - faltantes.length;
+  // `faltantes` cuenta ARCHIVOS, no respuestas: una respuesta puede fallar en
+  // el .md y en el PDF y aportar dos lineas. La cuenta de respuestas completas
+  // se deriva de los nombres, no de la longitud de la lista.
+  const conAlgunFallo = new Set(faltantes.map((f) => f.split(":")[0] as string));
+  const completas = params.respuestas.length - conAlgunFallo.size;
   const detalleRespuestas =
     params.respuestas.length === 0
       ? "Sin respuestas de investigador en el registro de esta ronda."
-      : faltantes.length === 0
-        ? `${hechas} respuestas de investigador en PDF.`
-        : `${hechas} de ${params.respuestas.length} respuestas en PDF (las que faltan estan nombradas en "${NOMBRE_FALTANTES}").`;
+      : falloSubcarpeta !== ""
+        ? `NINGUNA de las ${params.respuestas.length} respuestas de investigador se escribio: no se pudo crear la subcarpeta "${SUBCARPETA_RESPUESTAS}" (${falloSubcarpeta}). El texto de todas sigue entero en el registro.`
+        : conAlgunFallo.size === 0
+          ? `${completas} respuestas de investigador, cada una en .md y en PDF.`
+          : `${completas} de ${params.respuestas.length} respuestas completas; ${conAlgunFallo.size} con archivos faltantes${notaEscrita ? ` (nombrados en "${NOMBRE_FALTANTES}")` : ", y la nota que los nombra tampoco se pudo escribir"}.`;
 
   if (pdfDelInforme === null) {
     shell.showItemInFolder(rutaMd);

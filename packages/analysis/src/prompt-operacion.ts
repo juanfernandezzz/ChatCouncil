@@ -63,8 +63,8 @@ Ejemplos:
 
 CONVERGENCIA|HECHOS|P1,P3,P6|las tres dan la misma fecha para el anuncio
 DIVERGENCIA|FUENTES|P2,P5|citan medios distintos para el mismo dato
-TENSION|CONCLUSIONES|P1,P4|coinciden en que el plazo es de 15 anios pero P1 recomienda conservar y P4 recomienda suprimir
-SINGULARIDAD|CONCLUSIONES|P4|solo P4 proyecta un cambio regulatorio
+TENSION|CONCLUSIONES|P1,P4|coinciden en la misma cifra pero P1 recomienda ampliar y P4 recomienda reducir
+SINGULARIDAD|CONCLUSIONES|P4|solo P4 proyecta un cambio a futuro
 AUSENCIA|HECHOS|—|ninguna respuesta entrega cifras de adopcion
 
 En los hallazgos de tipo AUSENCIA el campo de etiquetas lleva el simbolo — porque no hay respuestas que lo sostengan.
@@ -149,8 +149,8 @@ Ejemplos:
 
 CONVERGENCIA|HECHOS|P1,P3,P6|las tres dan la misma fecha para el anuncio
 DIVERGENCIA|FUENTES|P2,P5|citan medios distintos para el mismo dato
-TENSION|CONCLUSIONES|P1,P4|coinciden en que el plazo es de 15 anios pero P1 recomienda conservar y P4 recomienda suprimir
-SINGULARIDAD|CONCLUSIONES|P4|solo P4 proyecta un cambio regulatorio
+TENSION|CONCLUSIONES|P1,P4|coinciden en la misma cifra pero P1 recomienda ampliar y P4 recomienda reducir
+SINGULARIDAD|CONCLUSIONES|P4|solo P4 proyecta un cambio a futuro
 AUSENCIA|HECHOS|—|ninguna respuesta entrega cifras de adopcion
 
 En los hallazgos de tipo AUSENCIA el campo de etiquetas lleva el simbolo — porque no hay respuestas que lo sostengan.

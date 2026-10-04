@@ -3657,6 +3657,17 @@ Verificado, cuota cero:
 ABIERTO: la primera salida real con el formato nuevo la produce Juan en su
 próxima ronda.
 
+Correcciones posteriores, el mismo día (pedido de Juan: corregir lo
+encontrado sin consultar):
+· El prompt del verificador y la nota de la sección 11 llegaron con voseo
+  ("Tenés", "buscá", "querés"). Pasaron a "tú", que es la regla de idioma de
+  `docs/AGENTES.md`. El contenido no cambió.
+· `prompt-operacion.ts`, las dos plantillas: dos ejemplos venían del caso
+  legal (el plazo de 15 años de la ficha clínica y "un cambio regulatorio").
+  Pasaron a "coinciden en la misma cifra pero P1 recomienda ampliar y P4
+  recomienda reducir" y "solo P4 proyecta un cambio a futuro". El formato y
+  las categorías no cambiaron.
+
 ---
 
 ## 11. Guía para escribir la pregunta
@@ -3664,7 +3675,7 @@ próxima ronda.
 El instrumento no redacta la pregunta de Juan: lo que la pregunta pide a los
 investigadores lo decide quien la escribe. Notas para usar cuando convenga.
 
-Si querés que el verificador pueda cotejar el tipo de cada fuente, pedí en tu
+Si quieres que el verificador pueda cotejar el tipo de cada fuente, pide en tu
 pregunta que cada respuesta, al citar una fuente, declare de qué tipo es:
 oficial, primaria, académica o secundaria. El verificador comprobará después
 si esa clasificación es correcta.

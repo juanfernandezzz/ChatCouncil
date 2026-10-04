@@ -89,9 +89,22 @@ const PIE =
   '<div style="width:100%;font-size:8px;color:#666;text-align:center;font-family:Georgia,serif;">ChatCouncil — página <span class="pageNumber"></span> de <span class="totalPages"></span></div>';
 
 export function informeAHtml(markdown: string, titulo = "Informe de ronda — ChatCouncil"): string {
-  // replace con función: un `$` del contenido no se interpreta como patrón.
-  return PLANTILLA.replace("{{TITULO}}", () => escapar(titulo)).replace("{{CONTENIDO}}", () =>
-    marked.parse(markdown, { async: false }),
+  // UNA SOLA pasada sobre los dos marcadores, y con función para que un `$`
+  // del contenido no se interprete como patrón de reemplazo.
+  //
+  // CORREGIDO (2026-10-04): eran dos `replace` en cadena, y el segundo volvía
+  // a recorrer el texto que el primero había insertado. El título lo escribe
+  // un modelo (el integrador) y `escapar` no toca las llaves, así que un
+  // título que contuviera "{{CONTENIDO}}" quedaba en el hueco del `<title>` y
+  // el segundo `replace` sustituía ESA aparición: el informe entero se metía
+  // dentro de `<title>` y el `<body>` se quedaba con el marcador literal.
+  // MEDIDO: el `<body>` pasaba de 84 a 15 caracteres y el cuerpo del informe
+  // desaparecía — un PDF de una página en blanco. Que el modelo escriba uno
+  // de estos marcadores no es descabellado: los prompts de la ronda usan
+  // `{{CUERPO}}`, `{{RESCATE}}` y `{{HALLAZGOS}}` con la misma sintaxis.
+  // Una sola pasada no puede reentrar en lo que acaba de insertar.
+  return PLANTILLA.replace(/\{\{(TITULO|CONTENIDO)\}\}/g, (_m, clave: string) =>
+    clave === "TITULO" ? escapar(titulo) : marked.parse(markdown, { async: false }),
   );
 }
 

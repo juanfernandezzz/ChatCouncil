@@ -47,8 +47,10 @@ function primeraUrl(campo: string): string | null {
   return m === null ? null : m[0].replace(/[).,;\]]+$/, "");
 }
 
+// GLM escribe a veces la comilla de apertura como el texto literal `&quot;`
+// (en su html va `&amp;quot;`): se lee como comilla.
 function sinComillas(t: string): string {
-  return t.trim().replace(/^["“”«]+|["“”»]+$/g, "").trim();
+  return t.replace(/&quot;/g, '"').trim().replace(/^["“”«]+|["“”»]+$/g, "").trim();
 }
 
 // Una palabra clave es válida en cualquier punto de la línea (GLM pega prosa

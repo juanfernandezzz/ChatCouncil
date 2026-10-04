@@ -236,6 +236,38 @@ function entradaParticipacion(p: ParticipacionOperador): string {
 
 const SIN_INFORME_INTEGRADOR = "No se capturo informe del integrador para esta ronda.";
 
+/**
+ * Las marcas de integridad del archivo de operación y de redacción
+ * (`[[CC-MARCA-0042-<token>]]`, `cuerpo-operador.ts`) son INSTRUMENTACIÓN, no
+ * contenido: los cuatro prompts le dicen al modelo "ignóralas por completo y
+ * no las menciones de nuevo". Un modelo que cita un trozo del archivo tal cual
+ * se las trae igual, y de ahí pasan al informe por tres caminos distintos — el
+ * cuerpo del redactor, la descripción de un hallazgo (y con ella la tabla que
+ * ve el integrador, su informe y la sección 5), y la cita del verificador.
+ *
+ * MEDIDO (2026-10-04): sembrando UNA marca repetida en el cuerpo del redactor
+ * y UNA en la descripción de un hallazgo, el informe final salía con las dos.
+ *
+ * Se quitan de la VISTA DERIVADA —este informe— y nunca del registro: el texto
+ * crudo con las marcas sigue intacto como dato canónico, y el informe declara
+ * cuántas quitó. El prefijo se eligió justamente para que ningún texto real lo
+ * produzca por azar, así que no hay contenido legítimo que esto pueda borrar.
+ */
+const MARCA_SOLA_EN_SU_LINEA = /^[ \t]*\[\[CC-[^\]\n]*\]\][ \t]*\n/gm;
+const MARCA_EN_LINEA = /[ \t]*\[\[CC-[^\]\n]*\]\]/g;
+
+function sinMarcasDeIntegridad(texto: string): { texto: string; quitadas: number } {
+  let quitadas = 0;
+  const contar = (): string => {
+    quitadas++;
+    return "";
+  };
+  // Primero la marca que ocupa su propia línea, con su salto: si no, queda una
+  // línea en blanco de más donde estaba.
+  const limpio = texto.replace(MARCA_SOLA_EN_SU_LINEA, contar).replace(MARCA_EN_LINEA, contar);
+  return { texto: limpio, quitadas };
+}
+
 export function armarInformeFinal(input: InformeFinalInput): string {
   const codigosExistentes = new Set(input.hallazgos.map((h) => h.codigo));
   // La línea "TITULO:" no es prosa del informe: pasa a ser el encabezado y no
@@ -303,7 +335,7 @@ export function armarInformeFinal(input: InformeFinalInput): string {
       ? input.participacionOperadores.map(entradaParticipacion).join("\n")
       : "No hay operadores registrados para esta ronda.";
 
-  return [
+  const armado = [
     titulo === null ? "# Informe de ronda" : `# ${titulo}`,
     "",
     ...(input.redaccion
@@ -379,4 +411,18 @@ export function armarInformeFinal(input: InformeFinalInput): string {
     "verificado. Las limitaciones completas del instrumento estan en",
     "docs/LIMITACIONES.md.",
   ].join("\n");
+
+  // Las marcas se quitan AL FINAL, de una sola pasada sobre el informe ya
+  // armado: entran por tres caminos distintos y atajar cada uno por separado
+  // garantiza olvidarse del cuarto.
+  const { texto, quitadas } = sinMarcasDeIntegridad(armado);
+  return quitadas === 0
+    ? texto
+    : [
+        texto,
+        "",
+        `Se quitaron ${quitadas} marca(s) de integridad [[CC-...]] del texto de este informe:`,
+        "son instrumentacion del archivo que leyeron los modelos, no contenido. El texto",
+        "crudo con las marcas sigue intacto en el registro de la conversacion.",
+      ].join("\n");
 }

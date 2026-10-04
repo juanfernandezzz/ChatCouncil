@@ -101,6 +101,12 @@ const EXIGIDO = {
     // el informe final…" para siempre, sin decir nada. Sin este literal, el
     // try/catch se puede borrar y nada falla en rojo.
     "No se pudo armar el informe final:",
+    // Las marcas de integridad del archivo son instrumentacion, no contenido,
+    // y entran al informe por tres caminos distintos (cuerpo del redactor,
+    // descripcion de un hallazgo, cita del verificador). Sin este literal, el
+    // filtro se puede borrar y el informe vuelve a mostrarlas sin que nada
+    // falle en rojo.
+    "marca(s) de integridad",
     "persist:",
     "--cc-test",
     "--cc-probe",

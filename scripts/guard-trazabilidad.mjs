@@ -220,6 +220,36 @@ for (const [nombre, input] of casos) {
   }
 }
 
+/**
+ * Las marcas de integridad del archivo ([[CC-MARCA-...]]) son instrumentacion,
+ * no contenido: los cuatro prompts le dicen al modelo que las ignore. Un
+ * modelo que cita un trozo del archivo tal cual se las trae, y entran al
+ * informe por tres caminos — el cuerpo del redactor, la descripcion de un
+ * hallazgo (y con ella la tabla, el informe del integrador y su seccion 5) y
+ * la cita del verificador. MEDIDO antes de corregirlo: con una marca sembrada
+ * en dos de esos caminos, el informe salia con las dos.
+ */
+const conMarcas = armarInformeFinal({
+  ...base,
+  informeIntegradorCrudo: "TITULO: t\\n5. QUE CONVIENE RESCATAR\\nLo firme [H1] [[CC-MARCA-0007-tok]] y mas.",
+  referenciasEnOrden: [{ codigo: "H1", existe: true }],
+  hallazgos: [{ ...hallazgos[0], descripcion: "Coinciden [[CC-MARCA-0042-tok]] en el plazo." }],
+  redaccion: { redactorId: "deepseek", controles: ["- c"], cuerpo: "Citando [[CC-MARCA-0099-tok]] el archivo [H1]." },
+});
+if (/\\[\\[CC-MARCA/.test(conMarcas)) {
+  problemas.push("quedaron marcas de integridad [[CC-MARCA-...]] en el informe final");
+}
+if (!/Se quitaron \\d+ marca\\(s\\) de integridad/.test(conMarcas)) {
+  problemas.push("se quitaron marcas y el informe no lo declara");
+}
+const sinMarcas = armarInformeFinal({
+  ...base, informeIntegradorCrudo: "TITULO: t\\nTexto [H1].",
+  referenciasEnOrden: [{ codigo: "H1", existe: true }], hallazgos,
+});
+if (/Se quitaron \\d+ marca/.test(sinMarcas)) {
+  problemas.push("un informe sin marcas declara que quito marcas");
+}
+
 if (problemas.length > 0) {
   console.error("PROBLEMAS:" + JSON.stringify(problemas));
   process.exit(1);

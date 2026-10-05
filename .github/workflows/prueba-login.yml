@@ -1,0 +1,46 @@
+# Compila los dos prototipos de prototipos/login-google/ y los publica como
+# descargas del Release prueba-login-google-v1. Los binarios nunca entran al repo.
+name: prueba-login
+on:
+  push:
+    branches: [main]
+    paths: ['prototipos/login-google/**', '.github/workflows/prueba-login.yml']
+  workflow_dispatch:
+permissions: { contents: write }
+env: { TAG: prueba-login-google-v1 }
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: 8.0.x }
+      - run: dotnet publish prototipos/login-google/windows -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o out
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: out/ChatCouncil-PruebaLogin.exe }
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults: { run: { working-directory: prototipos/login-google/android } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: 8.11.1 }
+      - run: keytool -genkeypair -keystore app/prueba.jks -storepass pruebalogin -keypass pruebalogin -alias prueba -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=ChatCouncil Prueba de login"
+      - run: gradle assembleRelease
+      - run: cp app/build/outputs/apk/release/app-release.apk ChatCouncil-PruebaLogin.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: prototipos/login-google/android/ChatCouncil-PruebaLogin.apk }
+  release:
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { merge-multiple: true }
+      - env: { GH_TOKEN: '${{ github.token }}', GH_REPO: '${{ github.repository }}' }
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --target "$GITHUB_SHA" --prerelease --title "$TAG" --notes "Prueba de login de Google en WebView2 (Windows) y Android System WebView. Prototipos sin Unity; código en prototipos/login-google/."
+          gh release upload "$TAG" ChatCouncil-PruebaLogin.exe ChatCouncil-PruebaLogin.apk --clobber

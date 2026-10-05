@@ -1,0 +1,31 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.chatcouncil.pruebalogin'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.chatcouncil.pruebalogin'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '1'
+    }
+    // ponytail: el CI genera una llave nueva en cada corrida; si hace falta actualizar
+    // encima de una versión instalada, mover la llave a un secreto del repo.
+    signingConfigs {
+        release {
+            storeFile file('prueba.jks')
+            storePassword 'pruebalogin'
+            keyAlias 'prueba'
+            keyPassword 'pruebalogin'
+        }
+    }
+    buildTypes { release { signingConfig signingConfigs.release } }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    lint { checkReleaseBuilds false }
+}
+
+dependencies { implementation 'androidx.webkit:webkit:1.12.1' }

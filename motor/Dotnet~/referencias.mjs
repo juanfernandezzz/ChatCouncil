@@ -39,12 +39,12 @@ const analisis = await importar("packages/analysis/src/index.ts");
 const dominio = await importar("packages/domain/src/index.ts");
 const registro = await importar("apps/desktop/src/main/registro.ts");
 
-/** Literal de C#. JSON ya escapa lo que C# exige, salvo U+2028/U+2029, que C# toma como salto de línea. */
+/** Literal de C#. JSON ya escapa lo que C# exige, salvo U+0085, U+2028 y U+2029, que C# toma como salto de línea. */
 const cs = (s) =>
   s === null
     ? "null"
-    : [0x2028, 0x2029].reduce(
-        (t, c) => t.split(String.fromCharCode(c)).join(String.fromCharCode(92) + "u" + c.toString(16)),
+    : [0x85, 0x2028, 0x2029].reduce(
+        (t, c) => t.split(String.fromCharCode(c)).join(String.fromCharCode(92) + "u" + c.toString(16).padStart(4, "0")),
         JSON.stringify(s),
       );
 const LS = String.fromCharCode(0x2028);
@@ -85,6 +85,92 @@ const ANONIMIZADOS = [
 ].map(([rs, semilla]) => ({ semilla, entrada: JSON.stringify(rs), esperado: JSON.stringify(analisis.anonymizeReplies(rs, true, semilla)) }));
 
 const CODIGOS = [POOL, ["chatgpt", "gemini", "chatgpt"], []].map((ids) => ({ ids, codigos: [...analisis.codigosEstables(ids).entries()] }));
+
+// ---------------------------------------------------------------- cuerpo del operador
+// Bordes donde .NET difiere de JS: \S (U+FEFF, U+0085), toLowerCase (İ, signo Kelvin),
+// decodeURIComponent que tira, y el prefijo http(s) sin /u.
+const NBSP = c(0xa0);
+const LIMPIEZAS = [
+  "https://ejemplo.org/a?utm_source=chatgpt.com&model=gpt-5.5#frag",
+  "https://ejemplo.org/a?model=x&MODEL=y&%6Dodel=z&mo%zzdel=w&%E2%82model=u&&=v&model",
+  "https://ejemplo.org/sin-query",
+  "https://ejemplo.org/?#solo",
+  "https://ejemplo.org/a#h?no=query",
+  "https://ejemplo.org/a?ref=kimi",
+].map((u) => [u, analisis.limpiarQueryWhitelist(u)]);
+const FUGAS = [
+  "sin urls",
+  "ver https://platform.claude.com/docs/claude-prompting y HTTPS://CHATGPT.COM/share/x",
+  "https://x.org/?ref=Kimi https://chat.z.ai/c/1 http://sub.claude.ai/ https://notclaude.ai/ https://claude.ai.evil.org/ https://kimi.ai",
+  `https://ejemplo.org/?q=kim${c(0x130)} https://claude.a${c(0x130)}/ https://x.org/?a=${c(0x212a)}imi`,
+  `http:// suelto, https://a.org/x${NBSP}y https://b.org/?q=glm${LS}https://c.org/?deepseek${c(0xfeff)}https://d.org/?x=qwen${c(0x85)}fin`,
+  `http${c(0x17f)}://claude.ai/ y httpS://grok.com y http://https://gemini.google.com`,
+].map((t) => [t, analisis.fugasDeProveedorEnUrls(t)]);
+const ARMADOS = [
+  ["texto de respuesta sin nada raro", ["https://arxiv.org/abs/2212.10001"]],
+  ["texto", []],
+  ["texto", ["https://ejemplo.org/a?utm_source=chatgpt.com&model=gpt-5.5", "https://otro.org/b?ref=x"]],
+  ["texto de respuesta", ["https://chatgpt.com/share/abc123"]],
+  ["texto con https://claude.ai/chat/1 adentro", []],
+].map(([t, us]) => {
+  try {
+    return [t, us, analisis.armarCuerpoConFuentes(t, us), null];
+  } catch (e) {
+    return [t, us, null, e.message];
+  }
+});
+
+const PALABRAS = ["la", "respuesta", "de", "Claude", "cita", "datos", `con${NBSP}espacio`, "y", "GPT-5", "sobre", "el", "tema\n"];
+const textoDe = (n, k0) => {
+  let s = "";
+  for (let k = k0; s.length < n; k++) s += PALABRAS[k % PALABRAS.length] + " ";
+  return s;
+};
+const MARCAS = [
+  ["", "t", 10],
+  ["hola mundo", "t", 1000],
+  ["aaaa bbbbbbbbbbbbbbbbbbbb cc\ndd ee ff gg", "t", 10],
+  ["x".repeat(25), "t", 10],
+  ["0123456789 abc", "t", 10],
+  [textoDe(3500, 0), "tok", 1000],
+].map(([texto, token, intervalo]) => ({ texto, token, intervalo, ...analisis.insertarMarcasIntercaladas(texto, token, intervalo) }));
+
+// Los cuatro casos de integridad del BLUEPRINT, más la respuesta vacía.
+const { textoConMarcas: CON_MARCAS, marcas: MARCAS_10 } = analisis.insertarMarcasIntercaladas(textoDe(10000, 3), "tok");
+const sinMarcas = (t, ...ms) => ms.reduce((s, m) => s.replace(m, ""), t);
+const INTEGRIDADES = [
+  ["completo", CON_MARCAS],
+  ["recortado al 40 %", CON_MARCAS.slice(0, Math.floor(CON_MARCAS.length * 0.4))],
+  ["sin la ultima marca", sinMarcas(CON_MARCAS, MARCAS_10.at(-1))],
+  ["sin dos marcas no contiguas", sinMarcas(CON_MARCAS, MARCAS_10[2], MARCAS_10[4])],
+  ["vacio", ""],
+].map(([caso, respuesta]) => ({ caso, respuesta, ...analisis.evaluarIntegridad(respuesta, MARCAS_10) }));
+const medio = CON_MARCAS.indexOf(MARCAS_10[4]) - 10;
+const PERDIDAS = [CON_MARCAS, CON_MARCAS.slice(0, medio) + CON_MARCAS.slice(medio + 1), sinMarcas(CON_MARCAS, MARCAS_10[6])].map((final) => ({
+  final,
+  segmentos: JSON.stringify(analisis.localizarPerdida(CON_MARCAS, final, MARCAS_10)),
+}));
+
+// armarCuerposPorOperador con tokens fijos; el segundo caso filtra por host propio y tira.
+const SEMILLA_CUERPOS = analisis.hashSemilla("semilla-fija");
+const paraOperar = (id, i) => ({
+  proveedorId: id,
+  replyId: `r-${id}`,
+  attemptId: `a-${id}`,
+  texto: textoDe(600 + 150 * i, i),
+  urlsCitadas: i % 3 === 0 ? [] : [`https://ejemplo.org/${id}?utm_source=${id}&model=m${i}`, "https://arxiv.org/abs/2212.10001"],
+});
+const CUERPOS = [
+  POOL.map(paraOperar),
+  POOL.map((id, i) => (id === "grok" ? { ...paraOperar(id, i), urlsCitadas: ["https://grok.com/share/1"] } : paraOperar(id, i))),
+].map((rs) => {
+  let n = 0;
+  try {
+    return { entrada: JSON.stringify(rs), esperado: JSON.stringify(analisis.armarCuerposPorOperador(rs, POOL, SEMILLA_CUERPOS, () => `tok${++n}`)), error: null };
+  } catch (e) {
+    return { entrada: JSON.stringify(rs), esperado: null, error: e.message };
+  }
+});
 
 // ---------------------------------------------------------------- registro
 // Un hecho de cada uno de los dieciséis tipos, escrito por las funciones reales.
@@ -209,6 +295,7 @@ const ESCENARIOS_CARGADOS = [[], [cond(["a"], "deepseek"), cond(["a", "b"], "glm
 
 // ---------------------------------------------------------------- archivo
 const arr = (xs) => xs.map(cs).join(",\n            ");
+const strs = (xs) => `new string[] { ${xs.map(cs).join(", ")} }`;
 const archivo = `// Generado por motor/Dotnet~/referencias.mjs a partir del código TypeScript. No editar a mano.
 namespace ChatCouncil.Motor.Pruebas
 {
@@ -231,7 +318,44 @@ namespace ChatCouncil.Motor.Pruebas
         };
 
         public static readonly (string[] ids, string[] claves, string[] codigos)[] Codigos = {
-            ${CODIGOS.map((k) => `(new string[] { ${k.ids.map(cs).join(", ")} }, new string[] { ${k.codigos.map(([id]) => cs(id)).join(", ")} }, new string[] { ${k.codigos.map(([, p]) => cs(p)).join(", ")} })`).join(",\n            ")}
+            ${CODIGOS.map((k) => `(${strs(k.ids)}, ${strs(k.codigos.map(([id]) => id))}, ${strs(k.codigos.map(([, p]) => p))})`).join(",\n            ")}
+        };
+
+        public static readonly (string url, string limpia)[] Limpiezas = {
+            ${LIMPIEZAS.map(([u, l]) => `(${cs(u)}, ${cs(l)})`).join(",\n            ")}
+        };
+
+        public static readonly (string texto, string[] fugas)[] Fugas = {
+            ${FUGAS.map(([t, f]) => `(${cs(t)}, ${strs(f)})`).join(",\n            ")}
+        };
+
+        /// <summary>armarCuerpoConFuentes: el cuerpo, o el mensaje con que tira.</summary>
+        public static readonly (string texto, string[] urls, string cuerpo, string error)[] Armados = {
+            ${ARMADOS.map(([t, us, cuerpo, error]) => `(${cs(t)}, ${strs(us)}, ${cs(cuerpo)}, ${cs(error)})`).join(",\n            ")}
+        };
+
+        public static readonly (string texto, string token, int intervalo, string conMarcas, string[] marcas)[] Marcas = {
+            ${MARCAS.map((m) => `(${cs(m.texto)}, ${cs(m.token)}, ${m.intervalo}, ${cs(m.textoConMarcas)}, ${strs(m.marcas)})`).join(",\n            ")}
+        };
+
+        public static readonly string ConMarcas = ${cs(CON_MARCAS)};
+        public static readonly string[] MarcasIntegridad = ${strs(MARCAS_10)};
+
+        public static readonly (string caso, string respuesta, string estado, int esperadas, int presentes, int[] faltantes)[] Integridades = {
+            ${INTEGRIDADES.map((r) => `(${cs(r.caso)}, ${cs(r.respuesta)}, ${cs(r.estado)}, ${r.marcasEsperadas}, ${r.marcasPresentes}, new int[] { ${r.faltantes.join(", ")} })`).join(",\n            ")}
+        };
+
+        /// <summary>localizarPerdida(ConMarcas, final, MarcasIntegridad), como JSON.</summary>
+        public static readonly (string final, string segmentos)[] Perdidas = {
+            ${PERDIDAS.map((p) => `(${cs(p.final)}, ${cs(p.segmentos)})`).join(",\n            ")}
+        };
+
+        public const uint SemillaCuerpos = ${SEMILLA_CUERPOS}u;
+        public static readonly string[] PoolCuerpos = ${strs(POOL)};
+
+        /// <summary>armarCuerposPorOperador con tokens tok1, tok2…: la salida como JSON, o el mensaje con que tira.</summary>
+        public static readonly (string entrada, string esperado, string error)[] Cuerpos = {
+            ${CUERPOS.map((k) => `(${cs(k.entrada)}, ${cs(k.esperado)}, ${cs(k.error)})`).join(",\n            ")}
         };
 
         /// <summary>Un hecho de cada tipo, escrito por las funciones reales de registro.ts.</summary>

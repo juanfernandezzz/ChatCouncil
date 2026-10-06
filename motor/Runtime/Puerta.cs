@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ChatCouncil.Motor
 {
@@ -32,6 +35,42 @@ namespace ChatCouncil.Motor
             copia.Error = error;
             return copia;
         }
+    }
+
+    /// <summary>
+    /// Puerto HTTP: pide la URL siguiendo redirecciones y devuelve el código de
+    /// estado; tira si no hubo respuesta. Sin cookies ni sesión de los paneles, y
+    /// sin leer el cuerpo de la respuesta.
+    /// </summary>
+    public interface IHttp
+    {
+        Task<int> Pedir(string url, string metodo, CancellationToken cancelar);
+    }
+
+    /// <summary>Puerto PDF: imprime un Markdown a un PDF en la ruta dada; tira si no pudo.</summary>
+    public interface IPdf
+    {
+        Task Generar(string markdown, string rutaPdf, string titulo);
+    }
+
+    public sealed class ResultadoUrls
+    {
+        public bool Ok { get; set; }
+        public string Error { get; set; }
+        public string SalidaVerificadorId { get; set; }
+        public List<UrlComprobada> Urls { get; set; }
+        /// <summary>Ya se habían comprobado para esa verificación: no se salió a la red.</summary>
+        public bool YaComprobadas { get; set; }
+    }
+
+    /// <summary>El único paso siguiente de la etapa, que decide el motor, y lo que Juan hace a mano en ese momento.</summary>
+    public sealed class Paso
+    {
+        /// <summary>pregunta, investigacion, operacion, integracion, verificacion, redaccion o informe.</summary>
+        public string Etapa { get; set; }
+        public string Accion { get; set; }
+        public string Texto { get; set; }
+        public string Recordatorio { get; set; }
     }
 
     /// <summary>La operación de un panel: lo que se pega y, por la vía de archivo, el archivo que se adjunta.</summary>
@@ -315,12 +354,11 @@ namespace ChatCouncil.Motor
             var ronda = hechos.OfType<Ronda>().FirstOrDefault(r => r.Id == RondaActual) ?? throw new InvalidOperationException("no se encontró la ronda actual en el registro");
             var pregunta = Dominio.PreguntaEfectivaDeRonda(hechos, ronda)
                 ?? throw new InvalidOperationException($"la ronda {ronda.Id} no tiene pregunta registrada: declárala antes de pegar la operación");
-            var ultimas = new Dictionary<string, Respuesta>();
-            foreach (var r in hechos.OfType<Respuesta>().Where(r => r.RondaId == ronda.Id && poolOperadores.Contains(r.ProveedorId))) ultimas[r.ProveedorId] = r;
-            var faltantes = poolOperadores.Where(id => !ultimas.ContainsKey(id)).ToList();
+            var ultimas = UltimaPorProveedor(hechos.OfType<Respuesta>().Where(r => r.RondaId == ronda.Id && poolOperadores.Contains(r.ProveedorId)));
+            var faltantes = poolOperadores.Where(id => ultimas.All(r => r.ProveedorId != id)).ToList();
             if (faltantes.Count > 0)
                 throw new InvalidOperationException($"faltan respuestas capturadas en esta ronda: {string.Join(", ", faltantes)}. Usa \"Capturar\" antes de pegar la operación");
-            return (ronda, pregunta, ultimas.Values.ToList(), hechos.OfType<Cita>().ToList());
+            return (ronda, pregunta, ultimas, hechos.OfType<Cita>().ToList());
         }
 
         /// <summary>
@@ -580,12 +618,11 @@ namespace ChatCouncil.Motor
             if (anterior == null) return "No se encontró la ronda activa en el registro.";
             var pregunta = Dominio.PreguntaEfectivaDeRonda(hechos, anterior);
             if (pregunta == null) return "La ronda activa no tiene una pregunta registrada válida: no se puede repetir.";
-            var ultimas = new Dictionary<string, Respuesta>();
-            foreach (var r in hechos.OfType<Respuesta>().Where(r => r.RondaId == anterior.Id && poolOperadores.Contains(r.ProveedorId))) ultimas[r.ProveedorId] = r;
+            var ultimas = UltimaPorProveedor(hechos.OfType<Respuesta>().Where(r => r.RondaId == anterior.Id && poolOperadores.Contains(r.ProveedorId)));
             if (ultimas.Count == 0) return "La ronda activa no tiene respuestas del pool para copiar.";
 
             var nueva = AbrirRonda(pregunta);
-            foreach (var r in ultimas.Values)
+            foreach (var r in ultimas)
             {
                 var copia = new Respuesta
                 {
@@ -686,6 +723,421 @@ namespace ChatCouncil.Motor
             var hecho = new PreguntaDeclarada { Id = nuevoId(), RondaId = rondaId, Texto = texto, DeclaradaEn = Ahora() };
             Escribir(hecho);
             return hecho;
+        }
+
+        // ---------------------------------------------------------------- URLs e informe
+
+        /// <summary>Techo de URLs por ronda: sólo las de la sección 1 del verificador.</summary>
+        public const int TechoUrlsPorRonda = 20;
+        static readonly TimeSpan TiempoPorUrl = TimeSpan.FromSeconds(10);
+        static readonly UTF8Encoding Utf8SinBom = new UTF8Encoding(false);
+        const string NombreFaltantes = "FALTAN - respuestas sin PDF.txt";
+
+        /// <summary>
+        /// HEAD y, si no da un 2xx o falla, GET, con un solo tiempo para los dos.
+        /// El código queda null cuando no hubo respuesta, con el motivo en el detalle.
+        /// </summary>
+        public static async Task<(int? Codigo, string Detalle)> ComprobarUrl(string url, IHttp http, TimeSpan tiempo)
+        {
+            using (var cancelar = new CancellationTokenSource(tiempo))
+            {
+                var sinRespuesta = ((int?)null, $"sin respuesta en {tiempo.TotalSeconds.ToString(CultureInfo.InvariantCulture)} s");
+                try
+                {
+                    int head = await http.Pedir(url, "HEAD", cancelar.Token);
+                    if (head >= 200 && head <= 299) return (head, null);
+                }
+                catch (Exception) when (cancelar.IsCancellationRequested)
+                {
+                    return sinRespuesta;
+                }
+                catch (Exception)
+                {
+                    // HEAD rechazado: algunos sitios sólo contestan GET.
+                }
+                try
+                {
+                    return (await http.Pedir(url, "GET", cancelar.Token), null);
+                }
+                catch (Exception) when (cancelar.IsCancellationRequested)
+                {
+                    return sinRespuesta;
+                }
+                catch (Exception e)
+                {
+                    return (null, e.Message);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Comprueba las URLs de la sección 1 de la última verificación de la
+        /// ronda, una sola vez por verificación: si ya se comprobaron, devuelve
+        /// esas y no sale a la red.
+        /// </summary>
+        public async Task<ResultadoUrls> ComprobarUrls(IHttp http)
+        {
+            if (ConversacionActual == null || RondaActual == null) return new ResultadoUrls { Ok = false, Error = "no hay una ronda activa" };
+            var rondaId = RondaActual;
+            var hechos = LeerRegistro().Hechos;
+            var salida = Dominio.UltimaSalidaVerificador(hechos, rondaId);
+            if (salida == null) return new ResultadoUrls { Ok = false, Error = $"la ronda {rondaId} no tiene verificacion capturada" };
+            var previas = hechos.OfType<UrlComprobada>().Where(u => u.SalidaVerificadorId == salida.Id).ToList();
+            if (previas.Count > 0) return new ResultadoUrls { Ok = true, SalidaVerificadorId = salida.Id, Urls = previas, YaComprobadas = true };
+
+            var urls = new List<string>();
+            foreach (var v in Parseos.ParsearVerificacion(TextoDeHtml.TextoDeLaSalidaVerificador(salida.SalidaCruda, salida.Html), new string[0]).Correspondencias)
+                if (v.Correspondencia != "NO_ENCONTRADA" && v.Url != null && !urls.Contains(v.Url) && urls.Count < TechoUrlsPorRonda) urls.Add(v.Url);
+            var resultados = await Task.WhenAll(urls.Select(u => ComprobarUrl(u, http, TiempoPorUrl)));
+            var escritas = new List<UrlComprobada>();
+            for (int i = 0; i < urls.Count; i++)
+            {
+                var u = new UrlComprobada
+                {
+                    Id = nuevoId(), RondaId = rondaId, SalidaVerificadorId = salida.Id, Url = urls[i],
+                    Codigo = resultados[i].Codigo, Detalle = resultados[i].Detalle, ComprobadaEn = Ahora(),
+                };
+                Escribir(u);
+                escritas.Add(u);
+            }
+            return new ResultadoUrls { Ok = true, SalidaVerificadorId = salida.Id, Urls = escritas, YaComprobadas = false };
+        }
+
+        /// <summary>La última respuesta de cada proveedor, en el orden de su primera captura.</summary>
+        static List<Respuesta> UltimaPorProveedor(IEnumerable<Respuesta> respuestas)
+        {
+            var orden = new List<string>();
+            var ultima = new Dictionary<string, Respuesta>();
+            foreach (var r in respuestas)
+            {
+                if (!ultima.ContainsKey(r.ProveedorId)) orden.Add(r.ProveedorId);
+                ultima[r.ProveedorId] = r;
+            }
+            return orden.Select(id => ultima[id]).ToList();
+        }
+
+        static List<HallazgoParaTabla> ParaTabla(IEnumerable<SalidaVigente> vigentes) =>
+            vigentes.SelectMany(s => s.Hallazgos.Select(h => new HallazgoParaTabla
+            {
+                HallazgoIdOriginal = h.Id, Categoria = h.Categoria, Eje = h.Eje, Etiquetas = h.Etiquetas, Descripcion = h.Descripcion, OperadorIdOriginal = s.OperadorId,
+            })).ToList();
+
+        /// <summary>
+        /// Arma el informe de la ronda y su carpeta en "informes": el informe en .md
+        /// y PDF, y una subcarpeta con la respuesta de cada investigador. Antes
+        /// comprueba las URLs de la verificación, si las hay y no se comprobaron.
+        /// </summary>
+        public async Task<(bool Ok, string Mensaje, string Ruta)> ArmarInforme(IHttp http, IPdf pdf)
+        {
+            try
+            {
+                return await ArmarInformeOTirar(http, pdf);
+            }
+            catch (Exception e)
+            {
+                return (false, $"No se pudo armar el informe final: {e.Message}", null);
+            }
+        }
+
+        async Task<(bool Ok, string Mensaje, string Ruta)> ArmarInformeOTirar(IHttp http, IPdf pdf)
+        {
+            var sinRonda = (false, "No hay una ronda activa para armar el informe.", (string)null);
+            if (ConversacionActual == null || RondaActual == null) return sinRonda;
+            var hechos = LeerRegistro().Hechos;
+            var ronda = hechos.OfType<Ronda>().FirstOrDefault(r => r.Id == RondaActual);
+            if (ronda == null) return sinRonda;
+
+            var semilla = ronda.Semilla ?? "";
+            var sello = hechos.OfType<Sello>().Where(s => s.RondaId == ronda.Id).ToList();
+            var respuestasDelPool = UltimaPorProveedor(hechos.OfType<Respuesta>().Where(r => r.RondaId == ronda.Id && poolOperadores.Contains(r.ProveedorId)));
+            var idsRespuesta = new HashSet<string>(respuestasDelPool.Select(r => r.Id));
+            var citas = hechos.OfType<Cita>().Where(c => idsRespuesta.Contains(c.RespuestaId)).ToList();
+            var vigentes = Dominio.SalidasVigentesDeRonda(hechos, ronda.Id);
+            var tabla = Prompts.ArmarTablaHallazgos(ParaTabla(vigentes), poolOperadores, Anonimizacion.HashSemilla(semilla));
+            // Un operador nunca desaparece del informe por haber fallado o no dar hallazgos: los tres estados son hechos.
+            var participacion = poolOperadores.Select(id =>
+            {
+                var v = vigentes.FirstOrDefault(x => x.OperadorId == id);
+                var s = v == null ? null : hechos.OfType<SalidaOperador>().FirstOrDefault(h => h.Id == v.SalidaId);
+                if (v == null || s == null) return new ParticipacionOperador { OperadorId = id, Estado = "fallo", Detalle = "no se capturo salida: no hay salida de operador en el registro" };
+                if (v.Hallazgos.Count > 0) return new ParticipacionOperador { OperadorId = id, Estado = "ok", Detalle = $"{v.Hallazgos.Count} hallazgos" };
+                int descartadas;
+                try
+                {
+                    descartadas = Parseos.ParsearHallazgos(s.SalidaCruda, Dominio.EtiquetasValidasDelOperador(id, poolOperadores, sello)).LineasDescartadas;
+                }
+                catch (InvalidOperationException)
+                {
+                    descartadas = 0;
+                }
+                return new ParticipacionOperador { OperadorId = id, Estado = "sin-hallazgos", Detalle = $"0 hallazgos parseables ({descartadas} lineas de la salida cruda descartadas)" };
+            }).ToList();
+
+            var informeIntegrador = Dominio.UltimoInformeIntegrador(hechos, ronda.Id);
+            var pregunta = Dominio.PreguntaEfectivaDeRonda(hechos, ronda) ?? ronda.Prompt;
+            var salidaVerificador = Dominio.UltimaSalidaVerificador(hechos, ronda.Id);
+            var urls = salidaVerificador == null ? new List<UrlComprobada>() : (await ComprobarUrls(http)).Urls ?? new List<UrlComprobada>();
+
+            // Desanonimizar: P# → proveedor con el sello, O# → operador con la tabla.
+            var cargados = Dominio.ProveedoresCargadosDeRonda(hechos, ronda.Id);
+            var proveedorDeCodigo = new Dictionary<string, string>();
+            var codigoDeProveedor = new Dictionary<string, string>();
+            foreach (var s in sello)
+            {
+                if (s.CodigoEstable != null) proveedorDeCodigo[s.CodigoEstable] = s.PanelSourceId;
+                codigoDeProveedor[s.PanelSourceId] = s.CodigoEstable;
+            }
+            var hallazgos = tabla.Filas.Select(f => new HallazgoResuelto
+            {
+                Codigo = f.CodigoHallazgo, Categoria = f.Categoria, Eje = f.Eje,
+                RespuestasReales = f.Etiquetas.Where(proveedorDeCodigo.ContainsKey).Select(p => proveedorDeCodigo[p]).ToList(),
+                Descripcion = f.Descripcion, OperadorReal = f.OperadorIdOriginal,
+            }).ToList();
+            var idsValidos = tabla.Filas.Select(f => f.CodigoHallazgo).ToList();
+            var textoIntegrador = informeIntegrador == null ? null : TextoDeHtml.TextoDelInformeIntegrador(informeIntegrador.InformeCrudo, informeIntegrador.Html);
+            var redaccion = hechos.OfType<RespuestaRedactor>().LastOrDefault(h => h.RondaId == ronda.Id);
+            RedaccionParaInforme redaccionParaInforme = null;
+            if (redaccion != null)
+            {
+                var controles = InformeFinal.ControlesRedaccion(redaccion.TextoCrudo, redaccion.Html, redaccion.MarcaPrimera, redaccion.MarcaUltima, idsValidos, citas.Select(c => c.Url).ToList());
+                redaccionParaInforme = new RedaccionParaInforme { RedactorId = redaccion.RedactorId, Controles = InformeFinal.LineasDeControl(controles), Cuerpo = controles.Cuerpo };
+            }
+            var texto = InformeFinal.Armar(new InformeFinalInput
+            {
+                Pregunta = pregunta,
+                Fecha = Ahora(),
+                ConversacionId = ConversacionActual,
+                RondaId = ronda.Id,
+                InformeIntegradorCrudo = textoIntegrador,
+                ReferenciasEnOrden = textoIntegrador == null
+                    ? new List<ReferenciaResuelta>()
+                    : Parseos.ParsearReferenciasIntegrador(textoIntegrador, idsValidos).Referencias.Select(r => new ReferenciaResuelta { Codigo = r.HallazgoId, Existe = !r.ReferenciaInvalida }).ToList(),
+                Hallazgos = hallazgos,
+                ParticipacionOperadores = participacion,
+                Condiciones = respuestasDelPool.Select(r => new CondicionProveedor
+                {
+                    ProveedorId = r.ProveedorId, EtiquetaModelo = r.Procedencia?.ModelLabel, CaracteresRespuesta = r.TextoOriginal.Length,
+                    FuentesCitadas = citas.Count(c => c.RespuestaId == r.Id), CodigoEstable = codigoDeProveedor.TryGetValue(r.ProveedorId, out var codigo) ? codigo : null,
+                }).ToList(),
+                IntegridadEntrega = "no persistida en el registro (se informa en pantalla al pegar cada panel)",
+                Semilla = semilla,
+                ProveedoresCargadosIncompletos = cargados != null && poolOperadores.Any(id => !cargados.Contains(id)) ? cargados.ToList() : null,
+                Integrador = informeIntegrador?.OperadorId ?? Dominio.IntegradorDeRonda(hechos, ronda.Id),
+                Verificacion = salidaVerificador == null ? null : InformeFinal.VerificacionParaInforme(salidaVerificador, urls, hallazgos, TechoUrlsPorRonda),
+                Redaccion = redaccionParaInforme,
+            });
+
+            // El nombre: fecha y hora locales y el título del integrador (o las primeras palabras de la pregunta).
+            var dir = Path.Combine(carpeta, "informes");
+            Directory.CreateDirectory(dir);
+            var titulo = informeIntegrador == null ? null
+                : !string.IsNullOrEmpty(informeIntegrador.Html) ? TituloInforme.ExtraerTituloDelInforme(textoIntegrador).Titulo
+                : informeIntegrador.Titulo ?? TituloInforme.ExtraerTituloDelInforme(informeIntegrador.InformeCrudo).Titulo;
+            var nombre = TituloInforme.NombreLibreDeInforme(TituloInforme.NombreBaseDeInforme(titulo, pregunta, reloj().DateTime),
+                n => Directory.Exists(Path.Combine(dir, n)) || File.Exists(Path.Combine(dir, n + ".md")) || File.Exists(Path.Combine(dir, n + ".pdf")));
+            // Las respuestas de los INVESTIGADORES a la pregunta, en el orden del pool; nunca las salidas de operador.
+            var respuestas = new List<(string Archivo, string Titulo, string Markdown)>();
+            for (int i = 0; i < poolOperadores.Count; i++)
+            {
+                var r = respuestasDelPool.FirstOrDefault(x => x.ProveedorId == poolOperadores[i]);
+                if (r == null) continue;
+                respuestas.Add((InformeFinal.NombreArchivoRespuesta(i, r.ProveedorId), $"{Dominio.NombreProveedor(r.ProveedorId)} — respuesta de investigador",
+                    InformeFinal.MarkdownDeRespuestaInvestigador(pregunta, new RespuestaParaPdf
+                    {
+                        ProveedorId = r.ProveedorId, EtiquetaModelo = r.Procedencia?.ModelLabel, LeidaEn = r.LeidaEn, TextoOriginal = r.TextoOriginal, Error = r.Error,
+                        FuentesCitadas = citas.Count(c => c.RespuestaId == r.Id), FuentesHref = r.FuentesHref, FinDe = r.Procedencia?.FinDe,
+                    })));
+            }
+            return await EntregarCarpeta(dir, nombre, texto, respuestas, pdf);
+        }
+
+        static void EscribirNuevo(string ruta, string texto)
+        {
+            // CreateNew: nunca se sobrescribe un informe, que es un dato de investigación.
+            using (var archivo = new FileStream(ruta, FileMode.CreateNew, FileAccess.Write))
+            {
+                var bytes = Utf8SinBom.GetBytes(texto);
+                archivo.Write(bytes, 0, bytes.Length);
+            }
+        }
+
+        /// <summary>
+        /// La carpeta del informe. Una respuesta cuyo .md o PDF falla no se omite en
+        /// silencio: las demás se escriben igual y un archivo FALTAN las nombra.
+        /// </summary>
+        static async Task<(bool Ok, string Mensaje, string Ruta)> EntregarCarpeta(string dirInformes, string nombreBase, string textoInforme,
+            List<(string Archivo, string Titulo, string Markdown)> respuestas, IPdf pdf)
+        {
+            var carpetaInforme = Path.Combine(dirInformes, nombreBase);
+            if (Directory.Exists(carpetaInforme)) throw new IOException($"ya existe la carpeta {carpetaInforme}");
+            Directory.CreateDirectory(carpetaInforme);
+            var rutaMd = Path.Combine(carpetaInforme, nombreBase + ".md");
+            EscribirNuevo(rutaMd, textoInforme);
+
+            string falloInforme = null;
+            try
+            {
+                await pdf.Generar(textoInforme, Path.Combine(carpetaInforme, nombreBase + ".pdf"), $"{nombreBase} — ChatCouncil");
+            }
+            catch (Exception e)
+            {
+                falloInforme = e.Message;
+            }
+
+            var faltantes = new List<string>();
+            string falloSubcarpeta = null;
+            bool notaEscrita = false;
+            if (respuestas.Count > 0)
+            {
+                var dirRespuestas = Path.Combine(carpetaInforme, InformeFinal.SubcarpetaRespuestas);
+                try
+                {
+                    Directory.CreateDirectory(dirRespuestas);
+                }
+                catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                {
+                    falloSubcarpeta = e.Message;
+                }
+                if (falloSubcarpeta == null)
+                {
+                    foreach (var r in respuestas)
+                    {
+                        // El .md primero: es el texto, y otro modelo lo lee sin pasar por el PDF.
+                        try
+                        {
+                            EscribirNuevo(Path.Combine(dirRespuestas, r.Archivo + ".md"), r.Markdown);
+                        }
+                        catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                        {
+                            faltantes.Add($"{r.Archivo}: no se pudo escribir el .md ({e.Message})");
+                        }
+                        try
+                        {
+                            await pdf.Generar(r.Markdown, Path.Combine(dirRespuestas, r.Archivo + ".pdf"), r.Titulo);
+                        }
+                        catch (Exception e)
+                        {
+                            faltantes.Add($"{r.Archivo}: no se pudo generar el PDF ({e.Message})");
+                        }
+                    }
+                    if (faltantes.Count > 0)
+                    {
+                        var nota = string.Join("\n", new[] { "Estos archivos de respuesta de investigador no se pudieron escribir.", "El texto de cada una sigue entero en el registro de la conversacion.", "" }
+                            .Concat(faltantes.Select(f => $"- {f}")).Concat(new[] { "" }));
+                        try
+                        {
+                            EscribirNuevo(Path.Combine(dirRespuestas, NombreFaltantes), nota);
+                            notaEscrita = true;
+                        }
+                        catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                        {
+                            // la cuenta igual va en el mensaje
+                        }
+                    }
+                }
+            }
+
+            // Se cuentan RESPUESTAS con algún fallo, no archivos: una puede fallar en el .md y en el PDF.
+            int conAlgunFallo = faltantes.Select(f => f.Split(':')[0]).Distinct().Count();
+            int completas = respuestas.Count - conAlgunFallo;
+            var detalle = respuestas.Count == 0 ? "Sin respuestas de investigador en el registro de esta ronda."
+                : falloSubcarpeta != null ? $"NINGUNA de las {respuestas.Count} respuestas de investigador se escribio: no se pudo crear la subcarpeta \"{InformeFinal.SubcarpetaRespuestas}\" ({falloSubcarpeta}). El texto de todas sigue entero en el registro."
+                : conAlgunFallo == 0 ? $"{completas} respuestas de investigador, cada una en .md y en PDF."
+                : $"{completas} de {respuestas.Count} respuestas completas; {conAlgunFallo} con archivos faltantes{(notaEscrita ? $" (nombrados en \"{NombreFaltantes}\")" : ", y la nota que los nombra tampoco se pudo escribir")}.";
+            return falloInforme != null
+                ? (true, $"Carpeta del informe: {carpetaInforme}. El informe quedo solo en Markdown: no se pudo generar el PDF ({falloInforme}). {detalle}", rutaMd)
+                : (true, $"Carpeta del informe: {carpetaInforme}. Se abrio el PDF del informe. {detalle}", carpetaInforme);
+        }
+
+        // ---------------------------------------------------------------- guía
+
+        static readonly Dictionary<string, string> Recordatorios = new Dictionary<string, string>
+        {
+            ["pregunta"] = "Escribe la pregunta. La app la pega en cada panel; tú la revisas y la envías.",
+            ["investigacion"] = "En cada panel, activa la búsqueda web, revisa y envía tú. Antes de capturar, abre el panel de fuentes.",
+            ["operacion"] = "En cada panel, revisa la operación y envíala tú. Si va con archivo, comprueba que quedó adjunto.",
+            ["integracion"] = "Revisa el prompt en el panel del integrador y envíalo tú.",
+            ["verificacion"] = "En el panel del verificador, activa la búsqueda web, revisa y envía tú.",
+            ["redaccion"] = "En el panel del redactor, comprueba que el archivo quedó adjunto y envía tú.",
+            ["informe"] = "La carpeta del informe se abre al terminar.",
+        };
+
+        static Paso NuevoPaso(string etapa, string accion, string texto) =>
+            new Paso { Etapa = etapa, Accion = accion, Texto = texto, Recordatorio = Recordatorios[etapa] };
+
+        /// <summary>El único paso siguiente, que sale del registro y de lo pegado en esta sesión; nunca de la interfaz.</summary>
+        public Paso PasoSiguiente()
+        {
+            if (ConversacionActual == null || RondaActual == null) return NuevoPaso("pregunta", "pegar-pregunta", "Pegar la pregunta en los paneles");
+            var hechos = LeerRegistro().Hechos;
+            var rondaId = RondaActual;
+            switch (Dominio.EtapaDeRonda(hechos, rondaId, poolOperadores.Count))
+            {
+                case "investigacion":
+                {
+                    var capturados = new HashSet<string>(hechos.OfType<Respuesta>().Where(r => r.RondaId == rondaId).Select(r => r.ProveedorId));
+                    if (!poolOperadores.All(capturados.Contains)) return NuevoPaso("investigacion", "capturar", "Capturar los que terminaron");
+                    var ronda = hechos.OfType<Ronda>().First(r => r.Id == rondaId);
+                    if (Dominio.PreguntaEfectivaDeRonda(hechos, ronda) == null) return NuevoPaso("investigacion", "declarar-pregunta", "Declarar la pregunta de esta ronda");
+                    return NuevoPaso("operacion", "pegar-operacion", "Pegar la operación en los paneles");
+                }
+                case "operacion":
+                {
+                    var conSalida = new HashSet<string>(hechos.OfType<SalidaOperador>().Where(s => s.RondaId == rondaId).Select(s => s.OperadorId));
+                    bool faltaPegar = poolOperadores.Any(op => !conSalida.Contains(op) && !promptOperador.ContainsKey(op));
+                    return faltaPegar ? NuevoPaso("operacion", "pegar-operacion", "Pegar la operación en los paneles") : NuevoPaso("operacion", "capturar", "Capturar los que terminaron");
+                }
+                case "integracion":
+                    return promptIntegrador == null ? NuevoPaso("integracion", "pegar-integrador", "Pegar el prompt del integrador") : NuevoPaso("integracion", "capturar", "Capturar el informe del integrador");
+                case "verificacion":
+                    return promptVerificador == null ? NuevoPaso("verificacion", "pegar-verificacion", "Pegar el prompt del verificador") : NuevoPaso("verificacion", "capturar", "Capturar la verificación");
+                default:
+                    if (hechos.OfType<RespuestaRedactor>().Any(r => r.RondaId == rondaId)) return NuevoPaso("informe", "armar-informe", "Armar el informe");
+                    return promptRedactor == null ? NuevoPaso("redaccion", "pegar-redactor", "Pegar el prompt y el archivo del redactor") : NuevoPaso("redaccion", "capturar", "Capturar la respuesta del redactor");
+            }
+        }
+
+        /// <summary>
+        /// El estado de un panel en la etapa actual: capturado, con-problema,
+        /// respondiendo, parece-terminado-observado o -deducido, pegado-falta-enviar o
+        /// por-pegar. Lo que dice la página (generando, cómo se supo el fin) entra
+        /// como parámetro; lo demás sale del registro y de lo pegado en esta sesión.
+        /// </summary>
+        public string EstadoDePanel(string proveedorId, bool? generando, string fin)
+        {
+            if (ConversacionActual == null || RondaActual == null) return "por-pegar";
+            var hechos = LeerRegistro().Hechos;
+            var rondaId = RondaActual;
+            var etapa = Dominio.EtapaDeRonda(hechos, rondaId, poolOperadores.Count);
+            bool capturado, problema, pegado;
+            if (etapa == "investigacion")
+            {
+                var intento = hechos.OfType<Intento>().LastOrDefault(i => i.RondaId == rondaId && i.ProveedorId == proveedorId);
+                var respuesta = hechos.OfType<Respuesta>().LastOrDefault(r => r.RondaId == rondaId && r.ProveedorId == proveedorId);
+                capturado = respuesta != null && string.IsNullOrEmpty(respuesta.Error);
+                problema = respuesta != null ? !string.IsNullOrEmpty(respuesta.Error) : intento != null && !intento.Ok;
+                pegado = intento != null && intento.Ok;
+            }
+            else if (etapa == "operacion")
+            {
+                capturado = hechos.OfType<SalidaOperador>().Any(s => s.RondaId == rondaId && s.OperadorId == proveedorId);
+                problema = false;
+                pegado = promptOperador.ContainsKey(proveedorId);
+            }
+            else
+            {
+                capturado = etapa == "redaccion" && hechos.OfType<RespuestaRedactor>().Any(r => r.RondaId == rondaId && r.RedactorId == proveedorId);
+                problema = hechos.OfType<ErrorCaptura>().Any(e => e.RondaId == rondaId && e.ProveedorId == proveedorId && e.EtapaEsperada == etapa);
+                pegado = etapa == "integracion" ? promptIntegrador != null && proveedorId == roles.Integrador
+                    : etapa == "verificacion" ? promptVerificador != null && proveedorId == roles.Verificador
+                    : promptRedactor != null && proveedorId == roles.Redactor;
+            }
+            if (capturado) return "capturado";
+            if (problema) return "con-problema";
+            if (generando == true) return "respondiendo";
+            if (pegado && fin == "observado") return "parece-terminado-observado";
+            if (pegado && fin == "deducido") return "parece-terminado-deducido";
+            return pegado ? "pegado-falta-enviar" : "por-pegar";
         }
 
         // El mismo prompt, no el mismo byte: espacios de más y mayúsculas no son la señal.

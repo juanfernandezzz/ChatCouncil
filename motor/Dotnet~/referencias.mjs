@@ -636,10 +636,26 @@ const LOTES = {
   operadores2: [{ id: "claude", text: salidaDe(2), generating: false, html: "<p>CONVERGENCIA|HECHOS|P1|en html</p>" }],
   integradorCorto: [{ id: "deepseek", text: "TITULO: Informe a medias\n\nTexto incompleto [H1].", generating: false, html: null }],
   integradorCompleto: { id: "deepseek", text: "TITULO: La dosis\n\n1. TIPOS DE DIVERGENCIA\nFactica [H2].\n\n5. QUE CONVIENE RESCATAR\nLo firme [H1] y [H3] y [H99].", html: null },
-  verificador: [{ id: "glm", text: 'Reviso.\nCONFIRMA|OFICIAL|H1|https://a.org|"cita"', generating: false, html: null }],
+  verificador: [{ id: "glm", generating: false, html: null, text: [
+    "Reviso.",
+    'CONFIRMA|OFICIAL|H1|https://a.org|"cita"',
+    'CONTRADICE|SECUNDARIA|H2|https://x.invalid/p|"otra"',
+    'CONFIRMA|PRIMARIA|H3|https://b.org/404|"no esta"',
+    'CONFIRMA|OFICIAL|H1|https://c.org/sin-head|"head rechazado"',
+    'CONFIRMA|OFICIAL|H1|https://a.org|"repetida"',
+    "NO_ENCONTRADA|—|H2|nada",
+  ].join("\n") }],
   kimiNueva: [{ id: "kimi", text: largo(2500, 7) + " (archivos corregidos)", userText: PREGUNTA_OP, generating: false, html: null }],
 };
-const CORRIDA_OP = (() => {
+const comprobar = await importar("apps/desktop/src/main/comprobar-urls.ts");
+// El fetch falso: 200, 404, HEAD rechazado (405 y GET 200) y un host que no resuelve.
+const fetchFalso = async (url, { method }) => {
+  if (url.includes("x.invalid")) throw Object.assign(new Error("fetch failed"), { cause: { code: "ENOTFOUND" } });
+  if (url.includes("404")) return { ok: false, status: 404, body: null };
+  if (url.includes("sin-head")) return method === "HEAD" ? { ok: false, status: 405, body: null } : { ok: true, status: 200, body: null };
+  return { ok: true, status: 200, body: null };
+};
+const CORRIDA_OP = await (async () => {
   const idAntes = siguienteId;
   siguienteId = 0;
   const d = mkdtempSync(join(tmpdir(), "cc-operacion-"));
@@ -745,6 +761,60 @@ const CORRIDA_OP = (() => {
   }
   const lecturaRedactor = { id: "deepseek", text: `ARCHIVO: primera marca = ${memoria.marcasRedactor.primera}, ultima marca = ${memoria.marcasRedactor.ultima}\n\nRespuesta [H1].`, generating: false, html: null };
   capturar([lecturaRedactor]);
+
+  // T11: las URLs de la verificación (una sola vez por verificación) y el informe de la ronda.
+  const comprobacion = await comprobar.comprobarUrlsDeRonda(d, conv, ronda, fetchFalso);
+  const segunda = await comprobar.comprobarUrlsDeRonda(d, conv, ronda, () => {
+    throw new Error("la segunda comprobacion no tenia que salir a la red");
+  });
+  let informe;
+  {
+    const hechos = leer();
+    const r = hechos.find((h) => h.tipo === "ronda" && h.id === ronda);
+    const deLaRonda = (tipo) => hechos.filter((h) => h.tipo === tipo && h.rondaId === r.id);
+    const semilla = r.semilla ?? "";
+    const sello = deLaRonda("sello");
+    const ultimaPor = (lista, clave) => [...new Map(lista.map((x) => [clave(x), x])).values()];
+    const respuestasDelPool = ultimaPor(deLaRonda("respuesta").filter((x) => POOL.includes(x.proveedorId)), (x) => x.proveedorId);
+    const idsRespuesta = new Set(respuestasDelPool.map((x) => x.id));
+    const citas = hechos.filter((h) => h.tipo === "cita" && idsRespuesta.has(h.respuestaId));
+    const vigentes = integrador.salidasVigentesDeRonda(hechos, r.id);
+    const { tabla } = integrador.armarTablaYPromptIntegrador(r.prompt, vigentes, POOL, semilla);
+    const resultadosOperadores = POOL.map((id) => {
+      const v = vigentes.find((x) => x.operadorId === id);
+      const s = v && hechos.find((h) => h.tipo === "salida-operador" && h.id === v.salidaId);
+      if (!v || !s) return { operadorId: id, capturado: false, motivoFallo: "no hay salida de operador en el registro" };
+      let lineasDescartadas;
+      try {
+        lineasDescartadas = analisis.parsearHallazgos(s.salidaCruda, integrador.etiquetasValidasDelOperador(id, POOL, sello)).lineasDescartadas;
+      } catch {
+        lineasDescartadas = undefined;
+      }
+      return { operadorId: id, capturado: true, totalHallazgos: v.hallazgos.length, ...(lineasDescartadas === undefined ? {} : { lineasDescartadas }) };
+    });
+    const informeIntegrador = integrador.ultimoDeRol(hechos, r.id, "integrador");
+    const pregunta = dominio.preguntaEfectivaDeRonda(hechos, r) ?? r.prompt;
+    const texto = integrador.armarInformeFinalDeRonda({
+      pregunta, fecha: FECHA, conversacionId: conv, rondaId: r.id, informeIntegrador, tabla, sello, respuestasDelPool, citas, resultadosOperadores,
+      integridadEntrega: "no persistida en el registro (se informa en pantalla al pegar cada panel)",
+      semilla, proveedoresCargados: dominio.proveedoresCargadosDeRonda(hechos, r.id), pool: POOL, integrador: dominio.integradorDeRonda(hechos, r.id),
+      salidaVerificador: integrador.ultimoDeRol(hechos, r.id, "verificador"), urlsComprobadas: comprobacion.ok ? comprobacion.urls : [],
+      respuestaRedactor: integrador.ultimaRedaccion(hechos, r.id),
+    });
+    const titulo = informeIntegrador === null ? null
+      : informeIntegrador.html ? analisis.extraerTituloDelInforme(analisis.textoDelInformeIntegrador(informeIntegrador)).titulo
+      : (informeIntegrador.titulo ?? analisis.extraerTituloDelInforme(informeIntegrador.informeCrudo).titulo);
+    const respuestas = POOL.map((proveedorId, i) => {
+      const x = respuestasDelPool.find((y) => y.proveedorId === proveedorId);
+      if (!x) return null;
+      return [analisis.nombreArchivoRespuesta(i, proveedorId), `${analisis.nombreProveedor(proveedorId)} — respuesta de investigador`, analisis.markdownDeRespuestaInvestigador(pregunta, {
+        proveedorId, etiquetaModelo: x.procedencia.modelLabel, leidaEn: x.leidaEn, textoOriginal: x.textoOriginal, error: x.error,
+        fuentesCitadas: citas.filter((c) => c.respuestaId === x.id).length, fuentesHref: x.fuentesHref, finDe: x.procedencia.finDe,
+      })];
+    }).filter((x) => x !== null);
+    informe = { texto, nombreBase: analisis.nombreBaseDeInforme({ titulo, pregunta, ahora: AHORA_LOCAL }), respuestas, yaComprobadas: segunda.yaComprobadas, urls: comprobacion.urls.length };
+  }
+
   {
     const hechos = leer();
     const anterior = hechos.find((h) => h.tipo === "ronda" && h.id === ronda);
@@ -764,7 +834,7 @@ const CORRIDA_OP = (() => {
   const lineas = readFileSync(join(d, "conversaciones", `${conv}.jsonl`), "utf8").split("\n").filter((l) => l.length > 0);
   rmSync(d, { recursive: true, force: true });
   siguienteId = idAntes;
-  return { lineas, archivoKimi, archivoRedactor, recaptura, reusoKimi, reusoChatgpt, lecturaRedactor };
+  return { lineas, archivoKimi, archivoRedactor, recaptura, reusoKimi, reusoChatgpt, lecturaRedactor, informe };
 })();
 
 const AVISOS_PROMPTS = [
@@ -1127,6 +1197,15 @@ namespace ChatCouncil.Motor.Pruebas
         public const bool ReusoKimiOk = ${CORRIDA_OP.reusoKimi.ok};
         public const string MensajeReusoChatgpt = ${cs(CORRIDA_OP.reusoChatgpt.mensaje)};
         public const bool ReusoChatgptOk = ${CORRIDA_OP.reusoChatgpt.ok};
+
+        /// <summary>El informe de la primera ronda de la corrida, armado con el pegamento de index.ts, y lo que va en su carpeta.</summary>
+        public const string InformeDeRonda = ${cs(CORRIDA_OP.informe.texto)};
+        public const string NombreBaseInforme = ${cs(CORRIDA_OP.informe.nombreBase)};
+        public const int UrlsComprobadas = ${CORRIDA_OP.informe.urls};
+        public const bool SegundaComprobacionSinRed = ${CORRIDA_OP.informe.yaComprobadas};
+        public static readonly (string archivo, string titulo, string markdown)[] RespuestasDeCarpeta = {
+            ${CORRIDA_OP.informe.respuestas.map(([a, t, m]) => `(${cs(a)}, ${cs(t)}, ${cs(m)})`).join(",\n            ")}
+        };
 
         public static readonly (string[] textos, string etapa, string aviso)[] AvisosPrompts = {
             ${AVISOS_PROMPTS.map(([t, e, a]) => `(new string[] { ${t.map(cs).join(", ")} }, ${cs(e)}, ${cs(a)})`).join(",\n            ")}

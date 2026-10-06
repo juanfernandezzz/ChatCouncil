@@ -193,8 +193,11 @@ export function armarPromptOperacionConArchivo(
  * se interpretan como patrón de reemplazo (ver cabecera del archivo).
  */
 export function armarPromptOperacion(pregunta: string, respuestas: readonly RespuestaEtiquetada[]): string {
+  // UNA SOLA pasada (2026-10-06, la lección del `{{CONTENIDO}}` del PDF): con
+  // dos split/join en cadena, una pregunta que trajera "{{CUERPO}}" recibía el
+  // cuerpo entero adentro. Lo insertado nunca se vuelve a recorrer.
+  const cuerpo = cuerpoDe(respuestas);
   return PLANTILLA.split("{{PREGUNTA}}")
-    .join(pregunta)
-    .split("{{CUERPO}}")
-    .join(cuerpoDe(respuestas));
+    .map((parte) => parte.split("{{CUERPO}}").join(cuerpo))
+    .join(pregunta);
 }

@@ -88,10 +88,15 @@ export function armarPromptVerificador(
   rescate: string,
   hallazgos: readonly HallazgoParaVerificador[],
 ): string {
+  // UNA SOLA pasada, mismo motivo que en `prompt-operacion.ts`: el rescate lo
+  // escribe un modelo y podría traer "{{HALLAZGOS}}".
+  const lineas = lineasDe(hallazgos);
   return PLANTILLA.split("{{PREGUNTA}}")
-    .join(pregunta)
-    .split("{{RESCATE}}")
-    .join(rescate)
-    .split("{{HALLAZGOS}}")
-    .join(lineasDe(hallazgos));
+    .map((parte) =>
+      parte
+        .split("{{RESCATE}}")
+        .map((p) => p.split("{{HALLAZGOS}}").join(lineas))
+        .join(rescate),
+    )
+    .join(pregunta);
 }

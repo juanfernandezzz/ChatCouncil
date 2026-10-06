@@ -108,8 +108,9 @@ export function tablaDe(hallazgos: readonly HallazgoParaIntegrador[]): string {
  * (ver cabecera del archivo).
  */
 export function armarPromptIntegrador(pregunta: string, hallazgos: readonly HallazgoParaIntegrador[]): string {
+  // UNA SOLA pasada, mismo motivo que en `prompt-operacion.ts`.
+  const tabla = tablaDe(hallazgos);
   return PLANTILLA.split("{{PREGUNTA}}")
-    .join(pregunta)
-    .split("{{HALLAZGOS}}")
-    .join(tablaDe(hallazgos));
+    .map((parte) => parte.split("{{HALLAZGOS}}").join(tabla))
+    .join(pregunta);
 }

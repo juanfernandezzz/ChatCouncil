@@ -538,7 +538,7 @@ namespace ChatCouncil.Motor
         /// <summary>
         /// El archivo del redactor (informe, verificación, la tabla H## y las siete
         /// respuestas con sus P#, con marcas) y su prompt. Sin verificación se arma
-        /// igual y se avisa: los botones no se bloquean por etapa.
+        /// igual, como en TypeScript; si la interfaz lo permite lo decide la etapa 5.
         /// </summary>
         public ArchivoRedactor ArmarRedactor()
         {

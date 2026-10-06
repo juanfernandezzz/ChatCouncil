@@ -498,36 +498,108 @@ Una aplicación nueva en Unity 6, para Windows (.exe instalable) y Android
 
 ### La interfaz
 
-- **UI Toolkit**, con una sola hoja de estilos de tokens (color, tipografía y
-  espacios). Las decisiones visuales concretas se toman en la etapa 5, con
-  `impeccable`, `make-interfaces-feel-better` y `accessibility`, sobre esta
-  especificación.
-- **Cuatro zonas fijas**:
-  - la guía de las siete etapas;
-  - la acción principal de la etapa;
-  - la lista de paneles con su estado;
-  - la zona del panel web.
+**Enmienda del 2026-10-06.** Juan pidió que la interfaz (menús, su contenido y
+distribución, botones, posición y forma) no siga sus preferencias ni su
+costumbre con la versión Electron, sino criterios evidenciados, con la meta de
+un producto listo para el mercado. Lo único que se conserva de él es lo
+esencial de la app. Por eso esta sección separa lo que se exige de lo que se
+decide en la etapa 5 con evidencia. Lo que antes fijaba la distribución (las
+cuatro zonas fijas, el costado en PC y la barra en el teléfono, y el contenido
+del menú aparte) pasa a ser una hipótesis de partida y deja de ser un
+requisito. Lo mismo vale para las historias 14 a 24: piden necesidades, y
+donde nombran una distribución (22 y 23) es hipótesis.
 
-  La zona del panel web la ocupa la página nativa: Unity no dibuja encima de
-  ella, así que mientras dura un diálogo la página se aparta.
-- **PC**: guía y paneles a un costado, la página al lado. **Teléfono**: la
-  página casi a pantalla completa, y la guía y los paneles en una barra que
-  se despliega.
-- **Estados de panel**: símbolo, color y texto, siempre los tres. Vocabulario
-  mínimo: por pegar; pegado, falta que envíes; respondiendo; parece terminado
-  (observado o deducido); capturado; con problema.
-- **Cada etapa tiene un único paso siguiente**, que decide el motor y nunca
-  la interfaz, y un recordatorio corto de lo que se hace a mano.
-- **Lo que no es flujo va en un menú aparte**:
-  - pegar la pregunta en este panel y capturar este panel;
-  - recapturar el integrador y la verificación, y capturar el redactor;
-  - usar la operación anterior y abrir una ronda nueva con respuestas
-    copiadas;
-  - mostrar u ocultar los paneles de los roles;
-  - recargar y cerrar la sesión del panel;
-  - el diagnóstico de selectores.
-- **Contraste AA como mínimo**, foco visible, objetivos táctiles de al menos
-  44 px en el teléfono y textos de la interfaz en español neutral.
+**Lo que se exige (lo esencial y el piso de calidad):**
+
+- **UI Toolkit**, con una sola hoja de estilos de tokens (color, tipografía y
+  espacios).
+- **El método no se toca desde la interfaz.** Esto incluye:
+  - envío siempre a mano;
+  - captura nunca automática;
+  - la pregunta nunca va a los roles;
+  - el chat nuevo se comprueba antes de pegar;
+  - lo imposible por datos se bloquea: no hay operación sin las siete
+    respuestas, ni verificación sin un informe del integrador.
+- **El paso siguiente lo decide el motor y nunca la interfaz.** La interfaz
+  decide cómo se muestra.
+- **La página nativa ocupa su zona**: Unity no dibuja encima de ella, así que
+  mientras dura un diálogo la página se aparta. Es una restricción técnica.
+- **Estado de panel con símbolo, color y texto, siempre los tres** (WCAG
+  1.4.1). El vocabulario mínimo del motor (por pegar; pegado, falta que
+  envíes; respondiendo; parece terminado; capturado; con problema) es un
+  dato. Las palabras finales se deciden en la etapa 5.
+- **Toda acción del motor tiene un lugar alcanzable en la interfaz**, en las
+  dos plataformas. Las acciones son:
+  - el flujo de la ronda;
+  - pegar o capturar un solo panel;
+  - las recapturas;
+  - usar la operación anterior;
+  - ronda nueva con respuestas copiadas;
+  - mostrar u ocultar los roles;
+  - recargar;
+  - cerrar la sesión de un panel;
+  - el diagnóstico.
+
+  Dónde va cada una se decide en la etapa 5.
+- **Piso de accesibilidad: WCAG 2.2 AA.** Incluye:
+  - contraste medido;
+  - foco visible;
+  - orden lógico y nombre accesible;
+  - objetivos táctiles de al menos 44 px en el teléfono, más que el mínimo
+    de 24 px de WCAG 2.5.8.
+
+  Los textos van en español neutral.
+
+**Lo que decide la etapa 5, con evidencia escrita:**
+
+- **La arquitectura de información.** Comprende:
+  - qué menús o áreas hay;
+  - qué contiene cada uno y en qué orden;
+  - qué es primario, qué es secundario y qué se esconde;
+  - cómo se navega en PC y en el teléfono.
+- **La distribución, la forma y la jerarquía de cada control**, y la
+  dirección visual.
+- **Si los botones del flujo se bloquean o no fuera de su etapa.** En
+  Electron no se bloquean desde el 2026-09-19. Eso es costumbre, no
+  evidencia: se decide contra la prevención de errores y el control del
+  usuario.
+- **Qué capacidades de producto entran a la versión 1.** El inventario
+  candidato es el de la tabla de abajo. Ninguna entra ni sale sin un
+  criterio.
+
+Cada decisión se escribe en la sección de la Fase 6 de `docs/BLUEPRINT.md`
+con su criterio y su fuente: una heurística, una guía de plataforma, una
+norma o un estudio. Ninguna se justifica con "así lo usa Juan".
+
+**Fuentes de criterio.** El método es una evaluación heurística y un
+recorrido cognitivo de una ronda completa sobre el boceto, antes de
+construir, y de nuevo sobre la app compilada. Las fuentes son:
+
+- las 10 heurísticas de Nielsen;
+- ISO 9241-110 (principios de diálogo);
+- WCAG 2.2;
+- las guías de diseño de apps de Windows (Fluent);
+- Material Design 3, con la navegación adaptativa por clase de tamaño de
+  ventana para Android.
+
+Si una fuente contradice algo de esta especificación, gana la fuente salvo en
+lo esencial. Se informa la contradicción.
+
+**Inventario candidato de capacidades** (2026-10-06). Son capacidades que la
+especificación no tenía y que un producto para el mercado suele tener. Cada
+una se acepta o se rechaza en T18 con su criterio.
+
+| Capacidad | Por qué se considera |
+|---|---|
+| Primer arranque guiado: elegir el consejo y entrar a cada cuenta, con el estado de sesión de cada proveedor a la vista | Entrar a nueve cuentas es la primera tarea real y hoy no tiene lugar propio. |
+| Configuración alcanzable en cualquier momento | La historia 7 la pide, pero la especificación no le daba lugar. |
+| Historial de rondas, con lo que dejó cada una, y abrir un informe anterior o su carpeta | Hoy, para volver a un informe hay que buscar la carpeta a mano. |
+| Abandonar la ronda en curso y empezar una limpia | Control del usuario y salida de emergencia. |
+| Ayuda: el método en breve, qué hace cada etapa y los atajos | Ayuda y documentación (Nielsen 10); el método no es evidente. |
+| Respaldo y ubicación de los datos | No hay sincronización (Q4): el registro existe solo en ese aparato. |
+| Acerca de, versión y aviso de versión nueva | Sin tienda, nada avisa que salió una versión. |
+| Tema claro, tema oscuro o el del sistema, y tamaño de texto | Legibilidad de textos largos y accesibilidad. |
+| Exportar el diagnóstico para reportar un problema | Recuperación de errores sin terminal. |
 
 ### Flujo de la ronda
 
@@ -540,10 +612,9 @@ Pregunta ─▶ Investigación ─▶ Operación ─▶ Integración ─▶ Veri
                               · capturar                                   · capturar
 ```
 
-- **Los botones no se bloquean por etapa**, igual que en Electron desde el
-  2026-09-19. La etapa se informa, y solo bloquea lo que es imposible por
-  datos: no hay operación sin las siete respuestas, ni verificación sin un
-  informe del integrador.
+- **Solo se bloquea lo que es imposible por datos**: no hay operación sin las
+  siete respuestas, ni verificación sin un informe del integrador. Si el
+  resto se bloquea o no por etapa lo decide la etapa 5 (ver "La interfaz").
 - **El chat nuevo** (Q9) navega a la URL de conversación nueva y comprueba,
   con lecturas repetidas, que el chat y el compositor quedaron vacíos antes
   de pegar. Si no quedaron vacíos, no pega y lo dice. Vale para los
@@ -676,7 +747,13 @@ Pregunta ─▶ Investigación ─▶ Operación ─▶ Integración ─▶ Veri
   color principal y sin estética de SaaS genérico; carácter de biblioteca o
   laboratorio, en tono no claro; tipografía de carácter científico. Y dos
   preferencias (2026-08-25): que se ilumine el panel al frente y que la app
-  arranque maximizada. Son insumo de la etapa 5.
+  arranque maximizada. **Desde el 2026-10-06 son solo antecedentes, no
+  restricciones**: Juan pidió que la interfaz siga criterios evidenciados y
+  no sus preferencias. Ejemplo de por qué importa: en lectura y corrección de
+  texto, la polaridad positiva (texto oscuro sobre fondo claro) rinde mejor
+  que la negativa (Piepenbrock y cols., 2013, *Ergonomics*). Eso choca con el
+  "tono no claro", y se resuelve en T18 con la evidencia, por ejemplo con
+  temas a elección.
 - **Las decisiones de diseño que tome el agente** quedan escritas en una
   sección de la Fase 6 de `docs/BLUEPRINT.md`, con su motivo, como pide el
   prompt de la fase. Ninguna se atribuye a Juan si Juan no la escribió.

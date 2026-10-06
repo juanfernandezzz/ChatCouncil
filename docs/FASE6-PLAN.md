@@ -189,6 +189,14 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   Depende de: T11. Tamaño: S. **Necesita a Juan**: aceptar las dos ventanas
   de permisos de Windows y activar la licencia.
 
+  Estado al 2026-10-06, medido en disco:
+  - Juan activó la licencia.
+  - Está instalado el Editor 6000.6.4f1. Falta confirmar si es LTS o si se
+    instala la LTS más reciente.
+  - Su `PlaybackEngines` tiene solo WebGL y Windows: **falta el módulo de
+    Android**.
+  - Están las Build Tools 18 con MSVC 14.51.36231.
+
 - [ ] **T15. Panel Windows I: crear, mostrar, ejecutar.**
   Acepta: el plugin de WebView2 crea un panel con su perfil en un rectángulo,
   lo pone al frente o detrás, ejecuta el script con pedido y consulta, cuenta
@@ -220,17 +228,49 @@ compilados en este PC, informe y push.
 
 ### Etapa 5 — Interfaz
 
-- [ ] **T18. Dirección de diseño y tokens.**
-  Acepta: el trabajo con `impeccable`, `make-interfaces-feel-better` y
-  `ecc:accessibility` produce una dirección de diseño escrita (incluida la
-  dirección estética del BLUEPRINT §2), los tokens en una hoja USS, la
-  estructura de cuatro zonas y el vocabulario de estados.
-  Verifica: capturas del esqueleto a 1366×768 y a 390×844.
-  Depende de: T14. Tamaño: M.
+- [ ] **T18. Arquitectura de información y dirección de diseño, con
+  evidencia.** Esta tarea se reescribió por la enmienda del 2026-10-06 en la
+  especificación, en "La interfaz": la interfaz no sigue las preferencias de
+  Juan, sino criterios evidenciados.
+
+  Acepta, con `impeccable`, `make-interfaces-feel-better` y
+  `ecc:accessibility`:
+  1. **Inventario de tareas.** Cada acción de la `Puerta` del motor, las
+     historias de usuario y el inventario candidato de capacidades, cada una
+     con su frecuencia por ronda y su momento.
+  2. **Decisión sobre el inventario candidato.** Cada capacidad se acepta o
+     se rechaza con un criterio. Las aceptadas se agregan a T19–T23, o como
+     tareas nuevas si no caben.
+  3. **Arquitectura de información para PC y teléfono.** Comprende:
+     - qué áreas o menús hay, con qué contenido y en qué orden;
+     - qué es primario y qué es secundario;
+     - la navegación, según Fluent para Windows y la navegación adaptativa
+       de Material 3 para Android;
+     - si los botones se bloquean fuera de su etapa.
+
+     Cada decisión lleva su fuente, escrita en la sección Fase 6 de
+     `docs/BLUEPRINT.md`.
+  4. **Boceto evaluado antes de construir.** Una evaluación heurística con
+     las 10 de Nielsen, con cada hallazgo y su severidad, y un recorrido
+     cognitivo de una ronda completa: pasos y decisiones por etapa, contados
+     y comparados contra las más de 30 acciones de Electron.
+  5. **Dirección visual y tokens** en una hoja USS. El contraste de cada par
+     de colores se mide, y la legibilidad se elige por evidencia. Las notas
+     estéticas del BLUEPRINT §2 son solo antecedentes.
+
+  Verifica:
+  - el documento de decisiones, en el que cada decisión tiene criterio y
+    fuente;
+  - los conteos del recorrido;
+  - las capturas del esqueleto a 1366×768 y a 390×844.
+
+  Depende de: T14. Tamaño: L. Si no cabe en una sesión, se corta en
+  "1–4" y "5".
 
 - [ ] **T19. Configuración y arranque.**
-  Acepta: la primera pantalla con proveedores y roles y sus reglas, que se
-  aplica al reabrir, y la restauración de la ronda activa.
+  Acepta: el primer arranque y la configuración según la arquitectura de
+  T18, con proveedores y roles y sus reglas, que se aplica al reabrir, y la
+  restauración de la ronda activa.
   Verifica: en la app compilada, las combinaciones inválidas se rechazan con
   su texto; el archivo de selección queda escrito y se aplica al reabrir.
   Depende de: T11, T16, T18. Tamaño: M.
@@ -259,12 +299,21 @@ compilados en este PC, informe y push.
   `.pdf`.
   Depende de: T21. Tamaño: M.
 
-- [ ] **T23. Menú secundario, teléfono y accesibilidad.**
-  Acepta: recargar, cerrar sesión del panel y diagnóstico; el diseño del
-  teléfono; una revisión de accesibilidad (contraste, foco, objetivos
-  táctiles) con sus defectos corregidos.
-  Verifica: capturas de PC y de teléfono y la lista de chequeo de
-  accesibilidad con cada punto medido.
+- [ ] **T23. Acciones secundarias, capacidades aceptadas, teléfono y
+  accesibilidad.**
+  Acepta:
+  - recargar, cerrar la sesión del panel y el diagnóstico, donde los ubicó
+    T18;
+  - las capacidades que T18 aceptó del inventario;
+  - el diseño del teléfono;
+  - una revisión de accesibilidad WCAG 2.2 AA (contraste, foco, orden,
+    nombre accesible, objetivos táctiles) con sus defectos corregidos;
+  - la evaluación heurística repetida sobre la app compilada.
+
+  Verifica:
+  - capturas de PC y de teléfono;
+  - la lista de chequeo de accesibilidad, con cada punto medido;
+  - los hallazgos heurísticos de severidad 3 y 4 en cero o explicados.
   Depende de: T22. Tamaño: M.
 
 **Control de la etapa 5:** capturas, recorrido completo en modo autoprueba,

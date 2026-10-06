@@ -337,6 +337,110 @@ const NOMBRES_BASE = [
 const OCUPADOS = ["base", "base (2)", "base (3)"];
 const NOMBRE_LIBRE = analisis.nombreLibreDeInforme("base", (n) => OCUPADOS.includes(n));
 
+// ---------------------------------------------------------------- citas, tabla y roles
+const citas = await importar("apps/desktop/src/main/citas.ts");
+const integrador = await importar("apps/desktop/src/main/integrador.ts");
+const HTMLS_CITAS = [
+  // Los cuatro descartes sintéticos de T1 y el href vacío.
+  `<p><a>sin href</a> <a href="">vacio</a> <a href="#">ancla</a> <a href="javascript:void(0)">js</a> <a href="/relativa">rel</a> <a href="mailto:x@y.org">m</a> <a href="https://ok.org/a?b=1&amp;c=2">ok <b>negrita</b></a></p>`,
+  // Chip inline de chatgpt frente a la lista "Fuentes clave".
+  `<p>Texto <span data-testid="webpage-citation-pill"><a href="https://a.org/x">a.org</a></span></p><h3>Fuentes clave</h3><ul><li><a href="https://b.org/y">B — dato</a></li></ul>`,
+  `<div class="sources-panel"><a href='https://c.org'>c</a></div><a href="https://d.org">d</a><div class="resource"><a href="https://e.org">e</a></div>`,
+  `<h2>Referencias:</h2><a href="https://f.org">f</a><H4>Sources</H4><a href="https://g.org">g</a><h3>Otra cosa</h3><a href="https://h.org">h</a><h3>Bibliograf${c(0xed)}a</h3><a href="https://i.org">i</a>`,
+  `<a href=" https://j.org/&quot;q&quot; ">  j&nbsp;&amp;${LS}<i>k</i>${c(0xfeff)} </a><A HREF="HTTPS://K.ORG">K</A><a data-x=1 href="https://l.org">l</a><a href="https://m.org"/><br/><img src="x"><a href="https://n.org">sin cierre`,
+  `<section data-role="bibliografia-x"><div><a href="https://o.org">o</a></div></section><a href="https://p.org">p</a><h3>Fuentes</h3><h3 >referencias </h3 ><a href="https://q.org">q</a>`,
+];
+const CITAS = HTMLS_CITAS.map((html) => {
+  let n = 0;
+  const { urlsUnicas, ...resto } = citas.extraerCitas(html, "resp-1", () => `c${++n}`);
+  return [html, JSON.stringify(resto)];
+});
+
+const PARA_TABLA = [
+  { hallazgoIdOriginal: "h-a", categoria: "CONVERGENCIA", eje: "HECHOS", etiquetas: ["P1", "P2"], descripcion: "d1", operadorIdOriginal: "gemini" },
+  { hallazgoIdOriginal: "h-b", categoria: "LIMITACION:TAREA", eje: null, etiquetas: [], descripcion: "d2", operadorIdOriginal: "chatgpt" },
+  { hallazgoIdOriginal: "h-c", categoria: "TENSION", eje: "CONCLUSIONES", etiquetas: ["P3"], descripcion: "d3", operadorIdOriginal: "qwen" },
+];
+const TABLA = JSON.stringify(analisis.armarTablaHallazgos(PARA_TABLA, POOL.slice(0, 7), analisis.hashSemilla("semilla-fija")));
+let errorTabla = null;
+try {
+  analisis.armarTablaHallazgos([{ ...PARA_TABLA[0], operadorIdOriginal: "deepseek" }], POOL.slice(0, 7), 1);
+} catch (e) {
+  errorTabla = e.message;
+}
+
+// Un operador recapturado: la tabla usa sólo su última salida, en el orden de la primera captura.
+const hecho = ({ tipo, ...o }) => JSON.stringify({ tipo, esquema: 1, ...o }); // el orden de registro.ts
+const sal = (id, op, r = "R") => hecho({ tipo: "salida-operador", id, rondaId: r, operadorId: op, promptCompleto: "", salidaCruda: "", recibidaEn: FECHA });
+const hal = (id, s, d) => hecho({ tipo: "hallazgo", id, salidaOperadorId: s, categoria: "CONVERGENCIA", eje: "HECHOS", etiquetas: ["P1"], descripcion: d, etiquetaInvalida: false });
+const REGISTRO_VIGENTES = [
+  sal("s1", "chatgpt"), hal("h1", "s1", "vieja de chatgpt"),
+  sal("s2", "gemini"), hal("h2", "s2", "de gemini"),
+  sal("s3", "chatgpt"), hal("h3", "s3", "nueva de chatgpt"), hal("h4", "s3", "otra nueva"),
+  sal("s4", "claude", "OTRA"), hal("h5", "s4", "de otra ronda"),
+  hecho({ tipo: "informe-integrador", id: "i1", rondaId: "R", integradorId: "deepseek", promptCompleto: "", informeCrudo: "uno", recibidoEn: FECHA }),
+  hecho({ tipo: "informe-integrador", id: "i2", rondaId: "R", integradorId: "deepseek", promptCompleto: "", informeCrudo: "dos", recibidoEn: FECHA }),
+].join("\n");
+const hechosVigentes = dominio.leerRegistro(REGISTRO_VIGENTES).hechos;
+const VIGENTES = JSON.stringify(integrador.salidasVigentesDeRonda(hechosVigentes, "R"));
+const ULTIMO_INTEGRADOR = integrador.ultimoDeRol(hechosVigentes, "R", "integrador")?.id ?? null;
+
+const SELLO = POOL.slice(0, 7).map((id, i) => ({ panelSourceId: id, codigoEstable: `P${i + 1}` }));
+const ETIQUETAS_VALIDAS = POOL.slice(0, 7).map((op) => [op, integrador.etiquetasValidasDelOperador(op, POOL.slice(0, 7), SELLO)]);
+let errorEtiquetas = null;
+try {
+  integrador.etiquetasValidasDelOperador("chatgpt", POOL.slice(0, 7), SELLO.slice(1, 3));
+} catch (e) {
+  errorEtiquetas = e.message;
+}
+
+const LECTURAS_ETAPA = ["chatgpt", "gemini", "deepseek", "glm", "kimi"].map((id) => ({ id }));
+const CLASIFICACIONES = ["investigacion", "operacion", "integracion", "verificacion", "redaccion"].map((etapa) => {
+  const r = integrador.clasificarLecturasPorEtapa(LECTURAS_ETAPA, etapa, POOL.slice(0, 7), "deepseek", "glm", "kimi");
+  const id = (l) => l?.id ?? null;
+  return [etapa, r.lecturasOperacion.map(id), id(r.lecturaIntegrador), id(r.lecturaVerificador), id(r.lecturaRedactor), r.lecturasComoRespuesta.map(id)];
+});
+
+const CONOCIDOS = ["chatgpt", "gemini", "claude", "grok", "mistral", "glm", "kimi", "qwen", "deepseek"];
+const dirRoles = mkdtempSync(join(tmpdir(), "cc-roles-"));
+const leerCon = (contenido, f) => {
+  const ruta = join(dirRoles, seleccion.ARCHIVO_SELECCION);
+  rmSync(ruta, { force: true });
+  if (contenido !== null) writeFileSync(ruta, contenido, "utf8");
+  return f(dirRoles);
+};
+const ARCHIVOS_SELECCION = [
+  null,
+  "no es json",
+  "null",
+  "7",
+  JSON.stringify({ proveedores: ["gemini", "chatgpt", "inventado"], integrador: "claude", verificador: "grok", redactor: "mistral" }),
+  JSON.stringify({ proveedores: [], integrador: "glm", verificador: "glm" }),
+  JSON.stringify({ proveedores: "chatgpt", integrador: "chatgpt", verificador: "glm" }),
+  JSON.stringify({ proveedores: ["inventado"], integrador: "inventado", verificador: 3, redactor: "glm" }),
+  JSON.stringify({ integrador: "claude", verificador: "grok", redactor: "grok" }),
+  JSON.stringify({ integrador: "deepseek", verificador: "glm", redactor: "deepseek" }),
+];
+const SELECCIONES = ARCHIVOS_SELECCION.map((contenido) => [
+  contenido,
+  JSON.stringify(leerCon(contenido, (d) => seleccion.leerSeleccion(d, CONOCIDOS))),
+  JSON.stringify(leerCon(contenido, (d) => seleccion.leerRoles(d, CONOCIDOS))),
+]);
+const GUARDADOS = [
+  [[], "deepseek", "glm", "deepseek"],
+  [["chatgpt", "glm"], "glm", "glm", "glm"],
+  [["chatgpt", "glm"], "deepseek", "glm", "deepseek"],
+  [["chatgpt", "deepseek", "glm"], "deepseek", "glm", "glm"],
+  [["chatgpt", "deepseek", "glm"], "deepseek", "glm", "kimi"],
+  [["chatgpt", "deepseek", "glm", "kimi"], "deepseek", "glm", "kimi"],
+  [["chatgpt", "deepseek", "glm", "inventado"], "deepseek", "glm", "deepseek"],
+].map(([marcados, i, v, r]) => [marcados, i, v, r, JSON.stringify(seleccion.guardarSeleccion(dirRoles, CONOCIDOS, marcados, i, v, r))]);
+rmSync(dirRoles, { recursive: true, force: true });
+const POOLES = [
+  { integrador: "deepseek", verificador: "glm", redactor: "deepseek" },
+  { integrador: "claude", verificador: "grok", redactor: "mistral" },
+].map((roles) => [JSON.stringify(roles), seleccion.poolDeInvestigadores(CONOCIDOS, roles)]);
+
 const CUERPOS = [
   POOL.map(paraOperar),
   POOL.map((id, i) => (id === "grok" ? { ...paraOperar(id, i), urlsCitadas: ["https://grok.com/share/1"] } : paraOperar(id, i))),
@@ -598,6 +702,47 @@ namespace ChatCouncil.Motor.Pruebas
 
         /// <summary>nombreLibreDeInforme("base") con "base", "base (2)" y "base (3)" ocupados.</summary>
         public const string NombreLibre = ${cs(NOMBRE_LIBRE)};
+
+        /// <summary>extraerCitas(html, "resp-1", ids c1, c2…) como JSON, sin urlsUnicas.</summary>
+        public static readonly (string html, string esperado)[] Citas = {
+            ${CITAS.map(([html, e]) => `(${cs(html)}, ${cs(e)})`).join(",\n            ")}
+        };
+
+        public const string ParaTabla = ${cs(JSON.stringify(PARA_TABLA))};
+        /// <summary>armarTablaHallazgos(ParaTabla, los 7 primeros de PoolCuerpos, hashSemilla("semilla-fija")) como JSON.</summary>
+        public const string Tabla = ${cs(TABLA)};
+        public const string ErrorTabla = ${cs(errorTabla)};
+
+        public const string RegistroVigentes = ${cs(REGISTRO_VIGENTES)};
+        /// <summary>salidasVigentesDeRonda(RegistroVigentes, "R") como JSON.</summary>
+        public const string Vigentes = ${cs(VIGENTES)};
+        public const string UltimoIntegrador = ${cs(ULTIMO_INTEGRADOR)};
+
+        public static readonly (string operador, string[] validas)[] EtiquetasValidas = {
+            ${ETIQUETAS_VALIDAS.map(([op, v]) => `(${cs(op)}, ${strs(v)})`).join(",\n            ")}
+        };
+        public const string ErrorEtiquetas = ${cs(errorEtiquetas)};
+
+        /// <summary>clasificarLecturasPorEtapa(chatgpt, gemini, deepseek, glm, kimi; pool de 7; integrador deepseek, verificador glm, redactor kimi).</summary>
+        public static readonly (string etapa, string[] operacion, string integrador, string verificador, string redactor, string[] comoRespuesta)[] Clasificaciones = {
+            ${CLASIFICACIONES.map(([e, o, i, v, r, cr]) => `(${cs(e)}, ${strs(o)}, ${cs(i)}, ${cs(v)}, ${cs(r)}, ${strs(cr)})`).join(",\n            ")}
+        };
+
+        public static readonly string[] Conocidos = ${strs(CONOCIDOS)};
+
+        /// <summary>leerSeleccion y leerRoles con ese contenido de archivo (null: no hay archivo), como JSON.</summary>
+        public static readonly (string contenido, string seleccion, string roles)[] Selecciones = {
+            ${SELECCIONES.map(([c, s, r]) => `(${cs(c)}, ${cs(s)}, ${cs(r)})`).join(",\n            ")}
+        };
+
+        /// <summary>guardarSeleccion(Conocidos, marcados, integrador, verificador, redactor) como JSON.</summary>
+        public static readonly (string[] marcados, string integrador, string verificador, string redactor, string esperado)[] Guardados = {
+            ${GUARDADOS.map(([m, i, v, r, e]) => `(${strs(m)}, ${cs(i)}, ${cs(v)}, ${cs(r)}, ${cs(e)})`).join(",\n            ")}
+        };
+
+        public static readonly (string roles, string[] pool)[] Pooles = {
+            ${POOLES.map(([r, p]) => `(${cs(r)}, ${strs(p)})`).join(",\n            ")}
+        };
 
         /// <summary>Un hecho de cada tipo, escrito por las funciones reales de registro.ts.</summary>
         public static readonly string[] RegistroLineas = {

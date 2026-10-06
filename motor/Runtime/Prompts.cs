@@ -25,6 +25,38 @@ namespace ChatCouncil.Motor
         public string Descripcion { get; set; }
     }
 
+    public sealed class HallazgoParaTabla
+    {
+        /// <summary>El Id real del HallazgoHecho: nunca viaja al integrador, sirve para desanonimizar el informe.</summary>
+        public string HallazgoIdOriginal { get; set; }
+        public string Categoria { get; set; }
+        public string Eje { get; set; }
+        public IReadOnlyList<string> Etiquetas { get; set; }
+        public string Descripcion { get; set; }
+        /// <summary>El proveedor real del operador: nunca viaja al integrador.</summary>
+        public string OperadorIdOriginal { get; set; }
+    }
+
+    // En el orden de los campos del TypeScript: el JSON sale igual.
+    public sealed class FilaTabla
+    {
+        public string CodigoHallazgo { get; set; }
+        public string HallazgoIdOriginal { get; set; }
+        public string CodigoOperador { get; set; }
+        public string OperadorIdOriginal { get; set; }
+        public string Categoria { get; set; }
+        public string Eje { get; set; }
+        public IReadOnlyList<string> Etiquetas { get; set; }
+        public string Descripcion { get; set; }
+    }
+
+    public sealed class TablaHallazgos
+    {
+        public List<FilaTabla> Filas { get; set; }
+        /// <summary>Lo que recibe ArmarPromptIntegrador como {{HALLAZGOS}}.</summary>
+        public List<HallazgoParaIntegrador> ParaPrompt { get; set; }
+    }
+
     /// <summary>Lo que va en el archivo del redactor, ya en texto.</summary>
     public sealed class MaterialRedactor
     {
@@ -83,6 +115,42 @@ namespace ChatCouncil.Motor
                 ("{{RESCATE}}", rescate),
                 ("{{HALLAZGOS}}", string.Join("\n", hallazgos.Select(h => string.Join("|", h.Id, h.Categoria, h.Eje ?? "", h.Descripcion)))));
 
+        /// <summary>
+        /// La tabla que recibe el integrador (armar-tabla-hallazgos.ts). H## es el
+        /// orden de persistencia, nunca barajado; O## es el operador, barajado con la
+        /// semilla de la ronda y el pool en su orden fijo: el integrador no puede
+        /// saber qué operador registró qué.
+        /// </summary>
+        public static TablaHallazgos ArmarTablaHallazgos(IReadOnlyList<HallazgoParaTabla> hallazgos, IReadOnlyList<string> poolOperadores, uint semilla)
+        {
+            var codigoOperadorDe = new Dictionary<string, string>();
+            var barajados = Anonimizacion.Barajar(poolOperadores, semilla);
+            for (int i = 0; i < barajados.Count; i++) codigoOperadorDe[barajados[i]] = $"O{i + 1}";
+            var filas = hallazgos.Select((h, i) => new FilaTabla
+            {
+                CodigoHallazgo = $"H{i + 1}",
+                HallazgoIdOriginal = h.HallazgoIdOriginal,
+                CodigoOperador = codigoOperadorDe.TryGetValue(h.OperadorIdOriginal, out var codigo)
+                    ? codigo
+                    : throw new InvalidOperationException($"hallazgo {h.HallazgoIdOriginal}: operador \"{h.OperadorIdOriginal}\" no está en el pool de operadores"),
+                OperadorIdOriginal = h.OperadorIdOriginal,
+                Categoria = h.Categoria,
+                Eje = h.Eje,
+                Etiquetas = h.Etiquetas,
+                Descripcion = h.Descripcion,
+            }).ToList();
+            var paraPrompt = filas.Select(f => new HallazgoParaIntegrador
+            {
+                Id = f.CodigoHallazgo,
+                Categoria = f.Categoria,
+                Eje = f.Eje,
+                Etiquetas = f.Etiquetas,
+                Descripcion = f.Descripcion,
+                Operador = f.CodigoOperador,
+            }).ToList();
+            return new TablaHallazgos { Filas = filas, ParaPrompt = paraPrompt };
+        }
+
         public static string ArmarPromptRedactor(string pregunta) => Sustituir(Datos.PlantillaRedactor, ("{{PREGUNTA}}", pregunta));
 
         /// <summary>El archivo del redactor, en el orden que describe su prompt. Las marcas las intercala quien llama.</summary>
@@ -97,14 +165,5 @@ namespace ChatCouncil.Motor
                 m.Tabla,
                 "===== RESPUESTAS =====",
                 CuerpoDe(m.Respuestas));
-    }
-
-    /// <summary>Los roles por defecto de seleccion-proveedores.ts.</summary>
-    public static class Roles
-    {
-        public const string IntegradorPorDefecto = "deepseek";
-        public const string VerificadorPorDefecto = "glm";
-        /// <summary>El integrador: si fuera otro, saldría un proveedor del pool de siete y los prompts ("siete") dejarían de cuadrar.</summary>
-        public const string RedactorPorDefecto = "deepseek";
     }
 }

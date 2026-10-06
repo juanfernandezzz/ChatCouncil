@@ -96,5 +96,99 @@ namespace ChatCouncil.Motor
 
         static CondicionProveedoresCargados UltimaCondicion(IEnumerable<Hecho> hechos, string rondaId) =>
             hechos.OfType<CondicionProveedoresCargados>().LastOrDefault(h => h.RondaId == rondaId);
+
+        /// <summary>
+        /// Las salidas de operador VIGENTES: la última captura de cada operador ("el
+        /// hecho más reciente gana"), en el orden de su primera captura. Es la única
+        /// entrada de la tabla de hallazgos: el prompt del integrador, el del
+        /// verificador y el informe salen de acá, así los H## coinciden entre los tres.
+        /// </summary>
+        public static List<SalidaVigente> SalidasVigentesDeRonda(IReadOnlyList<Hecho> hechos, string rondaId)
+        {
+            var orden = new List<string>();
+            var ultima = new Dictionary<string, SalidaOperador>();
+            foreach (var s in hechos.OfType<SalidaOperador>().Where(s => s.RondaId == rondaId))
+            {
+                if (!ultima.ContainsKey(s.OperadorId)) orden.Add(s.OperadorId);
+                ultima[s.OperadorId] = s;
+            }
+            return orden.Select(op => new SalidaVigente
+            {
+                OperadorId = op,
+                SalidaId = ultima[op].Id,
+                Hallazgos = hechos.OfType<HallazgoHecho>().Where(h => h.SalidaOperadorId == ultima[op].Id).ToList(),
+            }).ToList();
+        }
+
+        /// <summary>El informe vigente de la ronda: el último capturado. Una recaptura agrega un hecho, no reescribe.</summary>
+        public static InformeIntegrador UltimoInformeIntegrador(IEnumerable<Hecho> hechos, string rondaId) =>
+            hechos.OfType<InformeIntegrador>().LastOrDefault(h => h.RondaId == rondaId);
+
+        public static SalidaVerificador UltimaSalidaVerificador(IEnumerable<Hecho> hechos, string rondaId) =>
+            hechos.OfType<SalidaVerificador>().LastOrDefault(h => h.RondaId == rondaId);
+
+        /// <summary>
+        /// Los P# válidos para UN operador: el código estable de cada proveedor del
+        /// pool menos el suyo (exclusión de autoevaluación). Sale del Sello
+        /// persistido, así sobrevive a un reinicio de la app.
+        /// </summary>
+        public static List<string> EtiquetasValidasDelOperador(string operadorId, IReadOnlyList<string> poolOperadores, IEnumerable<Sello> sello)
+        {
+            var codigoDe = new Dictionary<string, string>();
+            foreach (var s in sello) codigoDe[s.PanelSourceId] = s.CodigoEstable;
+            return poolOperadores.Where(id => id != operadorId).Select(id =>
+                codigoDe.TryGetValue(id, out var codigo) && !string.IsNullOrEmpty(codigo)
+                    ? codigo
+                    : throw new InvalidOperationException($"no hay codigo estable de sello para el proveedor {id}")).ToList();
+        }
+
+        /// <summary>
+        /// Qué se escribe como qué en un lote de lecturas, según la etapa. Los
+        /// operadores que ya terminaron no se vuelven a escribir: en cada etapa sólo
+        /// el rol que tiene algo nuevo (en investigación, todas son respuestas).
+        /// </summary>
+        public static ClasificacionLecturas<T> ClasificarLecturasPorEtapa<T>(IReadOnlyList<T> lecturas, Func<T, string> idDe, string etapa,
+            IReadOnlyList<string> poolOperadores, string integradorId, string verificadorId, string redactorId = null)
+        {
+            T Buscar(string id) => lecturas.FirstOrDefault(l => idDe(l) == id);
+            var c = new ClasificacionLecturas<T>();
+            switch (etapa)
+            {
+                case "redaccion":
+                    c.Redactor = Buscar(redactorId ?? integradorId);
+                    break;
+                case "investigacion":
+                    c.ComoRespuesta.AddRange(lecturas);
+                    break;
+                case "operacion":
+                    // Los del pool operan; un rol que no opera sigue siendo un investigador más.
+                    c.Operacion.AddRange(lecturas.Where(l => poolOperadores.Contains(idDe(l))));
+                    c.ComoRespuesta.AddRange(lecturas.Where(l => !poolOperadores.Contains(idDe(l))));
+                    break;
+                case "verificacion":
+                    c.Verificador = Buscar(verificadorId);
+                    break;
+                default:
+                    c.Integrador = Buscar(integradorId);
+                    break;
+            }
+            return c;
+        }
+    }
+
+    public sealed class SalidaVigente
+    {
+        public string OperadorId { get; set; }
+        public string SalidaId { get; set; }
+        public List<HallazgoHecho> Hallazgos { get; set; }
+    }
+
+    public sealed class ClasificacionLecturas<T>
+    {
+        public List<T> Operacion { get; set; } = new List<T>();
+        public T Integrador { get; set; }
+        public T Verificador { get; set; }
+        public T Redactor { get; set; }
+        public List<T> ComoRespuesta { get; set; } = new List<T>();
     }
 }

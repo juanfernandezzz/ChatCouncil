@@ -12,4 +12,8 @@
   <ItemGroup>
     <Compile Include="../../Runtime/**/*.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- En Unity lo trae el paquete oficial com.unity.nuget.newtonsoft-json. -->
+    <PackageReference Include="Newtonsoft.Json" Version="*" />
+  </ItemGroup>
 </Project>

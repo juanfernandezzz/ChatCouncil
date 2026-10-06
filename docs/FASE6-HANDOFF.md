@@ -186,3 +186,21 @@ No escribas app. La primera sesión de Fase 6 hace solo la sección 2: investiga
 con evidencia, si Unity puede embeber un navegador con las cuatro capacidades.
 Entrega un informe con la respuesta medida y una recomendación. Juan decide con
 eso si la reconstrucción procede, cambia de forma, o se repiensa.
+
+## 8. Decisiones tomadas después del arranque
+
+- Base de navegador: WebView2 en Windows; Android System WebView con
+  androidx.webkit en Android; WKWebView en iOS, más adelante. Las tres usan un
+  perfil separado por proveedor, con datos persistentes.
+- Windows y Android usan el mismo motor (Chromium): todo el código que corre
+  dentro de las páginas (selectores, captura, escritura) es uno solo para las
+  dos. Solo cambia la capa delgada de cada sistema: crear el panel, asignar el
+  perfil y manejar ventanas emergentes.
+- "Continuar con Google" abre una ventana emergente. Esa ventana usa el mismo
+  perfil que el panel que la abrió y queda conectada con él (window.opener).
+  Medido: funciona en los nueve proveedores, en Windows y en Android.
+- No se cambia el user agent.
+- Distribución: .exe para Windows y .apk para Android, publicados como
+  descargas en GitHub Releases. Juan no usa ADB ni línea de comandos.
+- No se publica en ninguna tienda.
+- iOS es requisito de la versión final y se hace después de Windows y Android.

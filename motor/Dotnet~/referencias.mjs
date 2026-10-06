@@ -5,6 +5,8 @@
  * Ejecuta las funciones REALES (packages/ y el registro de apps/desktop) con
  * entradas fijas y escribe Tests/Referencias.g.cs. Determinista: ids y fechas
  * se fijan antes de importar, así dos corridas dan el mismo archivo byte a byte.
+ * También escribe Runtime/Datos.g.cs: los prompts literales y specs.json, que
+ * así nunca se copian a mano.
  *
  *   node motor/Dotnet~/referencias.mjs
  */
@@ -38,6 +40,7 @@ const importar = (ruta) => import(pathToFileURL(join(RAIZ, ruta)).href);
 const analisis = await importar("packages/analysis/src/index.ts");
 const dominio = await importar("packages/domain/src/index.ts");
 const registro = await importar("apps/desktop/src/main/registro.ts");
+const seleccion = await importar("apps/desktop/src/main/seleccion-proveedores.ts");
 
 /** Literal de C#. JSON ya escapa lo que C# exige, salvo U+0085, U+2028 y U+2029, que C# toma como salto de línea. */
 const cs = (s) =>
@@ -160,6 +163,54 @@ const paraOperar = (id, i) => ({
   texto: textoDe(600 + 150 * i, i),
   urlsCitadas: i % 3 === 0 ? [] : [`https://ejemplo.org/${id}?utm_source=${id}&model=m${i}`, "https://arxiv.org/abs/2212.10001"],
 });
+// ---------------------------------------------------------------- prompts literales (Runtime/Datos.g.cs)
+// Las plantillas no se exportan: se recuperan armando cada prompt con los
+// marcadores como valores, y con un centinela donde el valor es derivado.
+const CENTINELA = `${String.fromCharCode(0)}CENTINELA${String.fromCharCode(0)}`;
+const volver = (texto, centinela, marcador) => {
+  const partes = texto.split(centinela);
+  if (partes.length !== 2) throw new Error(`${marcador}: el centinela aparece ${partes.length - 1} veces`);
+  return partes.join(marcador);
+};
+const rC = [{ etiqueta: CENTINELA, texto: CENTINELA }];
+const hC = [{ id: CENTINELA, categoria: CENTINELA, eje: CENTINELA, etiquetas: [CENTINELA], descripcion: CENTINELA, operador: CENTINELA }];
+const PLANTILLAS = {
+  PlantillaOperacion: volver(analisis.armarPromptOperacion("{{PREGUNTA}}", rC), analisis.armarPromptOperacionConArchivo("", rC).cuerpoArchivo, "{{CUERPO}}"),
+  PlantillaOperacionConArchivo: analisis.armarPromptOperacionConArchivo("{{PREGUNTA}}", []).prompt,
+  PlantillaIntegrador: volver(analisis.armarPromptIntegrador("{{PREGUNTA}}", hC), analisis.tablaDe(hC), "{{HALLAZGOS}}"),
+  PlantillaVerificador: volver(analisis.armarPromptVerificador("{{PREGUNTA}}", "{{RESCATE}}", hC), Array(4).fill(CENTINELA).join("|"), "{{HALLAZGOS}}"),
+  PlantillaRedactor: analisis.armarPromptRedactor("{{PREGUNTA}}"),
+};
+const SPECS = readFileSync(join(RAIZ, "packages/providers/src/specs.json"), "utf8");
+
+// Las mismas entradas para el TypeScript y el motor, con valores que traen marcadores y patrones de replace.
+const PREGUNTAS = ["¿Qué dice la evidencia sobre X?", "con $& y $` y $' y {{CUERPO}} y {{HALLAZGOS}} y {{RESCATE}} y {{PREGUNTA}} adentro"];
+const RESCATE = "rescate con {{HALLAZGOS}} y $& [H1]";
+const ETIQUETADAS = [
+  { etiqueta: "P1", texto: "uno $& {{PREGUNTA}}" },
+  { etiqueta: "P3", texto: `dos\ncon ${LS} y {{CUERPO}}` },
+];
+const H_INTEGRADOR = [
+  { id: "H1", categoria: "CONVERGENCIA", eje: "HECHOS", etiquetas: ["P1", "P3"], descripcion: "d $' x", operador: "O1" },
+  { id: "H2", categoria: "LIMITACION:TAREA", eje: null, etiquetas: [], descripcion: "l {{HALLAZGOS}}", operador: "O2" },
+];
+const H_VERIFICADOR = H_INTEGRADOR.map(({ id, categoria, eje, descripcion }) => ({ id, categoria, eje, descripcion }));
+const PROMPTS = PREGUNTAS.map((p) => {
+  const archivo = analisis.armarPromptOperacionConArchivo(p, ETIQUETADAS);
+  return [
+    p,
+    analisis.armarPromptOperacion(p, ETIQUETADAS),
+    archivo.prompt,
+    archivo.cuerpoArchivo,
+    analisis.armarPromptIntegrador(p, H_INTEGRADOR),
+    analisis.armarPromptVerificador(p, RESCATE, H_VERIFICADOR),
+    analisis.armarPromptRedactor(p),
+  ];
+});
+const MATERIAL = { informe: "INFORME {{PREGUNTA}}", verificacion: "CONFIRMA|OFICIAL|H1|https://a.org|\"c\"", tabla: analisis.tablaDe(H_INTEGRADOR), respuestas: ETIQUETADAS };
+const ARCHIVOS_REDACTOR = [MATERIAL, { ...MATERIAL, verificacion: null }].map((m) => [JSON.stringify(m), analisis.armarArchivoRedactor(m)]);
+const ROLES = [seleccion.INTEGRADOR_POR_DEFECTO, seleccion.VERIFICADOR_POR_DEFECTO, seleccion.REDACTOR_POR_DEFECTO];
+
 const CUERPOS = [
   POOL.map(paraOperar),
   POOL.map((id, i) => (id === "grok" ? { ...paraOperar(id, i), urlsCitadas: ["https://grok.com/share/1"] } : paraOperar(id, i))),
@@ -358,6 +409,22 @@ namespace ChatCouncil.Motor.Pruebas
             ${CUERPOS.map((k) => `(${cs(k.entrada)}, ${cs(k.esperado)}, ${cs(k.error)})`).join(",\n            ")}
         };
 
+        public const string Rescate = ${cs(RESCATE)};
+        public const string Etiquetadas = ${cs(JSON.stringify(ETIQUETADAS))};
+        public const string HallazgosIntegrador = ${cs(JSON.stringify(H_INTEGRADOR))};
+
+        /// <summary>Los prompts armados por el TypeScript para cada pregunta, con Etiquetadas, HallazgosIntegrador y Rescate.</summary>
+        public static readonly (string pregunta, string operacion, string operacionConArchivo, string cuerpoArchivo, string integrador, string verificador, string redactor)[] Prompts = {
+            ${PROMPTS.map((p) => `(${p.map(cs).join(", ")})`).join(",\n            ")}
+        };
+
+        public static readonly (string material, string archivo)[] ArchivosRedactor = {
+            ${ARCHIVOS_REDACTOR.map(([m, t]) => `(${cs(m)}, ${cs(t)})`).join(",\n            ")}
+        };
+
+        /// <summary>Integrador, verificador y redactor por defecto de seleccion-proveedores.ts.</summary>
+        public static readonly string[] RolesPorDefecto = ${strs(ROLES)};
+
         /// <summary>Un hecho de cada tipo, escrito por las funciones reales de registro.ts.</summary>
         public static readonly string[] RegistroLineas = {
             ${arr(LINEAS)}
@@ -390,4 +457,22 @@ namespace ChatCouncil.Motor.Pruebas
 }
 `;
 writeFileSync(join(AQUI, "..", "Tests", "Referencias.g.cs"), archivo, "utf8");
+
+const datos = `// Generado por motor/Dotnet~/referencias.mjs a partir del código TypeScript. No editar a mano.
+namespace ChatCouncil.Motor
+{
+    /// <summary>
+    /// Los prompts literales y specs.json de la versión Electron, tomados por
+    /// script del código que los usa. Son datos de investigación: no se tocan.
+    /// </summary>
+    public static class Datos
+    {
+${Object.entries(PLANTILLAS).map(([k, v]) => `        public const string ${k} = ${cs(v)};`).join("\n")}
+
+        /// <summary>packages/providers/src/specs.json, el archivo entero.</summary>
+        public const string Specs = ${cs(SPECS)};
+    }
+}
+`;
+writeFileSync(join(AQUI, "..", "Runtime", "Datos.g.cs"), datos, "utf8");
 console.log(`Referencias.g.cs escrito: ${SEMILLAS.length} semillas, ${BARAJADOS.length} barajados, ${ANONIMIZADOS.length} anonimizados, ${LINEAS.length} lineas de registro, ${LECTURAS.length} lecturas, ${ESCENARIOS_ETAPA.length} etapas.`);

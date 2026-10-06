@@ -4,7 +4,7 @@ namespace ChatCouncil.Motor
     /// Las pocas funciones de JavaScript cuya semántica el port tiene que
     /// reproducir exacta, porque la de C# difiere en casos que llegan del DOM.
     /// </summary>
-    static class Js
+    public static class Js
     {
         /// <summary>
         /// String.prototype.trim: los blancos y saltos de ECMAScript. No es

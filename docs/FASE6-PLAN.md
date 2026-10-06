@@ -48,7 +48,7 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
 
 ### Etapa 3 — El motor
 
-- [ ] **T1. Esqueleto del motor y referencias de TypeScript.**
+- [x] **T1. Esqueleto del motor y referencias de TypeScript.**
   Acepta: existen el proyecto del motor, el de pruebas y el script de
   referencias. Una prueba de humo falla primero y después pasa.
   Verifica: `dotnet test` (salida pegada); el JSON de referencias se regenera
@@ -56,7 +56,7 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   Depende de: —. Archivos: ensamblado del motor, proyecto de pruebas, script
   de referencias, `.gitignore`. Tamaño: S.
 
-- [ ] **T2. Dominio y registro.**
+- [x] **T2. Dominio y registro.**
   Acepta: los dieciséis hechos leen y escriben JSON con los mismos nombres de
   campo que la versión Electron. `leerRegistro` cuenta ilegibles y detecta la
   última línea incompleta. Están portadas `etapaDeRonda` (operadores
@@ -66,7 +66,7 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   operadores con una recaptura → "operacion").
   Depende de: T1. Tamaño: M.
 
-- [ ] **T3. Barajado, anonimización y códigos.**
+- [x] **T3. Barajado, anonimización y códigos.**
   Acepta: `hashSemilla`, mulberry32, Fisher-Yates, `anonymizeReplies` con
   scrub y conteo, y `codigosEstables`.
   Verifica: igualdad con las referencias de TypeScript para 50 semillas;
@@ -74,7 +74,7 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   50 ± 26 por celda sobre 400 barajados.
   Depende de: T1. Tamaño: S.
 
-- [ ] **T4. Cuerpo del operador e integridad.**
+- [x] **T4. Cuerpo del operador e integridad.**
   Acepta: lista blanca de query, detección de fugas, `armarCuerpoConFuentes`,
   marcas intercaladas con FIN, `evaluarIntegridad`, `localizarPerdida` y
   `armarCuerposPorOperador` con su comprobación cruzada.
@@ -84,7 +84,7 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   son iguales a la referencia de TypeScript con tokens fijos.
   Depende de: T3. Tamaño: M.
 
-- [ ] **T5. Prompts literales y specs.**
+- [x] **T5. Prompts literales y specs.**
   Acepta: los cuatro prompts y `specs.json` son archivos de datos extraídos
   por script, nunca copiados a mano. La sustitución se hace partiendo y
   juntando. Están armados el prompt de operación (con cuerpo y con archivo),
@@ -95,7 +95,7 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   adentro; las reglas de `guard:specs`.
   Depende de: T1. Tamaño: M.
 
-- [ ] **T6. Parseos y texto desde HTML.**
+- [x] **T6. Parseos y texto desde HTML.**
   Acepta: `parsearHallazgos`, `parsearVerificacion` (formato nuevo y
   anterior), `parsearReferenciasIntegrador`, `textoDeHtmlEnBloques` y los
   títulos y la sección de rescate.
@@ -106,7 +106,7 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   TypeScript.
   Depende de: T1. Tamaño: M.
 
-- [ ] **T7. Citas, tabla de hallazgos y roles.**
+- [x] **T7. Citas, tabla de hallazgos y roles.**
   Acepta: `extraerCitas` (cuerpo y panel-ancestro, descartes con motivo),
   `armarTablaHallazgos`, salidas vigentes, etiquetas válidas por operador,
   clasificación de lecturas por etapa y reglas de roles y del pool.
@@ -115,7 +115,7 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   roles del BLUEPRINT (redactor = verificador rechazado, etc.).
   Depende de: T2, T3. Tamaño: M.
 
-- [ ] **T8. Informe final y controles del redactor.**
+- [x] **T8. Informe final y controles del redactor.**
   Acepta: `armarInformeFinal`, el documento por respuesta, los nombres libres
   sin guion largo, `controlesRedaccion` con las líneas de control y la
   verificación para el informe con su aviso de "sin comprobar".
@@ -125,7 +125,7 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   entradas.
   Depende de: T5, T6, T7. Tamaño: M.
 
-- [ ] **T9. La puerta del motor: pregunta e investigación.**
+- [x] **T9. La puerta del motor: pregunta e investigación.**
   Acepta: con los puertos falsos, se puede abrir una ronda (semilla y
   condición de cargados), registrar intentos y registrar capturas: umbral de
   20, corta < 300, citas derivadas, aviso de prompts y errores de captura
@@ -135,7 +135,7 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   registro los hechos esperados, contados.
   Depende de: T2, T7. Tamaño: M.
 
-- [ ] **T10. La puerta del motor: operación y roles.**
+- [x] **T10. La puerta del motor: operación y roles.**
   Acepta: el motor arma la operación de un panel (archivo o pegado) y escribe
   el sello la primera vez; después compara y se niega si hay discrepancia.
   Registra las capturas de operación con hallazgos, arma los prompts del
@@ -146,7 +146,7 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   hechos y gana el último).
   Depende de: T4, T5, T9. Tamaño: M.
 
-- [ ] **T11. La puerta del motor: URLs, informe y paso siguiente.**
+- [x] **T11. La puerta del motor: URLs, informe y paso siguiente.**
   Acepta: la comprobación de URLs se hace con el puerto HTTP; la carpeta del
   informe se escribe con el puerto PDF; y el motor responde el paso siguiente
   y el estado de cada panel.
@@ -156,7 +156,7 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   una ronda simulada completa.
   Depende de: T8, T10. Tamaño: M.
 
-- [ ] **T12. Script de página: escritura y lectura.**
+- [x] **T12. Script de página: escritura y lectura.**
   Acepta: el port en TypeScript de escribir, esperar a que asiente, leer el
   compositor, chat vacío y leer la respuesta (exclude, HTML, canvas, archivos,
   enlaces, etiqueta y aviso de iframe), con el contrato de pedido y consulta.
@@ -165,7 +165,7 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   prueba de comportamiento llega en T16, por la autoprueba del panel.
   Depende de: T5. Tamaño: M.
 
-- [ ] **T13. Script de página: generación, diagnóstico y adjunto.**
+- [x] **T13. Script de página: generación, diagnóstico y adjunto.**
   Acepta: el estado de generación en el tiempo, el diagnóstico de selectores
   de solo lectura y la búsqueda del `<input type=file>`.
   Verifica: igual que T12.

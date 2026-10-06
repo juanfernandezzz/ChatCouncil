@@ -103,10 +103,10 @@ namespace ChatCouncil.Motor
         // U+2028, su "$" acepta un \n final y su IgnoreCase pliega el signo Kelvin.
 
         /// <summary>El contenido de la clase \s de JS, para poner entre corchetes: [Blancos] o [^Blancos].</summary>
-        public const string Blancos = @"\t\n\v\f\r    -     　﻿";
+        public const string Blancos = @"\t\n\v\f\r \u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF";
 
         /// <summary>El "." de JS sin /s: todo menos los cuatro terminadores de línea. El "$" de JS sin /m es \z.</summary>
-        public const string Punto = @"[^\n\r  ]";
+        public const string Punto = @"[^\n\r\u2028\u2029]";
 
         /// <summary>\b de JS sin /u: el borde entre [A-Za-z0-9_] y lo demás.</summary>
         public const string Borde = @"(?:(?<=[A-Za-z0-9_])(?![A-Za-z0-9_])|(?<![A-Za-z0-9_])(?=[A-Za-z0-9_]))";

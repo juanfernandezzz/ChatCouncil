@@ -164,7 +164,7 @@ namespace ChatCouncil.Motor
         static readonly Regex PrimeraUrlRe = new Regex($"{Js.Ci("http")}[sS]?://[^{B}<>\"'`|]+");
         static readonly Regex PuntuacionFinal = new Regex(@"[).,;\]]+\z");
         static readonly Regex ComillasDeAfuera = new Regex("^\"+|\"+\\z");
-        static readonly Regex Diacriticos = new Regex(@"[̀-ͯ]");
+        static readonly Regex Diacriticos = new Regex(@"[\u0300-\u036F]");
         static readonly Regex SeparadorDeTipos = new Regex($"[{B}]*(?:,|/|;|\\+|[{B}]+{Js.Ci("y")}[{B}]+)[{B}]*");
         static readonly Regex SoloGuiones = new Regex("^[—–-]+\\z");
 

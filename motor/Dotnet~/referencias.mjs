@@ -50,8 +50,41 @@ const cs = (s) =>
 const LS = String.fromCharCode(0x2028);
 const TEXTO_RARO = `comillas "dobles", barra \\ ñandú 😀 separador${LS}control${String.fromCharCode(1)} surrogate suelto ${String.fromCharCode(0xd800)} fin`;
 
-// ---------------------------------------------------------------- semillas
-const SEMILLAS = ["", "abc", "0f8fad5b-d9cb-469f-a165-70867728950e", "ñandú", "😀 con emoji", `salto${LS}de linea`];
+// ---------------------------------------------------------------- semillas y barajado
+const SEMILLAS = [
+  ...["", "abc", "0f8fad5b-d9cb-469f-a165-70867728950e", "ñandú", "😀 con emoji", `salto${LS}de linea`],
+  ...Array.from({ length: 44 }, (_, k) => `0f8fad5b-d9cb-469f-a165-${String(k).padStart(12, "0")}`),
+];
+const rango = (n) => Array.from({ length: n }, (_, i) => i);
+// 8 es el pool; 100 hace correr mulberry32 99 veces por semilla. Más los bordes de uint.
+const BARAJADOS = [
+  ...SEMILLAS.flatMap((s) => [8, 100].map((n) => [analisis.hashSemilla(s), n])),
+  ...[0, 1, 2 ** 31, 2 ** 32 - 1].flatMap((x) => [0, 1, 2, 8].map((n) => [x, n])),
+].map(([semilla, n]) => ({ semilla, n, orden: analisis.seededShuffle(rango(n), semilla) }));
+
+// ---------------------------------------------------------------- anonimización
+// Casos del scrub donde las expresiones regulares de .NET y de JS (con /iu) difieren:
+// pliegue de mayúsculas fuera de ASCII, letras fuera del plano básico, surrogates sueltos.
+const c = (...cps) => String.fromCodePoint(...cps);
+const TAPADOS = [
+  "Soy Claude, un modelo de Anthropic.",
+  "GPT-4o, GPT-5, GPT4 y GPT-5GPT",
+  "chatgpt.com, OPENAI, gEmInI, xAI's, DeepSeek-R1, sonar-pro",
+  `ClaudeAI, Claude${c(0xe9)}, ${c(0xe9)}Claude, 1Claude, Claude1, _Claude_`,
+  `${c(0x17f)}onnet, Hai${c(0x212a)}u, Gem${c(0x130)}n${c(0x130)}, Gem${c(0x131)}n${c(0x131)}`,
+  `${c(0x1d400)}Claude, ${c(0x1f600)}Claude, Claude${c(0x1d7cf)}, Claude${c(0x301)}`,
+  `${String.fromCharCode(0xd800)}Claude ${String.fromCharCode(0xdc00)}Claude`,
+  "Sin nombres de proveedor.",
+];
+const POOL = ["chatgpt", "gemini", "claude", "grok", "mistral", "kimi", "qwen", "deepseek"];
+const respuesta = (id, text) => ({ panelSourceId: id, replyId: `r-${id}`, attemptId: `a-${id}`, displayName: id, text });
+const ANONIMIZADOS = [
+  [POOL.map((id, i) => respuesta(id, TAPADOS[i])), analisis.hashSemilla("semilla-fija")],
+  [rango(27).map((k) => respuesta(`p${k}`, `respuesta ${k} de Grok`)), analisis.hashSemilla("abc")],
+  [[], 0],
+].map(([rs, semilla]) => ({ semilla, entrada: JSON.stringify(rs), esperado: JSON.stringify(analisis.anonymizeReplies(rs, true, semilla)) }));
+
+const CODIGOS = [POOL, ["chatgpt", "gemini", "chatgpt"], []].map((ids) => ({ ids, codigos: [...analisis.codigosEstables(ids).entries()] }));
 
 // ---------------------------------------------------------------- registro
 // Un hecho de cada uno de los dieciséis tipos, escrito por las funciones reales.
@@ -184,6 +217,23 @@ namespace ChatCouncil.Motor.Pruebas
         public static readonly string[] Semillas = { ${SEMILLAS.map(cs).join(", ")} };
         public static readonly uint[] HashSemillas = { ${SEMILLAS.map((s) => `${analisis.hashSemilla(s)}u`).join(", ")} };
 
+        /// <summary>seededShuffle([0..n-1], semilla).</summary>
+        public static readonly (uint semilla, int n, int[] orden)[] Barajados = {
+            ${BARAJADOS.map((b) => `(${b.semilla}u, ${b.n}, new int[] { ${b.orden.join(", ")} })`).join(",\n            ")}
+        };
+
+        public static readonly string[] TerminosBloqueados = { ${analisis.PROVIDER_NAME_BLOCKLIST.map(cs).join(", ")} };
+        public const string TokenRedaccion = ${cs(analisis.REDACTION_TOKEN)};
+
+        /// <summary>Entrada y salida de anonymizeReplies(respuestas, true, semilla), como JSON.</summary>
+        public static readonly (uint semilla, string entrada, string esperado)[] Anonimizados = {
+            ${ANONIMIZADOS.map((a) => `(${a.semilla}u, ${cs(a.entrada)}, ${cs(a.esperado)})`).join(",\n            ")}
+        };
+
+        public static readonly (string[] ids, string[] claves, string[] codigos)[] Codigos = {
+            ${CODIGOS.map((k) => `(new string[] { ${k.ids.map(cs).join(", ")} }, new string[] { ${k.codigos.map(([id]) => cs(id)).join(", ")} }, new string[] { ${k.codigos.map(([, p]) => cs(p)).join(", ")} })`).join(",\n            ")}
+        };
+
         /// <summary>Un hecho de cada tipo, escrito por las funciones reales de registro.ts.</summary>
         public static readonly string[] RegistroLineas = {
             ${arr(LINEAS)}
@@ -216,4 +266,4 @@ namespace ChatCouncil.Motor.Pruebas
 }
 `;
 writeFileSync(join(AQUI, "..", "Tests", "Referencias.g.cs"), archivo, "utf8");
-console.log(`Referencias.g.cs escrito: ${SEMILLAS.length} semillas, ${LINEAS.length} lineas de registro, ${LECTURAS.length} lecturas, ${ESCENARIOS_ETAPA.length} etapas.`);
+console.log(`Referencias.g.cs escrito: ${SEMILLAS.length} semillas, ${BARAJADOS.length} barajados, ${ANONIMIZADOS.length} anonimizados, ${LINEAS.length} lineas de registro, ${LECTURAS.length} lecturas, ${ESCENARIOS_ETAPA.length} etapas.`);

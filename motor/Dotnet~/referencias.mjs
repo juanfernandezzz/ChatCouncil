@@ -613,6 +613,160 @@ const CORRIDA = (() => {
   siguienteId = idAntes;
   return { lineas, aviso, etapa, umbral: UMBRAL_LECTURA_MINIMO };
 })();
+// ---------------------------------------------------------------- puerta: operación y roles (T10)
+// Una ronda entera: investigación, la operación de cada panel (kimi por archivo),
+// las salidas en dos lotes, el integrador con una recaptura (dos hechos, gana el
+// último), el verificador, el redactor, y una ronda nueva con las respuestas
+// copiadas donde kimi se reutiliza y chatgpt se rechaza. Funciones reales de
+// operador.ts, integrador.ts y registro.ts; el pegamento de index.ts se
+// reconstruye con sus mismas reglas y en el mismo orden.
+const operador = await importar("apps/desktop/src/main/operador.ts");
+const NO_DISPONIBLE = "(prompt no disponible: no se registró en este proceso — probablemente se reinició la app entre el envío y la captura)";
+const PREGUNTA_OP = "¿Qué dice la evidencia sobre la dosis?";
+const AHORA_LOCAL = new Date(2026, 9, 6, 9, 0);
+const ROLES_OP = { integrador: "deepseek", verificador: "glm", redactor: "deepseek" };
+const salidaDe = (i) => ["Razonamiento previo.", "CONVERGENCIA|HECHOS|P1,P2|coinciden en la fecha", `DIVERGENCIA|FUENTES|P3,P9|citan distinto ${i}`, "LIMITACION:TAREA|—|nada"].join("\n");
+const LOTES = {
+  investigacion: [...POOL_PUERTA, "deepseek"].map((id, i) => ({ id, text: largo(1500 + 100 * i, i), userText: PREGUNTA_OP, generating: false,
+    html: i === 0 ? '<p>Ver <a href="https://a.org/x?ref=chatgpt">a</a> y <a href="https://b.org">b</a></p>' : null })),
+  operadores1: [
+    ...POOL_PUERTA.map((id, i) => (id === "claude" ? { id, text: "", generating: null, html: null, error: "lectura vacia" } : { id, text: salidaDe(i), generating: false, html: null })),
+    { id: "deepseek", text: largo(1600, 9), generating: false, html: null },
+  ],
+  operadores2: [{ id: "claude", text: salidaDe(2), generating: false, html: "<p>CONVERGENCIA|HECHOS|P1|en html</p>" }],
+  integradorCorto: [{ id: "deepseek", text: "TITULO: Informe a medias\n\nTexto incompleto [H1].", generating: false, html: null }],
+  integradorCompleto: { id: "deepseek", text: "TITULO: La dosis\n\n1. TIPOS DE DIVERGENCIA\nFactica [H2].\n\n5. QUE CONVIENE RESCATAR\nLo firme [H1] y [H3] y [H99].", html: null },
+  verificador: [{ id: "glm", text: 'Reviso.\nCONFIRMA|OFICIAL|H1|https://a.org|"cita"', generating: false, html: null }],
+  kimiNueva: [{ id: "kimi", text: largo(2500, 7) + " (archivos corregidos)", userText: PREGUNTA_OP, generating: false, html: null }],
+};
+const CORRIDA_OP = (() => {
+  const idAntes = siguienteId;
+  siguienteId = 0;
+  const d = mkdtempSync(join(tmpdir(), "cc-operacion-"));
+  const POOL = POOL_PUERTA;
+  const memoria = { operador: new Map(), integrador: null, verificador: null, redactor: null, marcasRedactor: null };
+  let conv = null, ronda = null, indice = 0;
+  const leer = () => registro.leerRegistroDeArchivo(d, conv).hechos;
+  const abrirRonda = (prompt) => {
+    ronda = registro.escribirRonda(d, conv, indice++, prompt, registro.generarSemilla());
+    registro.escribirCondicionProveedoresCargados(d, conv, ronda, CONOCIDOS, ROLES_OP.integrador);
+  };
+  const marcar = (l) => (l.text.length < UMBRAL_LECTURA_MINIMO && !l.error
+    ? { ...l, error: `lectura por debajo del umbral (${l.text.length} de ${UMBRAL_LECTURA_MINIMO} caracteres): no genero una respuesta observable, no se guarda como valida` } : l);
+  const error = (etapa, tipo, detalle, id) => registro.escribirErrorCaptura(d, conv, ronda, etapa, tipo, detalle, id);
+  const capturar = (crudas) => {
+    const lecturas = crudas.map(marcar);
+    const hechos = leer();
+    const etapa = dominio.etapaDeRonda(hechos, ronda, POOL.length);
+    const sello = hechos.filter((h) => h.tipo === "sello" && h.rondaId === ronda);
+    const c = integrador.clasificarLecturasPorEtapa(lecturas, etapa, POOL, ROLES_OP.integrador, ROLES_OP.verificador, ROLES_OP.redactor);
+    if (c.lecturasComoRespuesta.length > 0) registro.escribirRespuestas(d, conv, ronda, c.lecturasComoRespuesta, () => ({ continuidad: "confirmada", panel: null }));
+    if (etapa === "investigacion") {
+      for (const l of c.lecturasComoRespuesta) if (!l.error && l.text.length < 300) error(etapa, "respuesta", "respuesta sospechosamente corta: puede haber quedado fuera de la captura", l.id);
+    }
+    for (const l of c.lecturasOperacion) {
+      if (l.error) continue;
+      try {
+        const validas = integrador.etiquetasValidasDelOperador(l.id, POOL, sello);
+        integrador.procesarSalidaOperador(d, conv, ronda, l.id, memoria.operador.get(l.id) ?? NO_DISPONIBLE, l.text, l.html ?? null, validas);
+      } catch (e) {
+        error(etapa, "salida-operador", e.message);
+      }
+    }
+    const rol = (lectura, tipo, id, escribir) => {
+      if (!lectura) error(etapa, tipo, `el panel del ${tipo === "informe-integrador" ? "integrador" : tipo === "salida-verificador" ? "verificador" : "redactor"} (${id}) no estaba abierto al capturar`, id);
+      else if (lectura.error) error(etapa, tipo, lectura.error, lectura.id);
+      else escribir(lectura);
+    };
+    if (etapa === "integracion") rol(c.lecturaIntegrador, "informe-integrador", ROLES_OP.integrador, (l) => registro.escribirInformeIntegrador(d, conv, ronda, l.id, memoria.integrador ?? NO_DISPONIBLE, l.text, l.html ?? null));
+    if (etapa === "verificacion") rol(c.lecturaVerificador, "salida-verificador", ROLES_OP.verificador, (l) => registro.escribirSalidaVerificador(d, conv, ronda, l.id, memoria.verificador ?? NO_DISPONIBLE, l.text, l.html ?? null));
+    if (etapa === "redaccion") rol(c.lecturaRedactor, "respuesta-redactor", ROLES_OP.redactor, (l) => {
+      const previo = integrador.ultimaRedaccion(hechos, ronda);
+      const marcas = memoria.marcasRedactor ?? (previo?.marcaPrimera && previo.marcaUltima ? { primera: previo.marcaPrimera, ultima: previo.marcaUltima } : null);
+      registro.escribirRespuestaRedactor(d, conv, ronda, l.id, memoria.redactor ?? previo?.promptCompleto ?? NO_DISPONIBLE, l.text, l.html ?? null, marcas);
+    });
+    return etapa;
+  };
+  const prepararRonda = () => {
+    const hechos = leer();
+    const r = hechos.find((h) => h.tipo === "ronda" && h.id === ronda);
+    const ultimas = new Map();
+    for (const h of hechos) if (h.tipo === "respuesta" && h.rondaId === ronda && POOL.includes(h.proveedorId)) ultimas.set(h.proveedorId, h);
+    return { r, pregunta: dominio.preguntaEfectivaDeRonda(hechos, r), respuestas: [...ultimas.values()], citas: hechos.filter((h) => h.tipo === "cita") };
+  };
+  const operar = (op, conArchivo) => {
+    const p = prepararRonda();
+    const res = operador.armarYPersistirCuerposDeRonda(d, conv, p.r, p.respuestas, p.citas, POOL);
+    const cuerpo = res.cuerpos.find((x) => x.operadorId === op);
+    if (conArchivo) {
+      const codigo = res.sello.find((s) => s.panelSourceId === op).codigoEstable;
+      const a = operador.armarOperacionConArchivo(p.pregunta, cuerpo, codigo, AHORA_LOCAL, crypto.randomUUID());
+      memoria.operador.set(op, `${a.prompt}\n\n=== ARCHIVO ADJUNTO: ${a.nombreArchivo} ===\n${a.cuerpoArchivo}`);
+      return a.nombreArchivo;
+    }
+    const token = crypto.randomUUID();
+    const { textoConMarcas } = analisis.insertarMarcasIntercaladas(analisis.armarPromptOperacion(p.pregunta, cuerpo.respuestasParaOperador), token);
+    memoria.operador.set(op, `${textoConMarcas}\n[[CC-MARCA-FIN-${token}]]`);
+    return null;
+  };
+  const tablaRonda = () => {
+    const hechos = leer();
+    const r = hechos.find((h) => h.tipo === "ronda" && h.id === ronda);
+    const pregunta = dominio.preguntaEfectivaDeRonda(hechos, r);
+    return { hechos, pregunta, ...integrador.armarTablaYPromptIntegrador(pregunta, integrador.salidasVigentesDeRonda(hechos, ronda), POOL, r.semilla) };
+  };
+
+  conv = registro.crearConversacion(d, false);
+  abrirRonda(PREGUNTA_OP);
+  capturar(LOTES.investigacion);
+  const archivoKimi = POOL.map((op) => operar(op, op === "kimi")).find((x) => x !== null);
+  capturar(LOTES.operadores1);
+  capturar(LOTES.operadores2);
+  memoria.integrador = tablaRonda().prompt;
+  capturar(LOTES.integradorCorto);
+  const recaptura = integrador.registrarRecaptura(d, leer(), conv, ronda, "integrador", LOTES.integradorCompleto, memoria.integrador);
+  {
+    const t = tablaRonda();
+    memoria.verificador = integrador.armarPromptVerificadorDeRonda(t.pregunta, analisis.textoDelInformeIntegrador(integrador.ultimoDeRol(t.hechos, ronda, "integrador")), t.tabla).prompt;
+  }
+  capturar(LOTES.verificador);
+  let archivoRedactor;
+  {
+    const t = tablaRonda();
+    const inf = integrador.ultimoDeRol(t.hechos, ronda, "integrador");
+    const ver = integrador.ultimoDeRol(t.hechos, ronda, "verificador");
+    const p = prepararRonda();
+    const respuestas = operador.armarCuerposDeRonda(p.r, p.respuestas, p.citas, POOL).respuestasTodas;
+    const material = { informe: analisis.textoDelInformeIntegrador(inf), verificacion: ver === null ? null : analisis.textoDeLaSalidaVerificador(ver), tabla: analisis.tablaDe(t.tabla.paraPrompt), respuestas };
+    const a = operador.armarArchivoRedactorConMarcas(material, AHORA_LOCAL, crypto.randomUUID());
+    memoria.redactor = `${analisis.armarPromptRedactor(t.pregunta)}\n\n=== ARCHIVO ADJUNTO: ${a.nombreArchivo} ===\n${a.cuerpoArchivo}`;
+    memoria.marcasRedactor = a.marcas;
+    archivoRedactor = a.nombreArchivo;
+  }
+  const lecturaRedactor = { id: "deepseek", text: `ARCHIVO: primera marca = ${memoria.marcasRedactor.primera}, ultima marca = ${memoria.marcasRedactor.ultima}\n\nRespuesta [H1].`, generating: false, html: null };
+  capturar([lecturaRedactor]);
+  {
+    const hechos = leer();
+    const anterior = hechos.find((h) => h.tipo === "ronda" && h.id === ronda);
+    const pregunta = dominio.preguntaEfectivaDeRonda(hechos, anterior);
+    const ultimas = new Map();
+    for (const h of hechos) if (h.tipo === "respuesta" && h.rondaId === anterior.id && POOL.includes(h.proveedorId)) ultimas.set(h.proveedorId, h);
+    abrirRonda(pregunta);
+    registro.copiarRespuestas(d, conv, ronda, [...ultimas.values()]);
+    memoria.operador.clear();
+    memoria.integrador = memoria.verificador = memoria.redactor = memoria.marcasRedactor = null;
+  }
+  capturar(LOTES.kimiNueva);
+  operar("chatgpt", false);
+  const reusoKimi = integrador.copiarOperacionDeRondaAnterior(d, leer(), conv, ronda, "kimi", POOL);
+  const reusoChatgpt = integrador.copiarOperacionDeRondaAnterior(d, leer(), conv, ronda, "chatgpt", POOL);
+
+  const lineas = readFileSync(join(d, "conversaciones", `${conv}.jsonl`), "utf8").split("\n").filter((l) => l.length > 0);
+  rmSync(d, { recursive: true, force: true });
+  siguienteId = idAntes;
+  return { lineas, archivoKimi, archivoRedactor, recaptura, reusoKimi, reusoChatgpt, lecturaRedactor };
+})();
+
 const AVISOS_PROMPTS = [
   [["a", "A  ", " a"], "investigacion"],
   [["a", "b", null, ""], "investigacion"],
@@ -957,6 +1111,22 @@ namespace ChatCouncil.Motor.Pruebas
         };
         public const string CorridaAviso = ${cs(CORRIDA.aviso)};
         public const string CorridaEtapa = ${cs(CORRIDA.etapa)};
+
+        /// <summary>Los lotes de lecturas de la corrida de operación, por nombre.</summary>
+        public const string LotesOperacion = ${cs(JSON.stringify(LOTES))};
+        public const string LecturaRedactorOperacion = ${cs(JSON.stringify(CORRIDA_OP.lecturaRedactor))};
+        public const string PreguntaOperacion = ${cs(PREGUNTA_OP)};
+        /// <summary>Las líneas que deja la corrida de operación y roles, con ids 1, 2, 3… y la fecha fija.</summary>
+        public static readonly string[] CorridaOperacionLineas = {
+            ${arr(CORRIDA_OP.lineas)}
+        };
+        public const string ArchivoKimi = ${cs(CORRIDA_OP.archivoKimi)};
+        public const string ArchivoRedactor = ${cs(CORRIDA_OP.archivoRedactor)};
+        public const string MensajeRecaptura = ${cs(CORRIDA_OP.recaptura.mensaje)};
+        public const string MensajeReusoKimi = ${cs(CORRIDA_OP.reusoKimi.mensaje)};
+        public const bool ReusoKimiOk = ${CORRIDA_OP.reusoKimi.ok};
+        public const string MensajeReusoChatgpt = ${cs(CORRIDA_OP.reusoChatgpt.mensaje)};
+        public const bool ReusoChatgptOk = ${CORRIDA_OP.reusoChatgpt.ok};
 
         public static readonly (string[] textos, string etapa, string aviso)[] AvisosPrompts = {
             ${AVISOS_PROMPTS.map(([t, e, a]) => `(new string[] { ${t.map(cs).join(", ")} }, ${cs(e)}, ${cs(a)})`).join(",\n            ")}

@@ -43,7 +43,7 @@ interface Spec {
 
 interface Pedido {
   id: string;
-  op: "escribir" | "leer" | "leerCompositor" | "chatVacio";
+  op: "escribir" | "leer" | "leerCompositor" | "chatVacio" | "estado" | "diagnostico" | "inputArchivo";
   spec: Spec;
   texto?: string;
 }
@@ -356,6 +356,124 @@ async function leer(spec: Spec) {
   };
 }
 
+/**
+ * El estado de la generación en el tiempo, para el indicador de "parece
+ * terminado" (la app avisa; Juan decide cuándo capturar). Recuerda el largo de
+ * la respuesta entre consultas: el fin es "observado" si el control de detener
+ * desapareció con texto en pantalla, y "deducido" si el texto lleva quieto la
+ * ventana de quietud de la spec. Sin texto no hay fin.
+ */
+const seguimiento = { largo: -1, desde: 0 };
+
+function estadoDeGeneracion(spec: Spec) {
+  const largo = textoDelAsistente(spec, ultimoNodoAsistente(spec)).length;
+  const ahora = Date.now();
+  if (largo !== seguimiento.largo) {
+    seguimiento.largo = largo;
+    seguimiento.desde = ahora;
+  }
+  const generando = estaGenerando(spec);
+  const quietoMs = ahora - seguimiento.desde;
+  const fin = largo === 0 || generando === true ? null
+    : spec.completion.kind === "element-gone" ? "observado"
+    : quietoMs >= spec.completion.quiescenceMs ? "deducido"
+    : null;
+  return { generando, largo, quietoMs, fin };
+}
+
+// Atributos estructurales: identifican un nodo sin leer lo que la persona escribió.
+const ATRIBUTOS_ESTRUCTURALES = ["id", "class", "data-testid", "data-test-id", "aria-label", "role", "name", "type"];
+
+function recortar(texto: string, max = 80): string {
+  const t = texto.replace(/\s+/g, " ").trim();
+  return t.length > max ? `${t.slice(0, max)}…` : t;
+}
+
+function describir(el: Element) {
+  const atributos: Record<string, string> = {};
+  for (const a of ATRIBUTOS_ESTRUCTURALES) {
+    const v = el.getAttribute(a);
+    if (v !== null) atributos[a] = recortar(v, 120);
+  }
+  return { etiqueta: el.tagName.toLowerCase(), atributos };
+}
+
+function contar(selector: string | undefined): number | "invalido" | null {
+  if (!selector) return null;
+  try {
+    return document.querySelectorAll(selector).length;
+  } catch {
+    return "invalido";
+  }
+}
+
+/**
+ * Diagnóstico de selectores, de SOLO LECTURA (Q8): para corregir una spec
+ * cuando el sitio móvil no se parece al de escritorio. Cuenta cuántas
+ * coincidencias da cada selector y describe con atributos estructurales los
+ * cuadros de texto, los contenedores de texto largo, los controles cerca del
+ * compositor, los iframes y los shadow roots. No lee valores de campos y
+ * recorta todo texto a 80 caracteres.
+ */
+function diagnostico(spec: Spec) {
+  const selectores: Record<string, number | "invalido" | null> = {
+    "composer.selector": contar(spec.composer.selector),
+    "assistantMessage.selector": contar(spec.assistantMessage.selector),
+    "userMessage.selector": contar(spec.userMessage?.selector),
+    "modelLabel.selector": contar(spec.modelLabel?.selector),
+    "completion.selector": contar(spec.completion.kind === "element-gone" ? spec.completion.selector : undefined),
+  };
+  (spec.assistantMessage.exclude ?? []).forEach((s, i) => (selectores[`assistantMessage.exclude[${i}]`] = contar(s)));
+  for (const [grupo, valores] of Object.entries({ canvas: spec.canvas, archivos: spec.archivos, informeEnIframe: spec.informeEnIframe })) {
+    for (const [campo, s] of Object.entries(valores ?? {})) if (campo !== "frameUrl") selectores[`${grupo}.${campo}`] = contar(s);
+  }
+  const cuadrosDeTexto = buscarTodos('textarea, [contenteditable="true"], [contenteditable=""], input[type="text"], input:not([type])').slice(0, 20).map(describir);
+  const textoLargo = buscarTodos("main *, body > div *")
+    .filter((el) => (el.textContent ?? "").length > 500 && Array.from(el.children).every((h) => (h.textContent ?? "").length < 500))
+    .slice(0, 10)
+    .map((el) => ({ ...describir(el), largo: (el.textContent ?? "").length, inicio: recortar(el.textContent ?? "") }));
+  const compositor = buscar(spec.composer.selector);
+  let zona: Element | null = compositor;
+  for (let nivel = 0; zona && nivel < 4; nivel++) zona = zona.parentElement;
+  const controles = zona ? Array.from(zona.querySelectorAll("button, [role=button], input[type=file]")).slice(0, 30).map((el) => ({
+    ...describir(el),
+    deshabilitado: (el as HTMLButtonElement).disabled === true || el.getAttribute("aria-disabled") === "true",
+  })) : [];
+  const iframes = buscarTodos("iframe").slice(0, 20).map((f) => {
+    let origen = "";
+    try {
+      const u = new URL((f as HTMLIFrameElement).src, location.href);
+      origen = u.origin + u.pathname;
+    } catch {
+      origen = "(src no legible)";
+    }
+    return { ...describir(f), origen, titulo: recortar(f.getAttribute("title") ?? "") };
+  });
+  const shadowRoots = buscarTodos("*").filter((el) => el.shadowRoot !== null).slice(0, 20).map(describir);
+  return { url: location.origin + location.pathname, selectores, cuadrosDeTexto, textoLargo, controlesCercaDelCompositor: controles, iframes, shadowRoots };
+}
+
+/**
+ * El <input type=file> del compositor, para adjuntar el archivo de la
+ * operación o del redactor. Se busca subiendo desde el compositor y, si no,
+ * en todo el documento; el elegido queda marcado con data-cc-adjunto para que
+ * el lado nativo lo encuentre. Marcarlo no envía nada.
+ */
+function inputArchivo(spec: Spec) {
+  document.querySelectorAll("[data-cc-adjunto]").forEach((el) => el.removeAttribute("data-cc-adjunto"));
+  let zona: Element | null = buscar(spec.composer.selector);
+  let input: HTMLInputElement | null = null;
+  for (let nivel = 0; zona && !input && nivel <= 6; nivel++) {
+    input = zona.querySelector('input[type="file"]');
+    zona = zona.parentElement;
+  }
+  const todos = buscarTodos('input[type="file"]');
+  input = input ?? (todos[0] as HTMLInputElement | undefined) ?? null;
+  if (!input) return { encontrado: false, cantidad: 0 };
+  input.setAttribute("data-cc-adjunto", "1");
+  return { encontrado: true, cantidad: todos.length, selector: '[data-cc-adjunto="1"]', accept: input.accept, multiple: input.multiple, ...describir(input) };
+}
+
 type Estado = { estado: "pendiente" } | { estado: "listo"; resultado: unknown } | { estado: "error"; error: string };
 
 interface Puente {
@@ -378,6 +496,12 @@ interface Puente {
         return Promise.resolve(leerCompositor(p.spec));
       case "chatVacio":
         return Promise.resolve(chatVacio(p.spec));
+      case "estado":
+        return Promise.resolve(estadoDeGeneracion(p.spec));
+      case "diagnostico":
+        return Promise.resolve(diagnostico(p.spec));
+      case "inputArchivo":
+        return Promise.resolve(inputArchivo(p.spec));
       default:
         return Promise.reject(new Error(`operacion desconocida: ${String((p as { op: unknown }).op)}`));
     }

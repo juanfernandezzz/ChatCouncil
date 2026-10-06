@@ -12,6 +12,20 @@ namespace ChatCouncil.Motor
     {
         public const int VersionEsquema = 1;
 
+        static readonly Dictionary<string, string> Nombres = new Dictionary<string, string>
+        {
+            ["chatgpt"] = "ChatGPT", ["gemini"] = "Gemini", ["claude"] = "Claude", ["grok"] = "Grok", ["mistral"] = "Mistral",
+            ["glm"] = "GLM", ["kimi"] = "Kimi", ["qwen"] = "Qwen", ["deepseek"] = "DeepSeek",
+        };
+
+        /// <summary>
+        /// El nombre de un proveedor como lo ve Juan (nombre-proveedor.ts). El id
+        /// sigue siendo la clave en el registro; un id desconocido sale con la
+        /// primera letra en mayúscula.
+        /// </summary>
+        public static string NombreProveedor(string id) =>
+            Nombres.TryGetValue(id, out var nombre) ? nombre : id.Length == 0 ? "" : Js.ToUpperCase(id.Substring(0, 1)) + id.Substring(1);
+
         /// <summary>
         /// "Hay algo en el campo" no alcanza: el marcador interno de una ronda
         /// capturada sin envío es texto no vacío y no es una pregunta.

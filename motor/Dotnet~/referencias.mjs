@@ -441,6 +441,127 @@ const POOLES = [
   { integrador: "claude", verificador: "grok", redactor: "mistral" },
 ].map((roles) => [JSON.stringify(roles), seleccion.poolDeInvestigadores(CONOCIDOS, roles)]);
 
+// ---------------------------------------------------------------- informe final y redactor
+// Las entradas de la parte 2 de guard:trazabilidad, los cuatro casos de secciones vacías,
+// las marcas de integridad (también una tras un \r suelto: la /m de JS corta ahí) y la verificación.
+const HALLAZGOS_INFORME = [
+  { codigo: "H1", categoria: "CONVERGENCIA", eje: "HECHOS", respuestasReales: ["chatgpt"], descripcion: "d1", operadorReal: "gemini" },
+  { codigo: "H2", categoria: "DIVERGENCIA", eje: "FUENTES", respuestasReales: ["claude"], descripcion: "d2", operadorReal: "grok" },
+];
+const BASE_INFORME = {
+  pregunta: "p",
+  fecha: "f",
+  conversacionId: "c",
+  rondaId: "r",
+  participacionOperadores: [{ operadorId: "gemini", estado: "ok", detalle: "1 hallazgos" }],
+  condiciones: [{ proveedorId: "claude", etiquetaModelo: null, caracteresRespuesta: 10, fuentesCitadas: 0, codigoEstable: "P3" }],
+  integridadEntrega: "x",
+  semilla: "s",
+};
+const VERIFICACION_INFORME = {
+  avisoSinComprobar: "Se comprobo 1 de las 3 URL distintas de esta seccion.",
+  items: [
+    { correspondencia: "CONFIRMA", tiposFuente: ["OFICIAL", "PRIMARIA"], tiposNoReconocidos: [], formatoAnterior: false, hallazgoId: "H1", descripcion: "d1", url: "https://a.org", comprobacion: "responde 200", texto: "cita" },
+    { correspondencia: "CONTRADICE", tiposFuente: [], tiposNoReconocidos: ["blog"], formatoAnterior: false, hallazgoId: "H9", descripcion: null, url: "https://b.org", comprobacion: "sin comprobar", texto: "" },
+    { correspondencia: "NO_ENCONTRADA", tiposFuente: [], tiposNoReconocidos: [], formatoAnterior: false, hallazgoId: "H2", descripcion: "d2", url: null, comprobacion: "sin comprobar", texto: "motivo" },
+    { correspondencia: "CONFIRMA", tiposFuente: [], tiposNoReconocidos: [], formatoAnterior: true, hallazgoId: "H1", descripcion: "d1", url: "https://c.org", comprobacion: "no resuelve", texto: "vieja" },
+    { correspondencia: "CONFIRMA", tiposFuente: [], tiposNoReconocidos: [], formatoAnterior: false, hallazgoId: "H2", descripcion: "d2", url: "https://d.org", comprobacion: "responde 404", texto: "x" },
+  ],
+  puntosCiegos: [
+    { descripcion: "falta norma", url: "https://e.org", tiposFuente: ["OFICIAL"], tiposNoReconocidos: [] },
+    { descripcion: "sin fuente", url: null, tiposFuente: [], tiposNoReconocidos: [] },
+  ],
+  preguntas: ["¿y en otro pais?"],
+};
+const ENTRADAS_INFORME = [
+  {
+    ...BASE_INFORME,
+    informeIntegradorCrudo: "TITULO: t\n5. QUE CONVIENE RESCATAR\nLo firme [H1] y lo disputado [H2].",
+    referenciasEnOrden: [{ codigo: "H1", existe: true }, { codigo: "H2", existe: true }],
+    hallazgos: HALLAZGOS_INFORME,
+    condiciones: [
+      { proveedorId: "claude", etiquetaModelo: null, caracteresRespuesta: 10, fuentesCitadas: 0, codigoEstable: "P3" },
+      { proveedorId: "mistral", etiquetaModelo: null, caracteresRespuesta: 10, fuentesCitadas: 0, codigoEstable: null },
+    ],
+    redaccion: { redactorId: "deepseek", controles: ["- control"], cuerpo: "Firme [CONFIRMA H1] y tambien [H2], segun P3 y P5. Inventado [CONFIRMA H999] y [H888]." },
+  },
+  { ...BASE_INFORME, informeIntegradorCrudo: null, referenciasEnOrden: [], hallazgos: HALLAZGOS_INFORME },
+  { ...BASE_INFORME, informeIntegradorCrudo: "TITULO: t\nTexto [H1].", referenciasEnOrden: [{ codigo: "H1", existe: false }], hallazgos: [] },
+  { ...BASE_INFORME, informeIntegradorCrudo: "TITULO: t\nTexto sin referencias.", referenciasEnOrden: [], hallazgos: HALLAZGOS_INFORME },
+  { ...BASE_INFORME, informeIntegradorCrudo: null, referenciasEnOrden: [], hallazgos: HALLAZGOS_INFORME, condiciones: [], participacionOperadores: [] },
+  {
+    ...BASE_INFORME,
+    informeIntegradorCrudo: "TITULO: t\n5. QUE CONVIENE RESCATAR\nLo firme [H1] [[CC-MARCA-0007-tok]] y mas.",
+    referenciasEnOrden: [{ codigo: "H1", existe: true }],
+    hallazgos: [{ ...HALLAZGOS_INFORME[0], descripcion: "Coinciden [[CC-MARCA-0042-tok]] en el plazo." }],
+    redaccion: { redactorId: "deepseek", controles: ["- c"], cuerpo: "Citando [[CC-MARCA-0099-tok]] el archivo [H1].\n[[CC-MARCA-0100-tok]]\nsigue\r[[CC-MARCA-0101-tok]]\nfin" },
+  },
+  {
+    ...BASE_INFORME,
+    informeIntegradorCrudo: "Sin linea de titulo [H2] [H1] [H2] [H7]\n\n5) Que conviene rescatar\nRescate [H2].",
+    referenciasEnOrden: [{ codigo: "H2", existe: true }, { codigo: "H1", existe: true }, { codigo: "H2", existe: true }, { codigo: "H7", existe: false }],
+    hallazgos: [...HALLAZGOS_INFORME, { codigo: "H3", categoria: "LIMITACION:CORPUS", eje: null, respuestasReales: [], descripcion: "no pude leer", operadorReal: "nuevo" }],
+    participacionOperadores: [
+      { operadorId: "gemini", estado: "ok", detalle: "2 hallazgos" },
+      { operadorId: "qwen", estado: "fallo", detalle: "no se capturo salida: x" },
+    ],
+    proveedoresCargadosIncompletos: ["chatgpt", "glm"],
+    integrador: "deepseek",
+    verificacion: VERIFICACION_INFORME,
+  },
+  { ...BASE_INFORME, informeIntegradorCrudo: "TITULO: t\nTexto [H1].", referenciasEnOrden: [{ codigo: "H1", existe: true }], hallazgos: HALLAZGOS_INFORME, verificacion: { avisoSinComprobar: null, items: [], puntosCiegos: [], preguntas: [] } },
+];
+const INFORMES_FINALES = ENTRADAS_INFORME.map((e) => [JSON.stringify(e), analisis.armarInformeFinal(e)]);
+
+// verificacionParaInforme: la comprobación de cada URL y el aviso de "sin comprobar".
+const SALIDA_V = { tipo: "salida-verificador", esquema: 1, id: "v1", rondaId: "r", verificadorId: "glm", promptCompleto: "", salidaCruda: [
+  "CONFIRMA|OFICIAL|H1|https://a.org|\"uno\"",
+  "CONTRADICE|SECUNDARIA|H2|https://b.org|\"dos\"",
+  "CONFIRMA|OFICIAL|H9|https://c.org|\"inexistente\"",
+  "CONFIRMA|OFICIAL|H1|https://a.org|\"repetida\"",
+  "NO_ENCONTRADA|—|H2|nada",
+  "PUNTO_CIEGO|falta|https://p.org|OFICIAL",
+  "PREGUNTA|otra",
+].join("\n"), html: null, recibidaEn: FECHA };
+const url = (u, codigo, salida = "v1") => ({ tipo: "url-comprobada", esquema: 1, id: "u", rondaId: "r", salidaVerificadorId: salida, url: u, codigo, detalle: null, comprobadaEn: FECHA });
+const COMPROBACIONES = [
+  [[], undefined],
+  [[url("https://a.org", 200), url("https://b.org", null)], 20],
+  [[url("https://a.org", 200), url("https://b.org", 404)], 2],
+  [[url("https://a.org", 200), url("https://b.org", 301), url("https://c.org", 200), url("https://c.org", 500)], 20],
+  [[url("https://a.org", 200, "otra")], 20],
+  [[url("https://a.org", 200)], 20],
+];
+const VERIFICACIONES_INFORME = COMPROBACIONES.map(([urls, techo]) => [
+  JSON.stringify(urls),
+  techo ?? null,
+  JSON.stringify(integrador.verificacionParaInforme(SALIDA_V, urls, HALLAZGOS_INFORME, techo)),
+]);
+
+// controlesRedaccion y sus líneas: cada estado de lectura del archivo y de los enlaces.
+const M1 = "[[CC-MARCA-0000-t]]", MF = "[[CC-MARCA-FIN-t]]";
+const CONTROLES = [
+  [{ textoCrudo: `ARCHIVO: primera marca = ${M1}, ultima marca = ${MF}\n\nCuerpo [H1] [CONFIRMA H99] [H1] [H99]`, html: null, marcaPrimera: M1, marcaUltima: MF }, []],
+  [{ textoCrudo: "\n**archivo:** no pude leer el archivo adjunto\ncuerpo", html: null, marcaPrimera: M1, marcaUltima: MF }, []],
+  [{ textoCrudo: `ARCHIVO: ${M1} ${MF}\ncuerpo`, html: null, marcaPrimera: null, marcaUltima: null }, []],
+  [{ textoCrudo: `ARCHIVO: ${MF} ${M1}\ncuerpo`, html: null, marcaPrimera: M1, marcaUltima: MF }, []],
+  [{ textoCrudo: "Sin linea de archivo [H1]", html: null, marcaPrimera: M1, marcaUltima: MF }, []],
+  [{ textoCrudo: "", html: `<p>ARCHIVO: ${M1} ${MF}</p><p>Ver <a href="https://x.org/a?utm=1#f">x</a> y <A HREF = "http://y.org">y</A> y <a data-href="https://z.org" href="https://w.org">w</a></p>`, marcaPrimera: M1, marcaUltima: MF }, ["HTTPS://X.ORG/a/", "http://y.org"]],
+  [{ textoCrudo: "", html: `<p>ARCHIVO: ${M1} ${MF}</p><p><a href="https://x.org/a">x</a></p>`, marcaPrimera: M1, marcaUltima: MF }, ["https://x.org/a"]],
+  [{ textoCrudo: "", html: `<p>ARCHIVO: ${M1} ${MF}</p><p><a href="https://q.org">q</a></p>`, marcaPrimera: M1, marcaUltima: MF }, ["https://x.org"]],
+  [{ textoCrudo: "", html: `<p>ARCHIVO: ${M1} ${MF}</p><p><a href="https://q.org">q</a></p>`, marcaPrimera: M1, marcaUltima: MF }, []],
+  [{ textoCrudo: "", html: `<p>ARCHIVO: ${M1} ${MF}</p><p>sin enlaces</p>`, marcaPrimera: M1, marcaUltima: MF }, ["https://x.org"]],
+].map(([r, material]) => {
+  const c = analisis.controlesRedaccion(r, ["H1", "H2"], material);
+  return [JSON.stringify(r), material, JSON.stringify(c), analisis.lineasDeControl(c)];
+});
+
+const RESPUESTAS_PDF = [
+  { proveedorId: "chatgpt", etiquetaModelo: "GPT-5", leidaEn: FECHA, textoOriginal: "  Respuesta entera  \n", error: null, fuentesCitadas: 3, fuentesHref: 5, finDe: "observado" },
+  { proveedorId: "nuevo", etiquetaModelo: null, leidaEn: FECHA, textoOriginal: "   ", error: "compositor no encontrado", fuentesCitadas: 0, fuentesHref: null, finDe: "inferido" },
+].map((r) => [JSON.stringify(r), analisis.markdownDeRespuestaInvestigador("¿Pregunta?", r)]);
+const NOMBRES_RESPUESTA = [[0, "chatgpt"], [8, "nuevo—proveedor"], [2, "***"], [3, "ßeta"], [4, ""]].map(([i, id]) => [i, id, analisis.nombreArchivoRespuesta(i, id), analisis.nombreProveedor(id)]);
+
 const CUERPOS = [
   POOL.map(paraOperar),
   POOL.map((id, i) => (id === "grok" ? { ...paraOperar(id, i), urlsCitadas: ["https://grok.com/share/1"] } : paraOperar(id, i))),
@@ -742,6 +863,32 @@ namespace ChatCouncil.Motor.Pruebas
 
         public static readonly (string roles, string[] pool)[] Pooles = {
             ${POOLES.map(([r, p]) => `(${cs(r)}, ${strs(p)})`).join(",\n            ")}
+        };
+
+        /// <summary>armarInformeFinal: la entrada como JSON y el informe armado por el TypeScript.</summary>
+        public static readonly (string entrada, string informe)[] InformesFinales = {
+            ${INFORMES_FINALES.map(([e, i]) => `(${cs(e)}, ${cs(i)})`).join(",\n            ")}
+        };
+
+        public const string HallazgosInforme = ${cs(JSON.stringify(HALLAZGOS_INFORME))};
+        public const string SalidaVerificadorInforme = ${cs(JSON.stringify(SALIDA_V))};
+        /// <summary>verificacionParaInforme(SalidaVerificadorInforme, urls, HallazgosInforme, techo) como JSON.</summary>
+        public static readonly (string urls, int? techo, string esperado)[] VerificacionesInforme = {
+            ${VERIFICACIONES_INFORME.map(([u, t, e]) => `(${cs(u)}, ${t === null ? "null" : t}, ${cs(e)})`).join(",\n            ")}
+        };
+
+        /// <summary>controlesRedaccion(respuesta, H1 y H2, material) como JSON, y lineasDeControl.</summary>
+        public static readonly (string respuesta, string[] material, string controles, string[] lineas)[] Controles = {
+            ${CONTROLES.map(([r, m, c, l]) => `(${cs(r)}, ${strs(m)}, ${cs(c)}, ${strs(l)})`).join(",\n            ")}
+        };
+
+        /// <summary>markdownDeRespuestaInvestigador("¿Pregunta?", respuesta).</summary>
+        public static readonly (string respuesta, string markdown)[] RespuestasPdf = {
+            ${RESPUESTAS_PDF.map(([r, m]) => `(${cs(r)}, ${cs(m)})`).join(",\n            ")}
+        };
+
+        public static readonly (int indice, string id, string archivo, string nombre)[] NombresRespuesta = {
+            ${NOMBRES_RESPUESTA.map(([i, id, a, n]) => `(${i}, ${cs(id)}, ${cs(a)}, ${cs(n)})`).join(",\n            ")}
         };
 
         /// <summary>Un hecho de cada tipo, escrito por las funciones reales de registro.ts.</summary>

@@ -61,6 +61,30 @@ namespace ChatCouncil.Motor
         /// <summary>Un hecho como una línea, sin saltos adentro.</summary>
         public static string ALinea(Hecho hecho) => AJson(hecho);
 
+        static readonly UTF8Encoding Utf8SinBom = new UTF8Encoding(false);
+
+        /// <summary>conversaciones/&lt;id&gt;.jsonl dentro de la carpeta de datos.</summary>
+        public static string RutaArchivo(string carpetaDatos, string conversacionId) =>
+            Path.Combine(carpetaDatos, "conversaciones", conversacionId + ".jsonl");
+
+        /// <summary>Una línea completa por hecho, al final del archivo: el registro nunca se reescribe.</summary>
+        public static void Agregar(string carpetaDatos, string conversacionId, Hecho hecho)
+        {
+            Directory.CreateDirectory(Path.Combine(carpetaDatos, "conversaciones"));
+            File.AppendAllText(RutaArchivo(carpetaDatos, conversacionId), ALinea(hecho) + "\n", Utf8SinBom);
+        }
+
+        /// <summary>
+        /// El registro de una conversación; vacío si el archivo todavía no existe.
+        /// Se decodifican los bytes tal cual, como readFileSync: un BOM no se
+        /// descarta en silencio, cuenta como línea ilegible igual que en Electron.
+        /// </summary>
+        public static RegistroLeido LeerArchivo(string carpetaDatos, string conversacionId)
+        {
+            var ruta = RutaArchivo(carpetaDatos, conversacionId);
+            return Leer(File.Exists(ruta) ? Utf8SinBom.GetString(File.ReadAllBytes(ruta)) : "");
+        }
+
         public static string AJson(object valor)
         {
             var sb = new StringBuilder();

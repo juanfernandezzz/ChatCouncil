@@ -562,6 +562,64 @@ const RESPUESTAS_PDF = [
 ].map((r) => [JSON.stringify(r), analisis.markdownDeRespuestaInvestigador("¿Pregunta?", r)]);
 const NOMBRES_RESPUESTA = [[0, "chatgpt"], [8, "nuevo—proveedor"], [2, "***"], [3, "ßeta"], [4, ""]].map(([i, id]) => [i, id, analisis.nombreArchivoRespuesta(i, id), analisis.nombreProveedor(id)]);
 
+// ---------------------------------------------------------------- puerta: pregunta e investigación (T9)
+// La corrida simulada con nueve lecturas: el mismo orden de llamadas que index.ts
+// (abrirRonda, escribirIntentos, registrarRespuestasDeRondaActual en investigación y
+// la pregunta declarada), con las funciones reales de registro.ts. Lo único que se
+// reconstruye acá es el pegamento de index.ts, con sus mismas reglas: el umbral de
+// test-runner.ts y el aviso de respuesta corta (< 300).
+const { UMBRAL_LECTURA_MINIMO } = await importar("apps/desktop/src/main/test-runner.ts");
+const largo = (n, k) => textoDe(n, k).slice(0, n);
+const LECTURAS_9 = [
+  { id: "chatgpt", text: largo(900, 0), userText: "¿Pregunta de prueba?", generating: false, completionKind: "element-gone", quiescenceMs: 1500, modelLabel: "GPT-5", fuentesHref: 3,
+    html: '<div><p>Hola <a href="https://a.org/x?utm_source=chatgpt.com">a.org</a></p><h3>Fuentes clave</h3><ul><li><a href="https://b.org/y">B — dato</a></li><li><a href="#">ancla</a></li></ul></div>' },
+  { id: "gemini", text: largo(150, 1), userText: "¿pregunta de  prueba?", generating: false, modelLabel: null, html: null },
+  { id: "claude", text: "corto", userText: "¿Pregunta de prueba?", generating: false, completionKind: "quiescence", quiescenceMs: 20000, html: null },
+  { id: "grok", text: "", userText: null, generating: null, html: null, error: "lectura vacia" },
+  { id: "mistral", text: largo(1200, 2), userText: null, generating: false, html: null },
+  { id: "glm", text: largo(800, 3), userText: "Otra pregunta distinta", generating: false, modelLabel: "GLM-4.6", html: "<p>sin enlaces</p>" },
+  { id: "kimi", text: largo(700, 4), generating: null, completionKind: "quiescence", quiescenceMs: 20000, html: null },
+  { id: "qwen", text: largo(300, 5), userText: "¿Pregunta de prueba?", generating: false, html: null },
+  { id: "deepseek", text: largo(299, 6), userText: "¿Pregunta de prueba?", generating: false, fuentesHref: 0, html: null },
+];
+const CONTEXTO_9 = Object.fromEntries(LECTURAS_9.map((l, i) => [l.id, { continuidad: ["confirmada", "indeterminada", "refutada"][i % 3], panel: i % 2 === 0 ? "800x600" : null }]));
+const INTENTOS_9 = LECTURAS_9.map((l, i) => (i === 3 ? { id: l.id, ok: false, error: "compositor no encontrado" } : { id: l.id, ok: true }));
+const POOL_PUERTA = ["chatgpt", "gemini", "claude", "grok", "mistral", "kimi", "qwen"];
+const CORRIDA = (() => {
+  const idAntes = siguienteId; // los ids de la corrida empiezan en 1; el resto del archivo no cambia
+  siguienteId = 0;
+  const d = mkdtempSync(join(tmpdir(), "cc-puerta-"));
+  const conv = registro.crearConversacion(d, false);
+  const ronda = registro.escribirRonda(d, conv, 0, "¿Pregunta de prueba?", registro.generarSemilla());
+  registro.escribirCondicionProveedoresCargados(d, conv, ronda, CONOCIDOS, "deepseek");
+  registro.escribirIntentos(d, conv, ronda, INTENTOS_9);
+  const lecturas = LECTURAS_9.map((l) =>
+    l.text.length < UMBRAL_LECTURA_MINIMO && !l.error
+      ? { ...l, error: `lectura por debajo del umbral (${l.text.length} de ${UMBRAL_LECTURA_MINIMO} caracteres): no genero una respuesta observable, no se guarda como valida` }
+      : l,
+  );
+  const etapa = dominio.etapaDeRonda(registro.leerRegistroDeArchivo(d, conv).hechos, ronda, POOL_PUERTA.length);
+  const c = integrador.clasificarLecturasPorEtapa(lecturas, etapa, POOL_PUERTA, "deepseek", "glm", "deepseek");
+  registro.escribirRespuestas(d, conv, ronda, c.lecturasComoRespuesta, (id) => CONTEXTO_9[id]);
+  for (const l of c.lecturasComoRespuesta) {
+    if (!l.error && l.text.length < 300) {
+      registro.escribirErrorCaptura(d, conv, ronda, etapa, "respuesta", "respuesta sospechosamente corta: puede haber quedado fuera de la captura", l.id);
+    }
+  }
+  const aviso = integrador.avisoPromptsDeCaptura(lecturas, etapa);
+  registro.escribirPreguntaDeclarada(d, conv, ronda, "Pregunta declarada de verdad");
+  const lineas = readFileSync(join(d, "conversaciones", `${conv}.jsonl`), "utf8").split("\n").filter((l) => l.length > 0);
+  rmSync(d, { recursive: true, force: true });
+  siguienteId = idAntes;
+  return { lineas, aviso, etapa, umbral: UMBRAL_LECTURA_MINIMO };
+})();
+const AVISOS_PROMPTS = [
+  [["a", "A  ", " a"], "investigacion"],
+  [["a", "b", null, ""], "investigacion"],
+  [["a"], "investigacion"],
+  [["a", "b"], "operacion"],
+].map(([textos, etapa]) => [textos, etapa, integrador.avisoPromptsDeCaptura(textos.map((userText) => ({ userText })), etapa)]);
+
 const CUERPOS = [
   POOL.map(paraOperar),
   POOL.map((id, i) => (id === "grok" ? { ...paraOperar(id, i), urlsCitadas: ["https://grok.com/share/1"] } : paraOperar(id, i))),
@@ -885,6 +943,23 @@ namespace ChatCouncil.Motor.Pruebas
         /// <summary>markdownDeRespuestaInvestigador("¿Pregunta?", respuesta).</summary>
         public static readonly (string respuesta, string markdown)[] RespuestasPdf = {
             ${RESPUESTAS_PDF.map(([r, m]) => `(${cs(r)}, ${cs(m)})`).join(",\n            ")}
+        };
+
+        /// <summary>Las nueve lecturas de la corrida simulada, con lo que dice cada panel (continuidad, tamaño).</summary>
+        public const string Lecturas9 = ${cs(JSON.stringify(LECTURAS_9))};
+        public const string Contexto9 = ${cs(JSON.stringify(CONTEXTO_9))};
+        public const string Intentos9 = ${cs(JSON.stringify(INTENTOS_9))};
+        public static readonly string[] PoolPuerta = ${strs(POOL_PUERTA)};
+        public const int UmbralLecturaMinimo = ${CORRIDA.umbral};
+        /// <summary>Las líneas que deja la corrida en el registro, con ids 1, 2, 3… y la fecha fija.</summary>
+        public static readonly string[] CorridaLineas = {
+            ${arr(CORRIDA.lineas)}
+        };
+        public const string CorridaAviso = ${cs(CORRIDA.aviso)};
+        public const string CorridaEtapa = ${cs(CORRIDA.etapa)};
+
+        public static readonly (string[] textos, string etapa, string aviso)[] AvisosPrompts = {
+            ${AVISOS_PROMPTS.map(([t, e, a]) => `(new string[] { ${t.map(cs).join(", ")} }, ${cs(e)}, ${cs(a)})`).join(",\n            ")}
         };
 
         public static readonly (int indice, string id, string archivo, string nombre)[] NombresRespuesta = {

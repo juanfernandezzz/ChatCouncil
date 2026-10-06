@@ -19,3 +19,5 @@ yarn.lock
 # Salidas de compilación del motor en .NET (Fase 6)
 motor/Dotnet~/*/bin/
 motor/Dotnet~/*/obj/
+# El script de página compilado: sale de pagina/src con tsc (Fase 6)
+pagina/dist/

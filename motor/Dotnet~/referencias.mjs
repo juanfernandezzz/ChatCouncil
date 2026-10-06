@@ -211,6 +211,132 @@ const MATERIAL = { informe: "INFORME {{PREGUNTA}}", verificacion: "CONFIRMA|OFIC
 const ARCHIVOS_REDACTOR = [MATERIAL, { ...MATERIAL, verificacion: null }].map((m) => [JSON.stringify(m), analisis.armarArchivoRedactor(m)]);
 const ROLES = [seleccion.INTEGRADOR_POR_DEFECTO, seleccion.VERIFICADOR_POR_DEFECTO, seleccion.REDACTOR_POR_DEFECTO];
 
+// ---------------------------------------------------------------- parseos y texto desde html
+// Bordes de las expresiones de JS sin /u: \s, ".", $, \b, /i sin pliegue fuera de ASCII,
+// toUpperCase (ı, ſ, ß, ﬁ), normalize con surrogates sueltos, CRLF y U+2028.
+const HTMLS = [
+  `<ol start="5"><li><p>QUE CONVIENE RESCATAR</p></li></ol><p>texto</p>`,
+  `<h3>TITULO: Un t${c(0xed)}tulo</h3><p>Hola&nbsp;mundo &amp;amp; &lt;b&gt; &quot;x&quot; &#39;y&#39; &apos;z&apos; &#241; &#xF1; &#X1F600; &#55296; &amp;nbsp;</p><ul><li>uno</li><li><p>dos</p></li></ul><ol><li>a</li><li>b</li></ol><table><tr><td>c1</td><th>c2</th></tr></table>br<br>fin<br/>x</br>y`,
+  `<!-- comentario --><style>p{}</style><SCRIPT>x</script><Style>y</STYLE><styles>visible</styles><style>sin cierre`,
+  `<p>a   </p>\n\n\n\n<p>b\t</p>   \n<pre>  c${c(0xa0)}\t \nd</pre>`,
+  `<OL START=3><LI>x<LI>y</OL><ol start = "0012"><li>z</li></ol><ol start="99"><li>w</li></ol>`,
+  `a < b <!DOCTYPE html> <3 <li>suelto</li> <p start="2">p</p>`,
+  `<ol><li>a<ul><li>b</li></ul></li><li>c</li></ol></ul></ol><li>fuera</li>`,
+  `<p>${LS}linea${c(0xfeff)}</p><div>${c(0x2029)}</div>`,
+];
+const TEXTOS_HTML = HTMLS.map((h) => [h, analisis.textoDeHtmlEnBloques(h)]);
+let errorHtml = null;
+try {
+  analisis.textoDeHtmlEnBloques("<p>&#1114112;</p>");
+} catch (e) {
+  errorHtml = e.constructor.name;
+}
+
+const SALIDA_OPERADOR = [
+  "Razonamiento previo en prosa.",
+  "CONVERGENCIA|HECHOS|P1,P3,P6|las tres dan la misma fecha",
+  `DIVERGENCIA|FUENTES|P2, P5 ,|citan medios${NBSP}distintos | con barra`,
+  "TENSION|CONCLUSIONES|P1,P9|coinciden pero recomiendan opuesto",
+  "  SINGULARIDAD|CONCLUSIONES|P4|solo P4\r",
+  "AUSENCIA|HECHOS|—|ninguna trae cifras",
+  "AUSENCIA|HECHOS|nınguna|con i sin punto",
+  "AUSENCIA|HECHOS||vacio",
+  "LIMITACION:CORPUS|P2,P5|no pude leer parte",
+  "LIMITACION:AMBIGUEDAD|-|ambiguo",
+  "LIMITACION:TAREA|NINGUNA|no entiendo",
+  "LIMITACION:OTRA|P3|otra",
+  "CONVERGENCIA",
+  "CONVERGENCIA|HECHOS|P1",
+  "LIMITACION:OTRA|P3",
+  "CONVERGENCIAX|HECHOS|P1|no es prefijo",
+  "convergencia|HECHOS|P1|minusculas",
+  `${c(0xfeff)}CONVERGENCIA|HECHOS|P2|con BOM`,
+  "",
+  "Prosa final.",
+].join("\n");
+const HALLAZGOS_PARSEADOS = JSON.stringify(analisis.parsearHallazgos(SALIDA_OPERADOR, ["P1", "P2", "P3", "P4", "P5", "P6"]));
+
+const SALIDA_VERIFICADOR = [
+  "Voy a revisar las fuentes. Primero la sección 1.",
+  `CONFIRMA|OFICIAL,PRIMARIA|H12|https://boe.es/ley?x=1).|&quot;cita textual&quot;`,
+  `- confirma|Acad${c(0xe9)}mica|H13/H118 (parcial)|https://a.org/b|${c(0x201c)}cita tipogr${c(0xe1)}fica${c(0x201d)}`,
+  `1. **CONTRADICE**|SECUNDARIA|H24|https://x.org|${c(0xab)}lo que dice${c(0xbb)}`,
+  "NO_ENCONTRADA|—|H58|no encontré una fuente",
+  "NO_ENCONTRADA|H59|sin campo de tipo",
+  "CONFIRMA|H60|https://c.org|\"formato nuevo sin tipo\"",
+  "CONFIRMA|oficial y primaria / ACADEMICA; secundaria+inventado|H999|https://d.org|\"h inexistente\"",
+  `CONFIRMA|o${c(0xfb01)}cial, ${c(0x17f)}ecundaria, ofic${c(0x131)}al, PRIMARIA${String.fromCharCode(0xd800)}|H12|https://e.org|"tipos raros"`,
+  "VERIFICADO|H12|https://viejo.org|\"formato anterior\"",
+  "NO_VERIFICADO|H13|motivo anterior",
+  "CONTRADICHO|H24|https://viejo.org/2|\"anterior contradice\"",
+  "texto previo CONFIRMA|OFICIAL|H12|https://f.org|\"en medio\" y PREGUNTA|otra en la misma linea",
+  "* PUNTO_CIEGO|falta la norma local|https://g.org|OFICIAL",
+  "PUNTO_CIEGO|sin fuente para esto|sin fuente",
+  "PUNTO_CIEGO|tres campos|https://h.org",
+  "PREGUNTA|¿Qué pasa en otro país?",
+  "PREGUNTA|",
+  "CONFIRMA|OFICIAL|H12|https://i.org|\"cita\" SECCIÓN 2 — PUNTOS CIEGOS",
+  "CONFIRMA|OFICIAL|H12|https://j.org|\"cita\" seccion 3 resto\r",
+  `PREGUNTA|con separador${LS}de linea`,
+  "## CONFIRMA |OFICIAL|H12|https://k.org|\"con espacio antes de la barra\"",
+  "CONFIRMA|OFICIAL",
+  "Prosa final sin palabras clave.",
+].join("\n");
+const VERIFICACION_PARSEADA = JSON.stringify(analisis.parsearVerificacion(SALIDA_VERIFICADOR, ["H12", "H13", "H24", "H58", "H59", "H60"]));
+
+const INFORME_SEMBRADO = [
+  "TITULO: divergencias sobre una dosis",
+  "Primer parrafo con una referencia valida sobre una convergencia. [H1]",
+  "Segundo parrafo, apoyado en dos hallazgos distintos de la tabla. [H2] [H3]",
+  "5. QUE CONVIENE RESCATAR\nLo firme: las respuestas coinciden en esto y ninguna lo contradice. [H4]",
+  "Este parrafo de la seccion 5 no trae ninguna referencia y por eso tiene que fallar el gate.",
+  "LA TABLA NO ALCANZA para determinar el origen de una de las divergencias, y este parrafo no necesita referencia.",
+  "Ultimo parrafo con una referencia inventada que no existe en la tabla. [H999]",
+].join("\n\n");
+const INFORMES = [
+  INFORME_SEMBRADO,
+  INFORME_SEMBRADO.split("\n").join("\r\n"),
+  `**T${c(0xcd)}TULO:** Otro\n${NBSP}\nPárrafo [H1][h2] [H12]\n \t\n\nTITULO: no es el primero`,
+  `Sin titulo\n\n\n\nLA TABLA NO ALCANZA y algo\n\n${LS}\n\nfin [H3]`,
+];
+const TRAZABILIDADES = INFORMES.map((t) => [t, JSON.stringify(analisis.parsearReferenciasIntegrador(t, ["H1", "H2", "H3", "H4"]))]);
+
+const TITULOS = [
+  "TITULO: Un titulo\n\ncuerpo",
+  "\n\n  **TÍTULO:** Algo con negritas **\n\n\ncuerpo",
+  "# Título: con almohadilla\r\n\r\ncuerpo",
+  "TITULO:\ncuerpo sin titulo",
+  "Sin linea de titulo\nTITULO: en medio",
+  "  __titulo :  bajo guiones __",
+  `TITULO: con${LS}separador`,
+  "",
+].map((t) => [t, JSON.stringify(analisis.extraerTituloDelInforme(t)), analisis.esParrafoTitulo(t)]);
+const RESCATES = [
+  "1. TIPOS\nx\n5. QUE CONVIENE RESCATAR\nLo firme [H1]\n\nOtro [H2]",
+  "## Qué conviene rescatar\n  cuerpo  ",
+  "**5) Que conviene rescatar**\r\ncuerpo crlf",
+  "5 - QUÉ CONVIENE RESCATAR:\n\n",
+  "qué conviene rescatarlo\nno es encabezado",
+  "sin seccion",
+].map((t) => [t, analisis.extraerSeccionRescate(t)]);
+const ENCABEZADOS = ["5. QUE CONVIENE RESCATAR", "### Qué conviene rescatar", "Que conviene rescatar_", "QUE  CONVIENE\tRESCATAR!", "5.QUE CONVIENE RESCATAR"].map((l) => [l, analisis.esEncabezadoRescate(l)]);
+const LIMPIEZAS_TITULO = [
+  'Un "título": con/prohibidos*?<>|\\ y —guiones– ',
+  `con${String.fromCharCode(1)}control${String.fromCharCode(0x7f)}  y   ${NBSP}espacios...`,
+  "x".repeat(79) + "😀" + " fin",
+  " . . ",
+].map((t) => [t, analisis.limpiarTituloParaArchivo(t)]);
+const DESDE_PREGUNTAS = ["  una dos  tres\tcuatro\ncinco seis siete ocho", "", `uno${NBSP}dos`].map((p) => [p, analisis.tituloDesdePregunta(p)]);
+const AHORA = new Date(2026, 9, 6, 9, 5);
+const NOMBRES_BASE = [
+  [null, "¿Qué dice la evidencia sobre la dosis?"],
+  ["Título: del integrador", "pregunta"],
+  ["   ", "  "],
+  [null, "*?"],
+].map(([titulo, pregunta]) => [titulo, pregunta, analisis.nombreBaseDeInforme({ titulo, pregunta, ahora: AHORA })]);
+const OCUPADOS = ["base", "base (2)", "base (3)"];
+const NOMBRE_LIBRE = analisis.nombreLibreDeInforme("base", (n) => OCUPADOS.includes(n));
+
 const CUERPOS = [
   POOL.map(paraOperar),
   POOL.map((id, i) => (id === "grok" ? { ...paraOperar(id, i), urlsCitadas: ["https://grok.com/share/1"] } : paraOperar(id, i))),
@@ -424,6 +550,54 @@ namespace ChatCouncil.Motor.Pruebas
 
         /// <summary>Integrador, verificador y redactor por defecto de seleccion-proveedores.ts.</summary>
         public static readonly string[] RolesPorDefecto = ${strs(ROLES)};
+
+        public static readonly (string html, string texto)[] TextosHtml = {
+            ${TEXTOS_HTML.map(([h, t]) => `(${cs(h)}, ${cs(t)})`).join(",\n            ")}
+        };
+        /// <summary>Lo que tira textoDeHtmlEnBloques con &amp;#1114112; (un punto de código fuera de rango).</summary>
+        public const string ErrorHtml = ${cs(errorHtml)};
+
+        public const string SalidaOperador = ${cs(SALIDA_OPERADOR)};
+        /// <summary>parsearHallazgos(SalidaOperador, P1..P6) como JSON.</summary>
+        public const string HallazgosParseados = ${cs(HALLAZGOS_PARSEADOS)};
+
+        public const string SalidaVerificador = ${cs(SALIDA_VERIFICADOR)};
+        /// <summary>parsearVerificacion(SalidaVerificador, H12, H13, H24, H58, H59, H60) como JSON.</summary>
+        public const string VerificacionParseada = ${cs(VERIFICACION_PARSEADA)};
+
+        /// <summary>parsearReferenciasIntegrador(informe, H1..H4) como JSON; el primero es el informe sembrado de guard:trazabilidad.</summary>
+        public static readonly (string informe, string esperado)[] Trazabilidades = {
+            ${TRAZABILIDADES.map(([t, e]) => `(${cs(t)}, ${cs(e)})`).join(",\n            ")}
+        };
+
+        /// <summary>extraerTituloDelInforme como JSON y esParrafoTitulo.</summary>
+        public static readonly (string informe, string titulo, bool esParrafoTitulo)[] Titulos = {
+            ${TITULOS.map(([t, e, p]) => `(${cs(t)}, ${cs(e)}, ${p})`).join(",\n            ")}
+        };
+
+        public static readonly (string informe, string rescate)[] Rescates = {
+            ${RESCATES.map(([t, r]) => `(${cs(t)}, ${cs(r)})`).join(",\n            ")}
+        };
+
+        public static readonly (string linea, bool es)[] EncabezadosRescate = {
+            ${ENCABEZADOS.map(([l, e]) => `(${cs(l)}, ${e})`).join(",\n            ")}
+        };
+
+        public static readonly (string titulo, string limpio)[] LimpiezasTitulo = {
+            ${LIMPIEZAS_TITULO.map(([t, l]) => `(${cs(t)}, ${cs(l)})`).join(",\n            ")}
+        };
+
+        public static readonly (string pregunta, string titulo)[] TitulosDesdePregunta = {
+            ${DESDE_PREGUNTAS.map(([p, t]) => `(${cs(p)}, ${cs(t)})`).join(",\n            ")}
+        };
+
+        /// <summary>nombreBaseDeInforme con ahora = 2026-10-06 09:05 local.</summary>
+        public static readonly (string titulo, string pregunta, string nombre)[] NombresBase = {
+            ${NOMBRES_BASE.map(([t, p, n]) => `(${cs(t)}, ${cs(p)}, ${cs(n)})`).join(",\n            ")}
+        };
+
+        /// <summary>nombreLibreDeInforme("base") con "base", "base (2)" y "base (3)" ocupados.</summary>
+        public const string NombreLibre = ${cs(NOMBRE_LIBRE)};
 
         /// <summary>Un hecho de cada tipo, escrito por las funciones reales de registro.ts.</summary>
         public static readonly string[] RegistroLineas = {

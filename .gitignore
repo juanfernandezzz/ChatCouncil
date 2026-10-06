@@ -16,3 +16,6 @@ _fase*/
 package-lock.json
 yarn.lock
 .claude/
+# Salidas de compilación del motor en .NET (Fase 6)
+motor/Dotnet~/*/bin/
+motor/Dotnet~/*/obj/

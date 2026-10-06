@@ -1,0 +1,15 @@
+<!-- El motor compilado fuera de Unity, para correr sus pruebas con `dotnet test`.
+     Mismo código fuente que usa Unity (../Runtime); netstandard2.1 y C# 9 son lo
+     que admite el compilador de Unity 6, así que lo que compila acá compila allá. -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Runtime/**/*.cs" />
+  </ItemGroup>
+</Project>

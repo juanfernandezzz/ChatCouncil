@@ -195,11 +195,27 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
 
     Correr solo en el Editor no mide IL2CPP. Es IL2CPP lo que quedó
     **abierto** para las regex y para Unicode.
-  - Cada corrida se ve fallar antes de confiar en ella: una mutación de
-    `Js.Punto` o de `Js.Blancos` tiene que poner en rojo la prueba de
-    parseo también en IL2CPP.
+
+    El XML se versiona **completo, sin recortar**, con cada `<test-case
+    name result>`. Así el auditor externo puede comparar los 69 nombres
+    contra el repo.
+  - **La corrida mutada en rojo**, fijada de antemano:
+    - La mutación es de `Js.Punto` en `motor/Runtime/Js.cs:109`: pasa de
+      `@"[^\n\r\u2028\u2029]"` a `"."`, que en .NET no excluye ni `\r` ni
+      U+2028.
+    - Tienen que pasar a Failed exactamente dos pruebas:
+      - `ParseosPruebas.ElTituloYLaSeccionDeRescateSonLosMismosQueEnTypeScript`;
+      - `ParseosPruebas.LaVerificacionEsLaMismaQueEnTypeScript`.
+    - Las otras 67 tienen que quedar en Passed.
+    - Ya está medido en .NET 8 el 2026-10-06 sobre `df9177d`: 67 correctas,
+      y las dos que fallan son exactamente esas.
+    - Se repite en el player IL2CPP y ese XML en rojo también se versiona.
+  - **El SHA-256** amarra este resultado, este binario y el binario del
+    Release (T25). El informe dice que el hash no permite verificar desde
+    fuera el contenido del binario.
   - Android IL2CPP: las mismas pruebas en el player de Android si hay
-    emulador (T17); si no hay, quedan **sin medir**.
+    emulador (T17); si no hay, quedan **sin medir**, sin forzar la
+    medición.
   Depende de: T11. Tamaño: S. **Necesita a Juan**: aceptar las dos ventanas
   de permisos de Windows y activar la licencia.
 
@@ -235,6 +251,12 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   Verifica: la misma autoprueba en un emulador Android, si este equipo puede
   correrlo (necesita aceleración por hipervisor); si no, el `.apk` compila y
   la autoprueba queda **sin medir**, dicho así.
+
+  Si se miden las pruebas del motor en un player de Android, hay que contar
+  con que `PuertaPruebas` escribe en `Path.GetTempPath()` y crea carpetas,
+  y el almacenamiento de Android no es el de Windows. El informe separa
+  "falló por el motor" de "no corrió por el entorno del player": una
+  ausencia de entorno no se lee como fallo de lógica.
   Depende de: T16. Tamaño: M.
 
 **Control de la etapa 4:** las autopruebas medidas, los dos binarios

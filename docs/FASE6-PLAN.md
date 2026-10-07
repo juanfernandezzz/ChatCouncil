@@ -184,8 +184,22 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   - Proyecto creado con `unity:new-unity-project`, paquetes mínimos con
     `unity:unity-package-management`, y el motor compila dentro de Unity.
 
-  Verifica: `unity editors --installed`; la compilación del proyecto en
-  batchmode sin errores; las pruebas del motor corren en el Editor.
+  Verifica:
+  - `unity editors --installed`, con la versión y los módulos.
+  - La compilación del proyecto en batchmode, sin errores.
+  - **Las 69 pruebas del motor corren dos veces**, y el XML de resultados de
+    las dos corridas se versiona en `docs/evidencia/fase6/`:
+    - en el Editor (EditMode), que es Mono;
+    - en un player de Windows compilado con IL2CPP (`-runTests
+      -testPlatform StandaloneWindows64`, backend IL2CPP).
+
+    Correr solo en el Editor no mide IL2CPP. Es IL2CPP lo que quedó
+    **abierto** para las regex y para Unicode.
+  - Cada corrida se ve fallar antes de confiar en ella: una mutación de
+    `Js.Punto` o de `Js.Blancos` tiene que poner en rojo la prueba de
+    parseo también en IL2CPP.
+  - Android IL2CPP: las mismas pruebas en el player de Android si hay
+    emulador (T17); si no hay, quedan **sin medir**.
   Depende de: T11. Tamaño: S. **Necesita a Juan**: aceptar las dos ventanas
   de permisos de Windows y activar la licencia.
 
@@ -225,6 +239,17 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
 
 **Control de la etapa 4:** las autopruebas medidas, los dos binarios
 compilados en este PC, informe y push.
+
+**Evidencia verificable desde fuera** (la pide el auditor externo; Claude.ai
+no puede ejecutar nada). Todo va a `docs/evidencia/fase6/`:
+- el XML de resultados de cada corrida de pruebas;
+- el archivo de resultados de cada autoprueba, con fecha y commit;
+- el registro de compilación recortado a las líneas de IL2CPP y del
+  resultado;
+- el SHA-256 de cada binario.
+
+Los binarios no se versionan. El informe de la etapa cita cada archivo por
+su ruta.
 
 ### Etapa 5 — Interfaz
 

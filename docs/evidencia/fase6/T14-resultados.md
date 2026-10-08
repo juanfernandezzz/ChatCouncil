@@ -51,15 +51,69 @@ El `.exe` es el lanzador y no cambia; `GameAssembly.dll` (el C# compilado a nati
 sí cambian con la mutación. El hash amarra este resultado a este binario y, en T25, al del Release;
 no permite verificar desde fuera el contenido del binario.
 
-## Defecto encontrado en la primera corrida IL2CPP
+## Defecto encontrado en la primera corrida IL2CPP (`ea3b12c`)
 
-Antes de `ea3b12c`, en el player IL2CPP fallaban 3 de las 69 y el runner se colgaba al serializar
-el mensaje de una de ellas. Causa medida en `global-metadata.dat`: IL2CPP guarda los literales de
-cadena en UTF-8 y cambia cada surrogate suelto por U+FFFD (`PRIMARIA` + U+D800 quedó como
-`EF BF BD`). Afectaba a tres literales de los datos de prueba generados, no al código del motor
-(`motor/Runtime` no tiene literales con surrogates sueltos). Otras pruebas pasaban en IL2CPP
-probando U+FFFD en lugar del surrogate. `ea3b12c` arma esos caracteres con `(char)` en tiempo de
-ejecución; `Datos.g.cs` salió idéntico.
+**Orden.** `ea3b12c` (el arreglo) es anterior a `5b387fe`, y las tres corridas de arriba son
+sobre `5b387fe`. Las corridas IL2CPP previas al arreglo están en `il2cpp-antes-de-ea3b12c.txt`:
+la primera se colgó sin resultados; la segunda, con un callback de diagnóstico temporal, dio 66
+Passed y 3 Failed.
+
+**Qué falló.** Las tres pruebas que fallaban comparan contra un literal con un surrogate suelto:
+
+| Prueba | Literal (`referencias.mjs`) | En el player IL2CPP |
+|---|---|---|
+| `ElTextoDesdeHtmlEsElMismoQueEnTypeScript` | esperado de `textoDeHtmlEnBloques` para `&#55296;` (líneas 241 y 249): contiene U+D800 | el esperado llegó con U+FFFD; el motor produjo U+D800, igual que TypeScript |
+| `ElNombreDelInformeEsElMismoQueEnTypeScript` | esperado del recorte a 80 unidades de un título con un emoji (línea 353): termina en U+D83D | el esperado llegó con U+FFFD; el motor produjo U+D83D, igual que TypeScript |
+| `LaVerificacionEsLaMismaQueEnTypeScript` | entrada `SALIDA_VERIFICADOR` (línea 290): `PRIMARIA` + U+D800 | la entrada llegó con U+FFFD y el motor la pasó tal cual |
+
+Los mensajes de esos tres fallos, con lo no ASCII escapado, están en `il2cpp-antes-de-ea3b12c.txt`.
+
+**Causa: IL2CPP, no el motor.** IL2CPP guarda los literales de cadena en UTF-8 dentro de
+`global-metadata.dat`, y un surrogate suelto no existe en UTF-8: lo cambia por U+FFFD al compilar.
+Medido en el binario de la segunda corrida: el literal `PRIMARIA` + U+D800 + `|` estaba guardado
+como `PRIMARIA EF BF BD |` (ese binario no se conservó; los de verde y rojo sí tienen SHA-256).
+Mono y .NET guardan los literales en UTF-16 y no los alteran, por eso pasaban. Las cadenas que se
+forman en tiempo de ejecución (las que el motor recibe o arma) no pasan por los metadatos.
+
+**Qué cambió `ea3b12c`.** Ningún dato cambió de contenido. Cambió cómo se escribe en C#:
+
+```
+antes:   "... 😀 <U+D800 como escape de C#> &nbsp; ..."
+después: "... 😀 " + ((char)0xD800).ToString() + " &nbsp; ..."
+```
+
+El generador hace esto para cualquier cadena con un surrogate suelto; solo esas tres lo tenían
+como carácter (`TEXTO_RARO` y `TAPADOS` llegan al C# dentro de JSON escapado, texto ASCII, y no
+cambiaron). Las constantes de `Referencias` pasaron de `const` a `static readonly`, porque la
+concatenación con `(char)` no es constante. `Datos.g.cs` (prompts y specs) salió idéntico.
+
+**¿El motor recibe surrogates sueltos en producción? Sí, puede.** El propio motor los produce:
+recortar un título a 80 unidades UTF-16 puede partir un emoji, y se conserva así porque es lo que
+hace TypeScript. Además, el texto que llega de una página es una cadena de JS, que admite
+surrogates sueltos. Por eso el caso **no se quitó ni se ablandó**: después de `ea3b12c` el player
+IL2CPP recibe el surrogate real, armado en tiempo de ejecución, y el motor da el mismo resultado
+que TypeScript (69/69). Antes del arreglo, IL2CPP probaba U+FFFD en esos casos, no el surrogate.
+
+**Qué cubre esto y qué no.**
+- `motor/Runtime` (incluido `Datos.g.cs`) no tiene ningún literal con un surrogate suelto: el único
+  escape de ese tipo está en un comentario de `JsonEstricto.cs:11`. Si lo tuviera, IL2CPP lo
+  corrompería en la app. Medido con una búsqueda en el código, no con una prueba que lo impida.
+- El paso de un surrogate suelto desde la página hasta el motor, a través del puente del panel,
+  queda **abierto**: se mide en la autoprueba del panel (T16).
+
+## Por qué EditMode no descubría las pruebas
+
+Unity Test Framework 1.6.0 clasifica cada ensamblado de pruebas por su marca de plataforma:
+`EditorLoadedTestAssemblyProvider.cs:62` lo pone en EditMode solo si es `EditorOnly`, y si no, en
+PlayMode. `ChatCouncil.Motor.Pruebas.asmdef` tiene `"includePlatforms": []` (todas), que es lo que
+permite compilarlo y correrlo en el player IL2CPP. Un mismo ensamblado no puede ser solo de Editor
+y correr en el player. Las pruebas están integradas como pruebas de PlayMode; dentro del Editor,
+PlayMode corre en Mono.
+
+## El XML de IL2CPP en verde
+
+Tiene 20 líneas porque el player escribe varios elementos en la misma línea; son 46 138 bytes y
+contienen los 69 `<test-case>`.
 
 ## Abierto
 

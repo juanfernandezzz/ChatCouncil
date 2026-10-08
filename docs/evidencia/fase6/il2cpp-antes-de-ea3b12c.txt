@@ -1,0 +1,76 @@
+# Player IL2CPP ANTES del arreglo ea3b12c (2026-10-07/08). Extracto de Player.log, sin otra edicion.
+# Codigo: 2d7da1d + el trabajo de T14 aun sin commitear (Referencias.g.cs previo a ea3b12c).
+# Corrida 1 (23:39): sin diagnostico; el runner se cuelga al serializar un resultado:
+ArgumentException: The surrogate pair (0xD83D, 0x22) is invalid. A high surrogate character (0xD800 - 0xDBFF) must always be paired with a low surrogate character (0xDC00 - 0xDFFF).
+# Corrida 2 (00:04): con un TestRunCallback temporal que escribe cada resultado con lo no ASCII escapado
+# (borrado antes de las corridas de evidencia). 66 Passed, 3 Failed:
+[DIAG] Passed ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.AnonimizarDaLasMismasEtiquetasTextosSelloYConteoQueTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.CadaElementoCaeParejoEnCadaPosicion | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.ElBarajadoEsDeterministaYNoTocaLaEntrada | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.ElBarajadoEsElMismoQueEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.ElBarajadoEsUniforme | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.ElHashDeLaSemillaEsElMismoQueEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.LaListaDeTerminosYElTokenSonLosDeTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.LosCodigosEstablesSiguenElOrdenDelPool | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.CadaCuerpoExcluyeLaRespuestaDeSuOperador | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.ElCuerpoConFuentesEsElMismoQueEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.ElCuerpoLimpioPasaYElQueDelataAlProveedorTira | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.LaComprobacionCruzadaTiraSiElCuerpoIncluyeLaRespuestaPropia | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.LaIntegridadDistingueCompletoTruncadoEIndeterminado | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.LaPerdidaSeLocalizaEnElSegmentoQueCambio | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.LaQuerySoloConservaModel | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.LasFugasSonLasMismasQueEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.LasMarcasVanEnElPrimerBlancoDespuesDelIntervalo | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.LosCuerposSonLosMismosQueEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.DominioPruebas.CadaTipoDeHechoSeLeeYSeReescribeIgualQueLoEscribeLaVersionElectron | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.DominioPruebas.ElEsquemaEsElMismoQueElDeLaVersionElectron | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.DominioPruebas.ElIntegradorYLosCargadosSonLosDeLaUltimaCondicion | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.DominioPruebas.LaEtapaSaleDeLosHechosYCuentaOperadoresDistintos | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.DominioPruebas.LaPreguntaEfectivaRechazaElMarcadorYUsaLaUltimaDeclarada | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.DominioPruebas.LaProcedenciaDistingueFinObservadoDeInferido | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.DominioPruebas.LeerCuentaLasIlegiblesYDetectaLaUltimaLineaIncompleta | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.InformePruebas.ElDocumentoDeCadaRespuestaEsElMismoQueEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.InformePruebas.ElInformeFinalEsElMismoQueArmaElTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.InformePruebas.ElInformeMarcaCadaReferenciaYPublicaLaClaveDeLosP | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.InformePruebas.LasMarcasDeIntegridadSeQuitanYSeDeclaran | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.InformePruebas.LaVerificacionParaElInformeEsLaMismaQueEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.InformePruebas.LosControlesDelRedactorSonLosMismosQueEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.InformePruebas.NingunaSeccionQuedaVacia | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.ParseosPruebas.ElInformeSembradoDeGuardTrazabilidad | 
+[DIAG] Failed ChatCouncil.Motor.Pruebas.ParseosPruebas.ElNombreDelInformeEsElMismoQueEnTypeScript |   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\uD83D\uDE00 fin\u000D\u000A  String lengths are both 80. Strings differ at index 79.\u000D\u000A  Expected: "...xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\uFFFD"\u000D\u000A  But was:  "...xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\uD83D"\u000D\u000A  --------------------------------------------------------------------------^\u000D\u000A
+[DIAG] Failed ChatCouncil.Motor.Pruebas.ParseosPruebas.ElTextoDesdeHtmlEsElMismoQueEnTypeScript |   <h3>TITULO: Un t\u00EDtulo</h3><p>Hola&nbsp;mundo &amp;amp; &lt;b&gt; &quot;x&quot; &#39;y&#39; &apos;z&apos; &#241; &#xF1; &#X1F600; &#55296; &amp;nbsp;</p><ul><li>uno</li><li><p>dos</p></li></ul><ol><li>a</li><li>b</li></ol><table><tr><td>c1</td><th>c2</th></tr></table>br<br>fin<br/>x</br>y\u000D\u000A  String lengths are both 109. Strings differ at index 58.\u000D\u000A  Expected: "...z' \u00F1 \u00F1 \uD83D\uDE00 \uFFFD &nbsp;\n- uno\n- dos\n1. a\n2. b\nc1 | c2 |\nbr\nfin\nx\ny"\u000D\u000A  But was:  "...z' \u00F1 \u00F1 \uD83D\uDE00 \uD800 &nbsp;\n- uno\n- dos\n1. a\n2. b\nc1 | c2 |\nbr\nfin\nx\ny"\u000D\u000A  ------------------------^\u000D\u000A
+[DIAG] Passed ChatCouncil.Motor.Pruebas.ParseosPruebas.ElTituloYLaSeccionDeRescateSonLosMismosQueEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.ParseosPruebas.LaListaOrdenadaRespetaSuStart | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.ParseosPruebas.LaTrazabilidadEsLaMismaQueEnTypeScript | 
+[DIAG] Failed ChatCouncil.Motor.Pruebas.ParseosPruebas.LaVerificacionEsLaMismaQueEnTypeScript |   Expected string length 3661 but was 3656. Strings differ at index 1747.\u000D\u000A  Expected: "...tiposNoReconocidos":["PRIMARIA\\ud800"],"hallazgoId":"H12",..."\u000D\u000A  But was:  "...tiposNoReconocidos":["PRIMARIA\uFFFD"],"hallazgoId":"H12","url"..."\u000D\u000A  --------------------------------------------^\u000D\u000A
+[DIAG] Passed ChatCouncil.Motor.Pruebas.ParseosPruebas.LosHallazgosSonLosMismosQueEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.ParseosPruebas.TensionSeLeeYUnaEtiquetaInexistenteQuedaMarcada | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.ParseosPruebas.UnPuntoDeCodigoFueraDeRangoTiraComoEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PromptsPruebas.ElArchivoDelRedactorEsElMismoQueArmaElTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PromptsPruebas.LasSpecsCumplenElContrato | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PromptsPruebas.LosPromptsSonLosMismosQueArmaElTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PromptsPruebas.LosRolesPorDefectoSonLosDeLaVersionElectronYCumplenSusReglas | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PromptsPruebas.UnMarcadorDentroDeLaPreguntaQuedaLiteral | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PuertaPruebas.CadaUrlSeComprueba | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PuertaPruebas.ConElSelloYaEscritoUnaRespuestaDistintaHaceQueLaOperacionSeNiegue | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PuertaPruebas.DeclararSinRondaAbiertaSeNiega | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PuertaPruebas.ElAvisoDePromptsEsElMismoQueEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PuertaPruebas.ElEstadoDeCadaPanelSaleDelRegistro | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PuertaPruebas.ElUmbralDeLecturaEsElDeLaVersionElectron | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PuertaPruebas.LaCorridaDeNueveLecturasDejaLosMismosHechosQueElTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PuertaPruebas.LaRondaActivaSeRestauraDelRegistro | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PuertaPruebas.SiFallaElPdfDeUnaRespuestaLasDemasSeEscribenYFaltanLaNombra | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PuertaPruebas.SinLasRespuestasDelPoolLaOperacionSeNiega | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PuertaPruebas.SinRondaAbiertaLaCapturaAbreUnaConElMarcadorYLaPreguntaSeDeclara | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.PuertaPruebas.UnaRondaEnteraDejaLosMismosHechosQueElTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.RondaPruebas.ElChipInlineEsCuerpoYLaListaDeFuentesClaveEsPanel | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.RondaPruebas.ElPoolSonTodosMenosLosRoles | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.RondaPruebas.LasCitasSonLasMismasQueEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.RondaPruebas.LaSeleccionSeValidaComoEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.RondaPruebas.LaSeleccionYLosRolesSeLeenComoEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.RondaPruebas.LasEtiquetasValidasSonLasDelPoolMenosLaPropia | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.RondaPruebas.LasLecturasSeClasificanPorEtapa | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.RondaPruebas.LasSalidasVigentesSonLaUltimaDeCadaOperador | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.RondaPruebas.LaTablaDeHallazgosEsLaMismaQueEnTypeScript | 
+[DIAG] Passed ChatCouncil.Motor.Pruebas.RondaPruebas.LosCuatroDescartesDeT1 | 
+ArgumentException: The surrogate pair (0xD83D, 0x22) is invalid. A high surrogate character (0xD800 - 0xDBFF) must always be paired with a low surrogate character (0xDC00 - 0xDFFF).

@@ -1,0 +1,10 @@
+{
+  "name": "com.chatcouncil.motor",
+  "version": "0.1.0",
+  "displayName": "ChatCouncil Motor",
+  "description": "El motor de ChatCouncil, sin referencias a Unity. Lo comparten la app de Unity y las pruebas de dotnet (Dotnet~).",
+  "unity": "6000.3",
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.2"
+  }
+}

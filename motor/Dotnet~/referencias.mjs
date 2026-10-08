@@ -43,13 +43,35 @@ const registro = await importar("apps/desktop/src/main/registro.ts");
 const seleccion = await importar("apps/desktop/src/main/seleccion-proveedores.ts");
 
 /** Literal de C#. JSON ya escapa lo que C# exige, salvo U+0085, U+2028 y U+2029, que C# toma como salto de línea. */
-const cs = (s) =>
-  s === null
-    ? "null"
-    : [0x85, 0x2028, 0x2029].reduce(
-        (t, c) => t.split(String.fromCharCode(c)).join(String.fromCharCode(92) + "u" + c.toString(16).padStart(4, "0")),
-        JSON.stringify(s),
-      );
+const literal = (s) =>
+  [0x85, 0x2028, 0x2029].reduce(
+    (t, c) => t.split(String.fromCharCode(c)).join(String.fromCharCode(92) + "u" + c.toString(16).padStart(4, "0")),
+    JSON.stringify(s),
+  );
+const esAlto = (c) => c >= 0xd800 && c <= 0xdbff;
+const esBajo = (c) => c >= 0xdc00 && c <= 0xdfff;
+/**
+ * Expresión de C# para s. Un surrogate suelto no va en un literal: IL2CPP guarda los literales
+ * en UTF-8 y lo cambia por U+FFFD (medido en global-metadata.dat, T14). Se arma con (char) en
+ * tiempo de ejecución, así Mono, IL2CPP y .NET prueban el mismo texto.
+ */
+const cs = (s) => {
+  if (s === null) return "null";
+  const partes = [];
+  let tramo = "";
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (esAlto(c) && i + 1 < s.length && esBajo(s.charCodeAt(i + 1))) tramo += s[i] + s[++i];
+    else if (esAlto(c) || esBajo(c)) {
+      if (tramo) partes.push(literal(tramo));
+      partes.push(`((char)0x${c.toString(16).toUpperCase()}).ToString()`);
+      tramo = "";
+    } else tramo += s[i];
+  }
+  if (!partes.length) return literal(s);
+  if (tramo) partes.push(literal(tramo));
+  return `(${partes.join(" + ")})`;
+};
 const LS = String.fromCharCode(0x2028);
 const TEXTO_RARO = `comillas "dobles", barra \\ ñandú 😀 separador${LS}control${String.fromCharCode(1)} surrogate suelto ${String.fromCharCode(0xd800)} fin`;
 
@@ -994,7 +1016,7 @@ namespace ChatCouncil.Motor.Pruebas
         };
 
         public static readonly string[] TerminosBloqueados = { ${analisis.PROVIDER_NAME_BLOCKLIST.map(cs).join(", ")} };
-        public const string TokenRedaccion = ${cs(analisis.REDACTION_TOKEN)};
+        public static readonly string TokenRedaccion = ${cs(analisis.REDACTION_TOKEN)};
 
         /// <summary>Entrada y salida de anonymizeReplies(respuestas, true, semilla), como JSON.</summary>
         public static readonly (uint semilla, string entrada, string esperado)[] Anonimizados = {
@@ -1042,9 +1064,9 @@ namespace ChatCouncil.Motor.Pruebas
             ${CUERPOS.map((k) => `(${cs(k.entrada)}, ${cs(k.esperado)}, ${cs(k.error)})`).join(",\n            ")}
         };
 
-        public const string Rescate = ${cs(RESCATE)};
-        public const string Etiquetadas = ${cs(JSON.stringify(ETIQUETADAS))};
-        public const string HallazgosIntegrador = ${cs(JSON.stringify(H_INTEGRADOR))};
+        public static readonly string Rescate = ${cs(RESCATE)};
+        public static readonly string Etiquetadas = ${cs(JSON.stringify(ETIQUETADAS))};
+        public static readonly string HallazgosIntegrador = ${cs(JSON.stringify(H_INTEGRADOR))};
 
         /// <summary>Los prompts armados por el TypeScript para cada pregunta, con Etiquetadas, HallazgosIntegrador y Rescate.</summary>
         public static readonly (string pregunta, string operacion, string operacionConArchivo, string cuerpoArchivo, string integrador, string verificador, string redactor)[] Prompts = {
@@ -1062,15 +1084,15 @@ namespace ChatCouncil.Motor.Pruebas
             ${TEXTOS_HTML.map(([h, t]) => `(${cs(h)}, ${cs(t)})`).join(",\n            ")}
         };
         /// <summary>Lo que tira textoDeHtmlEnBloques con &amp;#1114112; (un punto de código fuera de rango).</summary>
-        public const string ErrorHtml = ${cs(errorHtml)};
+        public static readonly string ErrorHtml = ${cs(errorHtml)};
 
-        public const string SalidaOperador = ${cs(SALIDA_OPERADOR)};
+        public static readonly string SalidaOperador = ${cs(SALIDA_OPERADOR)};
         /// <summary>parsearHallazgos(SalidaOperador, P1..P6) como JSON.</summary>
-        public const string HallazgosParseados = ${cs(HALLAZGOS_PARSEADOS)};
+        public static readonly string HallazgosParseados = ${cs(HALLAZGOS_PARSEADOS)};
 
-        public const string SalidaVerificador = ${cs(SALIDA_VERIFICADOR)};
+        public static readonly string SalidaVerificador = ${cs(SALIDA_VERIFICADOR)};
         /// <summary>parsearVerificacion(SalidaVerificador, H12, H13, H24, H58, H59, H60) como JSON.</summary>
-        public const string VerificacionParseada = ${cs(VERIFICACION_PARSEADA)};
+        public static readonly string VerificacionParseada = ${cs(VERIFICACION_PARSEADA)};
 
         /// <summary>parsearReferenciasIntegrador(informe, H1..H4) como JSON; el primero es el informe sembrado de guard:trazabilidad.</summary>
         public static readonly (string informe, string esperado)[] Trazabilidades = {
@@ -1104,27 +1126,27 @@ namespace ChatCouncil.Motor.Pruebas
         };
 
         /// <summary>nombreLibreDeInforme("base") con "base", "base (2)" y "base (3)" ocupados.</summary>
-        public const string NombreLibre = ${cs(NOMBRE_LIBRE)};
+        public static readonly string NombreLibre = ${cs(NOMBRE_LIBRE)};
 
         /// <summary>extraerCitas(html, "resp-1", ids c1, c2…) como JSON, sin urlsUnicas.</summary>
         public static readonly (string html, string esperado)[] Citas = {
             ${CITAS.map(([html, e]) => `(${cs(html)}, ${cs(e)})`).join(",\n            ")}
         };
 
-        public const string ParaTabla = ${cs(JSON.stringify(PARA_TABLA))};
+        public static readonly string ParaTabla = ${cs(JSON.stringify(PARA_TABLA))};
         /// <summary>armarTablaHallazgos(ParaTabla, los 7 primeros de PoolCuerpos, hashSemilla("semilla-fija")) como JSON.</summary>
-        public const string Tabla = ${cs(TABLA)};
-        public const string ErrorTabla = ${cs(errorTabla)};
+        public static readonly string Tabla = ${cs(TABLA)};
+        public static readonly string ErrorTabla = ${cs(errorTabla)};
 
-        public const string RegistroVigentes = ${cs(REGISTRO_VIGENTES)};
+        public static readonly string RegistroVigentes = ${cs(REGISTRO_VIGENTES)};
         /// <summary>salidasVigentesDeRonda(RegistroVigentes, "R") como JSON.</summary>
-        public const string Vigentes = ${cs(VIGENTES)};
-        public const string UltimoIntegrador = ${cs(ULTIMO_INTEGRADOR)};
+        public static readonly string Vigentes = ${cs(VIGENTES)};
+        public static readonly string UltimoIntegrador = ${cs(ULTIMO_INTEGRADOR)};
 
         public static readonly (string operador, string[] validas)[] EtiquetasValidas = {
             ${ETIQUETAS_VALIDAS.map(([op, v]) => `(${cs(op)}, ${strs(v)})`).join(",\n            ")}
         };
-        public const string ErrorEtiquetas = ${cs(errorEtiquetas)};
+        public static readonly string ErrorEtiquetas = ${cs(errorEtiquetas)};
 
         /// <summary>clasificarLecturasPorEtapa(chatgpt, gemini, deepseek, glm, kimi; pool de 7; integrador deepseek, verificador glm, redactor kimi).</summary>
         public static readonly (string etapa, string[] operacion, string integrador, string verificador, string redactor, string[] comoRespuesta)[] Clasificaciones = {
@@ -1152,8 +1174,8 @@ namespace ChatCouncil.Motor.Pruebas
             ${INFORMES_FINALES.map(([e, i]) => `(${cs(e)}, ${cs(i)})`).join(",\n            ")}
         };
 
-        public const string HallazgosInforme = ${cs(JSON.stringify(HALLAZGOS_INFORME))};
-        public const string SalidaVerificadorInforme = ${cs(JSON.stringify(SALIDA_V))};
+        public static readonly string HallazgosInforme = ${cs(JSON.stringify(HALLAZGOS_INFORME))};
+        public static readonly string SalidaVerificadorInforme = ${cs(JSON.stringify(SALIDA_V))};
         /// <summary>verificacionParaInforme(SalidaVerificadorInforme, urls, HallazgosInforme, techo) como JSON.</summary>
         public static readonly (string urls, int? techo, string esperado)[] VerificacionesInforme = {
             ${VERIFICACIONES_INFORME.map(([u, t, e]) => `(${cs(u)}, ${t === null ? "null" : t}, ${cs(e)})`).join(",\n            ")}
@@ -1170,37 +1192,37 @@ namespace ChatCouncil.Motor.Pruebas
         };
 
         /// <summary>Las nueve lecturas de la corrida simulada, con lo que dice cada panel (continuidad, tamaño).</summary>
-        public const string Lecturas9 = ${cs(JSON.stringify(LECTURAS_9))};
-        public const string Contexto9 = ${cs(JSON.stringify(CONTEXTO_9))};
-        public const string Intentos9 = ${cs(JSON.stringify(INTENTOS_9))};
+        public static readonly string Lecturas9 = ${cs(JSON.stringify(LECTURAS_9))};
+        public static readonly string Contexto9 = ${cs(JSON.stringify(CONTEXTO_9))};
+        public static readonly string Intentos9 = ${cs(JSON.stringify(INTENTOS_9))};
         public static readonly string[] PoolPuerta = ${strs(POOL_PUERTA)};
         public const int UmbralLecturaMinimo = ${CORRIDA.umbral};
         /// <summary>Las líneas que deja la corrida en el registro, con ids 1, 2, 3… y la fecha fija.</summary>
         public static readonly string[] CorridaLineas = {
             ${arr(CORRIDA.lineas)}
         };
-        public const string CorridaAviso = ${cs(CORRIDA.aviso)};
-        public const string CorridaEtapa = ${cs(CORRIDA.etapa)};
+        public static readonly string CorridaAviso = ${cs(CORRIDA.aviso)};
+        public static readonly string CorridaEtapa = ${cs(CORRIDA.etapa)};
 
         /// <summary>Los lotes de lecturas de la corrida de operación, por nombre.</summary>
-        public const string LotesOperacion = ${cs(JSON.stringify(LOTES))};
-        public const string LecturaRedactorOperacion = ${cs(JSON.stringify(CORRIDA_OP.lecturaRedactor))};
-        public const string PreguntaOperacion = ${cs(PREGUNTA_OP)};
+        public static readonly string LotesOperacion = ${cs(JSON.stringify(LOTES))};
+        public static readonly string LecturaRedactorOperacion = ${cs(JSON.stringify(CORRIDA_OP.lecturaRedactor))};
+        public static readonly string PreguntaOperacion = ${cs(PREGUNTA_OP)};
         /// <summary>Las líneas que deja la corrida de operación y roles, con ids 1, 2, 3… y la fecha fija.</summary>
         public static readonly string[] CorridaOperacionLineas = {
             ${arr(CORRIDA_OP.lineas)}
         };
-        public const string ArchivoKimi = ${cs(CORRIDA_OP.archivoKimi)};
-        public const string ArchivoRedactor = ${cs(CORRIDA_OP.archivoRedactor)};
-        public const string MensajeRecaptura = ${cs(CORRIDA_OP.recaptura.mensaje)};
-        public const string MensajeReusoKimi = ${cs(CORRIDA_OP.reusoKimi.mensaje)};
+        public static readonly string ArchivoKimi = ${cs(CORRIDA_OP.archivoKimi)};
+        public static readonly string ArchivoRedactor = ${cs(CORRIDA_OP.archivoRedactor)};
+        public static readonly string MensajeRecaptura = ${cs(CORRIDA_OP.recaptura.mensaje)};
+        public static readonly string MensajeReusoKimi = ${cs(CORRIDA_OP.reusoKimi.mensaje)};
         public const bool ReusoKimiOk = ${CORRIDA_OP.reusoKimi.ok};
-        public const string MensajeReusoChatgpt = ${cs(CORRIDA_OP.reusoChatgpt.mensaje)};
+        public static readonly string MensajeReusoChatgpt = ${cs(CORRIDA_OP.reusoChatgpt.mensaje)};
         public const bool ReusoChatgptOk = ${CORRIDA_OP.reusoChatgpt.ok};
 
         /// <summary>El informe de la primera ronda de la corrida, armado con el pegamento de index.ts, y lo que va en su carpeta.</summary>
-        public const string InformeDeRonda = ${cs(CORRIDA_OP.informe.texto)};
-        public const string NombreBaseInforme = ${cs(CORRIDA_OP.informe.nombreBase)};
+        public static readonly string InformeDeRonda = ${cs(CORRIDA_OP.informe.texto)};
+        public static readonly string NombreBaseInforme = ${cs(CORRIDA_OP.informe.nombreBase)};
         public const int UrlsComprobadas = ${CORRIDA_OP.informe.urls};
         public const bool SegundaComprobacionSinRed = ${CORRIDA_OP.informe.yaComprobadas};
         public static readonly (string archivo, string titulo, string markdown)[] RespuestasDeCarpeta = {

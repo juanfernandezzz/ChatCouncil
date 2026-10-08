@@ -1,0 +1,11 @@
+Built from '6000.3/staging' branch; Version is '6000.3.25f1 (e1dba0a9aba4) revision 14801824'; Using compiler version '194234433'; Build Type 'Release'
+COMMAND LINE ARGUMENTS:
+-testPlatform
+*** Tundra build success (3.03 seconds), 8 items updated, 637 evaluated
+*** Tundra build success (2.11 seconds), 1 items updated, 3 evaluated
+*** Tundra build success (8.13 seconds), 53 items updated, 545 evaluated
+C:\Program Files\Unity\Hub\Editor\6000.3.25f1\Editor\Data\il2cpp\build\deploy\il2cpp.exe @Library\Bee\artifacts\rsp\18207906941144758351.rsp
+*** Tundra requires additional run (117.85 seconds - 0:01:57), 759 items updated, 1676 evaluated
+*** Tundra build success (1.12 seconds), 0 items updated, 1676 evaluated
+Build Finished, Result: Success.
+Test run completed. Exiting with code 2 (Failed). One or more tests failed.

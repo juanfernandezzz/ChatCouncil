@@ -1,0 +1,469 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="69" result="Passed" total="69" passed="69" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:47Z" duration="3,3878154">
+  <test-suite type="TestSuite" id="1085" name="unity" fullname="unity" runstate="Runnable" testcasecount="69" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:47Z" duration="3.387815" total="69" passed="69" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="PlayMode" />
+    </properties>
+    <test-suite type="Assembly" id="1078" name="ChatCouncil.Motor.Pruebas.dll" fullname="C:/Users/Juan Fernández/Documents/Proyectos/ChatCouncil-main/unity/Library/ScriptAssemblies/ChatCouncil.Motor.Pruebas.dll" runstate="Runnable" testcasecount="69" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:47Z" duration="3.365814" total="69" passed="69" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="15108" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="PlayMode" />
+        <property name="EditorOnly" value="False" />
+      </properties>
+      <test-suite type="TestSuite" id="1079" name="ChatCouncil" fullname="ChatCouncil" runstate="Runnable" testcasecount="69" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:47Z" duration="3.364524" total="69" passed="69" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1080" name="Motor" fullname="ChatCouncil.Motor" runstate="Runnable" testcasecount="69" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:47Z" duration="3.363835" total="69" passed="69" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="1081" name="Pruebas" fullname="ChatCouncil.Motor.Pruebas" runstate="Runnable" testcasecount="69" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:47Z" duration="3.362426" total="69" passed="69" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1001" name="AnonimizacionPruebas" fullname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas" classname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.618697" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1008" name="AnonimizarDaLasMismasEtiquetasTextosSelloYConteoQueTypeScript" fullname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.AnonimizarDaLasMismasEtiquetasTextosSelloYConteoQueTypeScript" methodname="AnonimizarDaLasMismasEtiquetasTextosSelloYConteoQueTypeScript" classname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas" runstate="Runnable" seed="1166301905" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.528108" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1006" name="CadaElementoCaeParejoEnCadaPosicion" fullname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.CadaElementoCaeParejoEnCadaPosicion" methodname="CadaElementoCaeParejoEnCadaPosicion" classname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas" runstate="Runnable" seed="316197613" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.014468" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Celdas: mínimo 37, máximo 76.
+]]></output>
+              </test-case>
+              <test-case id="1004" name="ElBarajadoEsDeterministaYNoTocaLaEntrada" fullname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.ElBarajadoEsDeterministaYNoTocaLaEntrada" methodname="ElBarajadoEsDeterministaYNoTocaLaEntrada" classname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas" runstate="Runnable" seed="2015330180" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.003326" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1003" name="ElBarajadoEsElMismoQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.ElBarajadoEsElMismoQueEnTypeScript" methodname="ElBarajadoEsElMismoQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas" runstate="Runnable" seed="1974455928" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.009590" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1005" name="ElBarajadoEsUniforme" fullname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.ElBarajadoEsUniforme" methodname="ElBarajadoEsUniforme" classname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas" runstate="Runnable" seed="1967512307" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.022352" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Media de coincidencias: 1,011 sobre 19900 pares.
+]]></output>
+              </test-case>
+              <test-case id="1002" name="ElHashDeLaSemillaEsElMismoQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.ElHashDeLaSemillaEsElMismoQueEnTypeScript" methodname="ElHashDeLaSemillaEsElMismoQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas" runstate="Runnable" seed="849158088" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.003342" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1007" name="LaListaDeTerminosYElTokenSonLosDeTypeScript" fullname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.LaListaDeTerminosYElTokenSonLosDeTypeScript" methodname="LaListaDeTerminosYElTokenSonLosDeTypeScript" classname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas" runstate="Runnable" seed="1148987249" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.000740" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1009" name="LosCodigosEstablesSiguenElOrdenDelPool" fullname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas.LosCodigosEstablesSiguenElOrdenDelPool" methodname="LosCodigosEstablesSiguenElOrdenDelPool" classname="ChatCouncil.Motor.Pruebas.AnonimizacionPruebas" runstate="Runnable" seed="1198802606" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.004568" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1010" name="CuerpoOperadorPruebas" fullname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas" classname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas" runstate="Runnable" testcasecount="10" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:45Z" duration="0.223172" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1020" name="CadaCuerpoExcluyeLaRespuestaDeSuOperador" fullname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.CadaCuerpoExcluyeLaRespuestaDeSuOperador" methodname="CadaCuerpoExcluyeLaRespuestaDeSuOperador" classname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas" runstate="Runnable" seed="327082075" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.117648" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1014" name="ElCuerpoConFuentesEsElMismoQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.ElCuerpoConFuentesEsElMismoQueEnTypeScript" methodname="ElCuerpoConFuentesEsElMismoQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas" runstate="Runnable" seed="1503358301" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.014847" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1013" name="ElCuerpoLimpioPasaYElQueDelataAlProveedorTira" fullname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.ElCuerpoLimpioPasaYElQueDelataAlProveedorTira" methodname="ElCuerpoLimpioPasaYElQueDelataAlProveedorTira" classname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas" runstate="Runnable" seed="636014789" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.001903" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1019" name="LaComprobacionCruzadaTiraSiElCuerpoIncluyeLaRespuestaPropia" fullname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.LaComprobacionCruzadaTiraSiElCuerpoIncluyeLaRespuestaPropia" methodname="LaComprobacionCruzadaTiraSiElCuerpoIncluyeLaRespuestaPropia" classname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas" runstate="Runnable" seed="1330202696" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.000957" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1016" name="LaIntegridadDistingueCompletoTruncadoEIndeterminado" fullname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.LaIntegridadDistingueCompletoTruncadoEIndeterminado" methodname="LaIntegridadDistingueCompletoTruncadoEIndeterminado" classname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas" runstate="Runnable" seed="1357042184" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.010483" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1017" name="LaPerdidaSeLocalizaEnElSegmentoQueCambio" fullname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.LaPerdidaSeLocalizaEnElSegmentoQueCambio" methodname="LaPerdidaSeLocalizaEnElSegmentoQueCambio" classname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas" runstate="Runnable" seed="706766099" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.011005" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1011" name="LaQuerySoloConservaModel" fullname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.LaQuerySoloConservaModel" methodname="LaQuerySoloConservaModel" classname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas" runstate="Runnable" seed="1778822006" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.003393" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1012" name="LasFugasSonLasMismasQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.LasFugasSonLasMismasQueEnTypeScript" methodname="LasFugasSonLasMismasQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas" runstate="Runnable" seed="465517670" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.001454" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1015" name="LasMarcasVanEnElPrimerBlancoDespuesDelIntervalo" fullname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.LasMarcasVanEnElPrimerBlancoDespuesDelIntervalo" methodname="LasMarcasVanEnElPrimerBlancoDespuesDelIntervalo" classname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas" runstate="Runnable" seed="1366800863" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:44Z" duration="0.000637" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1018" name="LosCuerposSonLosMismosQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas.LosCuerposSonLosMismosQueEnTypeScript" methodname="LosCuerposSonLosMismosQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.CuerpoOperadorPruebas" runstate="Runnable" seed="2117089467" result="Passed" start-time="2026-10-08 15:02:44Z" end-time="2026-10-08 15:02:45Z" duration="0.057314" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1021" name="DominioPruebas" fullname="ChatCouncil.Motor.Pruebas.DominioPruebas" classname="ChatCouncil.Motor.Pruebas.DominioPruebas" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.174122" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1023" name="CadaTipoDeHechoSeLeeYSeReescribeIgualQueLoEscribeLaVersionElectron" fullname="ChatCouncil.Motor.Pruebas.DominioPruebas.CadaTipoDeHechoSeLeeYSeReescribeIgualQueLoEscribeLaVersionElectron" methodname="CadaTipoDeHechoSeLeeYSeReescribeIgualQueLoEscribeLaVersionElectron" classname="ChatCouncil.Motor.Pruebas.DominioPruebas" runstate="Runnable" seed="1906817193" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.153355" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1022" name="ElEsquemaEsElMismoQueElDeLaVersionElectron" fullname="ChatCouncil.Motor.Pruebas.DominioPruebas.ElEsquemaEsElMismoQueElDeLaVersionElectron" methodname="ElEsquemaEsElMismoQueElDeLaVersionElectron" classname="ChatCouncil.Motor.Pruebas.DominioPruebas" runstate="Runnable" seed="1713284478" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.000515" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1028" name="ElIntegradorYLosCargadosSonLosDeLaUltimaCondicion" fullname="ChatCouncil.Motor.Pruebas.DominioPruebas.ElIntegradorYLosCargadosSonLosDeLaUltimaCondicion" methodname="ElIntegradorYLosCargadosSonLosDeLaUltimaCondicion" classname="ChatCouncil.Motor.Pruebas.DominioPruebas" runstate="Runnable" seed="1632893129" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.001661" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1025" name="LaEtapaSaleDeLosHechosYCuentaOperadoresDistintos" fullname="ChatCouncil.Motor.Pruebas.DominioPruebas.LaEtapaSaleDeLosHechosYCuentaOperadoresDistintos" methodname="LaEtapaSaleDeLosHechosYCuentaOperadoresDistintos" classname="ChatCouncil.Motor.Pruebas.DominioPruebas" runstate="Runnable" seed="528495074" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.003560" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1026" name="LaPreguntaEfectivaRechazaElMarcadorYUsaLaUltimaDeclarada" fullname="ChatCouncil.Motor.Pruebas.DominioPruebas.LaPreguntaEfectivaRechazaElMarcadorYUsaLaUltimaDeclarada" methodname="LaPreguntaEfectivaRechazaElMarcadorYUsaLaUltimaDeclarada" classname="ChatCouncil.Motor.Pruebas.DominioPruebas" runstate="Runnable" seed="881897871" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.002163" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1027" name="LaProcedenciaDistingueFinObservadoDeInferido" fullname="ChatCouncil.Motor.Pruebas.DominioPruebas.LaProcedenciaDistingueFinObservadoDeInferido" methodname="LaProcedenciaDistingueFinObservadoDeInferido" classname="ChatCouncil.Motor.Pruebas.DominioPruebas" runstate="Runnable" seed="374328905" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.003240" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1024" name="LeerCuentaLasIlegiblesYDetectaLaUltimaLineaIncompleta" fullname="ChatCouncil.Motor.Pruebas.DominioPruebas.LeerCuentaLasIlegiblesYDetectaLaUltimaLineaIncompleta" methodname="LeerCuentaLasIlegiblesYDetectaLaUltimaLineaIncompleta" classname="ChatCouncil.Motor.Pruebas.DominioPruebas" runstate="Runnable" seed="1918043936" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.006402" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1029" name="InformePruebas" fullname="ChatCouncil.Motor.Pruebas.InformePruebas" classname="ChatCouncil.Motor.Pruebas.InformePruebas" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.167756" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1036" name="ElDocumentoDeCadaRespuestaEsElMismoQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.InformePruebas.ElDocumentoDeCadaRespuestaEsElMismoQueEnTypeScript" methodname="ElDocumentoDeCadaRespuestaEsElMismoQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.InformePruebas" runstate="Runnable" seed="462931375" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.023624" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1030" name="ElInformeFinalEsElMismoQueArmaElTypeScript" fullname="ChatCouncil.Motor.Pruebas.InformePruebas.ElInformeFinalEsElMismoQueArmaElTypeScript" methodname="ElInformeFinalEsElMismoQueArmaElTypeScript" classname="ChatCouncil.Motor.Pruebas.InformePruebas" runstate="Runnable" seed="1289686911" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.064632" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1031" name="ElInformeMarcaCadaReferenciaYPublicaLaClaveDeLosP" fullname="ChatCouncil.Motor.Pruebas.InformePruebas.ElInformeMarcaCadaReferenciaYPublicaLaClaveDeLosP" methodname="ElInformeMarcaCadaReferenciaYPublicaLaClaveDeLosP" classname="ChatCouncil.Motor.Pruebas.InformePruebas" runstate="Runnable" seed="65435295" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.006164" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1033" name="LasMarcasDeIntegridadSeQuitanYSeDeclaran" fullname="ChatCouncil.Motor.Pruebas.InformePruebas.LasMarcasDeIntegridadSeQuitanYSeDeclaran" methodname="LasMarcasDeIntegridadSeQuitanYSeDeclaran" classname="ChatCouncil.Motor.Pruebas.InformePruebas" runstate="Runnable" seed="2035265697" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.003598" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1034" name="LaVerificacionParaElInformeEsLaMismaQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.InformePruebas.LaVerificacionParaElInformeEsLaMismaQueEnTypeScript" methodname="LaVerificacionParaElInformeEsLaMismaQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.InformePruebas" runstate="Runnable" seed="1861281629" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.049518" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1035" name="LosControlesDelRedactorSonLosMismosQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.InformePruebas.LosControlesDelRedactorSonLosMismosQueEnTypeScript" methodname="LosControlesDelRedactorSonLosMismosQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.InformePruebas" runstate="Runnable" seed="1119456822" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.012084" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1032" name="NingunaSeccionQuedaVacia" fullname="ChatCouncil.Motor.Pruebas.InformePruebas.NingunaSeccionQuedaVacia" methodname="NingunaSeccionQuedaVacia" classname="ChatCouncil.Motor.Pruebas.InformePruebas" runstate="Runnable" seed="677067876" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.005224" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1037" name="ParseosPruebas" fullname="ChatCouncil.Motor.Pruebas.ParseosPruebas" classname="ChatCouncil.Motor.Pruebas.ParseosPruebas" runstate="Runnable" testcasecount="10" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.060766" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1045" name="ElInformeSembradoDeGuardTrazabilidad" fullname="ChatCouncil.Motor.Pruebas.ParseosPruebas.ElInformeSembradoDeGuardTrazabilidad" methodname="ElInformeSembradoDeGuardTrazabilidad" classname="ChatCouncil.Motor.Pruebas.ParseosPruebas" runstate="Runnable" seed="1625971135" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.007106" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1047" name="ElNombreDelInformeEsElMismoQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.ParseosPruebas.ElNombreDelInformeEsElMismoQueEnTypeScript" methodname="ElNombreDelInformeEsElMismoQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.ParseosPruebas" runstate="Runnable" seed="1172810166" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.005149" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1038" name="ElTextoDesdeHtmlEsElMismoQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.ParseosPruebas.ElTextoDesdeHtmlEsElMismoQueEnTypeScript" methodname="ElTextoDesdeHtmlEsElMismoQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.ParseosPruebas" runstate="Runnable" seed="1251059253" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.003237" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1046" name="ElTituloYLaSeccionDeRescateSonLosMismosQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.ParseosPruebas.ElTituloYLaSeccionDeRescateSonLosMismosQueEnTypeScript" methodname="ElTituloYLaSeccionDeRescateSonLosMismosQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.ParseosPruebas" runstate="Runnable" seed="706286420" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.003232" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1039" name="LaListaOrdenadaRespetaSuStart" fullname="ChatCouncil.Motor.Pruebas.ParseosPruebas.LaListaOrdenadaRespetaSuStart" methodname="LaListaOrdenadaRespetaSuStart" classname="ChatCouncil.Motor.Pruebas.ParseosPruebas" runstate="Runnable" seed="2074606210" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.000424" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1044" name="LaTrazabilidadEsLaMismaQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.ParseosPruebas.LaTrazabilidadEsLaMismaQueEnTypeScript" methodname="LaTrazabilidadEsLaMismaQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.ParseosPruebas" runstate="Runnable" seed="1448242676" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.013088" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1043" name="LaVerificacionEsLaMismaQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.ParseosPruebas.LaVerificacionEsLaMismaQueEnTypeScript" methodname="LaVerificacionEsLaMismaQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.ParseosPruebas" runstate="Runnable" seed="1803661758" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.010573" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1041" name="LosHallazgosSonLosMismosQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.ParseosPruebas.LosHallazgosSonLosMismosQueEnTypeScript" methodname="LosHallazgosSonLosMismosQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.ParseosPruebas" runstate="Runnable" seed="1595205695" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.012590" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1042" name="TensionSeLeeYUnaEtiquetaInexistenteQuedaMarcada" fullname="ChatCouncil.Motor.Pruebas.ParseosPruebas.TensionSeLeeYUnaEtiquetaInexistenteQuedaMarcada" methodname="TensionSeLeeYUnaEtiquetaInexistenteQuedaMarcada" classname="ChatCouncil.Motor.Pruebas.ParseosPruebas" runstate="Runnable" seed="2009468965" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.001400" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1040" name="UnPuntoDeCodigoFueraDeRangoTiraComoEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.ParseosPruebas.UnPuntoDeCodigoFueraDeRangoTiraComoEnTypeScript" methodname="UnPuntoDeCodigoFueraDeRangoTiraComoEnTypeScript" classname="ChatCouncil.Motor.Pruebas.ParseosPruebas" runstate="Runnable" seed="1502646500" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.000870" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1048" name="PromptsPruebas" fullname="ChatCouncil.Motor.Pruebas.PromptsPruebas" classname="ChatCouncil.Motor.Pruebas.PromptsPruebas" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.024066" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1051" name="ElArchivoDelRedactorEsElMismoQueArmaElTypeScript" fullname="ChatCouncil.Motor.Pruebas.PromptsPruebas.ElArchivoDelRedactorEsElMismoQueArmaElTypeScript" methodname="ElArchivoDelRedactorEsElMismoQueArmaElTypeScript" classname="ChatCouncil.Motor.Pruebas.PromptsPruebas" runstate="Runnable" seed="1869772741" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.001987" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1052" name="LasSpecsCumplenElContrato" fullname="ChatCouncil.Motor.Pruebas.PromptsPruebas.LasSpecsCumplenElContrato" methodname="LasSpecsCumplenElContrato" classname="ChatCouncil.Motor.Pruebas.PromptsPruebas" runstate="Runnable" seed="1664834685" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.005822" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1049" name="LosPromptsSonLosMismosQueArmaElTypeScript" fullname="ChatCouncil.Motor.Pruebas.PromptsPruebas.LosPromptsSonLosMismosQueArmaElTypeScript" methodname="LosPromptsSonLosMismosQueArmaElTypeScript" classname="ChatCouncil.Motor.Pruebas.PromptsPruebas" runstate="Runnable" seed="1164760406" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.007470" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1053" name="LosRolesPorDefectoSonLosDeLaVersionElectronYCumplenSusReglas" fullname="ChatCouncil.Motor.Pruebas.PromptsPruebas.LosRolesPorDefectoSonLosDeLaVersionElectronYCumplenSusReglas" methodname="LosRolesPorDefectoSonLosDeLaVersionElectronYCumplenSusReglas" classname="ChatCouncil.Motor.Pruebas.PromptsPruebas" runstate="Runnable" seed="1867206127" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.002363" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1050" name="UnMarcadorDentroDeLaPreguntaQuedaLiteral" fullname="ChatCouncil.Motor.Pruebas.PromptsPruebas.UnMarcadorDentroDeLaPreguntaQuedaLiteral" methodname="UnMarcadorDentroDeLaPreguntaQuedaLiteral" classname="ChatCouncil.Motor.Pruebas.PromptsPruebas" runstate="Runnable" seed="1913090874" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.000536" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1054" name="PuertaPruebas" fullname="ChatCouncil.Motor.Pruebas.PuertaPruebas" classname="ChatCouncil.Motor.Pruebas.PuertaPruebas" runstate="Runnable" testcasecount="12" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:47Z" duration="2.031110" total="12" passed="12" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1057" name="CadaUrlSeComprueba" fullname="ChatCouncil.Motor.Pruebas.PuertaPruebas.CadaUrlSeComprueba" methodname="CadaUrlSeComprueba" classname="ChatCouncil.Motor.Pruebas.PuertaPruebas" runstate="Runnable" seed="717416891" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.228667" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1056" name="ConElSelloYaEscritoUnaRespuestaDistintaHaceQueLaOperacionSeNiegue" fullname="ChatCouncil.Motor.Pruebas.PuertaPruebas.ConElSelloYaEscritoUnaRespuestaDistintaHaceQueLaOperacionSeNiegue" methodname="ConElSelloYaEscritoUnaRespuestaDistintaHaceQueLaOperacionSeNiegue" classname="ChatCouncil.Motor.Pruebas.PuertaPruebas" runstate="Runnable" seed="1917301812" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.247611" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1064" name="DeclararSinRondaAbiertaSeNiega" fullname="ChatCouncil.Motor.Pruebas.PuertaPruebas.DeclararSinRondaAbiertaSeNiega" methodname="DeclararSinRondaAbiertaSeNiega" classname="ChatCouncil.Motor.Pruebas.PuertaPruebas" runstate="Runnable" seed="144479601" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.002168" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1066" name="ElAvisoDePromptsEsElMismoQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.PuertaPruebas.ElAvisoDePromptsEsElMismoQueEnTypeScript" methodname="ElAvisoDePromptsEsElMismoQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.PuertaPruebas" runstate="Runnable" seed="1383418558" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:45Z" duration="0.001957" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1059" name="ElEstadoDeCadaPanelSaleDelRegistro" fullname="ChatCouncil.Motor.Pruebas.PuertaPruebas.ElEstadoDeCadaPanelSaleDelRegistro" methodname="ElEstadoDeCadaPanelSaleDelRegistro" classname="ChatCouncil.Motor.Pruebas.PuertaPruebas" runstate="Runnable" seed="689794408" result="Passed" start-time="2026-10-08 15:02:45Z" end-time="2026-10-08 15:02:46Z" duration="0.115827" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1061" name="ElUmbralDeLecturaEsElDeLaVersionElectron" fullname="ChatCouncil.Motor.Pruebas.PuertaPruebas.ElUmbralDeLecturaEsElDeLaVersionElectron" methodname="ElUmbralDeLecturaEsElDeLaVersionElectron" classname="ChatCouncil.Motor.Pruebas.PuertaPruebas" runstate="Runnable" seed="321782168" result="Passed" start-time="2026-10-08 15:02:46Z" end-time="2026-10-08 15:02:46Z" duration="0.001829" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1062" name="LaCorridaDeNueveLecturasDejaLosMismosHechosQueElTypeScript" fullname="ChatCouncil.Motor.Pruebas.PuertaPruebas.LaCorridaDeNueveLecturasDejaLosMismosHechosQueElTypeScript" methodname="LaCorridaDeNueveLecturasDejaLosMismosHechosQueElTypeScript" classname="ChatCouncil.Motor.Pruebas.PuertaPruebas" runstate="Runnable" seed="905119250" result="Passed" start-time="2026-10-08 15:02:46Z" end-time="2026-10-08 15:02:46Z" duration="0.083657" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1065" name="LaRondaActivaSeRestauraDelRegistro" fullname="ChatCouncil.Motor.Pruebas.PuertaPruebas.LaRondaActivaSeRestauraDelRegistro" methodname="LaRondaActivaSeRestauraDelRegistro" classname="ChatCouncil.Motor.Pruebas.PuertaPruebas" runstate="Runnable" seed="1963385587" result="Passed" start-time="2026-10-08 15:02:46Z" end-time="2026-10-08 15:02:46Z" duration="0.082523" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1058" name="SiFallaElPdfDeUnaRespuestaLasDemasSeEscribenYFaltanLaNombra" fullname="ChatCouncil.Motor.Pruebas.PuertaPruebas.SiFallaElPdfDeUnaRespuestaLasDemasSeEscribenYFaltanLaNombra" methodname="SiFallaElPdfDeUnaRespuestaLasDemasSeEscribenYFaltanLaNombra" classname="ChatCouncil.Motor.Pruebas.PuertaPruebas" runstate="Runnable" seed="140101930" result="Passed" start-time="2026-10-08 15:02:46Z" end-time="2026-10-08 15:02:46Z" duration="0.189313" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1060" name="SinLasRespuestasDelPoolLaOperacionSeNiega" fullname="ChatCouncil.Motor.Pruebas.PuertaPruebas.SinLasRespuestasDelPoolLaOperacionSeNiega" methodname="SinLasRespuestasDelPoolLaOperacionSeNiega" classname="ChatCouncil.Motor.Pruebas.PuertaPruebas" runstate="Runnable" seed="1451999461" result="Passed" start-time="2026-10-08 15:02:46Z" end-time="2026-10-08 15:02:46Z" duration="0.037857" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1063" name="SinRondaAbiertaLaCapturaAbreUnaConElMarcadorYLaPreguntaSeDeclara" fullname="ChatCouncil.Motor.Pruebas.PuertaPruebas.SinRondaAbiertaLaCapturaAbreUnaConElMarcadorYLaPreguntaSeDeclara" methodname="SinRondaAbiertaLaCapturaAbreUnaConElMarcadorYLaPreguntaSeDeclara" classname="ChatCouncil.Motor.Pruebas.PuertaPruebas" runstate="Runnable" seed="1578103802" result="Passed" start-time="2026-10-08 15:02:46Z" end-time="2026-10-08 15:02:46Z" duration="0.060970" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1055" name="UnaRondaEnteraDejaLosMismosHechosQueElTypeScript" fullname="ChatCouncil.Motor.Pruebas.PuertaPruebas.UnaRondaEnteraDejaLosMismosHechosQueElTypeScript" methodname="UnaRondaEnteraDejaLosMismosHechosQueElTypeScript" classname="ChatCouncil.Motor.Pruebas.PuertaPruebas" runstate="Runnable" seed="583456668" result="Passed" start-time="2026-10-08 15:02:46Z" end-time="2026-10-08 15:02:47Z" duration="0.973258" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1067" name="RondaPruebas" fullname="ChatCouncil.Motor.Pruebas.RondaPruebas" classname="ChatCouncil.Motor.Pruebas.RondaPruebas" runstate="Runnable" testcasecount="10" result="Passed" start-time="2026-10-08 15:02:47Z" end-time="2026-10-08 15:02:47Z" duration="0.057811" total="10" passed="10" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1070" name="ElChipInlineEsCuerpoYLaListaDeFuentesClaveEsPanel" fullname="ChatCouncil.Motor.Pruebas.RondaPruebas.ElChipInlineEsCuerpoYLaListaDeFuentesClaveEsPanel" methodname="ElChipInlineEsCuerpoYLaListaDeFuentesClaveEsPanel" classname="ChatCouncil.Motor.Pruebas.RondaPruebas" runstate="Runnable" seed="2113311550" result="Passed" start-time="2026-10-08 15:02:47Z" end-time="2026-10-08 15:02:47Z" duration="0.001737" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1077" name="ElPoolSonTodosMenosLosRoles" fullname="ChatCouncil.Motor.Pruebas.RondaPruebas.ElPoolSonTodosMenosLosRoles" methodname="ElPoolSonTodosMenosLosRoles" classname="ChatCouncil.Motor.Pruebas.RondaPruebas" runstate="Runnable" seed="1381727676" result="Passed" start-time="2026-10-08 15:02:47Z" end-time="2026-10-08 15:02:47Z" duration="0.000874" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1068" name="LasCitasSonLasMismasQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.RondaPruebas.LasCitasSonLasMismasQueEnTypeScript" methodname="LasCitasSonLasMismasQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.RondaPruebas" runstate="Runnable" seed="1538626197" result="Passed" start-time="2026-10-08 15:02:47Z" end-time="2026-10-08 15:02:47Z" duration="0.013788" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1076" name="LaSeleccionSeValidaComoEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.RondaPruebas.LaSeleccionSeValidaComoEnTypeScript" methodname="LaSeleccionSeValidaComoEnTypeScript" classname="ChatCouncil.Motor.Pruebas.RondaPruebas" runstate="Runnable" seed="977044680" result="Passed" start-time="2026-10-08 15:02:47Z" end-time="2026-10-08 15:02:47Z" duration="0.005891" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1075" name="LaSeleccionYLosRolesSeLeenComoEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.RondaPruebas.LaSeleccionYLosRolesSeLeenComoEnTypeScript" methodname="LaSeleccionYLosRolesSeLeenComoEnTypeScript" classname="ChatCouncil.Motor.Pruebas.RondaPruebas" runstate="Runnable" seed="1817479246" result="Passed" start-time="2026-10-08 15:02:47Z" end-time="2026-10-08 15:02:47Z" duration="0.005333" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1073" name="LasEtiquetasValidasSonLasDelPoolMenosLaPropia" fullname="ChatCouncil.Motor.Pruebas.RondaPruebas.LasEtiquetasValidasSonLasDelPoolMenosLaPropia" methodname="LasEtiquetasValidasSonLasDelPoolMenosLaPropia" classname="ChatCouncil.Motor.Pruebas.RondaPruebas" runstate="Runnable" seed="782757312" result="Passed" start-time="2026-10-08 15:02:47Z" end-time="2026-10-08 15:02:47Z" duration="0.001962" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1074" name="LasLecturasSeClasificanPorEtapa" fullname="ChatCouncil.Motor.Pruebas.RondaPruebas.LasLecturasSeClasificanPorEtapa" methodname="LasLecturasSeClasificanPorEtapa" classname="ChatCouncil.Motor.Pruebas.RondaPruebas" runstate="Runnable" seed="363435791" result="Passed" start-time="2026-10-08 15:02:47Z" end-time="2026-10-08 15:02:47Z" duration="0.001253" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1072" name="LasSalidasVigentesSonLaUltimaDeCadaOperador" fullname="ChatCouncil.Motor.Pruebas.RondaPruebas.LasSalidasVigentesSonLaUltimaDeCadaOperador" methodname="LasSalidasVigentesSonLaUltimaDeCadaOperador" classname="ChatCouncil.Motor.Pruebas.RondaPruebas" runstate="Runnable" seed="1706245844" result="Passed" start-time="2026-10-08 15:02:47Z" end-time="2026-10-08 15:02:47Z" duration="0.008119" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1071" name="LaTablaDeHallazgosEsLaMismaQueEnTypeScript" fullname="ChatCouncil.Motor.Pruebas.RondaPruebas.LaTablaDeHallazgosEsLaMismaQueEnTypeScript" methodname="LaTablaDeHallazgosEsLaMismaQueEnTypeScript" classname="ChatCouncil.Motor.Pruebas.RondaPruebas" runstate="Runnable" seed="1377712518" result="Passed" start-time="2026-10-08 15:02:47Z" end-time="2026-10-08 15:02:47Z" duration="0.013499" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1069" name="LosCuatroDescartesDeT1" fullname="ChatCouncil.Motor.Pruebas.RondaPruebas.LosCuatroDescartesDeT1" methodname="LosCuatroDescartesDeT1" classname="ChatCouncil.Motor.Pruebas.RondaPruebas" runstate="Runnable" seed="1882563194" result="Passed" start-time="2026-10-08 15:02:47Z" end-time="2026-10-08 15:02:47Z" duration="0.002016" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Saving results to: C:/Users/Juan Fernández/AppData/LocalLow/DefaultCompany/unity\TestResults.xml
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

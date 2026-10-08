@@ -1,0 +1,13 @@
+diff --git a/motor/Runtime/Js.cs b/motor/Runtime/Js.cs
+index 2fe0b9c..fa8ff7c 100644
+--- a/motor/Runtime/Js.cs
++++ b/motor/Runtime/Js.cs
+@@ -106,7 +106,7 @@ namespace ChatCouncil.Motor
+         public const string Blancos = @"\t\n\v\f\r \u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF";
+ 
+         /// <summary>El "." de JS sin /s: todo menos los cuatro terminadores de línea. El "$" de JS sin /m es \z.</summary>
+-        public const string Punto = @"[^\n\r\u2028\u2029]";
++        public const string Punto = ".";
+ 
+         /// <summary>\b de JS sin /u: el borde entre [A-Za-z0-9_] y lo demás.</summary>
+         public const string Borde = @"(?:(?<=[A-Za-z0-9_])(?![A-Za-z0-9_])|(?<![A-Za-z0-9_])(?=[A-Za-z0-9_]))";

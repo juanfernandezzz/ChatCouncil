@@ -1,0 +1,15 @@
+Built from '6000.3/staging' branch; Version is '6000.3.25f1 (e1dba0a9aba4) revision 14801824'; Using compiler version '194234433'; Build Type 'Release'
+COMMAND LINE ARGUMENTS:
+-testPlatform
+*** Tundra build success (0.83 seconds), 1 items updated, 637 evaluated
+*** Tundra requires additional run (2.78 seconds), 1 items updated, 1 evaluated
+*** Tundra build success (2.16 seconds), 1 items updated, 3 evaluated
+*** Tundra requires additional run (0.37 seconds), 0 items updated, 239 evaluated
+*** Tundra build success (8.43 seconds), 53 items updated, 545 evaluated
+*** Tundra requires additional run (35.72 seconds), 27 items updated, 1692 evaluated
+C:\Program Files\Unity\Hub\Editor\6000.3.25f1\Editor\Data\il2cpp\build\deploy\il2cpp.exe @Library\Bee\artifacts\rsp\18207906941144758351.rsp
+*** Tundra requires additional run (54.05 seconds), 138 items updated, 1684 evaluated
+[BUSY      18s] C_Win_x64_VS2026_VB_MT Library/Bee/artifacts/WinPlayerBuildProgram/gmbpj/phytjc07joa2.obj
+*** Tundra build success (59.35 seconds), 607 items updated, 1676 evaluated
+Build Finished, Result: Success.
+Test run completed. Exiting with code 0 (Ok). Run completed.

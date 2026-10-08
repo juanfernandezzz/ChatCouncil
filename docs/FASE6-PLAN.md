@@ -176,7 +176,7 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
 
 ### Etapa 4 — Unity y los paneles nativos
 
-- [ ] **T14. Entorno y proyecto.**
+- [x] **T14. Entorno y proyecto.**
   Acepta:
   - Instalados el Editor de Unity 6 LTS (versión más reciente) con los
     módulos de Android, y Visual Studio Build Tools con C++.
@@ -189,7 +189,10 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   - La compilación del proyecto en batchmode, sin errores.
   - **Las 69 pruebas del motor corren dos veces**, y el XML de resultados de
     las dos corridas se versiona en `docs/evidencia/fase6/`:
-    - en el Editor (EditMode), que es Mono;
+    - en el Editor, que es Mono. Corre como PlayMode y no como EditMode:
+      el ensamblado de pruebas incluye todas las plataformas para correr en
+      el player, y Unity Test Framework no lo lista en EditMode (medido: 0
+      pruebas);
     - en un player de Windows compilado con IL2CPP (`-runTests
       -testPlatform StandaloneWindows64`, backend IL2CPP).
 
@@ -219,13 +222,18 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   Depende de: T11. Tamaño: S. **Necesita a Juan**: aceptar las dos ventanas
   de permisos de Windows y activar la licencia.
 
-  Estado al 2026-10-06, medido en disco:
-  - Juan activó la licencia.
-  - Está instalado el Editor 6000.6.4f1. Falta confirmar si es LTS o si se
-    instala la LTS más reciente.
-  - Su `PlaybackEngines` tiene solo WebGL y Windows: **falta el módulo de
-    Android**.
-  - Están las Build Tools 18 con MSVC 14.51.36231.
+  Cerrada el 2026-10-08. Medido y detallado en
+  `docs/evidencia/fase6/T14-resultados.md`:
+  - Editor 6000.3.25f1, la LTS más reciente (6000.6.4f1 es de la rama
+    "SUPPORTED", no LTS), con Android (SDK, NDK, OpenJDK) y Windows IL2CPP.
+  - Build Tools 2026 estaba incompleta y sin Windows SDK; quedó completa,
+    con el SDK 10.0.26100.
+  - Sobre `5b387fe`: Editor (Mono) 69/69; player IL2CPP 69/69; player
+    IL2CPP mutado 67 Passed y las 2 fijadas en Failed.
+  - Defecto encontrado y corregido en `ea3b12c`: IL2CPP cambia por U+FFFD
+    los surrogates sueltos de los literales; afectaba a tres datos de
+    prueba, no al motor.
+  - Android IL2CPP: **sin medir** hasta T17.
 
 - [ ] **T15. Panel Windows I: crear, mostrar, ejecutar.**
   Acepta: el plugin de WebView2 crea un panel con su perfil en un rectángulo,

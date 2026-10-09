@@ -1,2 +1,5 @@
 * text=auto eol=lf
 *.md text eol=lf
+# cmd.exe no encuentra las etiquetas de goto en un .cmd con fin de línea LF.
+*.cmd text eol=crlf
+*.bat text eol=crlf

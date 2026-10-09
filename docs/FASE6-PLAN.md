@@ -245,7 +245,11 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   la de `/logout` sale en verde (archivo de resultados pegado).
   Depende de: T12, T14. Tamaño: M.
 
-- [ ] **T16. Panel Windows II: el resto de la autoprueba.**
+- [x] **T16. Panel Windows II: el resto de la autoprueba.**
+  Cerrada el 2026-10-09 sobre `ef3bb01`: 36/36 en tres corridas del `.exe`
+  IL2CPP, con el script de página medido sobre las specs reales y el
+  surrogate suelto del puente arreglado. Detalle en
+  `docs/evidencia/fase6/T16-resultados.md`.
   Acepta: ventana emergente en el mismo perfil con `opener`, aislamiento entre
   dos perfiles de prueba, adjunto por DevTools, PDF, script en un iframe de
   otro origen, borrado del perfil y techo externo.

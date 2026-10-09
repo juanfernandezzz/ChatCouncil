@@ -1,6 +1,8 @@
 {
     "name": "ChatCouncil.Panel",
-    "references": [],
+    "references": [
+        "ChatCouncil.Motor"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

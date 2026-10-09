@@ -320,7 +320,7 @@ Una aplicación nueva en Unity 6, para Windows (.exe instalable) y Android
   |---|---|---|
   | motor | Dominio, análisis, prompts, specs y orquestación de la ronda. C# puro, sin Unity. | — |
   | script-de-pagina | Escritura, lectura, estado y diagnóstico dentro de cada página. Un archivo JS. | specs (datos) |
-  | panel | Interfaz C# común sobre los dos plugins nativos, más los plugins. | script-de-pagina |
+  | panel | Interfaz C# común sobre los dos plugins nativos, más los plugins. | script-de-pagina; motor, solo para leer con JsonEstricto (BLUEPRINT, decisiones de la Fase 6, 2026-10-09) |
   | interfaz | Guía, configuración, paneles y avisos (UI Toolkit). | motor, panel |
   | distribucion | Compilación en GitHub Actions, instalador, firma y Release. | todos |
 

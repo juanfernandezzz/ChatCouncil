@@ -2490,6 +2490,23 @@ PASO PREVIO — auditoria de los plugins y skills instalados en Claude Desktop:
     cuando, como y de que forma se usa cada una.
  3. Si una skill sirve para varios usos, se repite. Manda la funcionalidad.
 
+Decisiones de implementación de la versión 1 en Unity (las toma el agente;
+cada una con su motivo y su fuente):
+
+· 2026-10-07, plantilla URP de base (com.unity.template.urp-blank), sin el
+  Built-in Render Pipeline. Motivo: Unity marca el Built-in como obsoleto
+  desde 6.5 y no lo recomienda para proyectos nuevos. Fuente:
+  https://unity.com/topics/render-pipelines-strategy-for-2026. Se quitaron
+  los paquetes de la plantilla sin uso (entre ellos purchasing y analytics,
+  que envían datos): docs/evidencia/fase6/T14-resultados.md.
+· 2026-10-09, el módulo panel (ChatCouncil.Panel) referencia al motor, solo
+  para leer con JsonEstricto lo que vuelve de la página. Motivo, medido en
+  T16: el lector de Newtonsoft cambia un surrogate suelto por U+FFFD, y el
+  texto capturado llegaba alterado; reescribir el lector en el panel dejaría
+  dos copias. La dirección sigue siendo una sola: el motor no conoce al
+  panel. Fuente: docs/evidencia/fase6/T16-resultados.md y
+  motor/Runtime/JsonEstricto.cs.
+
 ---
 
 ## 6. Criterios de aceptación

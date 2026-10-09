@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using ChatCouncil.Motor;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -123,7 +124,12 @@ namespace ChatCouncil.Panel
             if (Bloqueadas > bloqueadas) throw new InvalidOperationException($"La navegación a {url} se bloqueó: es un cierre de sesión.");
         }
 
-        /// <summary>Ejecuta un script en el marco principal y devuelve su resultado como JSON. Un panel colgado corta en el techo.</summary>
+        /// <summary>
+        /// Ejecuta un script en el marco principal y devuelve su resultado como JSON. Un panel colgado corta en el techo.
+        /// Medido en T16: si el resultado trae un surrogate suelto, ExecuteScript no devuelve nada nunca. Todo script que
+        /// devuelva texto de la página lo pasa por JSON.stringify en la página (como pagina.js) y se lee con JsonEstricto,
+        /// porque Newtonsoft cambia el surrogate suelto por U+FFFD.
+        /// </summary>
         public Task<string> Ejecutar(string script, int techoMs = TechoMs) =>
             Esperar(Nativo.CC_Ejecutar(id, script), "ejecutar un script", techoMs);
 
@@ -164,13 +170,14 @@ namespace ChatCouncil.Panel
         {
             var cfg = JObject.Parse(specJson)["informeEnIframe"];
             if (cfg == null) return null;
-            var fuente = "(() => { const docs = [document]; for (const f of document.querySelectorAll('iframe')) { try { if (f.contentDocument) docs.push(f.contentDocument); } catch (e) {} } " +
+            // El resultado sale por JSON.stringify en la página, como en pagina.js: escapa los surrogates sueltos en ASCII.
+            var fuente = "JSON.stringify((() => { const docs = [document]; for (const f of document.querySelectorAll('iframe')) { try { if (f.contentDocument) docs.push(f.contentDocument); } catch (e) {} } " +
                          "for (const d of docs) { const el = Array.from(d.querySelectorAll(" + JsonConvert.ToString((string)cfg["contenido"]) + ")).pop(); if (!el) continue; " +
                          "const c = el.cloneNode(true); c.querySelectorAll('style, script').forEach((n) => n.remove()); const t = c.textContent || ''; " +
-                         "if (t.trim().length > 0) return { texto: t, html: el.outerHTML }; } return null; })()";
+                         "if (t.trim().length > 0) return { texto: t, html: el.outerHTML }; } return null; })())";
             var ticket = Nativo.CC_EjecutarEnIframe(id, (string)cfg["frameUrl"], fuente);
             if (ticket < 0) return null; // no hay un iframe con esa URL
-            var r = JToken.Parse(await Esperar(ticket, "leer el iframe", TechoMs));
+            var r = JsonEstricto.Leer((string)JsonEstricto.Leer(await Esperar(ticket, "leer el iframe", TechoMs)));
             return r.Type == JTokenType.Null ? null : r;
         }
 
@@ -180,18 +187,18 @@ namespace ChatCouncil.Panel
         /// </summary>
         public async Task<JToken> Correr(string op, string specJson, string texto = null, int esperaMs = 30_000)
         {
-            if ((string)JToken.Parse(await Ejecutar("typeof window.__cc")) != "object")
+            if ((string)JsonEstricto.Leer(await Ejecutar("typeof window.__cc")) != "object")
                 await Ejecutar(File.ReadAllText(Path.Combine(Application.streamingAssetsPath, "pagina.js")) + "\n;'ok'");
 
             var pedido = new JObject { ["id"] = (++siguientePedido).ToString(), ["op"] = op, ["spec"] = JToken.Parse(specJson) };
             if (texto != null) pedido["texto"] = texto;
-            var r = (string)JToken.Parse(await Ejecutar("window.__cc.pedir(" + JsonConvert.ToString(pedido.ToString(Formatting.None)) + ")"));
+            var r = (string)JsonEstricto.Leer(await Ejecutar("window.__cc.pedir(" + JsonConvert.ToString(pedido.ToString(Formatting.None)) + ")"));
             if (r != "ok") throw new InvalidOperationException($"pagina.js rechazó el pedido {op}: {r}");
 
             var reloj = Stopwatch.StartNew();
             for (;;)
             {
-                var estado = JObject.Parse((string)JToken.Parse(await Ejecutar("window.__cc.consultar(" + JsonConvert.ToString((string)pedido["id"]) + ")")));
+                var estado = (JObject)JsonEstricto.Leer((string)JsonEstricto.Leer(await Ejecutar("window.__cc.consultar(" + JsonConvert.ToString((string)pedido["id"]) + ")")));
                 switch ((string)estado["estado"])
                 {
                     case "listo": return estado["resultado"];

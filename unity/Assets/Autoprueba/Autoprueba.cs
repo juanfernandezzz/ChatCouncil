@@ -108,6 +108,36 @@ namespace ChatCouncil.Autoprueba
             await Grupo("pdf", Pdf);
             await Grupo("perfiles", () => Perfiles(a));
             await Grupo("techo externo", () => TechoExterno(a));
+            await Grupo("surrogate suelto", () => SurrogateSuelto(a));
+        }
+
+        // Abierto desde T14: que un surrogate suelto de la página llegue intacto al motor por el puente del panel.
+        async Task SurrogateSuelto(Panel a)
+        {
+            // Se arma en la página con fromCharCode y en C# con (char): ningún literal lo lleva (guard:surrogates).
+            const string EnPagina = "'a' + String.fromCharCode(0xD800) + 'b' + String.fromCharCode(0xDC00) + 'c'";
+            var esperado = "a" + ((char)0xD800).ToString() + "b" + ((char)0xDC00).ToString() + "c";
+            string Codigos(string s) => s == null ? "null" : string.Join(" ", s.Select(c => ((int)c).ToString("X4")));
+
+            // 1. El camino de producción: pagina.js responde con JSON.stringify, que escapa el surrogate en ASCII.
+            await a.Ejecutar("document.getElementById('compositor').value = " + EnPagina + "; 'ok'");
+            var porScript = (string)await a.Correr("leerCompositor", SpecTextarea);
+            Anotar(porScript == esperado, "surrogate suelto llega intacto por pagina.js", $"esperado {Codigos(esperado)}, llegó {Codigos(porScript)}");
+
+            // 2. Un script que pasa su resultado por JSON.stringify en la página (lo que hace LeerInformeEnIframe).
+            var envuelto = (string)JsonEstricto.Leer((string)JsonEstricto.Leer(await a.Ejecutar("JSON.stringify(" + EnPagina + ")", techoMs: 10_000)));
+            Anotar(envuelto == esperado, "surrogate suelto llega intacto con JSON.stringify en la página", $"esperado {Codigos(esperado)}, llegó {Codigos(envuelto)}");
+
+            // 3. Medido, no exigido: el mismo texto devuelto crudo por ExecuteScript. Va último por si deja algo colgado.
+            try
+            {
+                var crudo = (string)JToken.Parse(await a.Ejecutar(EnPagina, techoMs: 5_000));
+                lineas.Add($"MEDIDO resultado crudo con un surrogate suelto: llegó {Codigos(crudo)}");
+            }
+            catch (TimeoutException)
+            {
+                lineas.Add("MEDIDO resultado crudo con un surrogate suelto: ExecuteScript no devuelve nada (cortó el techo de 5 s)");
+            }
         }
 
         // ---------------------------------------------------------------- T15: crear, mostrar, ejecutar

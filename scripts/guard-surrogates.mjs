@@ -14,7 +14,7 @@
  * sus escapes. Las cadenas @"..." no decodifican escapes (el \u queda como
  * texto, p. ej. para una regex), así que no cuentan. Salta los comentarios.
  *
- * Uso: node scripts/guard-surrogates.mjs [carpeta...]   (por defecto: motor)
+ * Uso: node scripts/guard-surrogates.mjs [carpeta...]   (por defecto: motor y unity/Assets)
  * Cero dependencias a propósito.
  */
 
@@ -67,10 +67,27 @@ const sueltos = (u) =>
  */
 function literales(src) {
   const out = [];
+  // El código con comentarios y literales en blanco (los saltos se conservan para numerar líneas).
+  const codigo = src.split("");
+  const blanquear = (desde, hasta) => {
+    for (let k = desde; k < hasta && k < codigo.length; k++) if (codigo[k] !== "\n") codigo[k] = " ";
+  };
   for (let i = 0; i < src.length; i++) {
     const ch = src[i];
-    if (ch === "/" && src[i + 1] === "/") { i = src.indexOf("\n", i); if (i < 0) break; continue; }
-    if (ch === "/" && src[i + 1] === "*") { i = src.indexOf("*/", i + 2) + 1; if (i <= 0) break; continue; }
+    if (ch === "/" && src[i + 1] === "/") {
+      const fin = src.indexOf("\n", i);
+      blanquear(i, fin < 0 ? src.length : fin);
+      if (fin < 0) break;
+      i = fin;
+      continue;
+    }
+    if (ch === "/" && src[i + 1] === "*") {
+      const fin = src.indexOf("*/", i + 2);
+      blanquear(i, fin < 0 ? src.length : fin + 2);
+      if (fin < 0) break;
+      i = fin + 1;
+      continue;
+    }
     if (ch !== '"' && ch !== "'") continue;
     const verbatim = ch === '"' && (src[i - 1] === "@" || (src[i - 1] === "$" && src[i - 2] === "@"));
     let j = i + 1;
@@ -80,12 +97,19 @@ function literales(src) {
       while (j < src.length && src[j] !== ch && src[j] !== "\n") j += src.charCodeAt(j) === BARRA ? 2 : 1;
       out.push({ linea: src.slice(0, i).split("\n").length, cuerpo: src.slice(i + 1, j) });
     }
+    blanquear(i + 1, j);
     i = j;
   }
-  return out;
+  return { literales: out, codigo: codigo.join("") };
 }
 
-const carpetas = process.argv.length > 2 ? process.argv.slice(2) : ["motor"];
+// (char)0xD800 sin .ToString(): pegado a una cadena constante, el compilador de C# pliega la
+// concatenación en un literal ("a" + (char)0xD800 + "b"), y ese literal IL2CPP lo corrompe (medido en T16).
+// shortcut: también marca una comparación (c == (char)0xD800), que no se pliega; envolverla si aparece.
+const CHAR_SURROGATE = /\(char\)\s*(0x[dD][89a-fA-F][0-9a-fA-F]{2}|5[5-7]\d{3})(?!\s*\)\s*\.ToString\(\))/g;
+const esSurrogate = (n) => n >= 0xd800 && n <= 0xdfff;
+
+const carpetas = process.argv.length > 2 ? process.argv.slice(2) : ["motor", "unity/Assets"];
 const fallos = [];
 let revisados = 0;
 for (const carpeta of carpetas) {
@@ -96,8 +120,14 @@ for (const carpeta of carpetas) {
     for (let i = 0; i + 1 < bytes.length; i++) {
       if (bytes[i] === 0xed && bytes[i + 1] >= 0xa0 && bytes[i + 1] <= 0xbf) fallos.push(`${ruta}: surrogate escrito tal cual en el archivo (byte ${i}).`);
     }
-    for (const { linea, cuerpo } of literales(bytes.toString("utf8"))) {
-      if (sueltos(decodificar(cuerpo))) fallos.push(`${ruta}:${linea}: literal con un surrogate suelto. IL2CPP lo cambia por U+FFFD; armarlo con (char)0x... en tiempo de ejecución.`);
+    const { literales: lits, codigo } = literales(bytes.toString("utf8"));
+    for (const { linea, cuerpo } of lits) {
+      if (sueltos(decodificar(cuerpo))) fallos.push(`${ruta}:${linea}: literal con un surrogate suelto. IL2CPP lo cambia por U+FFFD; armarlo con ((char)0x...).ToString() en tiempo de ejecución.`);
+    }
+    for (const m of codigo.matchAll(CHAR_SURROGATE)) {
+      if (!esSurrogate(Number(m[1]))) continue;
+      const linea = codigo.slice(0, m.index).split("\n").length;
+      fallos.push(`${ruta}:${linea}: ${m[0]} sin .ToString(): junto a una cadena constante el compilador lo pliega en un literal, que IL2CPP corrompe. Usar ((char)0x...).ToString().`);
     }
   }
 }

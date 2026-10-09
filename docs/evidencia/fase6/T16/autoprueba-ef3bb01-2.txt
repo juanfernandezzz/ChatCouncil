@@ -1,0 +1,39 @@
+Autoprueba del panel, 2026-10-09 12:35:13, WindowsPlayer, 0.1.0
+OK entorno: WebView2 154.0.4258.62
+OK perfil: WebView2 dice "prueba-a"
+OK argumentos de no limitación: los tres están en la línea de comandos del proceso del navegador
+OK escribir: {"ok":true,"ms":542,"textoFinal":"Primera línea con ñ y acentos: áéíóú\nSegunda línea\n\nCuarta, tras una vacía","caracteresEscritos":74,"caracteresPresentes":74}
+OK leer el compositor: 74 caracteres, idénticos
+OK chat vacío: true
+OK escribir no navega: navegaciones antes 1, después 1
+OK contador de navegaciones: antes 1, después de navegar 2
+OK bloqueo de /logout: bloqueadas 0→1, navegaciones 2→2, página /cierre.html, última bloqueada https://cc-prueba.test/logout
+OK bloqueo de /auth/sign-out?vuelta=1: bloqueadas 1→2, navegaciones 2→2, página /cierre.html, última bloqueada https://cc-prueba.test/auth/sign-out?vuelta=1
+OK navegar a un cierre de sesión avisa: La navegación a https://cc-prueba.test/signout se bloqueó: es un cierre de sesión.
+OK frente: b al frente: True, a al frente: False
+OK detrás: después de mandar b atrás, a al frente: True
+OK rectángulo: la ventana del panel mide (0, 0, 800, 600)
+OK escritura insertText en contenteditable (spec chatgpt): 91 caracteres, idénticos
+OK escritura por párrafos (spec mistral): 91 caracteres, idénticos
+OK pegado de 180.000 caracteres con marcas (spec kimi): 185416 caracteres, 180 marcas, integridad completo (180/180), idéntico: True, leídos 185416, 1378 ms
+OK chat con mensajes no está vacío: chatVacio = false
+OK lectura tipo chatgpt: userText Pregunta de prueba, fuentesHref 2, informeEnIframe True, generating True
+OK estado de generación: antes {"generando":true,"largo":53,"quietoMs":0,"fin":null}, después {"generando":false,"largo":53,"quietoMs":29,"fin":"observado"}
+OK diagnóstico de selectores: selectores {"composer.selector":1,"assistantMessage.selector":1,"userMessage.selector":1,"modelLabel.selector":null,"completion.selector":0,"informeEnIframe.turno":2,"informeEnIframe.iframe":1,"informeEnIframe.contenido":0}, iframes https://cc-otro.test/informe.html
+OK diagnóstico con un selector inválido: composer.selector = invalido
+OK lectura con exclude y html crudo (spec kimi): el texto excluye el bloque: True, el html lo conserva: True
+OK archivos de kimi: leídos 2/2
+OK canvas de mistral: texto "TEXTO DEL CANVAS: lo que Mistral escribió en el canvas.", canvas cerrado después: True, modelLabel Rápido
+OK script en un iframe de otro origen: texto "INFORME DE PRUEBA: contenido del iframe de otro origen."
+OK adjunto sin selector (DevTools): el input recibió "adjunto-prueba-c9c96534.txt|63", se esperaba "adjunto-prueba-c9c96534.txt|63"
+OK PDF: existe True, cabecera "%PDF-", 67692 bytes
+OK ventana emergente con opener en el mismo perfil: opener https://cc-prueba.test, perfil prueba-a, marca del perfil perfil-a
+OK la emergente se cierra con window.close(): abierta después: False
+OK aislamiento entre dos perfiles: prueba-b ve la marca de prueba-a: null
+OK borrado de los datos del perfil: marca después de borrar: null
+OK techo externo sobre una página colgada: cortó a los 3003 ms: No se pudo ejecutar un script: sin respuesta en 3 s.
+OK un panel colgado no bloquea a los demás: el otro panel respondió en 6 ms
+OK surrogate suelto llega intacto por pagina.js: esperado 0061 D800 0062 DC00 0063, llegó 0061 D800 0062 DC00 0063
+OK surrogate suelto llega intacto con JSON.stringify en la página: esperado 0061 D800 0062 DC00 0063, llegó 0061 D800 0062 DC00 0063
+MEDIDO resultado crudo con un surrogate suelto: ExecuteScript no devuelve nada (cortó el techo de 5 s)
+Resultado: 36/36

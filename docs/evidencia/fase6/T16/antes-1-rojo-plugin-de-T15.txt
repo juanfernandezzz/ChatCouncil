@@ -1,0 +1,32 @@
+Autoprueba del panel, 2026-10-09 11:44:18, WindowsPlayer, 0.1.0
+OK entorno: WebView2 154.0.4258.62
+OK perfil: WebView2 dice "prueba-a"
+OK argumentos de no limitación: los tres están en la línea de comandos del proceso del navegador
+FALLA escribir: {"ok":false,"error":"compositor no encontrado: no se escribió nada","ms":0,"textoFinal":"","caracteresEscritos":74,"caracteresPresentes":0}
+FALLA leer el compositor: leyó: 
+OK chat vacío: true
+FALLA escribir no navega: navegaciones antes 1, después 3
+FALLA contador de navegaciones: antes 1, después de navegar 4
+FALLA bloqueo de /logout: bloqueadas 0→0, navegaciones 4→5, página /, última bloqueada 
+FALLA bloqueo de /auth/sign-out?vuelta=1: bloqueadas 0→0, navegaciones 5→5, página /, última bloqueada 
+OK navegar a un cierre de sesión avisa: La navegación a https://cc-prueba.test/signout se bloqueó: es un cierre de sesión.
+OK frente: b al frente: True, a al frente: False
+OK detrás: después de mandar b atrás, a al frente: True
+OK rectángulo: la ventana del panel mide (0, 0, 800, 600)
+FALLA escritura insertText en contenteditable (spec chatgpt): leyó: 
+FALLA escritura: se cortó con una excepción: TimeoutException: pagina.js, escribir: sin resultado en 30 s.
+FALLA chat con mensajes no está vacío: chatVacio = false
+FALLA lectura tipo chatgpt: userText , fuentesHref 0, informeEnIframe False, generating False
+FALLA estado de generación: antes {"generando":false,"largo":0,"quietoMs":0,"fin":null}, después {"generando":false,"largo":0,"quietoMs":27,"fin":null}
+FALLA diagnóstico de selectores: selectores {"composer.selector":0,"assistantMessage.selector":0,"userMessage.selector":0,"modelLabel.selector":null,"completion.selector":0,"informeEnIframe.turno":0,"informeEnIframe.iframe":0,"informeEnIframe.contenido":0}, iframes 
+OK diagnóstico con un selector inválido: composer.selector = invalido
+FALLA lectura: se cortó con una excepción: NullReferenceException: Object reference not set to an instance of an object.
+FALLA iframe de otro origen: se cortó con una excepción: EntryPointNotFoundException: Unable to find an entry point named 'CC_EjecutarEnIframe' in 'ChatCouncilPanel'. Tried the following entry points: Unable to get function 'CC_EjecutarEnIframeW' because of 'C:\build\output\unity\unity\External\il2cpp\builds\external\baselib\Source\WinApi\Baselib_DynamicLibrary_WinApi.inl.h(100):Baselib_DynamicLibrary_GetFunction: The requested function was not found (0x06000001) - No se encontró el proceso especificado.  (WinError:0000007f)
+FALLA adjunto: se cortó con una excepción: InvalidOperationException: No hay un <input type=file> en la página: no se puede adjuntar.
+FALLA pdf: se cortó con una excepción: EntryPointNotFoundException: Unable to find an entry point named 'CC_Pdf' in 'ChatCouncilPanel'. Tried the following entry points: Unable to get function 'CC_PdfW' because of 'C:\build\output\unity\unity\External\il2cpp\builds\external\baselib\Source\WinApi\Baselib_DynamicLibrary_WinApi.inl.h(100):Baselib_DynamicLibrary_GetFunction: The requested function was not found (0x06000001) - No se encontró el proceso especificado.  (WinError:0000007f)
+FALLA ventana emergente con opener en el mismo perfil: opener null, perfil prueba-i, marca del perfil null
+FALLA la emergente se cierra con window.close(): abierta después: True
+OK aislamiento entre dos perfiles: prueba-b ve la marca de prueba-a: null
+FALLA perfiles: se cortó con una excepción: EntryPointNotFoundException: Unable to find an entry point named 'CC_Borrar' in 'ChatCouncilPanel'. Tried the following entry points: Unable to get function 'CC_Borrar' because of 'C:\build\output\unity\unity\External\il2cpp\builds\external\baselib\Source\WinApi\Baselib_DynamicLibrary_WinApi.inl.h(100):Baselib_DynamicLibrary_GetFunction: The requested function was not found (0x06000001) - No se encontró el proceso especificado.  (WinError:0000007f)
+FALLA techo externo: se cortó con una excepción: EntryPointNotFoundException: Unable to find an entry point named 'CC_Olvidar' in 'ChatCouncilPanel'. Tried the following entry points: Unable to get function 'CC_Olvidar' because of 'C:\build\output\unity\unity\External\il2cpp\builds\external\baselib\Source\WinApi\Baselib_DynamicLibrary_WinApi.inl.h(100):Baselib_DynamicLibrary_GetFunction: The requested function was not found (0x06000001) - No se encontró el proceso especificado.  (WinError:0000007f)
+Resultado: 10/30

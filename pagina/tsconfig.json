@@ -8,7 +8,7 @@
     "noEmitOnError": true,
     "removeComments": true,
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "../unity/Assets/StreamingAssets"
   },
   "include": ["src/pagina.ts"]
 }

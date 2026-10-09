@@ -19,5 +19,9 @@ yarn.lock
 # Salidas de compilación del motor en .NET (Fase 6)
 motor/Dotnet~/*/bin/
 motor/Dotnet~/*/obj/
-# El script de página compilado: sale de pagina/src con tsc (Fase 6)
-pagina/dist/
+# El script de página compilado: sale de pagina/src con tsc y lo lleva el .exe (Fase 6)
+unity/Assets/StreamingAssets/pagina.js*
+# El SDK de WebView2 (NuGet) y la salida del plugin nativo: los baja y compila panel/windows/compilar.cmd
+panel/windows/sdk/
+panel/windows/obj/
+unity/Assets/Plugins/x86_64/ChatCouncilPanel.*

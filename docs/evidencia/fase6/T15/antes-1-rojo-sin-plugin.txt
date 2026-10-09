@@ -1,0 +1,23 @@
+Autoprueba del panel, 2026-10-09 02:05:16, WindowsPlayer, 0.1.0
+FALLA autoprueba: se cortó con una excepción: System.DllNotFoundException: Unable to load DLL 'ChatCouncilPanel'. Tried the load the following dynamic libraries: Unable to load dynamic library 'ChatCouncilPanel' because of 'C:\build\output\unity\unity\External\il2cpp\builds\external\baselib\Source\WinApi\Baselib_DynamicLibrary_WinApi.inl.h(36):Baselib_DynamicLibrary_OpenUtf16: Failed to open the requested dynamic library (0x06000000) - No se puede encontrar el módulo especificado.  (WinError:0000007e)
+  at ChatCouncil.Panel.Paneles.Iniciar (System.String carpetaDatos, System.String host, System.String carpetaHost) [0x00000] in <00000000000000000000000000000000>:0 
+  at System.Runtime.CompilerServices.AsyncTaskMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Panel.Paneles.Iniciar (System.String carpetaDatos, System.String host, System.String carpetaHost) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Correr () [0x00000] in <00000000000000000000000000000000>:0 
+  at System.Runtime.CompilerServices.AsyncTaskMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Start () [0x00000] in <00000000000000000000000000000000>:0 
+  at System.Runtime.CompilerServices.AsyncVoidMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Start () [0x00000] in <00000000000000000000000000000000>:0 
+--- End of stack trace from previous location where exception was thrown ---
+
+  at ChatCouncil.Autoprueba.Autoprueba.Correr () [0x00000] in <00000000000000000000000000000000>:0 
+  at System.Runtime.CompilerServices.AsyncTaskMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Start () [0x00000] in <00000000000000000000000000000000>:0 
+  at System.Runtime.CompilerServices.AsyncVoidMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Start () [0x00000] in <00000000000000000000000000000000>:0 
+--- End of stack trace from previous location where exception was thrown ---
+
+  at ChatCouncil.Autoprueba.Autoprueba.Start () [0x00000] in <00000000000000000000000000000000>:0 
+  at System.Runtime.CompilerServices.AsyncVoidMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Start () [0x00000] in <00000000000000000000000000000000>:0 
+Resultado: 0/1

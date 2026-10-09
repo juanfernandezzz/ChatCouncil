@@ -1,0 +1,16 @@
+Autoprueba del panel, 2026-10-09 02:20:59, WindowsPlayer, 0.1.0
+OK entorno: WebView2 154.0.4258.62
+OK perfil: WebView2 dice "prueba-a"
+OK argumentos de no limitación: los tres están en la línea de comandos del proceso del navegador
+OK escribir: {"ok":true,"ms":510,"textoFinal":"Primera línea con ñ y acentos: áéíóú\nSegunda línea\n\nCuarta, tras una vacía","caracteresEscritos":74,"caracteresPresentes":74}
+OK leer el compositor: 74 caracteres, idénticos
+OK chat vacío: true
+OK escribir no navega: navegaciones antes 1, después 1
+OK contador de navegaciones: antes 1, después de navegar 2
+OK bloqueo de /logout: bloqueadas 0→1, navegaciones 2→2, página /cierre.html, última bloqueada https://cc-prueba.test/logout
+OK bloqueo de /auth/sign-out?vuelta=1: bloqueadas 1→2, navegaciones 2→2, página /cierre.html, última bloqueada https://cc-prueba.test/auth/sign-out?vuelta=1
+OK navegar a un cierre de sesión avisa: La navegación a https://cc-prueba.test/signout se bloqueó: es un cierre de sesión.
+OK frente: b al frente: True, a al frente: False
+OK detrás: después de mandar b atrás, a al frente: True
+OK rectángulo: la ventana del panel mide (0, 0, 800, 600)
+Resultado: 14/14

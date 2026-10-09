@@ -235,7 +235,9 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
     prueba, no al motor.
   - Android IL2CPP: **sin medir** hasta T17.
 
-- [ ] **T15. Panel Windows I: crear, mostrar, ejecutar.**
+- [x] **T15. Panel Windows I: crear, mostrar, ejecutar.**
+  Cerrada el 2026-10-09 sobre `ead9dcf`: 14/14 en tres corridas del `.exe`
+  IL2CPP. Detalle, historia y SHA-256 en `docs/evidencia/fase6/T15-resultados.md`.
   Acepta: el plugin de WebView2 crea un panel con su perfil en un rectángulo,
   lo pone al frente o detrás, ejecuta el script con pedido y consulta, cuenta
   navegaciones, bloquea `/logout` y aplica los argumentos de no limitación.

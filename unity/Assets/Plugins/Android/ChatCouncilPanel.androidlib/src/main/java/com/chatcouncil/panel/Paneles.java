@@ -80,8 +80,10 @@ public final class Paneles {
     static volatile String error = "";
     static final AtomicInteger siguienteId = new AtomicInteger(), siguienteTicket = new AtomicInteger();
     static final ConcurrentHashMap<Integer, Panel> paneles = new ConcurrentHashMap<>();
+    // Un solo mapa por ticket: PENDIENTE hasta que llega el resultado. Con dos estructuras, C# podía leer entre el "ya no
+    // pendiente" y el "guardado" y recibir un ticket desconocido (corrida 1 de T17, 33/34).
+    static final String PENDIENTE = "";
     static final ConcurrentHashMap<Integer, String> resultados = new ConcurrentHashMap<>();
-    static final Set<Integer> pendientes = ConcurrentHashMap.newKeySet();
 
     public static int fallar(String mensaje) {
         error = mensaje;
@@ -251,7 +253,7 @@ public final class Paneles {
         try {
             int ticket = Integer.parseInt(datos.substring(0, i));
             // Como ExecuteScript de un JSON.stringify en Windows: el JSON queda como un string de JSON.
-            if (pendientes.remove(ticket)) resultados.put(ticket, JSONObject.quote(datos.substring(i + 1)));
+            guardar(ticket, JSONObject.quote(datos.substring(i + 1)));
         } catch (NumberFormatException ignorado) {
         }
     }
@@ -339,12 +341,12 @@ public final class Paneles {
 
     static int nuevoTicket() {
         int t = siguienteTicket.incrementAndGet();
-        pendientes.add(t);
+        resultados.put(t, PENDIENTE);
         return t;
     }
 
     static void guardar(int ticket, String r) {
-        if (pendientes.remove(ticket)) resultados.put(ticket, r);
+        resultados.replace(ticket, PENDIENTE, r); // si C# ya lo olvidó, no queda nada guardado
     }
 
     /** evaluateJavascript devuelve el resultado como JSON, igual que ExecuteScript. Un script que lanza devuelve "null". */
@@ -437,16 +439,16 @@ public final class Paneles {
     }
 
     public static void olvidar(int ticket) {
-        pendientes.remove(ticket);
         resultados.remove(ticket);
     }
 
     /** null si sigue pendiente; el resultado se olvida al leerlo. */
     public static String resultado(int ticket) {
-        String r = resultados.remove(ticket);
-        if (r != null) return r;
-        if (pendientes.contains(ticket)) return null;
-        throw new IllegalStateException("Resultado de script desconocido: " + ticket);
+        String r = resultados.get(ticket);
+        if (r == null) throw new IllegalStateException("Resultado de script desconocido: " + ticket);
+        if (r.isEmpty()) return null; // PENDIENTE: ningún resultado es vacío ("null", "true", JSON)
+        resultados.remove(ticket);
+        return r;
     }
 
     /** 1: versión del WebView; 2: línea de comandos (no existe en Android); 3: perfil según el WebView; 4: última bloqueada; 5: error. */

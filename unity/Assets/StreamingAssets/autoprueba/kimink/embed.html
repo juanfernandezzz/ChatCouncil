@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Autoprueba: archivo de Kimi</title></head>
+<body>
+  <div class="kme-editor-content"></div>
+  <script>
+    const f = new URLSearchParams(location.search).get("f");
+    setTimeout(() => {
+      document.querySelector(".kme-editor-content").textContent = "CONTENIDO DEL ARCHIVO " + f + ": texto del archivo número " + f + ".";
+    }, 200);
+  </script>
+</body>
+</html>

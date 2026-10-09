@@ -19,13 +19,16 @@ namespace ChatCouncil.Panel
         // Los tres switches de Electron (apps/desktop/src/main/index.ts): un panel detrás u ocluido
         // sigue ejecutando JS y temporizadores como si estuviera al frente. El user agent no se toca.
         const string Argumentos = "--disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling";
-        const int EsperaMs = 30_000;
+        internal const int EsperaMs = 30_000;
 
-        /// <summary>Inicia WebView2 con una carpeta de datos (un perfil por proveedor adentro). Si se pasa host, sirve esa carpeta en https://host/.</summary>
-        public static async Task Iniciar(string carpetaDatos, string host = null, string carpetaHost = null)
+        /// <summary>
+        /// Inicia WebView2 con una carpeta de datos (un perfil por proveedor adentro). Si se pasan hosts
+        /// (separados por ';'), cada uno sirve la carpeta en https://host/.
+        /// </summary>
+        public static async Task Iniciar(string carpetaDatos, string hosts = null, string carpetaHost = null)
         {
             Directory.CreateDirectory(carpetaDatos);
-            Nativo.Comprobar(Nativo.CC_Iniciar(carpetaDatos, Argumentos, host, carpetaHost), "iniciar WebView2");
+            Nativo.Comprobar(Nativo.CC_Iniciar(carpetaDatos, Argumentos, hosts, carpetaHost), "iniciar WebView2");
             await Esperar(() => Nativo.CC_EstadoEntorno(), "iniciar WebView2", 0);
         }
 
@@ -38,14 +41,13 @@ namespace ChatCouncil.Panel
         {
             var id = Nativo.CC_Crear(perfil, url);
             Nativo.Comprobar(id, "crear el panel " + perfil);
-            await Esperar(() => Nativo.CC_EstadoPanel(id), "crear el panel " + perfil, id);
-            // Listo es con su URL inicial cargada: si no, el contador y la primera navegación del llamador se cruzan con ella.
-            await Esperar(() => Nativo.CC_Contador(id, 2) >= 1 ? 1 : 0, "cargar " + url, id);
-            return new Panel(id);
+            var panel = new Panel(id);
+            await panel.EsperarCarga();
+            return panel;
         }
 
-        /// <summary>Espera a que un estado nativo pase de 0 (pendiente) a 1 (listo); negativo es error.</summary>
-        internal static async Task Esperar(Func<int> estado, string que, int id)
+        /// <summary>Espera a que un estado nativo pase de 0 (pendiente) a 1 (listo); negativo es error. Al pasar el techo, TimeoutException.</summary>
+        internal static async Task Esperar(Func<int> estado, string que, int id, int techoMs = EsperaMs)
         {
             var reloj = Stopwatch.StartNew();
             for (;;)
@@ -53,7 +55,7 @@ namespace ChatCouncil.Panel
                 var e = estado();
                 if (e == 1) return;
                 if (e < 0) throw new InvalidOperationException($"No se pudo {que}: {Nativo.Texto(Nativo.TextoError, id)}");
-                if (reloj.ElapsedMilliseconds > EsperaMs) throw new TimeoutException($"No se pudo {que}: sin respuesta en {EsperaMs / 1000} s.");
+                if (reloj.ElapsedMilliseconds > techoMs) throw new TimeoutException($"No se pudo {que}: sin respuesta en {techoMs / 1000.0:0.#} s.");
                 await Task.Yield();
             }
         }
@@ -61,6 +63,9 @@ namespace ChatCouncil.Panel
 
     public sealed class Panel
     {
+        /// <summary>El techo externo sobre todo script, fuera del hilo de la página (spec: 90 s).</summary>
+        public const int TechoMs = 90_000;
+
         readonly int id;
         static int siguientePedido;
 
@@ -73,6 +78,18 @@ namespace ChatCouncil.Panel
         /// <summary>Navegaciones canceladas por ir a un cierre de sesión.</summary>
         public int Bloqueadas => Nativo.CC_Contador(id, 1);
         public string UltimaBloqueada => Nativo.Texto(Nativo.TextoUltimaBloqueada, id);
+        /// <summary>false cuando el panel se cerró (también una emergente con window.close()).</summary>
+        public bool Abierto => Nativo.CC_EstadoPanel(id) == 1;
+
+        /// <summary>La última ventana emergente que abrió este panel (window.open), en su mismo perfil; null si no abrió ninguna.</summary>
+        public Panel Emergente
+        {
+            get
+            {
+                var e = Nativo.CC_Contador(id, 3);
+                return e > 0 ? new Panel(e) : null;
+            }
+        }
 
         public void Rect(int x, int y, int ancho, int alto) => Nativo.CC_Rect(id, x, y, ancho, alto);
         public void Frente() => Nativo.CC_Frente(id);
@@ -88,6 +105,13 @@ namespace ChatCouncil.Panel
             }
         }
 
+        /// <summary>Listo es con su primera página cargada: si no, el contador y la primera navegación del llamador se cruzan con ella.</summary>
+        public async Task EsperarCarga()
+        {
+            await Paneles.Esperar(() => Nativo.CC_EstadoPanel(id), "crear el panel", id);
+            await Paneles.Esperar(() => Nativo.CC_Contador(id, 2) >= 1 ? 1 : 0, "cargar la primera página", id);
+        }
+
         /// <summary>Navega y espera a que la navegación termine.</summary>
         public async Task Navegar(string url)
         {
@@ -99,14 +123,55 @@ namespace ChatCouncil.Panel
             if (Bloqueadas > bloqueadas) throw new InvalidOperationException($"La navegación a {url} se bloqueó: es un cierre de sesión.");
         }
 
-        /// <summary>Ejecuta un script en el marco principal y devuelve su resultado como JSON.</summary>
-        public async Task<string> Ejecutar(string script)
+        /// <summary>Ejecuta un script en el marco principal y devuelve su resultado como JSON. Un panel colgado corta en el techo.</summary>
+        public Task<string> Ejecutar(string script, int techoMs = TechoMs) =>
+            Esperar(Nativo.CC_Ejecutar(id, script), "ejecutar un script", techoMs);
+
+        /// <summary>Un método del protocolo de DevTools sobre este panel; devuelve el JSON de la respuesta.</summary>
+        public Task<string> DevTools(string metodo, string parametrosJson) =>
+            Esperar(Nativo.CC_DevTools(id, metodo, parametrosJson), "llamar a DevTools " + metodo, TechoMs);
+
+        /// <summary>
+        /// Adjunta un archivo al &lt;input type=file&gt; del compositor por DevTools, sin abrir el selector.
+        /// pagina.js elige y marca el input; DOM.setFileInputFiles lo carga como si la persona lo hubiera elegido.
+        /// </summary>
+        public async Task Adjuntar(string specJson, string ruta)
         {
-            var ticket = Nativo.CC_Ejecutar(id, script);
-            Nativo.Comprobar(ticket, "ejecutar un script");
-            string resultado = null;
-            await Paneles.Esperar(() => (resultado = Nativo.Resultado(ticket)) == null ? 0 : 1, "ejecutar un script", id);
-            return resultado;
+            var input = await Correr("inputArchivo", specJson);
+            if ((bool?)input["encontrado"] != true) throw new InvalidOperationException("No hay un <input type=file> en la página: no se puede adjuntar.");
+            var raiz = JObject.Parse(await DevTools("DOM.getDocument", "{\"depth\":0}"));
+            var nodo = JObject.Parse(await DevTools("DOM.querySelector", new JObject { ["nodeId"] = raiz["root"]["nodeId"], ["selector"] = input["selector"] }.ToString(Formatting.None)));
+            if ((int)nodo["nodeId"] == 0) throw new InvalidOperationException("DevTools no encontró el input que marcó pagina.js.");
+            await DevTools("DOM.setFileInputFiles", new JObject { ["nodeId"] = nodo["nodeId"], ["files"] = new JArray(Path.GetFullPath(ruta)) }.ToString(Formatting.None));
+        }
+
+        /// <summary>Imprime la página actual a PDF con la impresión nativa de WebView2.</summary>
+        public async Task ImprimirPdf(string ruta)
+        {
+            if (await Esperar(Nativo.CC_Pdf(id, Path.GetFullPath(ruta)), "imprimir a PDF", TechoMs) != "true")
+                throw new InvalidOperationException("WebView2 no pudo imprimir el PDF en " + ruta);
+        }
+
+        /// <summary>Borra todos los datos de navegación del perfil de este panel (cookies, almacenamiento, caché).</summary>
+        public Task BorrarDatos() => Esperar(Nativo.CC_Borrar(id), "borrar los datos del perfil", TechoMs);
+
+        /// <summary>
+        /// El informe que un proveedor deja en un iframe de otro origen (spec.informeEnIframe): el script corre en el
+        /// último iframe cuya URL contiene frameUrl y en los about:blank que tenga adentro. Sólo lee.
+        /// Port de completarInformeEnIframe (apps/desktop/src/main/index.ts). null si no está.
+        /// </summary>
+        public async Task<JToken> LeerInformeEnIframe(string specJson)
+        {
+            var cfg = JObject.Parse(specJson)["informeEnIframe"];
+            if (cfg == null) return null;
+            var fuente = "(() => { const docs = [document]; for (const f of document.querySelectorAll('iframe')) { try { if (f.contentDocument) docs.push(f.contentDocument); } catch (e) {} } " +
+                         "for (const d of docs) { const el = Array.from(d.querySelectorAll(" + JsonConvert.ToString((string)cfg["contenido"]) + ")).pop(); if (!el) continue; " +
+                         "const c = el.cloneNode(true); c.querySelectorAll('style, script').forEach((n) => n.remove()); const t = c.textContent || ''; " +
+                         "if (t.trim().length > 0) return { texto: t, html: el.outerHTML }; } return null; })()";
+            var ticket = Nativo.CC_EjecutarEnIframe(id, (string)cfg["frameUrl"], fuente);
+            if (ticket < 0) return null; // no hay un iframe con esa URL
+            var r = JToken.Parse(await Esperar(ticket, "leer el iframe", TechoMs));
+            return r.Type == JTokenType.Null ? null : r;
         }
 
         /// <summary>
@@ -138,6 +203,25 @@ namespace ChatCouncil.Panel
         }
 
         public void Cerrar() => Nativo.CC_Cerrar(id);
+
+        /// <summary>Espera el resultado de un ticket del plugin. Si pasa el techo, el plugin lo olvida y lanza TimeoutException.</summary>
+        async Task<string> Esperar(int ticket, string que, int techoMs)
+        {
+            Nativo.Comprobar(ticket, que);
+            string resultado = null;
+            try
+            {
+                await Paneles.Esperar(() => (resultado = Nativo.Resultado(ticket)) == null ? 0 : 1, que, id, techoMs);
+            }
+            catch (TimeoutException)
+            {
+                Nativo.CC_Olvidar(ticket);
+                throw;
+            }
+            // Un fallo de la llamada nativa viene como {"__error": "..."}: no se entrega como si fuera un resultado.
+            if (resultado.StartsWith("{\"__error\"")) throw new InvalidOperationException($"No se pudo {que}: {JObject.Parse(resultado)["__error"]}");
+            return resultado;
+        }
     }
 
     /// <summary>El plugin ChatCouncilPanel.dll (panel/windows). Todas las funciones se llaman desde el hilo principal.</summary>
@@ -146,7 +230,7 @@ namespace ChatCouncil.Panel
         const string Dll = "ChatCouncilPanel";
         internal const int TextoVersion = 1, TextoLineaDeComandos = 2, TextoPerfil = 3, TextoUltimaBloqueada = 4, TextoError = 5;
 
-        [DllImport(Dll, CharSet = CharSet.Unicode)] internal static extern int CC_Iniciar(string carpetaDatos, string argumentos, string host, string carpetaHost);
+        [DllImport(Dll, CharSet = CharSet.Unicode)] internal static extern int CC_Iniciar(string carpetaDatos, string argumentos, string hosts, string carpetaHost);
         [DllImport(Dll)] internal static extern int CC_EstadoEntorno();
         [DllImport(Dll, CharSet = CharSet.Unicode)] internal static extern int CC_Crear(string perfil, string url);
         [DllImport(Dll)] internal static extern int CC_EstadoPanel(int id);
@@ -158,6 +242,11 @@ namespace ChatCouncil.Panel
         [DllImport(Dll, CharSet = CharSet.Unicode)] internal static extern int CC_Navegar(int id, string url);
         [DllImport(Dll)] internal static extern int CC_Contador(int id, int cual);
         [DllImport(Dll, CharSet = CharSet.Unicode)] internal static extern int CC_Ejecutar(int id, string script);
+        [DllImport(Dll, CharSet = CharSet.Unicode)] internal static extern int CC_EjecutarEnIframe(int id, string urlContiene, string script);
+        [DllImport(Dll, CharSet = CharSet.Unicode)] internal static extern int CC_DevTools(int id, string metodo, string parametrosJson);
+        [DllImport(Dll, CharSet = CharSet.Unicode)] internal static extern int CC_Pdf(int id, string ruta);
+        [DllImport(Dll)] internal static extern int CC_Borrar(int id);
+        [DllImport(Dll)] internal static extern void CC_Olvidar(int ticket);
         [DllImport(Dll, CharSet = CharSet.Unicode)] static extern int CC_Resultado(int ticket, [Out] char[] destino, int capacidad);
         [DllImport(Dll, CharSet = CharSet.Unicode)] static extern int CC_Texto(int cual, int id, [Out] char[] destino, int capacidad);
         [DllImport(Dll)] internal static extern void CC_Cerrar(int id);
@@ -178,7 +267,7 @@ namespace ChatCouncil.Panel
             return new string(d);
         }
 
-        /// <summary>El resultado de un script, o null si sigue pendiente. El plugin lo olvida al copiarlo.</summary>
+        /// <summary>El resultado de un ticket, o null si sigue pendiente. El plugin lo olvida al copiarlo.</summary>
         internal static string Resultado(int ticket)
         {
             var largo = CC_Resultado(ticket, null, 0);

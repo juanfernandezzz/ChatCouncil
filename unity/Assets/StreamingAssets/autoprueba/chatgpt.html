@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Autoprueba: tipo ChatGPT</title></head>
+<body>
+  <!-- Imita la estructura que espera la spec real de chatgpt (specs.json): turnos, informe en un iframe de otro origen, botón de detener. -->
+  <main>
+    <section data-testid="conversation-turn-1"><div data-message-author-role="user">Pregunta de prueba</div></section>
+    <section data-testid="conversation-turn-2">
+      <div data-message-author-role="assistant">Aviso: el informe está en el panel. <a href="https://ejemplo.org/a">fuente a</a> <a href="https://ejemplo.org/b">fuente b</a></div>
+      <iframe title="internal://deep-research" src="https://cc-otro.test/informe.html" width="400" height="120"></iframe>
+    </section>
+  </main>
+  <button data-testid="stop-button">Detener</button>
+  <form>
+    <!-- ProseMirror exige white-space: pre-wrap (prosemirror-view/style/prosemirror.css): sin eso el navegador cambia la sangría por U+00A0. -->
+    <div id="prompt-textarea" contenteditable="true" style="white-space: pre-wrap"></div>
+    <input type="file" id="adjunto">
+    <output id="archivo"></output>
+  </form>
+  <script>
+    // Lo que el input recibió, para que la autoprueba lo compare con el archivo que adjuntó.
+    document.getElementById("adjunto").addEventListener("change", (e) => {
+      const f = e.target.files[0];
+      document.getElementById("archivo").textContent = f ? f.name + "|" + f.size : "";
+    });
+  </script>
+</body>
+</html>

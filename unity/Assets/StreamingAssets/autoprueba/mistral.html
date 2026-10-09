@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Autoprueba: tipo Mistral</title></head>
+<body>
+  <!-- Imita la spec real de mistral: compositor ProseMirror por párrafos y la respuesta en un canvas que se monta al abrirlo. -->
+  <main>
+    <div data-message-author-role="assistant">
+      <div class="rounded-t-xl border-b"><button class="cursor-pointer">Documento del canvas</button></div>
+      <div class="markdown-container-style max-w-none">Aviso: la respuesta está en el canvas.</div>
+    </div>
+  </main>
+  <button aria-label="Rápido">Rápido</button>
+  <!-- ProseMirror exige white-space: pre-wrap (prosemirror-view/style/prosemirror.css). -->
+  <div class="ProseMirror" contenteditable="true" style="white-space: pre-wrap"><p><br></p></div>
+  <div id="chat-side-panel"></div>
+  <script>
+    document.execCommand("defaultParagraphSeparator", false, "p");
+    const panel = document.getElementById("chat-side-panel");
+    document.querySelector("button.cursor-pointer").addEventListener("click", () => {
+      setTimeout(() => {
+        panel.innerHTML = '<button aria-label="Cerrar">x</button><div class="tiptap ProseMirror">TEXTO DEL CANVAS: lo que Mistral escribió en el canvas.</div>';
+        panel.querySelector("button").addEventListener("click", () => { panel.innerHTML = ""; });
+      }, 300);
+    });
+  </script>
+</body>
+</html>

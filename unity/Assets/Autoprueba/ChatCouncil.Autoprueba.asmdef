@@ -1,7 +1,8 @@
 {
     "name": "ChatCouncil.Autoprueba",
     "references": [
-        "ChatCouncil.Panel"
+        "ChatCouncil.Panel",
+        "ChatCouncil.Motor"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

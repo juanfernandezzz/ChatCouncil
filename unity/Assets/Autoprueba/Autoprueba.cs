@@ -87,14 +87,18 @@ namespace ChatCouncil.Autoprueba
             catch (Exception e) { Anotar(false, nombre, "se cortó con una excepción: " + e.GetType().Name + ": " + e.Message); }
         }
 
+        // En Android Path.GetTempPath() no es una carpeta de la app: se usa la caché de la app.
+        static string Temporal => Application.platform == RuntimePlatform.Android ? Application.temporaryCachePath : Path.GetTempPath();
+        static bool EsAndroid => Application.platform == RuntimePlatform.Android;
+
         static string Spec(string proveedor) => JObject.Parse(Datos.Specs)["specs"][proveedor].ToString(Formatting.None);
 
         async Task Correr()
         {
             lineas.Add($"Autoprueba del panel, {DateTime.Now:yyyy-MM-dd HH:mm:ss}, {Application.platform}, {Application.version}");
-            var datos = Path.Combine(Path.GetTempPath(), "cc-autoprueba-" + Guid.NewGuid().ToString("N"));
+            var datos = Path.Combine(Temporal, "cc-autoprueba-" + Guid.NewGuid().ToString("N"));
             await Paneles.Iniciar(datos, Host + ";" + OtroHost, Path.Combine(Application.streamingAssetsPath, "autoprueba"));
-            Anotar(true, "entorno", "WebView2 " + Paneles.VersionDelNavegador);
+            Anotar(true, "entorno", (EsAndroid ? "Android System WebView " : "WebView2 ") + Paneles.VersionDelNavegador);
 
             var a = await Paneles.Crear("prueba-a", Origen + "textarea.html");
             a.Rect(0, 0, 800, 600);
@@ -128,7 +132,14 @@ namespace ChatCouncil.Autoprueba
             var envuelto = (string)JsonEstricto.Leer((string)JsonEstricto.Leer(await a.Ejecutar("JSON.stringify(" + EnPagina + ")", techoMs: 10_000)));
             Anotar(envuelto == esperado, "surrogate suelto llega intacto con JSON.stringify en la página", $"esperado {Codigos(esperado)}, llegó {Codigos(envuelto)}");
 
-            // 3. Medido, no exigido: el mismo texto devuelto crudo por ExecuteScript. Va último por si deja algo colgado.
+            // 3. Texto fuera del plano básico (un emoji, par de surrogates) de ida y vuelta por el puente: en Android cruza JNI.
+            var conEmoji = "antes " + char.ConvertFromUtf32(0x1F600) + " después";
+            await a.Ejecutar("document.getElementById('compositor').value = ''; 'ok'"); // escribir no pisa un compositor con texto
+            var escritoEmoji = await a.Correr("escribir", SpecTextarea, conEmoji);
+            var emoji = (string)await a.Correr("leerCompositor", SpecTextarea);
+            Anotar((bool?)escritoEmoji["ok"] == true && emoji == conEmoji, "texto fuera del plano básico llega intacto", $"escribir {escritoEmoji.ToString(Formatting.None)}, esperado {Codigos(conEmoji)}, llegó {Codigos(emoji)}");
+
+            // 4. Medido, no exigido: el mismo texto devuelto crudo por ExecuteScript. Va último por si deja algo colgado.
             try
             {
                 var crudo = (string)JToken.Parse(await a.Ejecutar(EnPagina, techoMs: 5_000));
@@ -145,13 +156,17 @@ namespace ChatCouncil.Autoprueba
         async Task PanelBasico(Panel a)
         {
             // El perfil lo informa WebView2, no se repite el que se pidió.
-            Anotar(a.Perfil == "prueba-a", "perfil", $"WebView2 dice \"{a.Perfil}\"");
+            Anotar(a.Perfil == "prueba-a", "perfil", $"el navegador dice \"{a.Perfil}\"");
 
-            // Los tres switches de Electron, leídos por el sistema operativo en el proceso del navegador.
-            var linea = Paneles.LineaDeComandosDelNavegador();
-            var faltan = Switches.Where(s => !linea.Contains(s)).ToList();
-            Anotar(faltan.Count == 0, "argumentos de no limitación",
-                faltan.Count == 0 ? "los tres están en la línea de comandos del proceso del navegador" : "faltan: " + string.Join(", ", faltan) + " | línea: " + linea);
+            // Los tres switches de Electron, leídos por el sistema operativo en el proceso del navegador. Android no tiene
+            // argumentos del navegador: ahí los paneles se apilan visibles (spec, "El panel").
+            if (!EsAndroid)
+            {
+                var linea = Paneles.LineaDeComandosDelNavegador();
+                var faltan = Switches.Where(s => !linea.Contains(s)).ToList();
+                Anotar(faltan.Count == 0, "argumentos de no limitación",
+                    faltan.Count == 0 ? "los tres están en la línea de comandos del proceso del navegador" : "faltan: " + string.Join(", ", faltan) + " | línea: " + linea);
+            }
 
             // Escribir y leer por pedido y consulta, con saltos de línea, sin navegar.
             var navAntes = a.Navegaciones;
@@ -304,12 +319,12 @@ namespace ChatCouncil.Autoprueba
         async Task Adjunto()
         {
             var c = await Paneles.Crear("prueba-d", Origen + "chatgpt.html");
-            var ruta = Path.Combine(Path.GetTempPath(), "adjunto-prueba-" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".txt");
+            var ruta = Path.Combine(Temporal, "adjunto-prueba-" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".txt");
             File.WriteAllText(ruta, "Archivo de la operación, para adjuntar sin abrir el selector.\n");
             await c.Adjuntar(Spec("chatgpt"), ruta);
             var visto = (string)JToken.Parse(await c.Ejecutar("document.getElementById('archivo').textContent"));
             var esperado = Path.GetFileName(ruta) + "|" + new FileInfo(ruta).Length;
-            Anotar(visto == esperado, "adjunto sin selector (DevTools)", $"el input recibió \"{visto}\", se esperaba \"{esperado}\"");
+            Anotar(visto == esperado, EsAndroid ? "adjunto por el selector del sistema" : "adjunto sin selector (DevTools)", $"el input recibió \"{visto}\", se esperaba \"{esperado}\"");
             File.Delete(ruta);
             c.Cerrar();
         }
@@ -317,7 +332,7 @@ namespace ChatCouncil.Autoprueba
         async Task Pdf()
         {
             var c = await Paneles.Crear("prueba-p", Origen + "chatgpt.html");
-            var ruta = Path.Combine(Path.GetTempPath(), "cc-autoprueba-" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".pdf");
+            var ruta = Path.Combine(Temporal, "cc-autoprueba-" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".pdf");
             await c.ImprimirPdf(ruta);
             var ok = File.Exists(ruta);
             var cabecera = ok ? Encoding.ASCII.GetString(File.ReadAllBytes(ruta).Take(5).ToArray()) : "";

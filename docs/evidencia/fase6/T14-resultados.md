@@ -71,7 +71,9 @@ Los mensajes de esos tres fallos, con lo no ASCII escapado, están en `il2cpp-an
 **Causa: IL2CPP, no el motor.** IL2CPP guarda los literales de cadena en UTF-8 dentro de
 `global-metadata.dat`, y un surrogate suelto no existe en UTF-8: lo cambia por U+FFFD al compilar.
 Medido en el binario de la segunda corrida: el literal `PRIMARIA` + U+D800 + `|` estaba guardado
-como `PRIMARIA EF BF BD |` (ese binario no se conservó; los de verde y rojo sí tienen SHA-256).
+como `PRIMARIA EF BF BD |`. Ese binario no se conservó; se reprodujo el 2026-10-09 compilando el
+player con el `Referencias.g.cs` de `ea3b12c^`, y el volcado de bytes, con el SHA-256 de ambos
+`global-metadata.dat`, está en `il2cpp-metadata-antes-de-ea3b12c.txt`.
 Mono y .NET guardan los literales en UTF-16 y no los alteran, por eso pasaban. Las cadenas que se
 forman en tiempo de ejecución (las que el motor recibe o arma) no pasan por los metadatos.
 
@@ -97,7 +99,12 @@ que TypeScript (69/69). Antes del arreglo, IL2CPP probaba U+FFFD en esos casos, 
 **Qué cubre esto y qué no.**
 - `motor/Runtime` (incluido `Datos.g.cs`) no tiene ningún literal con un surrogate suelto: el único
   escape de ese tipo está en un comentario de `JsonEstricto.cs:11`. Si lo tuviera, IL2CPP lo
-  corrompería en la app. Medido con una búsqueda en el código, no con una prueba que lo impida.
+  corrompería en la app. Lo impide `guard:surrogates` (en el CI), que revisa todo `motor/`,
+  Runtime y Tests. Probado en rojo antes de confiar en él: con el `Referencias.g.cs` de
+  `ea3b12c^` falla exactamente en las líneas 228, 243 y 287, y no marca el JSON escapado; en ocho
+  casos sintéticos falla en los cinco malos (cadena, char, `\x`, interpolada, bajo suelto) y pasa
+  los tres buenos (par completo, cadena `@"..."`, comentario). Sobre `motor/` actual: 25 archivos
+  en verde.
 - El paso de un surrogate suelto desde la página hasta el motor, a través del puente del panel,
   queda **abierto**: se mide en la autoprueba del panel (T16).
 

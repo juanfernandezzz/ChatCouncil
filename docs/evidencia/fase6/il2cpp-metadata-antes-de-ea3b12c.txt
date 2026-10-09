@@ -1,0 +1,22 @@
+# Bytes de global-metadata.dat: el literal con U+D800, antes y después de ea3b12c.
+# Reproducido el 2026-10-09: player Windows x64 IL2CPP compilado sobre 0642aa9 con
+# motor/Tests/Referencias.g.cs reemplazado por su versión de ea3b12c^ (restaurado al terminar).
+# Comando: el de il2cpp-verde en T14-resultados.md, con -buildPlayerPath a una carpeta temporal.
+# El player no se dejó correr: solo hacía falta el global-metadata.dat compilado.
+
+## Antes (Referencias.g.cs de ea3b12c^)
+global-metadata.dat SHA-256 6c25defa6adc052b7a94dd9e4a6980159a44f4c86be17f52286b19a4227a4542
+El literal de SALIDA_VERIFICADOR (referencias.mjs:290) es "... ofic" U+0131 "al, PRIMARIA" U+D800 "|H12|https://e.org|...".
+Primera aparición de PRIMARIA + EF BF BD, offset 644099 (2 apariciones):
+  hex  : 61 72 69 61 2c 20 6f 66 69 63 c4 b1 61 6c 2c 20 50 52 49 4d 41 52 49 41 ef bf bd 7c 48 31 32 7c 68 74 74 70 73 3a 2f 2f
+  ascii: aria, ofic..al, PRIMARIA...|H12|https://
+U+D800 quedó como EF BF BD (U+FFFD en UTF-8). PRIMARIA + ED A0 80 (el surrogate en bruto): 0 apariciones.
+EF BF BD en todo el archivo: 21.
+
+## Después (5b387fe, el player de il2cpp-verde-5b387fe.xml)
+global-metadata.dat SHA-256 27a4f85e53afc8fcb554be67137daecbd67a788fd7b538e8dfa8ccb638f1bb38 (el mismo de T14-resultados.md)
+PRIMARIA + EF BF BD: 0 apariciones. EF BF BD en todo el archivo: 17.
+
+Medido: 4 EF BF BD menos después del arreglo. Inferido, no examinado byte a byte: esos 4 son
+los tres literales corrompidos (el de SALIDA_VERIFICADOR aparece dos veces), y los 17 que quedan
+vienen de literales que ya contienen U+FFFD de verdad.

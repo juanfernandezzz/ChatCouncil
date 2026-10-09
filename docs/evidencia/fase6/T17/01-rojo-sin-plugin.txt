@@ -1,0 +1,39 @@
+Autoprueba del panel, 2026-10-09 18:01:09, Android, 0.1.0
+FALLA autoprueba: se cortó con una excepción: System.TypeInitializationException: The type initializer for 'ChatCouncil.Panel.Nativo' threw an exception. ---> UnityEngine.AndroidJavaException: java.lang.ClassNotFoundException: com.chatcouncil.panel.Paneles
+  at UnityEngine.AndroidJNISafe.CheckException () [0x00000] in <00000000000000000000000000000000>:0 
+  at UnityEngine.AndroidJNISafe.FindClass (System.String name) [0x00000] in <00000000000000000000000000000000>:0 
+  at UnityEngine.AndroidJavaClass._AndroidJavaClass (System.String className) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Panel.Nativo..cctor () [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Panel.Paneles.Iniciar (System.String carpetaDatos, System.String hosts, System.String carpetaHost) [0x00000] in <00000000000000000000000000000000>:0 
+  at System.Runtime.CompilerServices.AsyncTaskMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Panel.Paneles.Iniciar (System.String carpetaDatos, System.String hosts, System.String carpetaHost) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Correr () [0x00000] in <00000000000000000000000000000000>:0 
+  at System.Runtime.CompilerServices.AsyncTaskMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Correr () [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Start () [0x00000] in <00000000000000000000000000000000>:0 
+  at System.Runtime.CompilerServices.AsyncVoidMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Start () [0x00000] in <00000000000000000000000000000000>:0 
+   --- End of inner exception stack trace ---
+  at ChatCouncil.Panel.Paneles.Iniciar (System.String carpetaDatos, System.String hosts, System.String carpetaHost) [0x00000] in <00000000000000000000000000000000>:0 
+  at System.Runtime.CompilerServices.AsyncTaskMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Panel.Paneles.Iniciar (System.String carpetaDatos, System.String hosts, System.String carpetaHost) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Correr () [0x00000] in <00000000000000000000000000000000>:0 
+  at System.Runtime.CompilerServices.AsyncTaskMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Correr () [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Start () [0x00000] in <00000000000000000000000000000000>:0 
+  at System.Runtime.CompilerServices.AsyncVoidMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Start () [0x00000] in <00000000000000000000000000000000>:0 
+--- End of stack trace from previous location where exception was thrown ---
+
+  at ChatCouncil.Autoprueba.Autoprueba.Correr () [0x00000] in <00000000000000000000000000000000>:0 
+  at System.Runtime.CompilerServices.AsyncTaskMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Correr () [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Start () [0x00000] in <00000000000000000000000000000000>:0 
+  at System.Runtime.CompilerServices.AsyncVoidMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Start () [0x00000] in <00000000000000000000000000000000>:0 
+--- End of stack trace from previous location where exception was thrown ---
+
+  at ChatCouncil.Autoprueba.Autoprueba.Start () [0x00000] in <00000000000000000000000000000000>:0 
+  at System.Runtime.CompilerServices.AsyncVoidMethodBuilder.Start[TStateMachine] (TStateMachine& stateMachine) [0x00000] in <00000000000000000000000000000000>:0 
+  at ChatCouncil.Autoprueba.Autoprueba.Start () [0x00000] in <00000000000000000000000000000000>:0 
+Resultado: 0/1

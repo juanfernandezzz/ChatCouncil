@@ -2506,6 +2506,27 @@ cada una con su motivo y su fuente):
   dos copias. La dirección sigue siendo una sola: el motor no conoce al
   panel. Fuente: docs/evidencia/fase6/T16-resultados.md y
   motor/Runtime/JsonEstricto.cs.
+· 2026-10-09, el .apk se compila solo para ARM64. Motivo: en Unity 6000.3,
+  x86_64 para Android quedó limitado a Magic Leap y la compilación aborta;
+  los teléfonos son ARM64 y el emulador x86_64 de Android 11+ traduce ARM64.
+  Fuente: el error de BuildPipeline y la medición en
+  docs/evidencia/fase6/T17-resultados.md.
+· 2026-10-09, en Android, el informe en un iframe de otro origen se lee con
+  un script de inicio de documento y un canal de mensajes de androidx.webkit,
+  los dos restringidos a los orígenes de informeEnIframe de las specs. El
+  plugin le manda el selector y el script lee con su propio lector, sin eval.
+  Motivo: Android WebView no ejecuta scripts en un marco elegido (WebView2
+  sí), y eval depende de la CSP del sitio. Fuente: la spec ("El panel") y
+  T17-resultados.md.
+· 2026-10-09, en Android, el adjunto abre el selector con un toque real sobre
+  el input, y onShowFileChooser entrega el archivo preparado sin mostrar el
+  selector. Motivo, medido en T17: un click() desde un script no abre el
+  selector, porque falta la activación del usuario. Fuente: T17-resultados.md.
+· 2026-10-09, en Android, el PDF sale del PrintDocumentAdapter del WebView,
+  escrito a un archivo desde una clase del paquete android.print. Motivo: el
+  SDK no expone públicamente los constructores de los callbacks, y
+  PrintManager abre un diálogo. Fuente: T17-resultados.md. El riesgo en
+  otras versiones de Android queda abierto.
 
 ---
 

@@ -257,7 +257,12 @@ Formato: **Acepta** (qué tiene que ser cierto), **Verifica** (cómo se mide),
   `.exe` compilado, tres corridas, con su tasa.
   Depende de: T13, T15. Tamaño: M.
 
-- [ ] **T17. Panel Android.**
+- [x] **T17. Panel Android.**
+  Cerrada el 2026-10-09 sobre `b9c3091`: en un emulador Android 36 con WHPX, 36/36 en tres
+  corridas del `.apk` IL2CPP ARM64; el `.exe` de Windows sobre el mismo commit, 37/37 en tres.
+  Un defecto del plugin, una carrera entre hilos en los tickets, quedó arreglado. Las pruebas del
+  motor en el player de Android: **sin medir**. Detalle en
+  `docs/evidencia/fase6/T17-resultados.md`.
   Acepta: el plugin Java con perfiles, comprobación de `MULTI_PROFILE`,
   apilado visible, ejecución del script, bloqueo de `/logout`, ventana
   emergente con `opener`, adjunto por el selector de archivos del sistema,

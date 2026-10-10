@@ -1,7 +1,7 @@
 /*
  * Componentes de la interfaz. Solo usa los tokens de Tokens.uss: ningún color ni medida suelta,
  * salvo los anchos de estructura de la arquitectura (riel 88, lista 280; docs/FASE6-INTERFAZ.md).
- * La raíz lleva .ancha o .angosta, y .compacta debajo de 600 (Esqueleto.cs, decisiones D3 a D5).
+ * La raíz lleva .ancha o .angosta, y .compacta debajo de 600 (Aplicacion.cs, decisiones D3 a D5).
  */
 
 .raiz {
@@ -57,12 +57,18 @@
 .compacta .riel { display: none; }
 .riel-item {
     min-height: 56px;
-    margin-bottom: var(--esp-1);
+    margin: 0 0 var(--esp-1) 0;
+    padding: 0;
+    border-width: var(--ancho-foco);
+    border-color: rgba(0, 0, 0, 0);
     border-radius: var(--radio);
+    background-color: rgba(0, 0, 0, 0);
     -unity-text-align: middle-center;
     font-size: var(--texto-pequeno);
     color: var(--color-texto-2);
 }
+.riel-item:hover { background-color: var(--color-superficie); }
+.riel-item:focus { border-color: var(--color-foco); }
 .riel-item--actual { background-color: var(--color-superficie); color: var(--color-texto); }
 
 .trabajo { flex-grow: 1; }
@@ -185,3 +191,98 @@
 .icono-estado--terminado { --icono-color: var(--color-estado-terminado); }
 .icono-estado--capturado { --icono-color: var(--color-estado-capturado); }
 .icono-estado--problema { --icono-color: var(--color-estado-problema); }
+
+/* ---------- cajón modal de la clase compacta (D3) ---------- */
+
+.cajon {
+    display: none;
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    flex-direction: row;
+}
+.cajon--abierto { display: flex; }
+.cajon-hoja { width: 280px; padding: var(--esp-2); background-color: var(--color-superficie); }
+.cajon-item { margin-bottom: var(--esp-1); -unity-text-align: middle-left; }
+.cajon-fondo { flex-grow: 1; margin: 0; border-width: 0; border-radius: 0; background-color: var(--color-velo); }
+.cajon-fondo:hover { background-color: var(--color-velo); }
+
+/* ---------- primer arranque (D10): la guía es la única salida ---------- */
+
+.primer-arranque .riel { display: none; }
+.primer-arranque .oculta-primer-arranque { display: none; }
+.solo-primer-arranque { display: none; }
+.primer-arranque .solo-primer-arranque { display: flex; }
+.primer-arranque .solo-ajustes { display: none; }
+
+/* ---------- configuración (D11, D15) ---------- */
+
+.formulario { flex-grow: 1; }
+.hoja { padding: var(--esp-5) var(--esp-4); }
+/* Los textos alineados con las casillas y los campos: sin el margen que el tema da a Label. */
+.hoja .unity-label { margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0; }
+.titulo-seccion { font-size: var(--texto-encabezado); margin-bottom: var(--esp-3); }
+.titulo-bloque { font-size: var(--texto-titulo); margin-bottom: var(--esp-2); }
+.subtitulo { margin-top: var(--esp-3); }
+.bloque { margin-bottom: var(--esp-6); }
+.boton-solo { align-self: flex-start; margin-top: var(--esp-2); }
+.mensaje { margin-top: var(--esp-2); }
+.fila-botones { flex-direction: row; flex-wrap: wrap; margin: var(--esp-2) 0; }
+.fila-botones .boton { margin: 0 var(--esp-2) var(--esp-2) 0; }
+
+/* Casillas: la casilla primero y el nombre después, en una fila de 48 dp (D19). */
+.proveedores { flex-direction: row; flex-wrap: wrap; max-width: var(--medida-parrafo); }
+.marca { width: 160px; min-height: var(--alto-control); margin: 0; }
+.marca .unity-toggle__input { align-items: center; }
+.marca .unity-toggle__checkmark {
+    width: 24px;
+    height: 24px;
+    border-width: var(--ancho-foco);
+    border-radius: 4px;
+    border-color: var(--color-borde-control);
+    background-color: var(--color-superficie);
+    -unity-background-image-tint-color: var(--color-sobre-primario);
+}
+.marca:checked .unity-toggle__checkmark { background-color: var(--color-primario); border-color: var(--color-primario); }
+.marca:focus .unity-toggle__checkmark { border-color: var(--color-foco); }
+.marca .unity-toggle__text { margin-left: var(--esp-2); color: var(--color-texto); font-size: var(--texto-cuerpo); }
+
+/* Campos: la etiqueta arriba, el control de 48 dp debajo. */
+.campo { flex-direction: column; margin: 0 0 var(--esp-3) 0; max-width: var(--medida-parrafo); }
+.campo > .unity-base-field__label { min-width: 0; margin: 0 0 var(--esp-1) 0; padding: 0; white-space: normal; color: var(--color-texto); font-size: var(--texto-cuerpo); }
+.campo > .unity-base-field__input {
+    min-height: var(--alto-control);
+    margin: 0;
+    padding: 0 var(--esp-3);
+    border-width: var(--ancho-foco);
+    border-radius: var(--radio);
+    border-color: var(--color-borde-control);
+    background-color: var(--color-superficie);
+    color: var(--color-texto);
+    font-size: var(--texto-cuerpo);
+}
+.campo:focus > .unity-base-field__input { border-color: var(--color-foco); }
+.campo .unity-base-popup-field__text { color: var(--color-texto); }
+.campo .unity-base-popup-field__arrow { -unity-background-image-tint-color: var(--color-texto); }
+.campo .unity-text-element { color: var(--color-texto); }
+
+/* El menú del desplegable cuelga de la raíz del panel: por eso estas hojas van en el tema. */
+.unity-base-dropdown__container-outer { border-width: 1px; border-radius: var(--radio); border-color: var(--color-borde-control); background-color: var(--color-superficie); }
+.unity-base-dropdown__container-inner { border-width: 0; background-color: var(--color-superficie); }
+.unity-base-dropdown__item { min-height: var(--alto-control); }
+.unity-base-dropdown__item:hover:enabled { background-color: var(--color-superficie-2); }
+.unity-base-dropdown__label { color: var(--color-texto); font-size: var(--texto-cuerpo); }
+.unity-base-dropdown__checkmark { -unity-background-image-tint-color: var(--color-texto); }
+
+.fila-cuenta {
+    flex-direction: row;
+    align-items: center;
+    min-height: 64px;
+    max-width: var(--medida-parrafo);
+    border-bottom-width: 1px;
+    border-color: var(--color-borde);
+}
+.fila-cuenta .cabecera-texto { margin: 0 var(--esp-3) 0 0; }
+.ruta { margin-bottom: 0; }

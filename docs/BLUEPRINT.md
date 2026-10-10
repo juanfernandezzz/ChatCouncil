@@ -2706,6 +2706,37 @@ Fuentes nuevas:
   las clases de ancho de D3 son en dp [M3C], y una sola hoja sirve a los dos
   sistemas (PRODUCT.md, Platform).
 
+Decisiones de T19 (configuración y arranque). Fuente nueva:
+[UPD] Unity, Application.persistentDataPath, https://docs.unity3d.com/ScriptReference/Application-persistentDataPath.html
+
+· D28, 2026-10-10, la carpeta de datos es la que Unity da a la app en cada sistema
+  [UPD], con empresa y producto "ChatCouncil": en Windows,
+  %USERPROFILE%\AppData\LocalLow\ChatCouncil\ChatCouncil; en Android, la carpeta
+  de archivos de la app. Criterio: la ubicación por convención de cada sistema, sin
+  una ruta propia que mantener; es otra carpeta que la de Electron, así que las dos
+  versiones no escriben el mismo registro. En Windows guarda también los perfiles
+  del navegador (subcarpeta "navegador"); en Android las sesiones quedan dentro de
+  la app (ProfileStore), y Ajustes lo dice así (D15). -datos CARPETA la reemplaza
+  para las pruebas, que nunca usan la real.
+· D29, 2026-10-10, el primer arranque (sin archivo de selección) es una guía de dos
+  pasos: el consejo y después las cuentas, sin riel ni cajón hasta "Ir a la ronda".
+  Entrar a las cuentas no es obligatorio. Criterio: la primera tarea real, con
+  ayuda en contexto [ISO, NH 10] (D10); la persona decide cuándo empezar
+  [ISO, controlabilidad]. El consejo del primer arranque se aplica al terminar la
+  guía, porque todavía no hay nada cargado; los cambios posteriores, al reabrir
+  (D11, historia 7), y Ajustes lo dice junto al botón Guardar.
+· D30, 2026-10-10, la sesión se comprueba al entrar a una cuenta y con
+  "Comprobar", no al abrir Ajustes: abrir las nueve páginas para leer su estado
+  cuesta tiempo y red que la persona no pidió. "Sesión abierta" si el compositor
+  de la spec aparece en 10 s; si no, "Sin sesión" con qué hacer [NH 9]. Límite: un
+  proveedor que deja escribir sin cuenta muestra el compositor y da "Sesión
+  abierta" sin sesión; D10 acepta esa deducción porque no lee cookies.
+· D31, 2026-10-10, Historial y Ayuda no están en el riel ni en el cajón hasta que
+  existan (T23). Criterio: un destino deshabilitado sin motivo no le dice nada a
+  la persona; D7 pide el motivo, y deshabilitar con explicación solo vale para lo
+  que existe y no se puede usar todavía [UXT]. Las capturas de la primera versión
+  los mostraban grises.
+
 ---
 
 ## 6. Criterios de aceptación

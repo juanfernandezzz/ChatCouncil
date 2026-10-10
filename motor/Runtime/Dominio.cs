@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Newtonsoft.Json.Linq;
 
 namespace ChatCouncil.Motor
 {
@@ -25,6 +26,10 @@ namespace ChatCouncil.Motor
         /// </summary>
         public static string NombreProveedor(string id) =>
             Nombres.TryGetValue(id, out var nombre) ? nombre : id.Length == 0 ? "" : Js.ToUpperCase(id.Substring(0, 1)) + id.Substring(1);
+
+        /// <summary>D10: con sesión si la página tiene el compositor de su spec (leerCompositor no da null); sin leer cookies.</summary>
+        public static string EstadoDeSesion(JToken compositor) =>
+            compositor != null && compositor.Type == JTokenType.String ? "con-sesion" : "sin-sesion";
 
         /// <summary>
         /// "Hay algo en el campo" no alcanza: el marcador interno de una ronda

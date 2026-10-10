@@ -55,8 +55,6 @@ namespace ChatCouncil.Motor
             "chat.mistral.ai", "chat.qwen.ai", "kimi.ai", "chat.deepseek.com",
         };
 
-        static readonly string[] IdsProveedor = { "chatgpt", "gemini", "claude", "grok", "mistral", "glm", "kimi", "qwen", "deepseek" };
-
         /// <summary>
         /// Quita todo parámetro de query salvo "model", que cambia qué página se
         /// sirve. Conserva el fragmento tal cual.
@@ -91,7 +89,7 @@ namespace ChatCouncil.Motor
                 if (fin == i + prefijo) continue;
                 var url = texto.Substring(i, fin - i);
                 var query = QueryDe(url);
-                if (EsHostPropio(HostDe(url)) || (query.Length > 0 && IdsProveedor.Any(id => query.Contains(id)))) fugas.Add(url);
+                if (EsHostPropio(HostDe(url)) || (query.Length > 0 && Roles.Conocidos.Any(id => query.Contains(id)))) fugas.Add(url);
                 i = fin - 1;
             }
             return fugas;

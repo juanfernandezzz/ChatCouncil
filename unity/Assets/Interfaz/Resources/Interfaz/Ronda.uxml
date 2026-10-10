@@ -1,70 +1,49 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:cc="ChatCouncil.Interfaz">
-    <!-- Esqueleto de la pantalla de Ronda (T18): datos de ejemplo, etapa Operación. Arquitectura: docs/FASE6-INTERFAZ.md. -->
-    <Style src="../../Tokens.uss" />
-    <Style src="../../Interfaz.uss" />
+    <!-- La app: riel de secciones y pantalla de Ronda (T18). Aplicacion.cs llena los datos y agrega Configuracion.uxml. Arquitectura: docs/FASE6-INTERFAZ.md. -->
     <ui:VisualElement name="raiz" class="raiz">
 
-        <!-- Riel de secciones (D2, D3): desde 600 dp; debajo, el botón Menú de la barra. -->
+        <!-- Riel de secciones (D2, D3): desde 600 dp; debajo, el botón Menú de la barra abre el cajón. Historial y Ayuda llegan en T23. -->
         <ui:VisualElement class="riel">
-            <ui:Label text="Ronda" class="riel-item riel-item--actual semibold" />
-            <ui:Label text="Historial" class="riel-item" />
-            <ui:Label text="Ajustes" class="riel-item" />
-            <ui:Label text="Ayuda" class="riel-item" />
+            <ui:Button name="ir-ronda" text="Ronda" class="riel-item" />
+            <ui:Button name="ir-ajustes" text="Ajustes" class="riel-item" />
         </ui:VisualElement>
 
-        <ui:VisualElement class="trabajo">
+        <ui:VisualElement name="secciones" class="trabajo">
+        <ui:VisualElement name="seccion-ronda" class="trabajo">
 
             <!-- ===== Ancha (D4) ===== -->
             <ui:VisualElement class="solo-ancha trabajo">
                 <ui:VisualElement class="guia">
                     <ui:VisualElement class="etapas">
-                        <ui:VisualElement class="etapa etapa--hecha"><ui:Label text="1 Pregunta" class="etapa-nombre" /><ui:VisualElement class="etapa-barra" /></ui:VisualElement>
-                        <ui:VisualElement class="etapa etapa--hecha"><ui:Label text="2 Investigación" class="etapa-nombre" /><ui:VisualElement class="etapa-barra" /></ui:VisualElement>
-                        <ui:VisualElement class="etapa etapa--actual"><ui:Label text="3 Operación" class="etapa-nombre semibold" /><ui:VisualElement class="etapa-barra" /></ui:VisualElement>
+                        <ui:VisualElement class="etapa"><ui:Label text="1 Pregunta" class="etapa-nombre" /><ui:VisualElement class="etapa-barra" /></ui:VisualElement>
+                        <ui:VisualElement class="etapa"><ui:Label text="2 Investigación" class="etapa-nombre" /><ui:VisualElement class="etapa-barra" /></ui:VisualElement>
+                        <ui:VisualElement class="etapa"><ui:Label text="3 Operación" class="etapa-nombre" /><ui:VisualElement class="etapa-barra" /></ui:VisualElement>
                         <ui:VisualElement class="etapa"><ui:Label text="4 Integración" class="etapa-nombre" /><ui:VisualElement class="etapa-barra" /></ui:VisualElement>
                         <ui:VisualElement class="etapa"><ui:Label text="5 Verificación" class="etapa-nombre" /><ui:VisualElement class="etapa-barra" /></ui:VisualElement>
                         <ui:VisualElement class="etapa"><ui:Label text="6 Redacción" class="etapa-nombre" /><ui:VisualElement class="etapa-barra" /></ui:VisualElement>
                         <ui:VisualElement class="etapa"><ui:Label text="7 Informe" class="etapa-nombre" /><ui:VisualElement class="etapa-barra" /></ui:VisualElement>
                     </ui:VisualElement>
                     <ui:VisualElement class="paso">
-                        <ui:Button text="Capturar los que terminaron (2)" class="boton boton-primario semibold" />
+                        <ui:Button name="paso-ancha" class="boton boton-primario semibold" />
                         <ui:VisualElement class="paso-texto">
-                            <ui:Label text="Tú: en cada panel, revisa la operación y envíala. Si va con archivo, comprueba que quedó adjunto." class="envolver" />
-                            <ui:Label text="Enviados 5 de 7 · Parecen terminados 2 · Capturados 1" class="pequeno texto-2" />
+                            <ui:Label name="frase-ancha" class="envolver" />
                         </ui:VisualElement>
-                        <ui:Button text="Siguiente por enviar ›" class="boton" />
                         <ui:Button text="Ronda…" class="boton" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 
                 <ui:VisualElement class="cuerpo">
-                    <ui:ScrollView class="lista">
-                        <ui:Label text="Operadores (7)" class="lista-titulo" />
-                        <ui:VisualElement class="fila-panel"><cc:IconoEstado estado="terminado" /><ui:Label text="Gemini" class="fila-nombre semibold" /><ui:Label text="Parece terminado" class="fila-estado" /></ui:VisualElement>
-                        <ui:VisualElement class="fila-panel"><cc:IconoEstado estado="respondiendo" /><ui:Label text="ChatGPT" class="fila-nombre semibold" /><ui:Label text="Respondiendo" class="fila-estado" /></ui:VisualElement>
-                        <ui:VisualElement class="fila-panel"><cc:IconoEstado estado="terminado" /><ui:Label text="Claude" class="fila-nombre semibold" /><ui:Label text="Parece terminado" class="fila-estado" /></ui:VisualElement>
-                        <ui:VisualElement class="fila-panel"><cc:IconoEstado estado="respondiendo" /><ui:Label text="Grok" class="fila-nombre semibold" /><ui:Label text="Respondiendo" class="fila-estado" /></ui:VisualElement>
-                        <ui:VisualElement class="fila-panel"><cc:IconoEstado estado="capturado" /><ui:Label text="Mistral" class="fila-nombre semibold" /><ui:Label text="Capturado" class="fila-estado" /></ui:VisualElement>
-                        <ui:VisualElement class="fila-panel"><cc:IconoEstado estado="falta-enviar" /><ui:Label text="Kimi" class="fila-nombre semibold" /><ui:Label text="Pegado, falta que envíes" class="fila-estado" /></ui:VisualElement>
-                        <ui:VisualElement class="fila-panel fila-panel--actual"><cc:IconoEstado estado="problema" /><ui:Label text="Qwen" class="fila-nombre semibold" /><ui:Label text="Con problema" class="fila-estado" /></ui:VisualElement>
-                        <ui:Label text="Roles (aparecen en su etapa)" class="lista-titulo" />
-                        <ui:VisualElement class="fila-panel"><cc:IconoEstado estado="por-pegar" /><ui:Label text="DeepSeek" class="fila-nombre semibold" /><ui:Label text="Integra y redacta" class="fila-estado" /></ui:VisualElement>
-                        <ui:VisualElement class="fila-panel"><cc:IconoEstado estado="por-pegar" /><ui:Label text="GLM" class="fila-nombre semibold" /><ui:Label text="Verifica" class="fila-estado" /></ui:VisualElement>
-                    </ui:ScrollView>
-
+                    <ui:ScrollView name="lista" class="lista" />
                     <ui:VisualElement class="panel">
                         <ui:VisualElement class="cabecera">
-                            <cc:IconoEstado estado="problema" />
+                            <cc:IconoEstado name="icono-cabecera" />
                             <ui:VisualElement class="cabecera-texto">
-                                <ui:Label text="Qwen · Con problema" class="semibold" />
-                                <ui:Label text="La página no tenía el compositor cuando se pegó. Recarga el panel y vuelve a pegar." class="problema pequeno" />
+                                <ui:Label name="cabecera-titulo" class="semibold" />
                             </ui:VisualElement>
-                            <ui:Button text="Pegar operación aquí" class="boton" />
                             <ui:Button text="Más…" class="boton" />
                         </ui:VisualElement>
                         <ui:VisualElement class="pagina">
                             <ui:Label text="Página del proveedor (vista nativa)" class="texto-2" />
-                            <ui:Label text="Esqueleto con datos de ejemplo" class="pequeno texto-2" />
                         </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:VisualElement>
@@ -73,14 +52,14 @@
             <!-- ===== Angosta (D5) ===== -->
             <ui:VisualElement class="solo-angosta trabajo">
                 <ui:VisualElement class="barra">
-                    <ui:Button text="Menú" class="boton solo-compacta" />
-                    <ui:Label text="Operación · 3 de 7" class="barra-titulo semibold" />
+                    <ui:Button name="menu" text="Menú" class="boton solo-compacta" />
+                    <ui:Label name="barra-titulo" class="barra-titulo semibold" />
                     <ui:Button text="Más…" class="boton" />
                 </ui:VisualElement>
                 <ui:VisualElement class="progreso">
-                    <ui:VisualElement class="etapa-barra etapa-barra--hecha" />
-                    <ui:VisualElement class="etapa-barra etapa-barra--hecha" />
-                    <ui:VisualElement class="etapa-barra etapa-barra--actual" />
+                    <ui:VisualElement class="etapa-barra" />
+                    <ui:VisualElement class="etapa-barra" />
+                    <ui:VisualElement class="etapa-barra" />
                     <ui:VisualElement class="etapa-barra" />
                     <ui:VisualElement class="etapa-barra" />
                     <ui:VisualElement class="etapa-barra" />
@@ -88,27 +67,35 @@
                 </ui:VisualElement>
                 <ui:VisualElement class="pagina">
                     <ui:Label text="Página del proveedor (vista nativa)" class="texto-2" />
-                    <ui:Label text="Esqueleto con datos de ejemplo" class="pequeno texto-2" />
                 </ui:VisualElement>
                 <ui:VisualElement class="abajo">
                     <ui:VisualElement class="selector">
                         <ui:Button text="‹" class="boton boton-icono" />
                         <ui:VisualElement class="selector-actual">
-                            <cc:IconoEstado estado="problema" />
-                            <ui:Label text="Qwen · Con problema · 7 de 7" class="semibold selector-texto" />
+                            <cc:IconoEstado name="icono-selector" />
+                            <ui:Label name="selector-texto" class="semibold selector-texto" />
                         </ui:VisualElement>
                         <ui:Button text="›" class="boton boton-icono" />
                     </ui:VisualElement>
-                    <ui:Label text="Sin compositor: recarga el panel y vuelve a pegar (Más…)." class="problema pequeno separado" />
-                    <ui:Button text="Capturar los que terminaron (2)" class="boton boton-primario semibold" />
-                    <ui:Label text="Tú: en cada panel, revisa la operación y envíala. Si va con archivo, comprueba que quedó adjunto." class="envolver separado" />
+                    <ui:Button name="paso-angosta" class="boton boton-primario semibold" />
+                    <ui:Label name="frase-angosta" class="envolver separado" />
                     <ui:VisualElement class="fila-resumen">
-                        <ui:Label text="5 de 7 enviados · 2 terminados" class="pequeno texto-2 resumen" />
+                        <ui:Label class="resumen" />
                         <ui:Button text="Ver todos" class="boton" />
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
 
+        </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Cajón modal de la clase compacta (D3): las mismas secciones que el riel. -->
+        <ui:VisualElement name="cajon" class="cajon">
+            <ui:VisualElement class="cajon-hoja">
+                <ui:Button name="cajon-ronda" text="Ronda" class="boton cajon-item" />
+                <ui:Button name="cajon-ajustes" text="Ajustes" class="boton cajon-item" />
+            </ui:VisualElement>
+            <ui:Button name="cajon-fondo" class="cajon-fondo" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

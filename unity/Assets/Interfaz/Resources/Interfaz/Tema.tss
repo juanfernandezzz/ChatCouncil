@@ -1,1 +1,4 @@
 @import url("unity-theme://default");
+/* Las hojas de la app van en el tema, no en el UXML: así alcanzan a los menús desplegables, que cuelgan de la raíz del panel. */
+@import url("../../Tokens.uss");
+@import url("../../Interfaz.uss");

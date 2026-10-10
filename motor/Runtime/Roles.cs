@@ -26,6 +26,9 @@ namespace ChatCouncil.Motor
     /// </summary>
     public static class Roles
     {
+        /// <summary>Los nueve, en el orden de INVESTIGADORES (index.ts): el de la configuración y el del pool.</summary>
+        public static readonly IReadOnlyList<string> Conocidos = new[] { "chatgpt", "gemini", "claude", "grok", "mistral", "glm", "kimi", "qwen", "deepseek" };
+
         /// <summary>El archivo aparte en la carpeta de datos, nunca el registro.</summary>
         public const string ArchivoSeleccion = "seleccion-proveedores.json";
 
@@ -103,6 +106,23 @@ namespace ChatCouncil.Motor
             if (redactor == verificador) return ErrorRedactorVerificador;
             if (!validos.Contains(redactor)) return ErrorRedactorDesmarcado;
             return null;
+        }
+
+        /// <summary>El error que impide guardar, o el contenido del archivo de selección (guardarSeleccion de TypeScript, sin escribirlo).</summary>
+        public static (string Error, string Contenido) Guardar(IReadOnlyList<string> conocidos, IReadOnlyList<string> marcados, string integrador, string verificador, string redactor, string guardadoEn)
+        {
+            var error = ValidarSeleccion(conocidos, marcados, integrador, verificador, redactor);
+            if (error != null) return (error, null);
+            var contenido = new JObject
+            {
+                ["proveedores"] = new JArray(conocidos.Where(marcados.Contains)),
+                ["integrador"] = integrador,
+                ["verificador"] = verificador,
+                ["redactor"] = redactor,
+                ["guardadoEn"] = guardadoEn,
+            };
+            // JSON.stringify(..., null, 2): sangría de dos espacios y el mismo salto de línea en cualquier sistema.
+            return (null, contenido.ToString(Newtonsoft.Json.Formatting.Indented).Replace("\r\n", "\n"));
         }
 
         /// <summary>El pool de investigadores y operadores: todos, en su orden, menos los tres roles.</summary>

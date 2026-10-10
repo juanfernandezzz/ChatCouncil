@@ -1,11 +1,16 @@
 {
     "name": "ChatCouncil.Interfaz",
-    "references": [],
+    "references": [
+        "ChatCouncil.Motor",
+        "ChatCouncil.Panel"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
-    "overrideReferences": false,
-    "precompiledReferences": [],
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "Newtonsoft.Json.dll"
+    ],
     "autoReferenced": false,
     "defineConstraints": [],
     "versionDefines": [],

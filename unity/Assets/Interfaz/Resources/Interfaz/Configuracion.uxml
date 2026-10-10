@@ -1,0 +1,66 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <!-- Ajustes y primer arranque (T19; D10, D11, D15). Configuracion.cs llena las listas y muestra lo que corresponde. -->
+    <ui:VisualElement name="seccion-configuracion" class="trabajo">
+        <!-- Clase compacta: el Menú abre el cajón de secciones (D3). -->
+        <ui:VisualElement class="barra solo-compacta oculta-primer-arranque">
+            <ui:Button name="menu-configuracion" text="Menú" class="boton" />
+            <ui:Label text="Ajustes" class="barra-titulo semibold" />
+        </ui:VisualElement>
+
+        <ui:ScrollView name="formulario" class="formulario">
+            <ui:VisualElement class="hoja">
+                <ui:Label name="titulo" text="Ajustes" class="titulo-seccion semibold" />
+                <ui:Label name="bienvenida" text="Antes de la primera ronda, elige tu consejo y entra a tu cuenta en cada proveedor. Después puedes cambiarlo en Ajustes." class="envolver separado solo-primer-arranque" />
+                <ui:Label name="paso-guia" class="texto-2 solo-primer-arranque" />
+
+                <!-- Consejo y roles -->
+                <ui:VisualElement name="bloque-consejo" class="bloque">
+                    <ui:Label text="Tu consejo" class="titulo-bloque semibold" />
+                    <ui:Label text="Marca los proveedores que se cargan al abrir la app." class="envolver separado" />
+                    <ui:VisualElement name="proveedores" class="proveedores" />
+                    <ui:Label text="Roles" class="subtitulo semibold" />
+                    <ui:Label text="Los proveedores sin rol investigan y operan." class="envolver texto-2 separado" />
+                    <ui:DropdownField name="integrador" label="Integrador: lee la tabla de hallazgos y escribe el informe" class="campo" />
+                    <ui:DropdownField name="verificador" label="Verificador: revisa las fuentes con búsqueda web" class="campo" />
+                    <ui:DropdownField name="redactor" label="Redactor: escribe la respuesta final; puede ser el integrador" class="campo" />
+                    <ui:Label name="aviso-reabrir" text="Los cambios se aplican la próxima vez que abras ChatCouncil." class="envolver texto-2 separado solo-ajustes" />
+                    <ui:Button name="guardar" text="Guardar" class="boton boton-primario semibold boton-solo" />
+                    <ui:Label name="mensaje" class="envolver mensaje" />
+                </ui:VisualElement>
+
+                <!-- Cuentas (D10): la sesión se deduce de la página, sin leer cookies. -->
+                <ui:VisualElement name="bloque-cuentas" class="bloque">
+                    <ui:Label text="Tus cuentas" class="titulo-bloque semibold" />
+                    <ui:Label text="Entra a tu cuenta en la página de cada proveedor. ChatCouncil no ve tu contraseña: sabe que la sesión está abierta porque la página muestra dónde escribir." class="envolver separado" />
+                    <ui:VisualElement name="lista-cuentas" />
+                    <ui:Button name="empezar" text="Ir a la ronda" class="boton boton-primario semibold boton-solo solo-primer-arranque" />
+                </ui:VisualElement>
+
+                <!-- Datos (D15) -->
+                <ui:VisualElement name="bloque-datos" class="bloque solo-ajustes">
+                    <ui:Label text="Tus datos" class="titulo-bloque semibold" />
+                    <ui:Label name="que-se-guarda" class="envolver separado" />
+                    <ui:TextField name="ruta-datos" readonly="true" class="campo ruta" />
+                    <ui:VisualElement class="fila-botones">
+                        <ui:Button name="copiar-ruta" text="Copiar la ruta" class="boton" />
+                        <ui:Button name="abrir-carpeta" text="Abrir la carpeta" class="boton" />
+                    </ui:VisualElement>
+                    <ui:Label name="como-copiar" class="envolver texto-2" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:ScrollView>
+
+        <!-- Entrar a una cuenta: la página del proveedor ocupa el resto. -->
+        <ui:VisualElement name="vista-cuenta" class="trabajo vista-cuenta">
+            <ui:VisualElement class="barra">
+                <ui:Button name="volver" text="‹ Volver" class="boton" />
+                <ui:VisualElement class="cabecera-texto">
+                    <ui:Label name="cuenta-titulo" class="semibold" />
+                    <ui:Label name="cuenta-estado" class="pequeno texto-2 envolver" />
+                </ui:VisualElement>
+                <ui:Button name="comprobar" text="Comprobar" class="boton" />
+            </ui:VisualElement>
+            <ui:VisualElement name="cuenta-pagina" class="pagina" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

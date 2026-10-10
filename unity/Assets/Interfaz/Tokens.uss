@@ -3,7 +3,7 @@
  * Tema claro en :root; el oscuro en .tema-oscuro, que redefine solo los colores.
  * Cada par de colores lo mide scripts/guard-contraste.mjs (WCAG 2.2 AA). Criterios y fuentes
  * de cada decisión: docs/BLUEPRINT.md, Fase 6, decisiones D20 en adelante.
- * Unidades: 1 px de USS es 1 dp en Android y 1 píxel efectivo en Windows (Esqueleto.cs).
+ * Unidades: 1 px de USS es 1 dp en Android y 1 píxel efectivo en Windows (Aplicacion.cs).
  */
 
 :root {
@@ -42,6 +42,7 @@
     --esp-4: 16px;
     --esp-5: 24px;
     --esp-6: 32px;
+    --color-velo: rgba(0, 0, 0, 0.5);    /* detrás del cajón modal (D3); no lleva texto encima */
     --alto-control: 48px;
     --radio: 6px;
     --ancho-foco: 2px;

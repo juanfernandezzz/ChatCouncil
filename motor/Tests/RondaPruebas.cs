@@ -118,6 +118,49 @@ namespace ChatCouncil.Motor.Pruebas
             }
         }
 
+        // INVESTIGADORES de index.ts: el orden en que la configuración muestra a los nueve.
+        [Test]
+        public void LosConocidosSonLosDeTypeScript() => Assert.That(Roles.Conocidos, Is.EqualTo(Referencias.Conocidos));
+
+        // T19: lo que la configuración escribe es lo que el arranque lee, y una selección inválida no se escribe.
+        [Test]
+        public void LaSeleccionGuardadaSeLeeIgualAlReabrir()
+        {
+            foreach (var (marcados, integrador, verificador, redactor, _) in Referencias.Guardados)
+            {
+                var (error, contenido) = Roles.Guardar(Referencias.Conocidos, marcados, integrador, verificador, redactor, "2026-10-10T12:00:00.000Z");
+                Assert.That(error, Is.EqualTo(Roles.ValidarSeleccion(Referencias.Conocidos, marcados, integrador, verificador, redactor)));
+                if (error != null)
+                {
+                    Assert.That(contenido, Is.Null, error);
+                    continue;
+                }
+                Assert.That(Roles.LeerSeleccion(contenido, Referencias.Conocidos), Is.EqualTo(Referencias.Conocidos.Where(marcados.Contains)));
+                var r = Roles.Leer(contenido, Referencias.Conocidos);
+                Assert.That((r.Integrador, r.Verificador, r.Redactor), Is.EqualTo((integrador, verificador, redactor)));
+            }
+        }
+
+        // El mismo formato que JSON.stringify(..., null, 2) de seleccion-proveedores.ts.
+        [Test]
+        public void LaSeleccionSeEscribeConElFormatoDeTypeScript()
+        {
+            var (_, contenido) = Roles.Guardar(Referencias.Conocidos, new[] { "glm", "chatgpt" }, "chatgpt", "glm", "chatgpt", "2026-10-10T12:00:00.000Z");
+            Assert.That(contenido, Is.EqualTo(
+                "{\n  \"proveedores\": [\n    \"chatgpt\",\n    \"glm\"\n  ],\n  \"integrador\": \"chatgpt\",\n  \"verificador\": \"glm\",\n" +
+                "  \"redactor\": \"chatgpt\",\n  \"guardadoEn\": \"2026-10-10T12:00:00.000Z\"\n}"));
+        }
+
+        // D10: la sesión se deduce de la página (el compositor está o no), sin leer cookies.
+        [Test]
+        public void LaSesionSeDeduceDelCompositor()
+        {
+            Assert.That(Dominio.EstadoDeSesion(JsonEstricto.Leer("\"\"")), Is.EqualTo("con-sesion"));
+            Assert.That(Dominio.EstadoDeSesion(JsonEstricto.Leer("\"borrador\"")), Is.EqualTo("con-sesion"));
+            Assert.That(Dominio.EstadoDeSesion(JsonEstricto.Leer("null")), Is.EqualTo("sin-sesion"));
+            Assert.That(Dominio.EstadoDeSesion(null), Is.EqualTo("sin-sesion"));
+        }
+
         [Test]
         public void ElPoolSonTodosMenosLosRoles()
         {

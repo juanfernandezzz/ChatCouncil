@@ -1,0 +1,3 @@
+Prueba de la interfaz (T19), fase 3, 2026-10-10 10:49:41, WindowsPlayer, 0.1.0
+OK el cambio se aplica al reabrir: filas [chatgpt,gemini,glm,kimi,deepseek,claude,grok], Claude: "Integra y redacta"
+Resultado: 1/1

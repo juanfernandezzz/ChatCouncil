@@ -344,3 +344,21 @@ Sin la frase ni la línea del problema, el cálculo da cerca del 67 %. **No est�
 - Los íconos de las secciones y de los menús ("Menú", "Más…" son texto por ahora), el tema
   según el sistema operativo (hoy, `-tema oscuro`) y el tamaño de texto en la app: T23 (D17).
 - La accesibilidad para lectores de pantalla en UI Toolkit: T23.
+
+## 7. Configuración y arranque (T19)
+
+`Esqueleto.cs` pasó a ser `Aplicacion.cs`: la app ya no muestra datos de ejemplo.
+- **Sin archivo de selección:** una guía de dos pasos, el consejo y las cuentas, sin riel hasta
+  "Ir a la ronda" (D29).
+- **Con archivo:** la Ronda con ese consejo y la ronda activa del registro.
+- **Ajustes** (`Configuracion.uxml`, `Configuracion.cs`):
+  - el consejo y los roles, con las reglas de `Roles` y el aviso de que se aplican al reabrir
+    (D11);
+  - las cuentas, con la sesión deducida del compositor (D10, D30);
+  - la carpeta de datos, con cómo copiarla (D15, D28).
+
+Historial y Ayuda salen del riel hasta T23 (D31). Las hojas `Tokens.uss` e `Interfaz.uss` van
+en el tema (`Tema.tss`), no en el UXML, para alcanzar los menús desplegables. El tema oscuro se
+pone en la raíz del panel.
+
+Capturas y resultados: `docs/evidencia/fase6/T19/` y `docs/evidencia/fase6/T19-resultados.md`.

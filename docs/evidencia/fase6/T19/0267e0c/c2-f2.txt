@@ -1,0 +1,9 @@
+Prueba de la interfaz (T19), fase 2, 2026-10-10 10:49:38, WindowsPlayer, 0.1.0
+OK reabrir: con archivo de selección arranca en la Ronda, sin la guía
+OK el consejo guardado se aplica al reabrir: filas [chatgpt,gemini,glm,kimi,qwen,deepseek,claude,grok], Claude: "Integra y redacta"
+OK ronda activa restaurada: "Investigación · 2 de 7", "Capturar los que terminaron"
+OK ajustes con lo guardado: [chatgpt,gemini,claude,grok,glm,kimi,qwen,deepseek] Claude/Grok/Claude
+OK carpeta de datos: C:\Users\JUANFE~1\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\17bb5b5b-98c9-47f5-8968-ef0cf33d15ce\scratchpad\corridas\datos-c2
+OK cambio guardado: Guardado. Se aplica la próxima vez que abras ChatCouncil.
+OK el cambio no se aplica antes de reabrir: filas [chatgpt,gemini,glm,kimi,qwen,deepseek,claude,grok], Claude: "Integra y redacta"
+Resultado: 7/7

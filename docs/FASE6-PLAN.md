@@ -354,7 +354,7 @@ su ruta.
 
   Queda para T20 el alto de la página en el teléfono (H7, 57 % en el caso más cargado).
 
-- [ ] **T19. Configuración y arranque.**
+- [x] **T19. Configuración y arranque.**
   Acepta: el primer arranque y la configuración según la arquitectura de
   T18, con proveedores y roles y sus reglas, que se aplica al reabrir, y la
   restauración de la ronda activa. Además, lo que T18 aceptó del inventario:
@@ -365,6 +365,15 @@ su ruta.
   Verifica: en la app compilada, las combinaciones inválidas se rechazan con
   su texto; el archivo de selección queda escrito y se aplica al reabrir.
   Depende de: T11, T16, T18. Tamaño: M.
+
+  **Hecha el 2026-10-10** sobre `0267e0c` (decisiones D28 a D31;
+  `docs/evidencia/fase6/T19-resultados.md`):
+  - Ajustes con el consejo, los roles y sus reglas, las cuentas y la carpeta de datos;
+  - el primer arranque, una guía de dos pasos sin riel;
+  - la Ronda con el consejo del archivo y la ronda activa restaurada;
+  - `PruebaInterfaz.cs` en el `.exe`: 13/13, 7/7 y 1/1 en tres corridas, sobre los controles
+    reales y en tres arranques; la autoprueba del panel, 37/37; el motor, 73/73.
+  Android no se compiló en esta tarea.
 
 - [ ] **T20. Pregunta e investigación conectadas.**
   Acepta: pegar en los 7, pegar en este panel, el aviso de capacidades, el
@@ -408,6 +417,8 @@ su ruta.
     nombre accesible, objetivos táctiles) con sus defectos corregidos;
   - la evaluación heurística repetida sobre la app compilada, que mide en
     especial H4, H7 y H12 (`docs/FASE6-INTERFAZ.md`).
+  - de T19: en el teléfono, "Ajustes" no se repite en la barra y en el título,
+    y la barra de desplazamiento sigue los tokens en los dos temas.
 
   Verifica:
   - capturas de PC y de teléfono;

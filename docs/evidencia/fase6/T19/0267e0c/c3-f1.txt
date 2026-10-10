@@ -1,0 +1,15 @@
+Prueba de la interfaz (T19), fase 1, 2026-10-10 10:49:43, WindowsPlayer, 0.1.0
+OK primer arranque: sin archivo de selección arranca la guía, sin riel (sección visible: configuración)
+OK paso 1: Paso 1 de 2: tu consejo
+OK combinación inválida: [] deepseek/glm/deepseek: "Tienes que marcar al menos un proveedor."
+OK combinación inválida: [chatgpt,glm] glm/glm/glm: "El integrador y el verificador tienen que ser proveedores distintos."
+OK combinación inválida: [chatgpt,glm] deepseek/glm/deepseek: "El integrador y el verificador tienen que estar entre los proveedores cargados."
+OK combinación inválida: [chatgpt,deepseek,glm] deepseek/glm/glm: "El redactor y el verificador tienen que ser proveedores distintos."
+OK combinación inválida: [chatgpt,deepseek,glm] deepseek/glm/kimi: "El redactor tiene que estar entre los proveedores cargados."
+OK combinación válida: "Guardado."; archivo: {   "proveedores": [     "chatgpt",     "gemini",     "claude",     "grok",     "glm",     "kimi",     "qwen",     "deepseek"   ],   "integrador": "claude",   "verificador": "grok",   "redactor": "claude",   "guardadoEn": "2026-10-10T13:49:44.126Z" }
+OK paso 2: Paso 2 de 2: tus cuentas
+OK sesión deducida, con compositor: Sesión abierta
+OK sesión deducida, sin compositor: Sin sesión: entra a tu cuenta en la página y toca Comprobar.
+OK fin de la guía: la Ronda queda a la vista, con el riel
+OK ronda con el consejo recién guardado: filas [chatgpt,gemini,glm,kimi,qwen,deepseek,claude,grok], Claude: "Integra y redacta"
+Resultado: 13/13

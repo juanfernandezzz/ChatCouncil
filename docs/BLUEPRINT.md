@@ -2527,6 +2527,21 @@ cada una con su motivo y su fuente):
   SDK no expone públicamente los constructores de los callbacks, y
   PrintManager abre un diálogo. Fuente: T17-resultados.md. El riesgo en
   otras versiones de Android queda abierto.
+· 2026-10-10, UniversalRenderPipelineGlobalSettings.asset se versiona en su
+  estado de Windows, con las dos entradas de SSAO (rid ...544,
+  ScreenSpaceAmbientOcclusionPersistentResources, y ...549,
+  ScreenSpaceAmbientOcclusionDynamicResources). Motivo: m_RuntimeSettings es
+  la lista de recursos que entran al player, y Unity la recalcula en cada
+  compilación según el renderer de la plataforma. Windows usa PC_Renderer,
+  que tiene SSAO; Android usa Mobile_Renderer (QualitySettings, Android: 0),
+  que no lo tiene. Por eso la compilación Android quita las dos entradas y la
+  de Windows las vuelve a poner. Medido en T17: cada compilación dejó su
+  propio estado, sin importar con cuál empezó, así que lo versionado no
+  cambia el binario. El estado de Android se coló en ed3c654 sin decirlo y
+  quedó corregido. Después de compilar Android en local, el archivo se
+  restaura con git checkout. En la nube (T25), no se comprueba un árbol
+  limpio sobre este archivo. Fuente: QualitySettings.asset, PC_Renderer.asset
+  y T17-resultados.md.
 
 ---
 

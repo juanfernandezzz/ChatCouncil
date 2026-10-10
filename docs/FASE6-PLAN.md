@@ -401,6 +401,9 @@ informe y push.
   Acepta: el flujo de GitHub Actions compila Windows y Android, arma el
   instalador, firma el `.apk` con la llave fija y publica
   `chatcouncil-unity-v1`. La llave tiene su respaldo fuera del repositorio.
+  `UniversalRenderPipelineGlobalSettings.asset` cambia con la plataforma que
+  se compila (BLUEPRINT, decisión del 2026-10-10): el flujo no lo commitea, y
+  si comprueba un árbol limpio después de compilar, lo excluye.
   Verifica: la corrida de Actions en verde y los dos binarios descargables
   del Release.
   Depende de: T24. Tamaño: M. **Necesita a Juan**: cargar los tres secretos

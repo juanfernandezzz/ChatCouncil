@@ -2543,6 +2543,109 @@ cada una con su motivo y su fuente):
   limpio sobre este archivo. Fuente: QualitySettings.asset, PC_Renderer.asset
   y T17-resultados.md.
 
+Decisiones de interfaz (T18). Las toma el agente con criterio y fuente, no con la
+costumbre ni las preferencias de Juan (enmienda de la spec del 2026-10-06). El
+inventario, el boceto, la evaluación heurística y el recorrido que las respaldan
+están en docs/FASE6-INTERFAZ.md. Fuentes, citadas por su sigla:
+[NH] Nielsen, 10 heurísticas, https://www.nngroup.com/articles/ten-usability-heuristics/
+[NS] Nielsen, severidad, https://www.nngroup.com/articles/how-to-rate-the-severity-of-usability-problems/
+[ISO] ISO 9241-110:2020, principios de interacción, https://www.iso.org/standard/75258.html
+[WCAG] WCAG 2.2, https://www.w3.org/TR/WCAG22/
+[FL] Fluent, NavigationView, https://learn.microsoft.com/en-us/windows/apps/design/controls/navigationview
+[M3C] Android, clases de tamaño de ventana, https://developer.android.com/develop/ui/compose/layouts/adaptive/use-window-size-classes
+[M3N] Android, navegación adaptativa, https://developer.android.com/develop/ui/compose/layouts/adaptive/build-adaptive-navigation
+[NNH] NN/g, navegación oculta en móvil y en escritorio, https://www.nngroup.com/articles/find-navigation-mobile-even-hamburger/ y https://www.nngroup.com/articles/find-navigation-desktop-not-hamburger/
+[UXT] Nielsen, botones inactivos, https://www.uxtigers.com/post/inactive-buttons
+[CW] Wharton, Rieman, Lewis y Polson (1994), "The cognitive walkthrough method: a practitioner's guide", en Nielsen y Mack (eds.), Usability Inspection Methods, Wiley.
+[TT] Google, tamaño de los objetivos táctiles, https://support.google.com/accessibility/android/answer/7101858
+
+· D1, 2026-10-10, la arquitectura se ordena por la frecuencia de cada tarea
+  en una ronda: lo frecuente siempre a la vista, lo raro a un menú. Criterio:
+  adecuación a la tarea [ISO] y flexibilidad y eficiencia [NH 7]. Lo más
+  frecuente es cambiar de panel (14 a 21 por ronda) y el paso siguiente
+  (unas 12); lo demás, 0 o 1 por ronda (FASE6-INTERFAZ.md §1).
+· D2, 2026-10-10, cuatro secciones: Ronda (inicio), Rondas anteriores,
+  Configuración y Ayuda. Criterio: la ronda es la única de uso continuo; las
+  otras tres reúnen las capacidades aceptadas (D10 a D18) [ISO, adecuación a
+  la tarea].
+· D3, 2026-10-10, navegación por clase de tamaño de ventana [M3C]: riel desde
+  600 de ancho; botón de menú con cajón modal por debajo. Contradicción
+  informada: [M3N] propone una barra inferior en compacta y [FL] un menú
+  (LeftMinimal) por debajo de 641 px. Gana el menú: las tres secciones que no
+  son la ronda se usan 0 o 1 vez por ronda, y una barra fija le quitaría unos
+  80 dp de alto a la página del proveedor, que es donde se trabaja (historia
+  23). [NNH] mide que la navegación oculta baja el descubrimiento; aquí se
+  esconde solo lo que casi no se usa, y lo frecuente (D4, D5) queda visible.
+· D4, 2026-10-10, Ronda ancha (840 o más): guía arriba con las siete etapas,
+  un solo botón primario del motor, la frase de la etapa y contadores; lista
+  de paneles a la izquierda; panel con su cabecera y la página. Criterio:
+  visibilidad del estado [NH 1], reconocer antes que recordar [NH 6] y la
+  historia 22. Boceto: docs/evidencia/fase6/T18/boceto-pc-1366x768.png.
+· D5, 2026-10-10, Ronda angosta (menos de 840): barra superior con la etapa,
+  la página con el mayor alto posible, y abajo el selector ‹ › del panel, el
+  botón primario y la frase de la etapa, visible al entrar en cada etapa.
+  Criterio: historias 15 y 23; reconocer antes que recordar [NH 6] (hallazgo
+  H1); controles abajo, al alcance del pulgar [M3N]. Boceto:
+  docs/evidencia/fase6/T18/boceto-telefono-390x844.png.
+· D6, 2026-10-10, la acción de un solo panel (pegar aquí, capturar este)
+  aparece solo cuando el estado del panel la permite. Criterio: prevención de
+  errores [NH 5] y robustez ante errores de uso [ISO] (hallazgo H2: pegar dos
+  veces en un panel que ya responde).
+· D7, 2026-10-10, sobre los botones fuera de su etapa: no hay una fila de
+  botones por etapa (el único botón del flujo es el paso del motor). Lo
+  imposible por datos se muestra deshabilitado con su motivo, y lo posible
+  fuera de su etapa (recapturar) queda habilitado en el menú de la ronda.
+  Criterio: prevención de errores [NH 5], control y libertad [NH 3],
+  controlabilidad [ISO], y deshabilitado con explicación mejor que oculto
+  [UXT]. Electron dejó de bloquear el 2026-09-19 por costumbre: aquí el
+  bloqueo se reduce a lo que el método exige.
+· D8, 2026-10-10, atajos de teclado en el PC: el paso siguiente, el cambio
+  de panel y F6 entre regiones; nunca Enter ni Ctrl+Enter, que envían en las
+  páginas. Criterio: flexibilidad y eficiencia [NH 7], operable por teclado
+  [WCAG 2.1.1]. Las teclas exactas se fijan en T23.
+· D9, 2026-10-10, un panel con problema dice qué pasó y qué hacer en su
+  cabecera, con el detalle técnico plegado. Criterio: [NH 9] (hallazgo H3) y
+  la historia 19.
+· D10, 2026-10-10, se acepta el primer arranque guiado: elegir el consejo y
+  entrar a cada cuenta, con el estado de sesión deducido de la página (el
+  compositor está o no), sin leer cookies. Criterio: es la primera tarea real
+  [ISO, adecuación a la tarea] y ayuda en contexto [NH 10]. T19.
+· D11, 2026-10-10, se acepta la configuración alcanzable en cualquier momento,
+  con los cambios del consejo aplicados al reabrir. Criterio: historia 7 y
+  controlabilidad [ISO]. T19.
+· D12, 2026-10-10, se acepta un historial mínimo de rondas de este aparato
+  (fecha, pregunta, etapa alcanzada, su informe). Criterio: reconocer antes
+  que recordar [NH 6]; el dato ya está en el registro. T23.
+· D13, 2026-10-10, se acepta abandonar la ronda, sin cambiar el esquema del
+  registro: vuelve a la etapa Pregunta y la ronda abandonada queda registrada.
+  Criterio: salida de emergencia [NH 3]. Límite medido en el código
+  (Puerta.RestaurarRondaActiva): si la app se cierra antes de pegar la
+  pregunta nueva, al reabrir vuelve la abandonada. Cambiar eso exige un hecho
+  nuevo, y el esquema es el de Electron (historia 69). T20.
+· D14, 2026-10-10, se acepta una sección de ayuda: el método, cada etapa y
+  los atajos. Criterio: [NH 10]; el método no es evidente. T23.
+· D15, 2026-10-10, se acepta mostrar dónde está la carpeta de datos y cómo
+  copiarla; se rechaza el respaldo automático. Criterio: sin sincronización,
+  el registro existe solo en ese aparato y la persona tiene que saber dónde
+  está [NH 1]. El respaldo automático necesita un destino que la spec no
+  tiene (Q4). T19.
+· D16, 2026-10-10, se acepta Acerca de con la versión, las licencias y un
+  enlace a la página de versiones; se rechaza el aviso automático. Criterio:
+  sin tienda, nada avisa de una versión nueva, y el enlace lo resuelve sin
+  que la app salga sola a la red. Las licencias de terceros (Unity, WebView2,
+  androidx.webkit) se muestran en cualquier caso. T23.
+· D17, 2026-10-10, se aceptan el tema claro, el oscuro o el del sistema, y el
+  tamaño de texto dentro de la app. Criterio: cambiar el tamaño del texto
+  hasta el 200 % es AA [WCAG 1.4.4], y Unity no sigue la escala de texto de
+  Windows. Qué tema es el predeterminado lo decide la parte 5 con evidencia.
+· D18, 2026-10-10, se acepta exportar el diagnóstico (abrir su carpeta o
+  compartir el archivo que ya escribe). Criterio: recuperarse de errores sin
+  terminal [NH 9]. T23.
+· D19, 2026-10-10, objetivos táctiles de 48 dp como mínimo, no los 44 px de
+  la spec. Contradicción informada: la spec pide 44 px; la guía de Android
+  pide 48 x 48 dp con 8 dp entre ellos [TT]. Gana la fuente, como dice la spec
+  para lo que no es esencial. WCAG 2.5.8 (24 px) queda holgado.
+
 ---
 
 ## 6. Criterios de aceptación

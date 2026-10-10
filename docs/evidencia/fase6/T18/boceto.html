@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boceto T18</title>
+<!--
+  Boceto de T18 (partes 3 y 4): arquitectura de información, en grises y sin dirección visual.
+  Una sola página que se reacomoda por ancho, como la interfaz real (una sola, por clase de
+  tamaño de ventana): "ancha" desde 840 px, "angosta" debajo. Estado representado: etapa
+  Operación, a mitad de camino. Los símbolos y las palabras de estado son provisionales (parte 5).
+-->
+<style>
+  :root { --borde: #555; --tenue: #888; --fondo: #fff; --suave: #eee; --texto: #111; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.35 system-ui, sans-serif; color: var(--texto); background: var(--fondo); height: 100vh; overflow: hidden; }
+  button { font: inherit; border: 1px solid var(--borde); background: var(--fondo); border-radius: 6px; padding: 0 12px; min-height: 40px; }
+  .primario { background: #222; color: #fff; border-color: #222; font-weight: 600; }
+  .nota { color: var(--tenue); font-size: 12px; }
+  .pagina { border: 2px dashed var(--borde); background: repeating-linear-gradient(45deg, #f6f6f6 0 10px, #fafafa 10px 20px);
+            display: grid; place-items: center; text-align: center; color: #444; }
+  .etapas { display: flex; gap: 4px; }
+  .etapa { flex: 1; border: 1px solid var(--borde); border-radius: 4px; padding: 4px 6px; font-size: 12px; white-space: nowrap; overflow: hidden; }
+  .etapa.hecha { background: var(--suave); }
+  .etapa.actual { background: #222; color: #fff; font-weight: 600; }
+  .estado { display: inline-flex; gap: 6px; align-items: baseline; }
+  .sim { width: 1.2em; text-align: center; font-weight: 700; }
+
+  /* ---------- ancha (840 px o más): riel, columna de guía y paneles, página ---------- */
+  .ancha { display: grid; grid-template-columns: 80px 260px 1fr; grid-template-rows: auto 1fr; height: 100vh; }
+  .riel { grid-row: 1 / 3; border-right: 1px solid var(--borde); display: flex; flex-direction: column; gap: 4px; padding: 8px 4px; }
+  .riel a { display: grid; place-items: center; min-height: 56px; border-radius: 8px; font-size: 11px; text-align: center; color: inherit; text-decoration: none; }
+  .riel a.sel { background: var(--suave); font-weight: 600; }
+  .guia { grid-column: 2 / 4; border-bottom: 1px solid var(--borde); padding: 8px 12px; display: grid; gap: 8px; }
+  .paso { display: flex; gap: 12px; align-items: center; }
+  .paso .texto { flex: 1; }
+  .lista { border-right: 1px solid var(--borde); overflow: auto; padding: 8px; }
+  .lista h3 { font-size: 12px; margin: 8px 4px 4px; color: var(--tenue); font-weight: 600; }
+  .fila { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 8px; border-radius: 6px; }
+  .fila.sel { outline: 2px solid #222; background: var(--suave); }
+  .fila .nombre { flex: 1; font-weight: 600; }
+  .derecha { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+  .cabecera { display: flex; gap: 8px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--borde); }
+  .cabecera .nombre { flex: 1; }
+
+  /* ---------- angosta (menos de 840 px): barra superior, página, guía abajo ---------- */
+  .angosta { display: none; height: 100vh; grid-template-rows: auto auto 1fr auto; }
+  .barra { display: flex; align-items: center; gap: 8px; padding: 0 4px; min-height: 56px; border-bottom: 1px solid var(--borde); }
+  .barra .titulo { flex: 1; font-weight: 600; }
+  .icono { width: 48px; min-height: 48px; padding: 0; }
+  .progreso { display: flex; gap: 3px; padding: 6px 8px; }
+  .progreso i { flex: 1; height: 6px; border: 1px solid var(--borde); border-radius: 3px; }
+  .progreso i.hecha { background: #999; } .progreso i.actual { background: #222; }
+  .abajo { border-top: 1px solid var(--borde); padding: 8px; display: grid; gap: 8px; }
+  .selector { display: flex; align-items: center; gap: 4px; }
+  .selector .actualp { flex: 1; text-align: center; min-height: 48px; display: grid; place-items: center; border: 1px solid var(--borde); border-radius: 6px; }
+  .abajo .primario { min-height: 48px; }
+
+  @media (max-width: 839px) { .ancha { display: none; } .angosta { display: grid; } }
+</style>
+</head>
+<body>
+
+<!-- ======================= ANCHA ======================= -->
+<div class="ancha">
+  <nav class="riel" aria-label="Secciones">
+    <a class="sel" href="#">▣<br>Ronda</a>
+    <a href="#">≡<br>Rondas<br>anteriores</a>
+    <a href="#">⚙<br>Configuración</a>
+    <a href="#">?<br>Ayuda</a>
+  </nav>
+
+  <section class="guia" aria-label="Guía de la ronda">
+    <div class="etapas" role="list" aria-label="Etapas de la ronda">
+      <div class="etapa hecha" role="listitem">✓ 1 Pregunta</div>
+      <div class="etapa hecha" role="listitem">✓ 2 Investigación</div>
+      <div class="etapa actual" role="listitem" aria-current="step">3 Operación</div>
+      <div class="etapa" role="listitem">4 Integración</div>
+      <div class="etapa" role="listitem">5 Verificación</div>
+      <div class="etapa" role="listitem">6 Redacción</div>
+      <div class="etapa" role="listitem">7 Informe</div>
+    </div>
+    <div class="paso">
+      <button class="primario">Capturar los que terminaron (2)</button>
+      <div class="texto">
+        <div><b>Tú:</b> en cada panel, revisa la operación y envíala. Si va con archivo, comprueba que quedó adjunto.</div>
+        <div class="nota">Enviados 5 de 7 · Parecen terminados 2 · Capturados 0</div>
+      </div>
+      <button>Siguiente por enviar ›</button>
+      <button aria-label="Más acciones de la ronda">⋯ Ronda</button>
+    </div>
+  </section>
+
+  <aside class="lista" aria-label="Paneles">
+    <h3>Operadores (7)</h3>
+    <div class="fila"><span class="sim">◕</span><span class="nombre">Gemini</span><span class="nota">Parece terminado</span></div>
+    <div class="fila sel" aria-current="true"><span class="sim">◐</span><span class="nombre">ChatGPT</span><span class="nota">Respondiendo</span></div>
+    <div class="fila"><span class="sim">◕</span><span class="nombre">Claude</span><span class="nota">Parece terminado</span></div>
+    <div class="fila"><span class="sim">◐</span><span class="nombre">Grok</span><span class="nota">Respondiendo</span></div>
+    <div class="fila"><span class="sim">◐</span><span class="nombre">Mistral</span><span class="nota">Respondiendo</span></div>
+    <div class="fila"><span class="sim">◔</span><span class="nombre">Kimi</span><span class="nota">Pegado, falta que envíes</span></div>
+    <div class="fila"><span class="sim">⚠</span><span class="nombre">Qwen</span><span class="nota">Con problema</span></div>
+    <h3>Roles (desde su etapa)</h3>
+    <div class="fila nota">DeepSeek integra · GLM verifica · DeepSeek redacta</div>
+  </aside>
+
+  <section class="derecha">
+    <div class="cabecera">
+      <span class="nombre"><b>ChatGPT</b> · <span class="estado"><span class="sim">◐</span>Respondiendo</span></span>
+      <button>Pegar operación aquí</button>
+      <button>Capturar este panel</button>
+      <button aria-label="Más acciones de este panel">⋯</button>
+    </div>
+    <div class="pagina">Página real de ChatGPT<br><span class="nota">(vista nativa: Unity no dibuja encima)</span></div>
+  </section>
+</div>
+
+<!-- ======================= ANGOSTA ======================= -->
+<div class="angosta">
+  <div class="barra">
+    <button class="icono" aria-label="Secciones">☰</button>
+    <span class="titulo">Operación · etapa 3 de 7</span>
+    <button class="icono" aria-label="Más acciones">⋯</button>
+  </div>
+  <div class="progreso" aria-hidden="true"><i class="hecha"></i><i class="hecha"></i><i class="actual"></i><i></i><i></i><i></i><i></i></div>
+  <div class="pagina">Página real de ChatGPT<br><span class="nota">(vista nativa)</span></div>
+  <section class="abajo" aria-label="Guía de la ronda">
+    <div class="selector">
+      <button class="icono" aria-label="Panel anterior">‹</button>
+      <div class="actualp"><span class="estado"><span class="sim">◐</span><b>ChatGPT</b> · Respondiendo · 2 de 7</span></div>
+      <button class="icono" aria-label="Siguiente por enviar">›</button>
+    </div>
+    <button class="primario">Capturar los que terminaron (2)</button>
+    <div class="nota">Enviados 5 de 7 · Parecen terminados 2 · <u>Qué hago yo ahora</u> · <u>Ver todos los paneles</u></div>
+  </section>
+</div>
+
+</body>
+</html>

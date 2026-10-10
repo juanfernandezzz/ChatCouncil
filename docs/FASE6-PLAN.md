@@ -333,10 +333,29 @@ su ruta.
   Depende de: T14. Tamaño: L. Si no cabe en una sesión, se corta en
   "1–4" y "5".
 
+  **Partes 1 a 4 hechas el 2026-10-10** (`docs/FASE6-INTERFAZ.md`; decisiones D1 a
+  D19 en el BLUEPRINT, sección Fase 6):
+  - inventario de tareas;
+  - las nueve capacidades del inventario candidato decididas: siete aceptadas,
+    dos en parte, ninguna rechazada entera;
+  - arquitectura para PC y teléfono;
+  - boceto capturado a 1366×768 y a 390×844 (`docs/evidencia/fase6/T18/`);
+  - evaluación heurística: 12 hallazgos, los 3 de severidad 3 corregidos en el
+    diseño;
+  - recorrido de una ronda: 85 acciones y 14 decisiones sin guía en Electron,
+    64 y 0 en el diseño nuevo.
+
+  **Falta la parte 5:** la dirección visual y los tokens, y las capturas del
+  esqueleto construido en Unity.
+
 - [ ] **T19. Configuración y arranque.**
   Acepta: el primer arranque y la configuración según la arquitectura de
   T18, con proveedores y roles y sus reglas, que se aplica al reabrir, y la
-  restauración de la ronda activa.
+  restauración de la ronda activa. Además, lo que T18 aceptó del inventario:
+  - el primer arranque guiado, con la entrada a cada cuenta y su estado de
+    sesión deducido de la página (D10);
+  - la configuración alcanzable en cualquier momento (D11);
+  - la ubicación de la carpeta de datos (D15).
   Verifica: en la app compilada, las combinaciones inválidas se rechazan con
   su texto; el archivo de selección queda escrito y se aplica al reabrir.
   Depende de: T11, T16, T18. Tamaño: M.
@@ -344,7 +363,9 @@ su ruta.
 - [ ] **T20. Pregunta e investigación conectadas.**
   Acepta: pegar en los 7, pegar en este panel, el aviso de capacidades, el
   indicador de cada panel, "Capturar los que terminaron", capturar este panel
-  y declarar la pregunta.
+  y declarar la pregunta. Además, de T18:
+  - abandonar la ronda (D13);
+  - en el teléfono, la frase de la etapa visible al entrar en ella (hallazgo H1).
   Verifica: en la app compilada, con páginas de prueba en lugar de
   proveedores (modo autoprueba), el recorrido de las dos etapas deja los
   hechos esperados en un registro temporal.
@@ -370,11 +391,14 @@ su ruta.
   Acepta:
   - recargar, cerrar la sesión del panel y el diagnóstico, donde los ubicó
     T18;
-  - las capacidades que T18 aceptó del inventario;
+  - las capacidades que T18 aceptó del inventario: atajos (D8), rondas
+    anteriores (D12), ayuda (D14), Acerca de (D16), tema y tamaño de texto (D17)
+    y exportar el diagnóstico (D18);
   - el diseño del teléfono;
   - una revisión de accesibilidad WCAG 2.2 AA (contraste, foco, orden,
     nombre accesible, objetivos táctiles) con sus defectos corregidos;
-  - la evaluación heurística repetida sobre la app compilada.
+  - la evaluación heurística repetida sobre la app compilada, que mide en
+    especial H4, H7 y H12 (`docs/FASE6-INTERFAZ.md`).
 
   Verifica:
   - capturas de PC y de teléfono;

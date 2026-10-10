@@ -38,6 +38,9 @@ jobs:
       # IL2CPP cambia por U+FFFD los surrogates sueltos de los literales (T14, ea3b12c).
       - name: Guard - ningun literal de C# del motor lleva un surrogate suelto
         run: pnpm guard:surrogates
+      # T18: cada par de colores de la interfaz, medido contra WCAG 2.2 AA en los dos temas.
+      - name: Guard - contraste de los tokens de la interfaz
+        run: pnpm guard:contraste
       # Compilar no es embarcar (BLUEPRINT 6): el gate mira el COMPILADO.
       - name: Build
         run: pnpm build

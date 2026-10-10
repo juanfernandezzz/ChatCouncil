@@ -2646,6 +2646,66 @@ están en docs/FASE6-INTERFAZ.md. Fuentes, citadas por su sigla:
   pide 48 x 48 dp con 8 dp entre ellos [TT]. Gana la fuente, como dice la spec
   para lo que no es esencial. WCAG 2.5.8 (24 px) queda holgado.
 
+Decisiones de la dirección visual (T18, parte 5). Mismas reglas: criterio y fuente, y
+las notas estéticas de §2 solo como antecedente. Tokens: unity/Assets/Interfaz/Tokens.uss.
+Fuentes nuevas:
+[POL] Piepenbrock, Mayr y Buchner (2013), "Positive display polarity is advantageous for both younger and older adults", Ergonomics 56(7).
+[BL] Beier y Larson (2010), "Design improvements for frequently misrecognized letters", Information Design Journal 18(2), doi 10.1075/idj.18.2.03bei.
+[WAL] Wallace y otros (2022), "Towards Individuated Reading Experiences: Different Fonts Increase Reading Speed for Different Individuals", ACM TOCHI 29(4), doi 10.1145/3502222.
+[REL] Rello, Pielot y Marcos (2016), "Make It Big! The Effect of Font Size and Line Spacing on Online Readability", CHI '16.
+[DYS] Dyson (2004), "How physical text layout affects reading from screen", Behaviour & Information Technology 23(6), doi 10.1080/01449290410001715714.
+
+· D20, 2026-10-10, el tema sigue al del sistema, y es claro cuando el
+  sistema no dice nada. Criterio: la polaridad positiva (texto oscuro sobre
+  claro) mejora la agudeza y la corrección de textos en jóvenes y mayores
+  [POL]; las páginas de los proveedores siguen el tema del sistema, y la app
+  coincide con ellas; quien elige el oscuro en su sistema (por fotofobia, por
+  ejemplo) lo conserva (D17). Contradicción informada: §2 pedía un tono "no
+  claro"; gana la evidencia, y el oscuro queda como tema completo, medido
+  igual que el claro.
+· D21, 2026-10-10, color "contenido": neutros apenas cálidos, el botón
+  primario en tinta (sin tono) y el color reservado a los seis estados.
+  Criterio: un color con un solo significado en toda la app [NH 4]; un
+  primario de color competiría con el color de algún estado. La calidez de
+  los neutros toma el antecedente de §2 ("ceniza, papel") donde la evidencia
+  no decide.
+· D22, 2026-10-10, el contraste de cada par lo mide un gate:
+  scripts/guard-contraste.mjs, en el CI. 4,5:1 para texto [WCAG 1.4.3],
+  incluidos los colores de estado, para que su palabra pueda ir en su color;
+  3:1 para bordes de control, el contorno del botón primario y el foco
+  [WCAG 1.4.11]. El foco tiene que contrastar a la vez con el fondo y con el
+  botón de tinta: su color se calculó dentro de esa franja (3,5:1 con los
+  dos). 68 pares en dos temas; el gate falló una vez (el foco, 2,88:1) antes
+  del cálculo.
+· D23, 2026-10-10, una sola familia tipográfica: Atkinson Hyperlegible Next
+  (OFL, Braille Institute), con Regular, SemiBold y Bold. Criterio: no hay
+  una fuente mejor para todos los lectores [WAL], así que se elige por la
+  tarea: la app muestra códigos y nombres en los que se confunden I, l y 1, y
+  O y 0 ([H12], [P3], URLs, modelos), y diferenciar esas letras mejora su
+  reconocimiento [BL]. Atkinson las diferencia sin depender de rasgos
+  OpenType, que UI Toolkit no garantiza; Inter, que trae Unity, los necesita.
+  Juan aprobó la descarga (2026-10-10). Le faltan dos glifos, → y ✓, que la
+  interfaz no usa en texto.
+· D24, 2026-10-10, tamaños: 16 px para los controles y el texto de la
+  interfaz, 14 como mínimo, 20 y 24 para títulos (escala de 1,2), y 18 para
+  los textos largos (la ayuda). Criterio: con más tamaño mejoran la lectura y
+  la comprensión, y para mucho texto se recomienda 18 o más [REL]. Los
+  párrafos tienen un ancho máximo de unos 70 caracteres (620 px): las líneas
+  largas se leen más rápido, pero se prefieren las medianas [DYS].
+· D25, 2026-10-10, interlineado de 1,5 en el texto, fijado en la altura de
+  línea de la fuente, porque USS no tiene line-height. Criterio: WCAG 1.4.8
+  (AAA) lo recomienda en párrafos; en [REL] el efecto del interlineado fue
+  marginal, así que se toma la recomendación de WCAG. La fuente trae 1,30.
+· D26, 2026-10-10, el símbolo de cada estado es un dibujo con forma propia
+  (círculo vacío, con punto, medio lleno, lleno, con marca, triángulo con
+  exclamación), no un carácter Unicode. Criterio: el estado se distingue sin
+  color [WCAG 1.4.1] y con 3:1 [WCAG 1.4.11]; un carácter depende de que la
+  fuente lo tenga, y a esta le falta ✓.
+· D27, 2026-10-10, unidades: 1 px de USS es 1 dp en Android (160 dpi) y 1
+  píxel efectivo en Windows (96 dpi), con escala física constante. Criterio:
+  las clases de ancho de D3 son en dp [M3C], y una sola hoja sirve a los dos
+  sistemas (PRODUCT.md, Platform).
+
 ---
 
 ## 6. Criterios de aceptación

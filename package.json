@@ -16,6 +16,7 @@
     "guard:artefacto": "node scripts/guard-artefacto.mjs",
     "guard:trazabilidad": "node scripts/guard-trazabilidad.mjs",
     "guard:surrogates": "node scripts/guard-surrogates.mjs",
+    "guard:contraste": "node scripts/guard-contraste.mjs",
     "dev": "pnpm --filter @chatcouncil/desktop dev",
     "build": "pnpm --filter @chatcouncil/desktop build"
   },

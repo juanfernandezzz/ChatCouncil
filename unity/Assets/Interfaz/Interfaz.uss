@@ -1,0 +1,187 @@
+/*
+ * Componentes de la interfaz. Solo usa los tokens de Tokens.uss: ningún color ni medida suelta,
+ * salvo los anchos de estructura de la arquitectura (riel 88, lista 280; docs/FASE6-INTERFAZ.md).
+ * La raíz lleva .ancha o .angosta, y .compacta debajo de 600 (Esqueleto.cs, decisiones D3 a D5).
+ */
+
+.raiz {
+    flex-grow: 1;
+    flex-direction: row;
+    background-color: var(--color-fondo);
+    color: var(--color-texto);
+    font-size: var(--texto-cuerpo);
+}
+
+.texto-2 { color: var(--color-texto-2); }
+.pequeno { font-size: var(--texto-pequeno); }
+.envolver { white-space: normal; max-width: var(--medida-parrafo); }
+
+/* ---------- controles ---------- */
+
+.boton {
+    min-height: var(--alto-control);
+    min-width: var(--alto-control);
+    margin: 0;
+    padding: 0 var(--esp-4);
+    border-width: var(--ancho-foco);
+    border-radius: var(--radio);
+    border-color: var(--color-borde-control);
+    background-color: var(--color-superficie);
+    color: var(--color-texto);
+    font-size: var(--texto-cuerpo);
+    -unity-text-align: middle-center;
+}
+.boton:hover { background-color: var(--color-superficie-2); }
+.boton:focus { border-color: var(--color-foco); }
+.boton:disabled { color: var(--color-texto-2); border-color: var(--color-borde); }
+
+.boton-primario {
+    border-color: var(--color-primario);
+    background-color: var(--color-primario);
+    color: var(--color-sobre-primario);
+}
+.boton-primario:hover { background-color: var(--color-primario); opacity: 0.92; }
+.boton-primario:focus { border-color: var(--color-foco); }
+
+.boton-icono { padding: 0; width: var(--alto-control); }
+
+/* ---------- riel de secciones (D3) ---------- */
+
+.riel {
+    width: 88px;
+    padding: var(--esp-2) var(--esp-1);
+    background-color: var(--color-superficie-2);
+    border-right-width: 1px;
+    border-color: var(--color-borde);
+}
+.compacta .riel { display: none; }
+.riel-item {
+    min-height: 56px;
+    margin-bottom: var(--esp-1);
+    border-radius: var(--radio);
+    -unity-text-align: middle-center;
+    font-size: var(--texto-pequeno);
+    color: var(--color-texto-2);
+}
+.riel-item--actual { background-color: var(--color-superficie); color: var(--color-texto); }
+
+.trabajo { flex-grow: 1; }
+.ancha .solo-angosta { display: none; }
+.angosta .solo-ancha { display: none; }
+
+/* ---------- etapas: indicador de progreso, no botones (H6) ---------- */
+
+.etapas { flex-direction: row; }
+.etapa { flex-grow: 1; flex-basis: 0; margin-right: var(--esp-1); }
+.etapa-nombre { font-size: var(--texto-pequeno); color: var(--color-texto-2); white-space: nowrap; overflow: hidden; }
+.etapa-barra { height: 4px; margin-top: var(--esp-1); border-radius: 2px; background-color: var(--color-borde); }
+.etapa--hecha .etapa-barra { background-color: var(--color-texto-2); }
+.etapa--actual .etapa-nombre { color: var(--color-texto); }
+.etapa--actual .etapa-barra { height: 6px; background-color: var(--color-primario); }
+
+/* ---------- guía de la ronda ---------- */
+
+.guia {
+    padding: var(--esp-3) var(--esp-4);
+    background-color: var(--color-superficie);
+    border-bottom-width: 1px;
+    border-color: var(--color-borde);
+}
+.paso { flex-direction: row; align-items: center; margin-top: var(--esp-3); }
+.paso-texto { flex-grow: 1; flex-shrink: 1; margin: 0 var(--esp-4); }
+.paso .boton { margin-left: var(--esp-2); }
+.paso .boton-primario { margin-left: 0; }
+
+/* ---------- lista de paneles (D4) ---------- */
+
+.cuerpo { flex-grow: 1; flex-direction: row; }
+.lista {
+    width: 280px;
+    padding: var(--esp-2);
+    background-color: var(--color-superficie);
+    border-right-width: 1px;
+    border-color: var(--color-borde);
+}
+.lista-titulo { font-size: var(--texto-pequeno); color: var(--color-texto-2); margin: var(--esp-3) var(--esp-2) var(--esp-1); }
+.fila-panel {
+    flex-direction: row;
+    align-items: center;
+    min-height: var(--alto-control);
+    padding: 0 var(--esp-2);
+    border-radius: var(--radio);
+    border-width: var(--ancho-foco);
+    border-color: rgba(0, 0, 0, 0);
+}
+.fila-panel--actual { background-color: var(--color-superficie-2); border-color: var(--color-primario); }
+.fila-nombre { flex-grow: 1; margin-left: var(--esp-2); }
+.fila-estado { font-size: var(--texto-pequeno); color: var(--color-texto-2); }
+
+/* ---------- panel: cabecera y página ---------- */
+
+.panel { flex-grow: 1; }
+.cabecera {
+    flex-direction: row;
+    align-items: center;
+    padding: var(--esp-2) var(--esp-4);
+    background-color: var(--color-superficie);
+    border-bottom-width: 1px;
+    border-color: var(--color-borde);
+}
+.cabecera-texto { flex-grow: 1; flex-shrink: 1; margin: 0 var(--esp-3); }
+.cabecera .boton { margin-left: var(--esp-2); }
+.problema { color: var(--color-estado-problema); white-space: normal; }
+
+.pagina {
+    flex-grow: 1;
+    justify-content: center;
+    align-items: center;
+    background-color: var(--color-superficie-2);
+}
+
+/* ---------- angosta (D5) ---------- */
+
+.barra {
+    flex-direction: row;
+    align-items: center;
+    min-height: 56px;
+    padding: 0 var(--esp-1);
+    background-color: var(--color-superficie);
+}
+.barra-titulo { flex-grow: 1; margin: 0 var(--esp-2); font-size: var(--texto-titulo); }
+.solo-compacta { display: none; }
+.compacta .solo-compacta { display: flex; }
+.progreso { flex-direction: row; padding: var(--esp-1) var(--esp-2) var(--esp-2); background-color: var(--color-superficie); }
+.progreso .etapa-barra { flex-grow: 1; margin-right: var(--esp-1); }
+
+.abajo {
+    padding: var(--esp-2) var(--esp-3) var(--esp-3);
+    background-color: var(--color-superficie);
+    border-top-width: 1px;
+    border-color: var(--color-borde);
+}
+.selector { flex-direction: row; align-items: center; margin-bottom: var(--esp-2); }
+.selector-actual {
+    flex-grow: 1;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    min-height: var(--alto-control);
+    margin: 0 var(--esp-2);
+}
+.progreso .etapa-barra--hecha { background-color: var(--color-texto-2); }
+.progreso .etapa-barra--actual { height: 6px; background-color: var(--color-primario); }
+.abajo .boton-primario { margin-bottom: var(--esp-2); }
+.separado { margin-bottom: var(--esp-2); }
+.fila-resumen { flex-direction: row; align-items: center; }
+.resumen { flex-grow: 1; }
+.selector-texto { margin-left: var(--esp-2); }
+
+/* ---------- íconos de estado: forma y color (IconoEstado.cs) ---------- */
+
+.icono-estado { width: 20px; height: 20px; flex-shrink: 0; --icono-fondo: var(--color-superficie); }
+.icono-estado--por-pegar { --icono-color: var(--color-estado-por-pegar); }
+.icono-estado--falta-enviar { --icono-color: var(--color-estado-falta-enviar); }
+.icono-estado--respondiendo { --icono-color: var(--color-estado-respondiendo); }
+.icono-estado--terminado { --icono-color: var(--color-estado-terminado); }
+.icono-estado--capturado { --icono-color: var(--color-estado-capturado); }
+.icono-estado--problema { --icono-color: var(--color-estado-problema); }

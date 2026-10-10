@@ -258,3 +258,89 @@ y el tiempo de cada acción.
 - T20 a T22: D4 a D7 y D9 en cada etapa.
 - T23: D8 (atajos), D12, D14, D16, D17, D18, y repetir la evaluación (H4, H7 y H12 quedan para
   medir ahí).
+
+## 6. Dirección visual y tokens (T18, parte 5)
+
+Escrito el 2026-10-10. Decisiones D20 a D27 en el BLUEPRINT.
+
+### 6.1 Cómo se decidió
+
+- **La escena:** profesionales en sesiones largas, de día y de noche, en el PC y en el
+  teléfono. Lo que leen es la página del proveedor, que sigue el tema del sistema. La app es
+  el marco: tiene que dejar ver la página y decir el estado sin competir con ella.
+- **Sin votación de estética.** La skill `impeccable` propone tirar direcciones visuales al
+  azar para que Juan elija una. La spec ("La interfaz") y la regla de Juan del 2026-10-06
+  dicen que la estética no sale de su gusto sino de criterios, así que ese paso **no se
+  corrió**. Del resto de la skill se aplicaron el modo "Operate" y su piso de calidad.
+- **Antecedentes de §2 del BLUEPRINT:** se tomó la calidez de los neutros ("ceniza, papel"),
+  donde la evidencia no decide. No se tomó el tono "no claro" como predeterminado, porque la
+  evidencia de polaridad lo contradice (D20). Tampoco la textura generada por código: no hay
+  criterio que la pida en una herramienta de trabajo.
+
+### 6.2 Tokens
+
+`unity/Assets/Interfaz/Tokens.uss` es la única hoja de color, tipografía y espacio, con el
+tema claro en `:root` y el oscuro en `.tema-oscuro`. Los componentes
+(`unity/Assets/Interfaz/Interfaz.uss`) usan solo esos tokens.
+
+### 6.3 Contraste, medido
+
+`pnpm guard:contraste` mide los **68 pares en los dos temas** y corre en el CI. La tabla
+completa, generada por el mismo gate, está en `docs/evidencia/fase6/T18/contraste.md`. Los
+márgenes más justos:
+
+| Par | Contraste | Mínimo |
+|---|---|---|
+| estado "por pegar" sobre la superficie 2, tema claro | 4,74:1 | 4,5:1 |
+| foco sobre el botón de tinta, tema claro | 3,49:1 | 3:1 |
+| foco sobre la superficie 2, tema claro | 3,50:1 | 3:1 |
+| estado "capturado" sobre la superficie 2, tema claro | 5,17:1 | 4,5:1 |
+
+El gate se vio fallar antes de pasar: el primer color de foco daba 2,88:1 contra el botón de
+tinta en el tema claro y 2,93:1 en el oscuro. El color definitivo se calculó para quedar en
+la franja que pasa contra los dos vecinos.
+
+### 6.4 El esqueleto, construido y capturado
+
+`unity/Assets/Interfaz/`: `Esqueleto.cs` arma la pantalla de Ronda de `Ronda.uxml`, con datos
+de ejemplo, en el `.exe` de Windows (IL2CPP). `IconoEstado.cs` dibuja los seis estados. Las
+capturas salen de la app compilada: con `-captura` dibuja la interfaz en una textura del tamaño
+exacto en dp. Así no depende del monitor (esta notebook no deja abrir una ventana de 844 px de
+alto).
+
+| Captura | Tamaño |
+|---|---|
+| `docs/evidencia/fase6/T18/esqueleto-pc-claro.png` | 1366 × 768 |
+| `docs/evidencia/fase6/T18/esqueleto-pc-oscuro.png` | 1366 × 768 |
+| `docs/evidencia/fase6/T18/esqueleto-telefono-claro.png` | 390 × 844 |
+| `docs/evidencia/fase6/T18/esqueleto-telefono-oscuro.png` | 390 × 844 |
+
+Lo que muestran:
+- el estado de un panel con forma, color y palabra;
+- la acción del panel solo cuando corresponde (Qwen, con problema, ofrece "Pegar operación
+  aquí");
+- el problema con qué hacer;
+- las etapas como indicador de progreso, no como botones;
+- en el teléfono, la frase de la etapa a la vista y las flechas en orden.
+
+**Medido en las capturas:**
+- Interlineado de 1,5: dos líneas de 16 px separadas 24 px.
+- **Alto de la página del proveedor:** 67 % en el PC y **57 % en el teléfono**, en el caso
+  más cargado (un panel con problema y la frase de la etapa visible). El boceto daba 72 % en
+  el teléfono, antes de las correcciones H1 y D9.
+
+**H7 sube de severidad 2 a 3:** mostrar la frase y el problema (H1, H3) le quita espacio a la
+página, que la historia 23 quiere casi a pantalla completa. Para T20:
+- la frase se pliega después de leerla, como ya dice §3.4;
+- la línea del problema va dentro del selector.
+
+Sin la frase ni la línea del problema, el cálculo da cerca del 67 %. **No está medido.**
+
+### 6.5 Lo que no se hizo en esta parte
+
+- **El revisor final de `impeccable` y el documento DESIGN.md no se corrieron.** Los tokens y
+  las decisiones D20 a D27 ya registran el sistema; un DESIGN.md los duplicaría. La revisión
+  heurística sobre la app compilada sigue en T23.
+- Los íconos de las secciones y de los menús ("Menú", "Más…" son texto por ahora), el tema
+  según el sistema operativo (hoy, `-tema oscuro`) y el tamaño de texto en la app: T23 (D17).
+- La accesibilidad para lectores de pantalla en UI Toolkit: T23.

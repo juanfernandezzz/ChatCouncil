@@ -1,0 +1,68 @@
+/*
+ * Tokens de la interfaz: la única hoja de color, tipografía y espacio (spec, "La interfaz").
+ * Tema claro en :root; el oscuro en .tema-oscuro, que redefine solo los colores.
+ * Cada par de colores lo mide scripts/guard-contraste.mjs (WCAG 2.2 AA). Criterios y fuentes
+ * de cada decisión: docs/BLUEPRINT.md, Fase 6, decisiones D20 en adelante.
+ * Unidades: 1 px de USS es 1 dp en Android y 1 píxel efectivo en Windows (Esqueleto.cs).
+ */
+
+:root {
+    /* Superficies: neutros apenas cálidos. El color se reserva para los estados (D21). */
+    --color-fondo: #F5F4F1;
+    --color-superficie: #FBFAF8;
+    --color-superficie-2: #ECEAE5;
+    --color-borde: #D8D4CC;            /* separador decorativo, no delimita un control */
+    --color-borde-control: #7D776D;
+    --color-texto: #1C1A17;
+    --color-texto-2: #57524A;
+    --color-primario: #2B2824;          /* tinta: el paso siguiente, sin un tono que compita con los estados */
+    --color-sobre-primario: #FBFAF8;
+    --color-foco: #3A79E0;          /* entre el fondo claro y la tinta: 3,5:1 con los dos */
+
+    /* Estados del panel: siempre con su forma y su palabra (WCAG 1.4.1). */
+    --color-estado-por-pegar: #6B665D;
+    --color-estado-falta-enviar: #8A5300;
+    --color-estado-respondiendo: #1F5BB8;
+    --color-estado-terminado: #00695F;
+    --color-estado-capturado: #2C6E31;
+    --color-estado-problema: #B3261E;
+
+    /* Tipografía: una sola familia (Atkinson Hyperlegible Next), escala 1,2 (D23). */
+    --texto-pequeno: 14px;
+    --texto-cuerpo: 16px;
+    --texto-titulo: 20px;
+    --texto-encabezado: 24px;
+    --texto-lectura: 18px;             /* textos largos (ayuda): 18 o más, Rello y otros 2016 */
+    --medida-parrafo: 620px;           /* unos 70 caracteres a 16 px: el largo que se prefiere (Dyson 2004) */
+
+    /* Espacio en pasos de 4 y objetivos de 48 (D19). */
+    --esp-1: 4px;
+    --esp-2: 8px;
+    --esp-3: 12px;
+    --esp-4: 16px;
+    --esp-5: 24px;
+    --esp-6: 32px;
+    --alto-control: 48px;
+    --radio: 6px;
+    --ancho-foco: 2px;
+}
+
+.tema-oscuro {
+    --color-fondo: #171614;
+    --color-superficie: #1F1D1A;
+    --color-superficie-2: #2A2724;
+    --color-borde: #3A3631;
+    --color-borde-control: #8F887D;
+    --color-texto: #EDEAE4;
+    --color-texto-2: #B4ADA2;
+    --color-primario: #EDEAE4;
+    --color-sobre-primario: #1C1A17;
+    --color-foco: #3A75F0;
+
+    --color-estado-por-pegar: #A49E94;
+    --color-estado-falta-enviar: #E8A33D;
+    --color-estado-respondiendo: #86B0F5;
+    --color-estado-terminado: #4FC2B4;
+    --color-estado-capturado: #82C785;
+    --color-estado-problema: #F28B82;
+}

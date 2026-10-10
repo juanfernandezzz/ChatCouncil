@@ -294,7 +294,7 @@ su ruta.
 
 ### Etapa 5 — Interfaz
 
-- [ ] **T18. Arquitectura de información y dirección de diseño, con
+- [x] **T18. Arquitectura de información y dirección de diseño, con
   evidencia.** Esta tarea se reescribió por la enmienda del 2026-10-06 en la
   especificación, en "La interfaz": la interfaz no sigue las preferencias de
   Juan, sino criterios evidenciados.
@@ -345,8 +345,14 @@ su ruta.
   - recorrido de una ronda: 85 acciones y 14 decisiones sin guía en Electron,
     64 y 0 en el diseño nuevo.
 
-  **Falta la parte 5:** la dirección visual y los tokens, y las capturas del
-  esqueleto construido en Unity.
+  **Parte 5 hecha el 2026-10-10** (decisiones D20 a D27 y `docs/FASE6-INTERFAZ.md` §6):
+  - tokens en `unity/Assets/Interfaz/Tokens.uss`, con tema claro y oscuro;
+  - contraste de 68 pares medido por `guard:contraste`, que corre en el CI;
+  - Atkinson Hyperlegible Next;
+  - esqueleto de la Ronda compilado en el `.exe`, con capturas a 1366×768 y a 390×844 en los
+    dos temas.
+
+  Queda para T20 el alto de la página en el teléfono (H7, 57 % en el caso más cargado).
 
 - [ ] **T19. Configuración y arranque.**
   Acepta: el primer arranque y la configuración según la arquitectura de
@@ -366,6 +372,9 @@ su ruta.
   y declarar la pregunta. Además, de T18:
   - abandonar la ronda (D13);
   - en el teléfono, la frase de la etapa visible al entrar en ella (hallazgo H1).
+  - el alto de la página en el teléfono (hallazgo H7, severidad 3): la frase se pliega
+    después de leerla y la línea del problema va dentro del selector; medir en la captura
+    (`docs/FASE6-INTERFAZ.md` §6.4).
   Verifica: en la app compilada, con páginas de prueba en lugar de
   proveedores (modo autoprueba), el recorrido de las dos etapas deja los
   hechos esperados en un registro temporal.

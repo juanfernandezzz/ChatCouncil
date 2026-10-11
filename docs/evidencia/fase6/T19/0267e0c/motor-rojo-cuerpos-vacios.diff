@@ -1,0 +1,38 @@
+--- a/motor/Runtime/Roles.cs
++++ b/motor/Runtime/Roles.cs
+@@ -109,21 +109,8 @@
+         }
+ 
+         /// <summary>El error que impide guardar, o el contenido del archivo de selección (guardarSeleccion de TypeScript, sin escribirlo).</summary>
+-        public static (string Error, string Contenido) Guardar(IReadOnlyList<string> conocidos, IReadOnlyList<string> marcados, string integrador, string verificador, string redactor, string guardadoEn)
+-        {
+-            var error = ValidarSeleccion(conocidos, marcados, integrador, verificador, redactor);
+-            if (error != null) return (error, null);
+-            var contenido = new JObject
+-            {
+-                ["proveedores"] = new JArray(conocidos.Where(marcados.Contains)),
+-                ["integrador"] = integrador,
+-                ["verificador"] = verificador,
+-                ["redactor"] = redactor,
+-                ["guardadoEn"] = guardadoEn,
+-            };
+-            // JSON.stringify(..., null, 2): sangría de dos espacios y el mismo salto de línea en cualquier sistema.
+-            return (null, contenido.ToString(Newtonsoft.Json.Formatting.Indented).Replace("\r\n", "\n"));
+-        }
++        public static (string Error, string Contenido) Guardar(IReadOnlyList<string> conocidos, IReadOnlyList<string> marcados, string integrador, string verificador, string redactor, string guardadoEn) =>
++            (null, null);
+ 
+         /// <summary>El pool de investigadores y operadores: todos, en su orden, menos los tres roles.</summary>
+         public static List<string> PoolDeInvestigadores(IReadOnlyList<string> todos, RolesElegidos roles) =>
+--- a/motor/Runtime/Dominio.cs
++++ b/motor/Runtime/Dominio.cs
+@@ -28,8 +28,7 @@
+             Nombres.TryGetValue(id, out var nombre) ? nombre : id.Length == 0 ? "" : Js.ToUpperCase(id.Substring(0, 1)) + id.Substring(1);
+ 
+         /// <summary>D10: con sesión si la página tiene el compositor de su spec (leerCompositor no da null); sin leer cookies.</summary>
+-        public static string EstadoDeSesion(JToken compositor) =>
+-            compositor != null && compositor.Type == JTokenType.String ? "con-sesion" : "sin-sesion";
++        public static string EstadoDeSesion(JToken compositor) => "";
+ 
+         /// <summary>
+         /// "Hay algo en el campo" no alcanza: el marcador interno de una ronda

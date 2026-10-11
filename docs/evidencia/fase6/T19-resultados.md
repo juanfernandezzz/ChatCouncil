@@ -39,10 +39,29 @@ Tres corridas, cada una con su carpeta de datos nueva (`T19/0267e0c/c1-f1.txt` a
 Tasa: 3/3. La autoprueba del panel sobre el mismo `.exe`: **37/37** (`T19/0267e0c/autoprueba.txt`),
 la misma que antes de T19.
 
-El motor, con `dotnet test`: **73/73**. Las cuatro pruebas nuevas (`Roles.Guardar` se lee
-igual al reabrir y escribe con el formato de TypeScript, `Roles.Conocidos` y
-`Dominio.EstadoDeSesion`) se vieron fallar antes de implementar: tres por su aserción, con
-una implementación vacía; la de `Roles.Conocidos`, solo porque no compilaba.
+### El motor, con `dotnet test`
+
+Las dos corridas son sobre la carpeta `motor/` de `0267e0c`, extraída con `git archive` fuera del
+repositorio. El XML lo escribe el adaptador de NUnit (`-- NUnit.TestOutputXml=CARPETA`).
+
+- **Verde:** `T19/0267e0c/motor-verde.xml`, con `result="Passed" total="73" passed="73"
+  failed="0"`.
+- **Roja:** `T19/0267e0c/motor-rojo.xml` y la salida cruda, `motor-rojo-salida.txt`. Corre
+  contra los cuerpos vacíos de `T19/0267e0c/motor-rojo-cuerpos-vacios.diff`:
+  `Roles.Guardar => (null, null)` y `Dominio.EstadoDeSesion => ""`. Da `result="Failed"
+  total="73" passed="70" failed="3"`. Fallan, por su aserción, exactamente las tres pruebas
+  nuevas que las usan:
+  - `LaSeleccionGuardadaSeLeeIgualAlReabrir`;
+  - `LaSeleccionSeEscribeConElFormatoDeTypeScript`;
+  - `LaSesionSeDeduceDelCompositor`.
+
+**Qué es reproducción y qué es original:** la corrida roja de este archivo se hizo el
+2026-10-11, para el auditor. La del 2026-10-10, durante el TDD, usó los mismos cuerpos vacíos
+sobre el árbol de trabajo, antes de que existieran `Roles.Conocidos` y su prueba (72
+pruebas). Dio las mismas tres fallas, pero su salida no se guardó.
+
+La cuarta prueba nueva, `LosConocidosSonLosDeTypeScript`, solo se vio fallar porque no
+compilaba (`Roles` no contenía `Conocidos`). No se la vio fallar por su aserción.
 
 **La prueba de la app pasó en su primera corrida**, así que no se la vio fallar. Se hizo una
 mutación: `Guardar` escribía el archivo aunque la combinación fuera inválida. La fase 1 dio

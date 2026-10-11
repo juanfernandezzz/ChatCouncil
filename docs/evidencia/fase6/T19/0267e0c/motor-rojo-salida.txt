@@ -1,0 +1,46 @@
+  Determinando los proyectos que se van a restaurar...
+  Todos los proyectos están actualizados para la restauración.
+  Motor -> C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\17bb5b5b-98c9-47f5-8968-ef0cf33d15ce\scratchpad\m0267\motor\Dotnet~\Motor\bin\Debug\netstandard2.1\Motor.dll
+  Pruebas -> C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\17bb5b5b-98c9-47f5-8968-ef0cf33d15ce\scratchpad\m0267\motor\Dotnet~\Pruebas\bin\Debug\net8.0\Pruebas.dll
+Serie de pruebas para C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\17bb5b5b-98c9-47f5-8968-ef0cf33d15ce\scratchpad\m0267\motor\Dotnet~\Pruebas\bin\Debug\net8.0\Pruebas.dll (.NETCoreApp,Version=v8.0)
+Versión 17.11.1 (x64) de VSTest
+Iniciando la ejecución de pruebas, espere...
+1 archivos de prueba en total coincidieron con el patrón especificado.
+  Con error LaSeleccionGuardadaSeLeeIgualAlReabrir [78 ms]
+  Mensaje de error:
+     Assert.That(error, Is.EqualTo(Roles.ValidarSeleccion(Referencias.Conocidos, marcados, integrador, verificador, redactor)))
+  Expected: "Tienes que marcar al menos un proveedor."
+  But was:  null
+  Seguimiento de la pila:
+     at ChatCouncil.Motor.Pruebas.RondaPruebas.LaSeleccionGuardadaSeLeeIgualAlReabrir() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\17bb5b5b-98c9-47f5-8968-ef0cf33d15ce\scratchpad\m0267\motor\Tests\RondaPruebas.cs:line 132
+1)    at ChatCouncil.Motor.Pruebas.RondaPruebas.LaSeleccionGuardadaSeLeeIgualAlReabrir() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\17bb5b5b-98c9-47f5-8968-ef0cf33d15ce\scratchpad\m0267\motor\Tests\RondaPruebas.cs:line 132
+  Con error LaSeleccionSeEscribeConElFormatoDeTypeScript [< 1 ms]
+  Mensaje de error:
+     Assert.That(contenido, Is.EqualTo(
+                "{\n  \"proveedores\": [\n    \"chatgpt\",\n    \"glm\"\n  ],\n  \"integrador\": \"chatgpt\",\n  \"verificador\": \"glm\",\n" +
+                "  \"redactor\": \"chatgpt\",\n  \"guardadoEn\": \"2026-10-10T12:00:00.000Z\"\n}"))
+  Expected: "{
+  "proveedores": [
+    "chatgpt",
+    "glm"
+  ],
+  "integrador": "chatgpt",
+  "verificador": "glm",
+  "redactor": "chatgpt",
+  "guardadoEn": "2026-10-10T12:00:00.000Z"
+}"
+  But was:  null
+  Seguimiento de la pila:
+     at ChatCouncil.Motor.Pruebas.RondaPruebas.LaSeleccionSeEscribeConElFormatoDeTypeScript() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\17bb5b5b-98c9-47f5-8968-ef0cf33d15ce\scratchpad\m0267\motor\Tests\RondaPruebas.cs:line 149
+1)    at ChatCouncil.Motor.Pruebas.RondaPruebas.LaSeleccionSeEscribeConElFormatoDeTypeScript() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\17bb5b5b-98c9-47f5-8968-ef0cf33d15ce\scratchpad\m0267\motor\Tests\RondaPruebas.cs:line 149
+  Con error LaSesionSeDeduceDelCompositor [3 ms]
+  Mensaje de error:
+     Assert.That(Dominio.EstadoDeSesion(JsonEstricto.Leer("\"\"")), Is.EqualTo("con-sesion"))
+  Expected string length 10 but was 0. Strings differ at index 0.
+  Expected: "con-sesion"
+  But was:  <string.Empty>
+  -----------^
+  Seguimiento de la pila:
+     at ChatCouncil.Motor.Pruebas.RondaPruebas.LaSesionSeDeduceDelCompositor() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\17bb5b5b-98c9-47f5-8968-ef0cf33d15ce\scratchpad\m0267\motor\Tests\RondaPruebas.cs:line 158
+1)    at ChatCouncil.Motor.Pruebas.RondaPruebas.LaSesionSeDeduceDelCompositor() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\17bb5b5b-98c9-47f5-8968-ef0cf33d15ce\scratchpad\m0267\motor\Tests\RondaPruebas.cs:line 158
+Con error! - Con error:     3, Superado:    70, Omitido:     0, Total:    73, Duración: 2 s - Pruebas.dll (net8.0)

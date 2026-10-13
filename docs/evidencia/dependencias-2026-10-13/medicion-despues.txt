@@ -1,0 +1,40 @@
+== pnpm install --frozen-lockfile: salida 0
+Scope: all 6 workspace projects
+Already up to date
+Done in 1.4s using pnpm v11.9.0
+== typecheck: salida 0
+packages/analysis typecheck: Done
+packages/ui typecheck: Done
+apps/desktop typecheck: Done
+== guard:sellado: salida 0
+[guard:sellado] OK — builder sellado sin imports; build-analyst-prompt importado sólo desde: packages/analysis/src/index.ts; armarCuerpoConFuentes deja pasar un cuerpo limpio y TIRA con uno que filtra al proveedor por URL.
+== guard:specs: salida 0
+[guard:specs] OK — 9 proveedores validos. chatgpt: fin OBSERVADO; glm: fin OBSERVADO; claude: fin INFERIDO (20000 ms); gemini: fin INFERIDO (20000 ms); grok: fin INFERIDO (20000 ms); mistral: fin INFERIDO (20000 ms); qwen: fin INFERIDO (20000 ms); kimi: fin INFERIDO (20000 ms); deepseek: fin INFERIDO (20000 ms); roles por defecto: integrador deepseek, verificador glm, redactor deepseek.
+== guard:sondeo: salida 0
+[guard:sondeo] OK — la fuente inyectada (37411 caracteres) parsea, no envia, no toca credenciales, y mide las tres formas de escritura.
+== guard:dominio: salida 0
+[guard:dominio] OK — 26 archivos bajo packages/; ninguno importa de apps/, packages/domain/ sigue sin Electron, sin DOM y sin node, packages/analysis/ sin node ni electron, y ningun archivo llama a fetch( directo.
+== guard:trazabilidad: salida 0
+[guard:trazabilidad] OK — sobre un informe sembrado de 7 párrafos: detecta el párrafo sin referencias de la sección 5, no exige referencia ni en 'LA TABLA NO ALCANZA' ni en la línea TITULO, y conserva una referencia inventada (H999) marcada referenciaInvalida sin descartar su párrafo. Y sobre el informe ARMADO: marca los H## de [CONFIRMA H##] y de [H##] (existentes e inexistentes), publica la clave de los [P#] en la tabla de condiciones, y ninguna sección queda vacía.
+== guard:surrogates: salida 0
+guard:surrogates OK: 32 archivos .cs sin literales con surrogates sueltos.
+== guard:contraste: salida 0
+guard:contraste OK: 68 pares en dos temas, todos sobre su mínimo WCAG 2.2 AA.
+== dotnet test: salida 0
+1 archivos de prueba en total coincidieron con el patrón especificado.
+
+Correctas! - Con error:     0, Superado:    73, Omitido:     0, Total:    73, Duración: 2 s - Pruebas.dll (net8.0)
+== pnpm build: salida 0
+[2m../../out/renderer/[22m[36massets/progreso-CBRTCTxs.js   [39m[1m[2m 1.76 kB[22m[1m[22m
+[2m../../out/renderer/[22m[36massets/index-B36f5Z4U.js      [39m[1m[2m10.70 kB[22m[1m[22m
+[32m✓ built in 482ms[39m
+== guard:artefacto: salida 0
+[guard:artefacto] OK — 156 marcadores presentes en el compilado; sin accesos a credenciales y sin envios desde el sondeo.
+== referencias.mjs: salida 0
+Referencias.g.cs escrito: 50 semillas, 116 barajados, 3 anonimizados, 29 lineas de registro, 6 lecturas, 7 etapas.
+== git status tras regenerar referencias:
+ M .github/workflows/ci.yml
+ M .github/workflows/prueba-login.yml
+ M apps/desktop/package.json
+ M packages/ui/package.json
+ M pnpm-lock.yaml

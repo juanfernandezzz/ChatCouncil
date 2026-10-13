@@ -11,10 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with: { version: 11.9.0 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: 22.22.2, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: Typecheck
@@ -43,7 +43,7 @@ jobs:
         run: pnpm guard:contraste
       # Fase 6: el motor C# (motor/Runtime) con sus pruebas NUnit, fuera de Unity.
       # Sin este paso, el conteo de dotnet test era una afirmacion, no una compuerta.
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with: { dotnet-version: 8.0.x }
       - name: Pruebas del motor (dotnet test)
         run: dotnet test "motor/Dotnet~/Pruebas/Pruebas.csproj"

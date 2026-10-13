@@ -297,6 +297,33 @@ namespace ChatCouncil.Motor.Pruebas
             Assert.That(Dominio.PreguntaEfectivaDeRonda(hechos, ronda), Is.EqualTo("La pregunta real"));
         }
 
+        // D13: abandonar vuelve a la etapa Pregunta sin escribir nada; la abandonada queda en el
+        // registro y la ronda nueva sigue la numeración en la misma conversación. Límite medido:
+        // si la app se reabre antes de pegar la pregunta nueva, vuelve la abandonada.
+        [Test]
+        public void AbandonarLaRondaVuelveALaPreguntaSinTocarElRegistro()
+        {
+            var puerta = NuevaPuerta();
+            var abandonada = puerta.AbrirRonda("la primera");
+            puerta.RegistrarIntentos(new[] { ("chatgpt", true, (string)null) });
+            var antes = Lineas(puerta).ToList();
+            var conversacion = puerta.ConversacionActual;
+
+            puerta.AbandonarRonda();
+            Assert.That(puerta.PasoSiguiente().Etapa, Is.EqualTo("pregunta"));
+            Assert.That(puerta.RondaActual, Is.Null);
+            Assert.That(Lineas(puerta), Is.EqualTo(antes));
+
+            var reabierta = NuevaPuerta();
+            reabierta.RestaurarRondaActiva();
+            Assert.That(reabierta.RondaActual, Is.EqualTo(abandonada));
+
+            var nueva = puerta.AbrirRonda("la segunda");
+            var rondas = Registro.Leer(string.Join("\n", Lineas(puerta))).Hechos.OfType<Ronda>().ToList();
+            Assert.That(puerta.ConversacionActual, Is.EqualTo(conversacion));
+            Assert.That(rondas.Select(r => (r.Id, r.Indice)), Is.EqualTo(new[] { (abandonada, 0), (nueva, 1) }));
+        }
+
         [Test]
         public void DeclararSinRondaAbiertaSeNiega()
         {

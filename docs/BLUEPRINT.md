@@ -2737,6 +2737,28 @@ Decisiones de T19 (configuración y arranque). Fuente nueva:
   que existe y no se puede usar todavía [UXT]. Las capturas de la primera versión
   los mostraban grises.
 
+Decisiones de T20 (Pregunta e Investigación conectadas):
+
+· D32, 2026-10-13, la pregunta se escribe en la guía y solo en la etapa Pregunta
+  (en el teléfono, sobre el botón primario). Criterio: la arquitectura de T18 no
+  le daba lugar, y el paso que la usa es el botón primario de esa guía [NH 6,
+  reconocer antes que recordar]; fuera de su etapa no ocupa alto de la página
+  (historia 23).
+· D33, 2026-10-13, los menús ("Ronda…", "Más…", "Ver todos") y los diálogos son
+  propios y apartan las páginas mientras están abiertos. Criterio medido: las
+  páginas nativas (WebView2, WebView de Android) se dibujan encima de todo lo de
+  Unity, así que un menú o un diálogo de UI Toolkit sobre el área de la página
+  quedaría tapado. Los ítems que no se pueden usar quedan deshabilitados con su
+  motivo debajo (D7).
+· D34, 2026-10-13, "Capturar lo que ya está en los paneles" va en el menú de la
+  Ronda y solo sin ronda abierta: es la entrada de la historia 40 (capturar sin
+  pegar y después declarar la pregunta), que se usa 0 o 1 vez por ronda (D1).
+· D35, 2026-10-13, un panel cuyo pegado falló sigue "con problema" aunque después
+  se pegue aquí, porque el intento fallido es un hecho y no se borra (historia
+  28). Si la página ya terminó, la cabecera lo dice y ofrece capturarlo, en lugar
+  de volver a pegar. Criterio: el estado sale del registro (motor), y la acción
+  sigue a lo que la página muestra [NH 9].
+
 ---
 
 ## 6. Criterios de aceptación

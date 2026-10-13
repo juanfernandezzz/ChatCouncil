@@ -201,6 +201,19 @@ namespace ChatCouncil.Motor
             indiceRonda = mejorRonda.Indice + 1;
         }
 
+        /// <summary>
+        /// D13: vuelve a la etapa Pregunta sin escribir nada. La ronda abandonada queda en el
+        /// registro tal cual, y la conversación sigue: la ronda nueva toma el índice siguiente.
+        /// Límite: si la app se reabre antes de abrir otra, RestaurarRondaActiva vuelve a ella.
+        /// </summary>
+        public void AbandonarRonda()
+        {
+            RondaActual = null;
+            promptOperador.Clear();
+            promptIntegrador = promptVerificador = promptRedactor = null;
+            marcasRedactor = null;
+        }
+
         void AsegurarConversacion()
         {
             if (ConversacionActual != null) return;

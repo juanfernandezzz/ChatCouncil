@@ -193,7 +193,7 @@ namespace ChatCouncil.Interfaz
             ComprobarRonda("el consejo guardado se aplica al reabrir", OperadoresEsperados);
             var titulo = Raiz.Q<Label>("barra-titulo").text;
             var paso = Raiz.Q<Button>("paso-ancha").text;
-            Anotar(titulo == "Investigación · 2 de 7" && paso == "Capturar los que terminaron", "ronda activa restaurada", $"\"{titulo}\", \"{paso}\"");
+            Anotar(titulo == "Investigación · 2 de 7" && paso == "Capturar los que terminaron (0)", "ronda activa restaurada", $"\"{titulo}\", \"{paso}\"");
 
             await Pulsar(Raiz, "ir-ajustes");
             var marcas = Roles.Conocidos.Where(id => Config.Q<Toggle>("marca-" + id).value).ToList();

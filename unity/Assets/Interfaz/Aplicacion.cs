@@ -1,12 +1,10 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using ChatCouncil.Motor;
 using ChatCouncil.Panel;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.TextCore.Text;
@@ -15,12 +13,13 @@ using UnityEngine.UIElements;
 namespace ChatCouncil.Interfaz
 {
     /// <summary>
-    /// La app (T19): las secciones de docs/FASE6-INTERFAZ.md con los tokens de Tokens.uss. Sin archivo de
-    /// selección arranca guiada (D10); con él, arma la Ronda con ese consejo y restaura la ronda activa del
+    /// La app: las secciones de docs/FASE6-INTERFAZ.md con los tokens de Tokens.uss. Sin archivo de selección
+    /// arranca guiada (D10); con él, arma la Ronda (PantallaRonda.cs) con ese consejo y la ronda activa del
     /// registro. No arranca con -autoprueba.
     /// Argumentos: -datos CARPETA (si no, la de Unity para la app); -tema oscuro; -seccion ajustes;
-    /// -captura RUTA [-ancho N -alto N]: dibuja la interfaz en una textura de N×N dp a escala 1, la guarda
-    /// como PNG y cierra la app; -pruebainterfaz RUTA -fase N: PruebaInterfaz.cs.
+    /// -captura RUTA [-ancho N -alto N]: dibuja la interfaz en una textura de N×N dp a escala 1, sin páginas,
+    /// la guarda como PNG y cierra la app; -pruebainterfaz RUTA -fase N: PruebaInterfaz.cs;
+    /// -pruebaronda RUTA: PruebaRonda.cs.
     /// </summary>
     public sealed class Aplicacion : MonoBehaviour
     {
@@ -29,29 +28,16 @@ namespace ChatCouncil.Interfaz
         /// <summary>Interlineado de los párrafos (WCAG 1.4.8); la fuente trae 1,30.</summary>
         const float Interlineado = 1.5f;
 
-        static readonly string[] Etapas = { "pregunta", "investigacion", "operacion", "integracion", "verificacion", "redaccion", "informe" };
-        static readonly string[] NombresEtapa = { "Pregunta", "Investigación", "Operación", "Integración", "Verificación", "Redacción", "Informe" };
-
-        /// <summary>El estado de Puerta.EstadoDePanel: su símbolo (IconoEstado) y su palabra.</summary>
-        static readonly Dictionary<string, (string Icono, string Palabra)> Estados = new Dictionary<string, (string, string)>
-        {
-            ["por-pegar"] = ("por-pegar", "Por pegar"),
-            ["pegado-falta-enviar"] = ("falta-enviar", "Pegado, falta que envíes"),
-            ["respondiendo"] = ("respondiendo", "Respondiendo"),
-            ["parece-terminado-observado"] = ("terminado", "Parece terminado"),
-            ["parece-terminado-deducido"] = ("terminado", "Parece terminado"),
-            ["capturado"] = ("capturado", "Capturado"),
-            ["con-problema"] = ("problema", "Con problema"),
-        };
-
         static FontDefinition semibold;
 
         string[] args;
         RenderTexture textura;
         VisualElement raiz, seccionRonda;
+        Task navegador;
 
         public string CarpetaDatos { get; private set; }
-        public Puerta Puerta { get; private set; }
+        public PantallaRonda Ronda { get; private set; }
+        public Puerta Puerta => Ronda.Puerta;
         public Configuracion Configuracion { get; private set; }
         public VisualElement Raiz => raiz;
 
@@ -114,16 +100,21 @@ namespace ChatCouncil.Interfaz
                 raiz.EnableInClassList("compacta", ancho < AnchoMediana);
             });
 
+            // En las pruebas, páginas locales en lugar de los proveedores y nunca la carpeta real (-datos).
+            var pruebaRonda = Arg("-pruebaronda");
+            var prueba = pruebaRonda != null || Arg("-pruebainterfaz") != null;
+            Func<string, string> urlCuentas = prueba ? (Func<string, string>)PruebaInterfaz.Url : UrlDeSpec;
+            Ronda = new PantallaRonda(raiz, CarpetaDatos, Navegador,
+                pruebaRonda != null ? (Func<string, string>)PruebaRonda.Url : urlCuentas,
+                pruebaRonda != null ? (Func<string, string>)(_ => PruebaRonda.Spec) : SpecDe);
+
             var primerArranque = !File.Exists(Path.Combine(CarpetaDatos, Roles.ArchivoSeleccion));
-            var prueba = Arg("-pruebainterfaz");
-            Configuracion = new Configuracion(CarpetaDatos, primerArranque,
-                prueba == null ? UrlDeSpec : (Func<string, string>)PruebaInterfaz.Url,
-                prueba == null ? () => Paneles.Iniciar(Path.Combine(CarpetaDatos, "navegador")) : (Func<Task>)(() => PruebaInterfaz.IniciarNavegador(CarpetaDatos)));
+            Configuracion = new Configuracion(CarpetaDatos, primerArranque, urlCuentas, Navegador);
             raiz.Q("secciones").Add(Configuracion.Raiz);
             Configuracion.Empezar += () =>
             {
                 raiz.RemoveFromClassList("primer-arranque");
-                ArmarRonda();
+                ArmarRonda(ruta == null);
                 Mostrar("ronda");
             };
 
@@ -131,28 +122,51 @@ namespace ChatCouncil.Interfaz
             AplicarSemibold(raiz);
             // En el primer arranque, la guía es la única salida: sin riel ni cajón hasta terminarla.
             raiz.EnableInClassList("primer-arranque", primerArranque);
-            if (!primerArranque) ArmarRonda();
+            if (!primerArranque) ArmarRonda(ruta == null);
             Mostrar(primerArranque || Arg("-seccion") == "ajustes" ? "ajustes" : "ronda");
 
             if (ruta != null) StartCoroutine(Capturar(ruta));
-            if (prueba != null) gameObject.AddComponent<PruebaInterfaz>().Iniciar(this, prueba, int.Parse(Arg("-fase") ?? "1"));
+            if (Arg("-pruebainterfaz") != null) gameObject.AddComponent<PruebaInterfaz>().Iniciar(this, Arg("-pruebainterfaz"), int.Parse(Arg("-fase") ?? "1"));
+            if (pruebaRonda != null) gameObject.AddComponent<PruebaRonda>().Iniciar(this, pruebaRonda);
         }
 
+        /// <summary>Un solo navegador para la Ronda y para Ajustes, iniciado la primera vez que alguien lo pide.</summary>
+        Task Navegador() =>
+            navegador ??= Arg("-pruebaronda") != null || Arg("-pruebainterfaz") != null
+                ? PruebaInterfaz.IniciarNavegador(CarpetaDatos)
+                : Paneles.Iniciar(Path.Combine(CarpetaDatos, "navegador"));
+
+        static string SpecDe(string id) => JObject.Parse(Datos.Specs)["specs"][id].ToString(Formatting.None);
+
         static string UrlDeSpec(string id) => (string)JObject.Parse(Datos.Specs)["specs"][id]["newConversationUrl"];
+
+        /// <summary>Las capturas de la interfaz no abren páginas: dibujan en una textura.</summary>
+        void ArmarRonda(bool conPaginas)
+        {
+            Ronda.Armar();
+            if (conPaginas) _ = Ronda.Conectar();
+        }
 
         // ---------------------------------------------------------------- secciones (D2, D3)
 
         void Navegacion()
         {
             var cajon = raiz.Q("cajon");
-            void Abrir() => cajon.AddToClassList("cajon--abierto");
             raiz.Q<Button>("ir-ronda").clicked += () => Mostrar("ronda");
             raiz.Q<Button>("ir-ajustes").clicked += () => Mostrar("ajustes");
             raiz.Q<Button>("cajon-ronda").clicked += () => Mostrar("ronda");
             raiz.Q<Button>("cajon-ajustes").clicked += () => Mostrar("ajustes");
-            raiz.Q<Button>("cajon-fondo").clicked += () => cajon.RemoveFromClassList("cajon--abierto");
-            raiz.Q<Button>("menu").clicked += Abrir;
-            Configuracion.Raiz.Q<Button>("menu-configuracion").clicked += Abrir;
+            raiz.Q<Button>("cajon-fondo").clicked += () =>
+            {
+                cajon.RemoveFromClassList("cajon--abierto");
+                Ronda.MostrarSeccion(seccionRonda.style.display != DisplayStyle.None);
+            };
+            raiz.Q<Button>("menu").clicked += () =>
+            {
+                Ronda.MostrarSeccion(false); // el cajón va encima de la página: la página se aparta
+                cajon.AddToClassList("cajon--abierto");
+            };
+            Configuracion.Raiz.Q<Button>("menu-configuracion").clicked += () => cajon.AddToClassList("cajon--abierto");
         }
 
         /// <summary>"ronda" o "ajustes".</summary>
@@ -162,95 +176,10 @@ namespace ChatCouncil.Interfaz
             seccionRonda.style.display = ronda ? DisplayStyle.Flex : DisplayStyle.None;
             Configuracion.Raiz.style.display = ronda ? DisplayStyle.None : DisplayStyle.Flex;
             if (ronda) Configuracion.Ocultar();
+            Ronda.MostrarSeccion(ronda);
             raiz.Q("ir-ronda").EnableInClassList("riel-item--actual", ronda);
             raiz.Q("ir-ajustes").EnableInClassList("riel-item--actual", !ronda);
             raiz.Q("cajon").RemoveFromClassList("cajon--abierto");
-        }
-
-        // ---------------------------------------------------------------- la Ronda
-
-        /// <summary>El consejo del archivo de selección (o los nueve con los roles por defecto) y la ronda activa del registro.</summary>
-        void ArmarRonda()
-        {
-            string contenido = null;
-            try
-            {
-                var archivo = Path.Combine(CarpetaDatos, Roles.ArchivoSeleccion);
-                if (File.Exists(archivo)) contenido = File.ReadAllText(archivo, Encoding.UTF8);
-            }
-            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
-            {
-                // ilegible: como sin archivo (seleccion-proveedores.ts)
-            }
-            var activos = Roles.LeerSeleccion(contenido, Roles.Conocidos) ?? Roles.Conocidos.ToList();
-            var roles = Roles.Leer(contenido, Roles.Conocidos);
-            var pool = Roles.PoolDeInvestigadores(Roles.Conocidos, roles);
-            Puerta = new Puerta(CarpetaDatos, () => Guid.NewGuid().ToString(), () => DateTimeOffset.Now, activos, roles, pool);
-            Puerta.RestaurarRondaActiva();
-            var paso = Puerta.PasoSiguiente();
-
-            var actual = Array.IndexOf(Etapas, paso.Etapa);
-            int j = 0;
-            raiz.Query(className: "etapa").ForEach(e =>
-            {
-                e.EnableInClassList("etapa--hecha", j < actual);
-                e.EnableInClassList("etapa--actual", j == actual);
-                e.Q(className: "etapa-nombre").EnableInClassList("semibold", j == actual);
-                j++;
-            });
-            j = 0;
-            raiz.Q(className: "progreso").Query(className: "etapa-barra").ForEach(e =>
-            {
-                e.EnableInClassList("etapa-barra--hecha", j < actual);
-                e.EnableInClassList("etapa-barra--actual", j == actual);
-                j++;
-            });
-            raiz.Q<Label>("barra-titulo").text = $"{NombresEtapa[actual]} · {actual + 1} de {Etapas.Length}";
-            raiz.Q<Button>("paso-ancha").text = raiz.Q<Button>("paso-angosta").text = paso.Texto;
-            raiz.Q<Label>("frase-ancha").text = raiz.Q<Label>("frase-angosta").text = paso.Recordatorio;
-
-            var operadores = pool.Where(activos.Contains).ToList();
-            var lista = raiz.Q<ScrollView>("lista");
-            lista.Clear();
-            lista.Add(Titulo($"Operadores ({operadores.Count})"));
-            foreach (var id in operadores) lista.Add(Fila(id, Palabra(id)));
-            lista.Add(Titulo("Roles (aparecen en su etapa)"));
-            lista.Add(Fila(roles.Integrador, roles.Redactor == roles.Integrador ? "Integra y redacta" : "Integra"));
-            lista.Add(Fila(roles.Verificador, "Verifica"));
-            if (roles.Redactor != roles.Integrador) lista.Add(Fila(roles.Redactor, "Redacta"));
-
-            var visible = operadores.FirstOrDefault() ?? roles.Integrador;
-            var (icono, palabra) = Estados[Puerta.EstadoDePanel(visible, null, null)];
-            raiz.Q<IconoEstado>("icono-cabecera").Estado = raiz.Q<IconoEstado>("icono-selector").Estado = icono;
-            raiz.Q<Label>("cabecera-titulo").text = $"{Dominio.NombreProveedor(visible)} · {palabra}";
-            raiz.Q<Label>("selector-texto").text = $"{Dominio.NombreProveedor(visible)} · {palabra} · 1 de {operadores.Count}";
-            if (lista.childCount > 1) lista[1].AddToClassList("fila-panel--actual");
-            AplicarSemibold(raiz);
-        }
-
-        string Palabra(string id) => Estados[Puerta.EstadoDePanel(id, null, null)].Palabra;
-
-        static Label Titulo(string texto)
-        {
-            var l = new Label(texto);
-            l.AddToClassList("lista-titulo");
-            return l;
-        }
-
-        VisualElement Fila(string id, string texto)
-        {
-            var fila = new VisualElement { name = "fila-" + id };
-            fila.AddToClassList("fila-panel");
-            var icono = new IconoEstado { Estado = Estados[Puerta.EstadoDePanel(id, null, null)].Icono };
-            var nombre = new Label(Dominio.NombreProveedor(id));
-            nombre.AddToClassList("fila-nombre");
-            nombre.AddToClassList("semibold");
-            var estado = new Label(texto);
-            estado.AddToClassList("fila-estado");
-            fila.Add(icono);
-            fila.Add(nombre);
-            fila.Add(estado);
-            return fila;
         }
 
         // ---------------------------------------------------------------- fuente y captura

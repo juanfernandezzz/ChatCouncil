@@ -1,5 +1,5 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:cc="ChatCouncil.Interfaz">
-    <!-- La app: riel de secciones y pantalla de Ronda (T18). Aplicacion.cs llena los datos y agrega Configuracion.uxml. Arquitectura: docs/FASE6-INTERFAZ.md. -->
+    <!-- La app: riel de secciones y pantalla de Ronda (T18). PantallaRonda.cs la conecta; Aplicacion.cs agrega Configuracion.uxml. Arquitectura: docs/FASE6-INTERFAZ.md. -->
     <ui:VisualElement name="raiz" class="raiz">
 
         <!-- Riel de secciones (D2, D3): desde 600 dp; debajo, el botón Menú de la barra abre el cajón. Historial y Ayuda llegan en T23. -->
@@ -23,12 +23,16 @@
                         <ui:VisualElement class="etapa"><ui:Label text="6 Redacción" class="etapa-nombre" /><ui:VisualElement class="etapa-barra" /></ui:VisualElement>
                         <ui:VisualElement class="etapa"><ui:Label text="7 Informe" class="etapa-nombre" /><ui:VisualElement class="etapa-barra" /></ui:VisualElement>
                     </ui:VisualElement>
+                    <!-- La pregunta se escribe en la guía, solo en su etapa (D32). -->
+                    <ui:TextField name="pregunta-ancha" label="Tu pregunta" multiline="true" class="campo campo-pregunta solo-etapa-pregunta" />
                     <ui:VisualElement class="paso">
                         <ui:Button name="paso-ancha" class="boton boton-primario semibold" />
                         <ui:VisualElement class="paso-texto">
                             <ui:Label name="frase-ancha" class="envolver" />
+                            <ui:Label name="contadores-ancha" class="pequeno texto-2" />
+                            <ui:Label name="resultado-ancha" class="envolver resultado" />
                         </ui:VisualElement>
-                        <ui:Button text="Ronda…" class="boton" />
+                        <ui:Button name="menu-ronda" text="Ronda…" class="boton" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 
@@ -39,10 +43,12 @@
                             <cc:IconoEstado name="icono-cabecera" />
                             <ui:VisualElement class="cabecera-texto">
                                 <ui:Label name="cabecera-titulo" class="semibold" />
+                                <ui:Label name="cabecera-problema" class="problema pequeno" />
                             </ui:VisualElement>
-                            <ui:Button text="Más…" class="boton" />
+                            <ui:Button name="accion-panel" class="boton" />
+                            <ui:Button name="menu-panel" text="Más…" class="boton" />
                         </ui:VisualElement>
-                        <ui:VisualElement class="pagina">
+                        <ui:VisualElement name="pagina-ancha" class="pagina">
                             <ui:Label text="Página del proveedor (vista nativa)" class="texto-2" />
                         </ui:VisualElement>
                     </ui:VisualElement>
@@ -54,7 +60,7 @@
                 <ui:VisualElement class="barra">
                     <ui:Button name="menu" text="Menú" class="boton solo-compacta" />
                     <ui:Label name="barra-titulo" class="barra-titulo semibold" />
-                    <ui:Button text="Más…" class="boton" />
+                    <ui:Button name="menu-angosta" text="Más…" class="boton" />
                 </ui:VisualElement>
                 <ui:VisualElement class="progreso">
                     <ui:VisualElement class="etapa-barra" />
@@ -65,23 +71,34 @@
                     <ui:VisualElement class="etapa-barra" />
                     <ui:VisualElement class="etapa-barra" />
                 </ui:VisualElement>
-                <ui:VisualElement class="pagina">
+                <ui:VisualElement name="pagina-angosta" class="pagina">
                     <ui:Label text="Página del proveedor (vista nativa)" class="texto-2" />
                 </ui:VisualElement>
                 <ui:VisualElement class="abajo">
                     <ui:VisualElement class="selector">
-                        <ui:Button text="‹" class="boton boton-icono" />
+                        <ui:Button name="anterior" text="‹" class="boton boton-icono" />
+                        <!-- El problema del panel va dentro del selector (H7). -->
                         <ui:VisualElement class="selector-actual">
-                            <cc:IconoEstado name="icono-selector" />
-                            <ui:Label name="selector-texto" class="semibold selector-texto" />
+                            <ui:VisualElement class="selector-fila">
+                                <cc:IconoEstado name="icono-selector" />
+                                <ui:Label name="selector-texto" class="semibold selector-texto" />
+                            </ui:VisualElement>
+                            <ui:Label name="selector-problema" class="problema pequeno" />
                         </ui:VisualElement>
-                        <ui:Button text="›" class="boton boton-icono" />
+                        <ui:Button name="siguiente" text="›" class="boton boton-icono" />
                     </ui:VisualElement>
+                    <ui:TextField name="pregunta-angosta" label="Tu pregunta" multiline="true" class="campo campo-pregunta solo-etapa-pregunta" />
                     <ui:Button name="paso-angosta" class="boton boton-primario semibold" />
-                    <ui:Label name="frase-angosta" class="envolver separado" />
+                    <ui:Label name="resultado-angosta" class="envolver resultado separado" />
+                    <!-- La frase de la etapa a la vista al entrar en ella (H1); después se pliega a un toque (H7). -->
+                    <ui:VisualElement name="frase-abierta" class="frase-abierta">
+                        <ui:Label name="frase-angosta" class="envolver frase-texto" />
+                        <ui:Button name="plegar-frase" text="Entendido" class="boton" />
+                    </ui:VisualElement>
                     <ui:VisualElement class="fila-resumen">
-                        <ui:Label class="resumen" />
-                        <ui:Button text="Ver todos" class="boton" />
+                        <ui:Label name="contadores-angosta" class="pequeno texto-2 resumen" />
+                        <ui:Button name="abrir-frase" text="Qué hago yo" class="boton" />
+                        <ui:Button name="ver-todos" text="Ver todos" class="boton" />
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
@@ -96,6 +113,22 @@
                 <ui:Button name="cajon-ajustes" text="Ajustes" class="boton cajon-item" />
             </ui:VisualElement>
             <ui:Button name="cajon-fondo" class="cajon-fondo" />
+        </ui:VisualElement>
+
+        <!-- Menús y diálogos. Las páginas nativas van encima de todo lo de Unity: se apartan mientras la capa está abierta. -->
+        <ui:VisualElement name="capa" class="capa">
+            <ui:Button name="capa-fondo" class="capa-fondo" />
+            <ui:VisualElement name="menu-flotante" class="menu-flotante" />
+            <ui:VisualElement name="dialogo" class="dialogo">
+                <ui:Label name="dialogo-titulo" class="titulo-bloque semibold" />
+                <ui:Label name="dialogo-texto" class="envolver separado" />
+                <ui:TextField name="dialogo-campo" multiline="true" class="campo campo-pregunta" />
+                <ui:Toggle name="dialogo-casilla" class="marca marca-ancha" />
+                <ui:VisualElement class="fila-botones dialogo-botones">
+                    <ui:Button name="dialogo-aceptar" class="boton boton-primario semibold" />
+                    <ui:Button name="dialogo-cancelar" text="Cancelar" class="boton" />
+                </ui:VisualElement>
+            </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

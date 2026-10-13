@@ -168,12 +168,14 @@
 .selector { flex-direction: row; align-items: center; margin-bottom: var(--esp-2); }
 .selector-actual {
     flex-grow: 1;
-    flex-direction: row;
+    flex-shrink: 1;
     justify-content: center;
     align-items: center;
     min-height: var(--alto-control);
     margin: 0 var(--esp-2);
 }
+.selector-fila { flex-direction: row; align-items: center; justify-content: center; }
+.selector-actual .problema { -unity-text-align: middle-center; }
 .progreso .etapa-barra--hecha { background-color: var(--color-texto-2); }
 .progreso .etapa-barra--actual { height: 6px; background-color: var(--color-primario); }
 .abajo .boton-primario { margin-bottom: var(--esp-2); }
@@ -286,3 +288,72 @@
 }
 .fila-cuenta .cabecera-texto { margin: 0 var(--esp-3) 0 0; }
 .ruta { margin-bottom: 0; }
+
+/* ---------- etapas Pregunta e Investigación (T20) ---------- */
+
+/* La pregunta se escribe en la guía, solo en su etapa (D32). */
+.solo-etapa-pregunta { display: none; }
+.etapa-pregunta .solo-etapa-pregunta { display: flex; }
+.guia .campo-pregunta { margin: var(--esp-3) 0 0 0; max-width: none; }
+.campo-pregunta > .unity-base-field__input { min-height: 96px; padding: var(--esp-2) var(--esp-3); -unity-text-align: upper-left; white-space: normal; }
+.abajo .campo-pregunta { margin-bottom: var(--esp-2); }
+.resultado { margin-top: var(--esp-1); }
+.resultado.problema { color: var(--color-estado-problema); }
+
+/* En el teléfono, la frase de la etapa a la vista al entrar; después se pliega (H1, H7). */
+.frase-abierta { flex-direction: row; align-items: center; margin-bottom: var(--esp-2); }
+.frase-texto { flex-grow: 1; flex-shrink: 1; margin-right: var(--esp-2); }
+.fila-resumen .boton { margin-left: var(--esp-2); }
+
+/* ---------- capa: menús y diálogos, con la página apartada ---------- */
+
+.capa {
+    display: none;
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    justify-content: center;
+    align-items: center;
+}
+.capa--abierta { display: flex; }
+.capa-fondo {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    border-width: 0;
+    border-radius: 0;
+    background-color: var(--color-velo);
+}
+.capa-fondo:hover { background-color: var(--color-velo); }
+
+.menu-flotante {
+    position: absolute;
+    width: 340px;
+    padding: var(--esp-2);
+    border-width: 1px;
+    border-radius: var(--radio);
+    border-color: var(--color-borde-control);
+    background-color: var(--color-superficie);
+}
+.menu-item { margin: 0 0 var(--esp-1) 0; -unity-text-align: middle-left; }
+.menu-motivo { margin: 0 var(--esp-2) var(--esp-2) var(--esp-2); }
+
+.dialogo {
+    width: 560px;
+    max-width: 90%;
+    padding: var(--esp-5);
+    border-width: 1px;
+    border-radius: var(--radio);
+    border-color: var(--color-borde);
+    background-color: var(--color-superficie);
+}
+.dialogo .campo-pregunta { margin-bottom: var(--esp-3); max-width: none; }
+.dialogo-botones { margin: var(--esp-3) 0 0 0; }
+.marca-ancha { width: auto; }
+/* En la clase compacta, el diálogo ocupa la pantalla (§3.4) y el menú es una hoja abajo (PantallaRonda.AbrirMenu). */
+.compacta .dialogo { width: 100%; max-width: none; height: 100%; border-radius: 0; border-width: 0; }

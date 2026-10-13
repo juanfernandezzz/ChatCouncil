@@ -1,0 +1,209 @@
+{
+  "total_count": 1,
+  "jobs": [
+    {
+      "id": 115309525395,
+      "run_id": 38401356594,
+      "workflow_name": "ci",
+      "head_branch": "ci-motor-rojo",
+      "run_url": "https://api.github.com/repos/juanfernandezzz/ChatCouncil/actions/runs/38401356594",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOTL7AdM8AAAAa2Pu5kw",
+      "head_sha": "46fcda112809a7cfbd7074fe7ece4552a122ef7f",
+      "url": "https://api.github.com/repos/juanfernandezzz/ChatCouncil/actions/jobs/115309525395",
+      "html_url": "https://github.com/juanfernandezzz/ChatCouncil/actions/runs/38401356594/job/115309525395",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-10-13T12:58:54Z",
+      "started_at": "2026-10-13T12:58:56Z",
+      "completed_at": "2026-10-13T12:59:38Z",
+      "name": "build",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-13T12:58:56Z",
+          "completed_at": "2026-10-13T12:58:57Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-13T12:58:57Z",
+          "completed_at": "2026-10-13T12:58:58Z"
+        },
+        {
+          "name": "Run pnpm/action-setup@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-13T12:58:58Z",
+          "completed_at": "2026-10-13T12:59:00Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-13T12:59:00Z",
+          "completed_at": "2026-10-13T12:59:07Z"
+        },
+        {
+          "name": "Run pnpm install --frozen-lockfile",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-13T12:59:07Z",
+          "completed_at": "2026-10-13T12:59:09Z"
+        },
+        {
+          "name": "Typecheck",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-13T12:59:09Z",
+          "completed_at": "2026-10-13T12:59:11Z"
+        },
+        {
+          "name": "Guard - el constructor del prompt esta sellado y no puede ver la identidad del proveedor",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-10-13T12:59:11Z",
+          "completed_at": "2026-10-13T12:59:11Z"
+        },
+        {
+          "name": "Guard - las specs cumplen el contrato que el preload espera",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-13T12:59:11Z",
+          "completed_at": "2026-10-13T12:59:12Z"
+        },
+        {
+          "name": "Guard - la fuente inyectada parsea, no envia y no toca credenciales",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-13T12:59:12Z",
+          "completed_at": "2026-10-13T12:59:12Z"
+        },
+        {
+          "name": "Guard - packages/ no importa de apps/ y el dominio sigue portable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-10-13T12:59:12Z",
+          "completed_at": "2026-10-13T12:59:13Z"
+        },
+        {
+          "name": "Guard - cada parrafo del informe referencia un hallazgo",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-10-13T12:59:13Z",
+          "completed_at": "2026-10-13T12:59:14Z"
+        },
+        {
+          "name": "Guard - ningun literal de C# del motor lleva un surrogate suelto",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-10-13T12:59:14Z",
+          "completed_at": "2026-10-13T12:59:14Z"
+        },
+        {
+          "name": "Guard - contraste de los tokens de la interfaz",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-10-13T12:59:14Z",
+          "completed_at": "2026-10-13T12:59:15Z"
+        },
+        {
+          "name": "Run actions/setup-dotnet@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-10-13T12:59:15Z",
+          "completed_at": "2026-10-13T12:59:16Z"
+        },
+        {
+          "name": "Pruebas del motor (dotnet test)",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 15,
+          "started_at": "2026-10-13T12:59:16Z",
+          "completed_at": "2026-10-13T12:59:36Z"
+        },
+        {
+          "name": "Build",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 16,
+          "started_at": "2026-10-13T12:59:36Z",
+          "completed_at": "2026-10-13T12:59:36Z"
+        },
+        {
+          "name": "Guard - el compilado contiene las capacidades declaradas",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 17,
+          "started_at": "2026-10-13T12:59:36Z",
+          "completed_at": "2026-10-13T12:59:36Z"
+        },
+        {
+          "name": "Post Run actions/setup-dotnet@v4",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 31,
+          "started_at": "2026-10-13T12:59:36Z",
+          "completed_at": "2026-10-13T12:59:36Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 32,
+          "started_at": "2026-10-13T12:59:36Z",
+          "completed_at": "2026-10-13T12:59:36Z"
+        },
+        {
+          "name": "Post Run pnpm/action-setup@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 33,
+          "started_at": "2026-10-13T12:59:36Z",
+          "completed_at": "2026-10-13T12:59:36Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 34,
+          "started_at": "2026-10-13T12:59:36Z",
+          "completed_at": "2026-10-13T12:59:36Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 35,
+          "started_at": "2026-10-13T12:59:36Z",
+          "completed_at": "2026-10-13T12:59:36Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/juanfernandezzz/ChatCouncil/check-runs/115309525395",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000000240,
+      "runner_name": "GitHub Actions 1000000240",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ]
+}

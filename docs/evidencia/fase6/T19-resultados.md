@@ -41,6 +41,9 @@ la misma que antes de T19.
 
 ### El motor, con `dotnet test`
 
+Desde el 2026-10-13, el CI corre estas pruebas en cada push a `main` y en cada PR. Antes de
+confiar en él se lo vio en rojo: `docs/evidencia/fase6/ci-motor/README.md`.
+
 Las dos corridas son sobre la carpeta `motor/` de `0267e0c`, extraída con `git archive` fuera del
 repositorio. El XML lo escribe el adaptador de NUnit (`-- NUnit.TestOutputXml=CARPETA`).
 

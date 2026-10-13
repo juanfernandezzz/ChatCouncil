@@ -41,6 +41,12 @@ jobs:
       # T18: cada par de colores de la interfaz, medido contra WCAG 2.2 AA en los dos temas.
       - name: Guard - contraste de los tokens de la interfaz
         run: pnpm guard:contraste
+      # Fase 6: el motor C# (motor/Runtime) con sus pruebas NUnit, fuera de Unity.
+      # Sin este paso, el conteo de dotnet test era una afirmacion, no una compuerta.
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: 8.0.x }
+      - name: Pruebas del motor (dotnet test)
+        run: dotnet test "motor/Dotnet~/Pruebas/Pruebas.csproj"
       # Compilar no es embarcar (BLUEPRINT 6): el gate mira el COMPILADO.
       - name: Build
         run: pnpm build

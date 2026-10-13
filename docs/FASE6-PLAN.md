@@ -375,7 +375,7 @@ su ruta.
     reales y en tres arranques; la autoprueba del panel, 37/37; el motor, 73/73.
   Android no se compiló en esta tarea.
 
-- [ ] **T20. Pregunta e investigación conectadas.**
+- [x] **T20. Pregunta e investigación conectadas.**
   Acepta: pegar en los 7, pegar en este panel, el aviso de capacidades, el
   indicador de cada panel, "Capturar los que terminaron", capturar este panel
   y declarar la pregunta. Además, de T18:
@@ -388,6 +388,16 @@ su ruta.
   proveedores (modo autoprueba), el recorrido de las dos etapas deja los
   hechos esperados en un registro temporal.
   Depende de: T19. Tamaño: M.
+
+  **Hecha el 2026-10-13** sobre `efd4e02` (decisiones D32 a D35;
+  `docs/evidencia/fase6/T20-resultados.md`):
+  - `PantallaRonda.cs` conecta las dos etapas: pegar en los 7 y en este panel, el aviso de
+    capacidades, el indicador, las capturas, declarar la pregunta y abandonar la ronda;
+  - `PruebaRonda.cs` en el `.exe`: 23/23 en tres corridas; T19, 13/13, 7/7 y 1/1; la autoprueba del
+    panel, 37/37; el motor, 74/74, con su XML;
+  - H7 medido en la captura del teléfono: 61,4 % con la frase plegada y 51,3 % con la frase a la
+    vista al entrar en la etapa (era 57 %).
+  Android no se compiló en esta tarea.
 
 - [ ] **T21. Operación conectada.**
   Acepta: el chat nuevo con comprobación, la vía de archivo predeterminada y
@@ -419,6 +429,9 @@ su ruta.
     especial H4, H7 y H12 (`docs/FASE6-INTERFAZ.md`).
   - de T19: en el teléfono, "Ajustes" no se repite en la barra y en el título,
     y la barra de desplazamiento sigue los tokens en los dos temas.
+  - de T20: en el PC, en la etapa Pregunta, la lista de paneles entra sin
+    desplazarse; y medir otra vez el alto de la página en el teléfono al entrar
+    en una etapa (51,3 %).
 
   Verifica:
   - capturas de PC y de teléfono;

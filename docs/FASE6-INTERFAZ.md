@@ -362,3 +362,22 @@ en el tema (`Tema.tss`), no en el UXML, para alcanzar los menús desplegables. E
 pone en la raíz del panel.
 
 Capturas y resultados: `docs/evidencia/fase6/T19/` y `docs/evidencia/fase6/T19-resultados.md`.
+
+## 8. Pregunta e Investigación conectadas (T20)
+
+`PantallaRonda.cs` conecta la Ronda con la Puerta del motor y con las páginas de los operadores. Las
+páginas van apiladas en el área de la página, con la del panel visible al frente.
+- **Etapa Pregunta:** el campo de la pregunta en la guía (D32). «Pegar la pregunta en los paneles»
+  muestra antes el aviso de capacidades, que se puede omitir en la sesión.
+- **Etapa Investigación:**
+  - el indicador de cada panel, por sondeo de la página;
+  - «Capturar los que terminaron (N)»;
+  - en la cabecera, la acción del panel según su estado (D6) y el problema con qué hacer (D9). En el
+    teléfono, el problema es una línea corta dentro del selector (H7).
+- **Menú de la Ronda:** capturar lo que ya está en los paneles (D34), declarar la pregunta y abandonar la
+  ronda (D13). Los menús y los diálogos son propios y apartan las páginas (D33).
+- **Teléfono:** la frase de la etapa está a la vista al entrar y se pliega con «Entendido» (H1).
+  Medido: 61,4 % de alto para la página con la frase plegada, y 51,3 % con la frase a la vista.
+
+Resultados y capturas: `docs/evidencia/fase6/T20-resultados.md` y `docs/evidencia/fase6/T20/`.
+

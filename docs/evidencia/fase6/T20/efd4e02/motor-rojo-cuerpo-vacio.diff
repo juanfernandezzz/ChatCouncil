@@ -1,0 +1,13 @@
+--- a/motor/Runtime/Puerta.cs
++++ b/motor/Runtime/Puerta.cs
+@@ -208,10 +208,6 @@
+         /// </summary>
+         public void AbandonarRonda()
+         {
+-            RondaActual = null;
+-            promptOperador.Clear();
+-            promptIntegrador = promptVerificador = promptRedactor = null;
+-            marcasRedactor = null;
+         }
+ 
+         void AsegurarConversacion()

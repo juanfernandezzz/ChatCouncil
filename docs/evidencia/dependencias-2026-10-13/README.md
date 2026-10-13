@@ -70,5 +70,32 @@ Node 20. No estaban en el pedido:
 (`b000ff0`) y hay un 18.1.1. Ese commit no da un motivo para fijarlo. Como es la conversión
 del informe a PDF, no se tocó.
 
-El motor C# usa `Newtonsoft.Json`, `NUnit` y el SDK de pruebas con `Version="*"`: toman la última
-versión en cada restauración, también en el CI. No son parte de pnpm, y quedan como estaban.
+## El motor C#: versiones fijadas (2026-10-13)
+
+Hasta este cambio, `motor/Dotnet~/Motor/Motor.csproj` y `Pruebas.csproj` pedían `Version="*"`:
+cada restauración tomaba la última versión publicada, también en el CI. Así el 73/73 de la
+compuerta del motor dependía del día en que se corría. Ya flotó: en la caché de NuGet de esta
+máquina hay dos versiones de dos paquetes, resueltas en corridas distintas:
+- `Microsoft.NET.Test.Sdk`: 18.10.1 y 18.11.0;
+- `NUnit3TestAdapter`: 6.3.0 y 6.3.1.
+
+Se fija lo que resolvía hoy, después de `dotnet restore --force-evaluate`, leído de
+`obj/project.assets.json`:
+
+| Paquete | Proyecto | Versión fijada |
+|---|---|---|
+| `Newtonsoft.Json` | Motor (y Pruebas, por referencia) | 13.0.4 |
+| `Microsoft.NET.Test.Sdk` | Pruebas | 18.11.0 |
+| `NUnit` | Pruebas | 5.0.0 |
+| `NUnit3TestAdapter` | Pruebas | 6.3.1 |
+
+**Medido:**
+- `dotnet test` antes de fijar, con la resolución flotante: 73/73, salida 0;
+- después de fijar: 73/73, salida 0, con exactamente las cuatro versiones de la tabla en
+  `project.assets.json`;
+- `node motor/Dotnet~/referencias.mjs`: sin diff (solo cambian los dos `.csproj`).
+
+**Para decidir:** dentro de Unity el motor usa otro Newtonsoft.Json, el del paquete
+`com.unity.nuget.newtonsoft-json` 3.2.2, que trae la 13.0.2 (`unity/Packages/packages-lock.json`).
+Las pruebas de `dotnet test` corren con 13.0.4. Se fijó la 13.0.4 porque es la que resolvía.
+Bajarla a 13.0.2 haría que las pruebas usen la misma versión que la app compilada.

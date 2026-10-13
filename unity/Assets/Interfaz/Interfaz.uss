@@ -304,6 +304,8 @@
 .frase-abierta { flex-direction: row; align-items: center; margin-bottom: var(--esp-2); }
 .frase-texto { flex-grow: 1; flex-shrink: 1; margin-right: var(--esp-2); }
 .fila-resumen .boton { margin-left: var(--esp-2); }
+/* El contador se parte en dos líneas antes de empujar los botones fuera de la pantalla. */
+.fila-resumen .resumen { flex-shrink: 1; min-width: 0; white-space: normal; }
 
 /* ---------- capa: menús y diálogos, con la página apartada ---------- */
 

@@ -174,8 +174,9 @@ namespace ChatCouncil.Interfaz
             Ronda.Seleccionar("grok");
             await Esperar(() => Raiz.Q<Button>("accion-panel").text == "Pegar la pregunta aquí");
             var problema = Raiz.Q<Label>("cabecera-problema").text;
-            Anotar(problema.StartsWith("La pregunta no se pegó", StringComparison.Ordinal) && Raiz.Q<Label>("selector-problema").text == problema,
-                "problema en la cabecera y en el selector", problema);
+            var corto = Raiz.Q<Label>("selector-problema").text;
+            Anotar(problema.StartsWith("La pregunta no se pegó: el compositor ya tenía texto", StringComparison.Ordinal) && corto == "No se pegó: pégala otra vez desde «Más…».",
+                "problema en la cabecera y en el selector", $"cabecera \"{problema}\"; selector \"{corto}\"");
             await En("grok", "document.getElementById('compositor').value = ''; 'ok'");
             await Pulsar("accion-panel");
             await Esperar(() => Resultado.StartsWith("Pegada en Grok", StringComparison.Ordinal));

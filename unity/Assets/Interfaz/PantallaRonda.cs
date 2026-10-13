@@ -83,7 +83,7 @@ namespace ChatCouncil.Interfaz
             Al("ver-todos", () => AbrirMenu(raiz.Q("ver-todos"), ItemsDePaneles()));
             Al("anterior", () => Mover(-1));
             Al("siguiente", () => Mover(1));
-            Al("plegar-frase", () => { frasePlegada = true; Refrescar(); });
+            Al("plegar-frase", PlegarFrase);
             Al("abrir-frase", () => { frasePlegada = false; Refrescar(); });
             Al("capa-fondo", CerrarCapa);
             Al("dialogo-cancelar", CerrarCapa);
@@ -241,25 +241,29 @@ namespace ChatCouncil.Interfaz
 
         static bool Terminado(string estado) => estado.StartsWith("parece-terminado", StringComparison.Ordinal);
 
-        /// <summary>Qué pasó y qué hacer, en la cabecera del panel (D9), y la acción que corresponde a ese estado (D6).</summary>
-        (string Problema, string Accion) Situacion(string id, string etapa)
+        /// <summary>
+        /// Qué pasó y qué hacer (D9): la cabecera del PC lleva el detalle; el selector del teléfono, una línea corta
+        /// que dice dónde está la acción (H7). Y la acción que corresponde a ese estado (D6).
+        /// </summary>
+        (string Problema, string Corto, string Accion) Situacion(string id, string etapa)
         {
-            if (fallaAlAbrir.TryGetValue(id, out var f)) return ($"La página no se pudo abrir: {f}. Cierra y vuelve a abrir la app.", null);
-            if (etapa != "investigacion") return (null, null);
+            if (fallaAlAbrir.TryGetValue(id, out var f))
+                return ($"La página no se pudo abrir: {f}. Cierra y vuelve a abrir la app.", "La página no se abrió: cierra y abre la app.", null);
+            if (etapa != "investigacion") return (null, null, null);
             var estado = EstadoDe(id);
-            if (estado == "por-pegar") return (null, PegarAqui);
-            if (Terminado(estado)) return (null, CapturarEste);
-            if (estado != "con-problema") return (null, null);
+            if (estado == "por-pegar") return (null, null, PegarAqui);
+            if (Terminado(estado)) return (null, null, CapturarEste);
+            if (estado != "con-problema") return (null, null, null);
             var hechos = Puerta.LeerRegistro().Hechos;
             var respuesta = hechos.OfType<Respuesta>().LastOrDefault(r => r.RondaId == Puerta.RondaActual && r.ProveedorId == id);
             if (respuesta != null)
-                return ($"La captura no sirvió: {respuesta.Error}. Revisa la página y vuelve a capturar.", CapturarEste);
+                return ($"La captura no sirvió: {respuesta.Error}. Revisa la página y vuelve a capturar.", "La captura no sirvió: captura otra vez desde «Más…».", CapturarEste);
             var intento = hechos.OfType<Intento>().LastOrDefault(i => i.RondaId == Puerta.RondaActual && i.ProveedorId == id);
             // El intento fallido no se borra: si después se pegó aquí y la página ya terminó, lo que corresponde es capturar.
             var termino = pagina.TryGetValue(id, out var p) && p.Fin != null;
             return termino
-                ? ($"La pregunta no se pegó con los demás ({intento?.Error}), pero la página ya respondió: captúrala.", CapturarEste)
-                : ($"La pregunta no se pegó: {intento?.Error}. Revisa el compositor y vuelve a pegarla.", PegarAqui);
+                ? ($"La pregunta no se pegó con los demás ({intento?.Error}), pero la página ya respondió: captúrala.", "Ya respondió: captúrala desde «Más…».", CapturarEste)
+                : ($"La pregunta no se pegó: {intento?.Error}. Revisa el compositor y vuelve a pegarla.", "No se pegó: pégala otra vez desde «Más…».", PegarAqui);
         }
 
         public void Refrescar()
@@ -324,14 +328,14 @@ namespace ChatCouncil.Interfaz
             if (visible != null)
             {
                 var (icono, palabra) = Estados[estados[visible]];
-                var (problema, accion) = Situacion(visible, etapa);
+                var (problema, corto, accion) = Situacion(visible, etapa);
                 raiz.Q<IconoEstado>("icono-cabecera").Estado = raiz.Q<IconoEstado>("icono-selector").Estado = icono;
                 raiz.Q<Label>("cabecera-titulo").text = $"{Dominio.NombreProveedor(visible)} · {palabra}";
                 raiz.Q<Label>("selector-texto").text = $"{Dominio.NombreProveedor(visible)} · {palabra} · {Operadores.IndexOf(visible) + 1} de {n}";
-                foreach (var nombre in new[] { "cabecera-problema", "selector-problema" })
+                foreach (var (nombre, linea) in new[] { ("cabecera-problema", problema), ("selector-problema", corto) })
                 {
-                    raiz.Q<Label>(nombre).text = problema ?? "";
-                    raiz.Q(nombre).style.display = problema == null ? DisplayStyle.None : DisplayStyle.Flex;
+                    raiz.Q<Label>(nombre).text = linea ?? "";
+                    raiz.Q(nombre).style.display = linea == null ? DisplayStyle.None : DisplayStyle.Flex;
                 }
                 var b = raiz.Q<Button>("accion-panel");
                 b.text = accion ?? "";
@@ -379,6 +383,12 @@ namespace ChatCouncil.Interfaz
             if (Operadores.Count == 0) return;
             var i = (Operadores.IndexOf(visible) + paso + Operadores.Count) % Operadores.Count;
             Seleccionar(Operadores[i]);
+        }
+
+        public void PlegarFrase()
+        {
+            frasePlegada = true;
+            Refrescar();
         }
 
         public void MostrarSeccion(bool visibleAhora)

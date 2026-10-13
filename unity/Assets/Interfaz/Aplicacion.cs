@@ -17,8 +17,8 @@ namespace ChatCouncil.Interfaz
     /// arranca guiada (D10); con él, arma la Ronda (PantallaRonda.cs) con ese consejo y la ronda activa del
     /// registro. No arranca con -autoprueba.
     /// Argumentos: -datos CARPETA (si no, la de Unity para la app); -tema oscuro; -seccion ajustes;
-    /// -captura RUTA [-ancho N -alto N]: dibuja la interfaz en una textura de N×N dp a escala 1, sin páginas,
-    /// la guarda como PNG y cierra la app; -pruebainterfaz RUTA -fase N: PruebaInterfaz.cs;
+    /// -captura RUTA [-ancho N -alto N] [-panel ID] [-frase plegada]: dibuja la interfaz en una textura de N×N dp
+    /// a escala 1, sin páginas, la guarda como PNG y cierra la app; -pruebainterfaz RUTA -fase N: PruebaInterfaz.cs;
     /// -pruebaronda RUTA: PruebaRonda.cs.
     /// </summary>
     public sealed class Aplicacion : MonoBehaviour
@@ -125,7 +125,13 @@ namespace ChatCouncil.Interfaz
             if (!primerArranque) ArmarRonda(ruta == null);
             Mostrar(primerArranque || Arg("-seccion") == "ajustes" ? "ajustes" : "ronda");
 
-            if (ruta != null) StartCoroutine(Capturar(ruta));
+            if (ruta != null)
+            {
+                // Para capturar un estado que en la app se alcanza con clics: el panel a la vista y la frase plegada.
+                if (Arg("-panel") != null && !primerArranque) Ronda.Seleccionar(Arg("-panel"));
+                if (Arg("-frase") == "plegada") Ronda.PlegarFrase();
+                StartCoroutine(Capturar(ruta));
+            }
             if (Arg("-pruebainterfaz") != null) gameObject.AddComponent<PruebaInterfaz>().Iniciar(this, Arg("-pruebainterfaz"), int.Parse(Arg("-fase") ?? "1"));
             if (pruebaRonda != null) gameObject.AddComponent<PruebaRonda>().Iniciar(this, pruebaRonda);
         }

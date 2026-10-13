@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ChatCouncil.Motor
 {
@@ -160,6 +161,36 @@ namespace ChatCouncil.Motor
                 pos = corte;
             }
             return (sb.ToString(), marcas);
+        }
+
+        /// <summary>Las diez cadenas que tiene que contener el prompt de operación (REQUISITOS_PROMPT_OPERACION de index.ts).</summary>
+        static readonly string[] RequisitosPromptOperacion =
+        {
+            "CONVERGENCIA", "DIVERGENCIA", "TENSION", "SINGULARIDAD", "AUSENCIA",
+            "LIMITACION:CORPUS", "LIMITACION:AMBIGUEDAD", "LIMITACION:TAREA", "LIMITACION:OTRA", "LA PREGUNTA ORIGINAL FUE:",
+        };
+
+        static readonly Regex MarcaConSaltos = new Regex(@"\n\[\[CC-MARCA-[^\]\n]*\]\]\n?");
+
+        /// <summary>
+        /// El error de la operación escrita en el compositor, o null si quedó bien (T21): primero las diez cadenas
+        /// del prompt, buscadas sin las marcas, que pueden partirlas; después la igualdad carácter por carácter,
+        /// con \r\n y el espacio duro normalizados (escribirYVerificarOperacion de Electron). Las marcas y las
+        /// cadenas pasan con un compositor que mezcló texto viejo; la igualdad no.
+        /// </summary>
+        public static string VerificarEscritura(string esperado, string leido)
+        {
+            string Normalizar(string t) => t.Replace("\r\n", "\n").Replace((char)0xA0, ' ');
+            // Electron buscaba las cadenas en el texto crudo: un espacio duro de ChatGPT en "LA PREGUNTA ORIGINAL FUE:"
+            // la daba por faltante aunque la igualdad, que sí normaliza, la aceptara. Aquí se normaliza antes.
+            var sinMarcas = MarcaConSaltos.Replace(Normalizar(leido), "");
+            var faltantes = RequisitosPromptOperacion.Where(r => !sinMarcas.Contains(r)).ToList();
+            if (faltantes.Count > 0) return "prompt incompleto: faltan " + string.Join(", ", faltantes);
+            var final = Normalizar(leido);
+            if (final == Normalizar(esperado)) return null;
+            var lineasPrompt = esperado.Replace("\r\n", "\n").Split('\n').Length;
+            var lineasCompositor = final.Length == 0 ? 0 : final.Split('\n').Length;
+            return $"el compositor no es igual al prompt: {lineasCompositor} de {lineasPrompt} líneas, {final.Length} de {esperado.Length} caracteres";
         }
 
         /// <summary>

@@ -2759,6 +2759,36 @@ Decisiones de T20 (Pregunta e Investigación conectadas):
   de volver a pegar. Criterio: el estado sale del registro (motor), y la acción
   sigue a lo que la página muestra [NH 9].
 
+Decisiones de T21 (Operación conectada):
+
+· D36, 2026-10-13, la app abre la conversación nueva de cada operador antes de
+  pegar la operación (navega a su newConversationUrl) y comprueba que quedó vacía:
+  tres lecturas seguidas con el chat sin mensajes y el compositor vacío, con un
+  techo de 20 s. Si no queda vacía, no pega y el panel dice qué hacer. Criterio:
+  historia 41 (sin esto el operador lee su propia respuesta y la evaluación deja de
+  ser ciega) y prevención de errores [NH 5]. Electron abría la conversación nueva
+  en el pegado de todos y la dejaba a mano en el de un panel; aquí es la misma en
+  los dos.
+· D37, 2026-10-13, la vía de archivo es la predeterminada: el prompt sin el cuerpo
+  en el compositor y el cuerpo con sus marcas en un .txt que la app adjunta sola
+  (la capacidad de T16) y guarda en la carpeta de datos, en "operaciones". La de
+  texto es la opción: en el aviso, para toda la ronda, y en el menú del panel,
+  para uno. El aviso se da una vez por ronda (pedido de Juan del 2026-09-30) y
+  vuelve en una ronda nueva. Se pega de a un panel por vez y con ese panel al
+  frente, como lo midió Electron con textos largos.
+· D38, 2026-10-13, lo escrito se verifica contra lo armado (Cuerpos.
+  VerificarEscritura, port de escribirYVerificarOperacion): las diez cadenas del
+  prompt y la igualdad carácter por carácter, con \r\n y el espacio duro
+  normalizados. Diferencia deliberada con Electron: las cadenas se buscan sobre el
+  texto normalizado. Electron las buscaba en el crudo, y un espacio duro de
+  ChatGPT en "LA PREGUNTA ORIGINAL FUE:" daba la cadena por faltante aunque la
+  igualdad, que sí normaliza, la aceptara.
+· D39, 2026-10-13, con la investigación completa, el estado de cada panel ya es el
+  de la operación ("por pegar"), aunque el registro no tenga todavía sello. Antes
+  cada operador seguía "capturado" por su respuesta y el paso "Pegar la operación"
+  no tenía a quién pegar (defecto medido en la prueba de T21). Criterio: el estado
+  sigue al paso que da el motor [NH 1].
+
 ---
 
 ## 6. Criterios de aceptación

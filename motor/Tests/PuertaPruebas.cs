@@ -232,9 +232,29 @@ namespace ChatCouncil.Motor.Pruebas
             Assert.That(puerta.EstadoDePanel("chatgpt", null, null), Is.EqualTo("pegado-falta-enviar"));
             Assert.That(puerta.EstadoDePanel("grok", null, null), Is.EqualTo("con-problema"));
             var contexto = (JObject)JsonEstricto.Leer(Referencias.Contexto9);
-            puerta.RegistrarCapturas(JsonEstricto.Leer(Referencias.Lecturas9).ToObject<List<Lectura>>(), id => ((string)contexto[id]["continuidad"], (string)contexto[id]["panel"]));
+            var lecturas = JsonEstricto.Leer(Referencias.Lecturas9).ToObject<List<Lectura>>();
+            (string, string) Contexto(string id) => ((string)contexto[id]["continuidad"], (string)contexto[id]["panel"]);
+            // Con la investigación todavía abierta: capturado, y con problema la lectura que falló.
+            puerta.RegistrarCapturas(lecturas.Where(l => l.Id == "chatgpt" || l.Id == "claude").ToList(), Contexto);
             Assert.That(puerta.EstadoDePanel("chatgpt", false, "observado"), Is.EqualTo("capturado"));
             Assert.That(puerta.EstadoDePanel("claude", false, "observado"), Is.EqualTo("con-problema"));
+            // Con las del pool capturadas el paso ya es la operación: por pegar (T21).
+            puerta.RegistrarCapturas(lecturas.Where(l => l.Id != "chatgpt" && l.Id != "claude").ToList(), Contexto);
+            Assert.That(puerta.EstadoDePanel("chatgpt", false, "observado"), Is.EqualTo("por-pegar"));
+        }
+
+        // T21: con la investigación completa el paso siguiente ya es la operación, aunque el registro no tenga
+        // todavía sello. El estado del panel sigue a ese paso: por pegar, no "capturado" por su respuesta.
+        [Test]
+        public void ElEstadoDelPanelSigueAlPasoCuandoEmpiezaLaOperacion()
+        {
+            var puerta = NuevaPuerta();
+            puerta.AbrirRonda("¿Pregunta de prueba?");
+            puerta.RegistrarCapturas(Referencias.PoolPuerta.Select(id => new Lectura { Id = id, Text = new string('x', 400) }).ToList(), _ => ("indeterminada", null));
+            Assert.That(puerta.PasoSiguiente().Etapa, Is.EqualTo("operacion"));
+            Assert.That(puerta.EstadoDePanel("chatgpt", false, "observado"), Is.EqualTo("por-pegar"));
+            puerta.OperacionPegada(puerta.ArmarOperacion("chatgpt", conArchivo: false));
+            Assert.That(puerta.EstadoDePanel("chatgpt", false, "observado"), Is.EqualTo("parece-terminado-observado"));
         }
 
         [Test]

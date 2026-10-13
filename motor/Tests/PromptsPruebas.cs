@@ -119,6 +119,30 @@ namespace ChatCouncil.Motor.Pruebas
             }
         }
 
+        // T21: lo que quedó en el compositor después de pegar la operación, como lo verificaba
+        // escribirYVerificarOperacion de Electron: las diez cadenas del prompt (sin las marcas, que
+        // pueden partirlas) y después la igualdad carácter por carácter, con \r\n y el espacio duro normalizados.
+        [Test]
+        public void LaOperacionEscritaSeVerificaComoEnElectron()
+        {
+            var (pegado, _) = Cuerpos.InsertarMarcasIntercaladas(Prompts.ArmarPromptOperacion("¿La pregunta?", RespuestasEtiquetadas), "t");
+            var (conArchivo, _) = Prompts.ArmarPromptOperacionConArchivo("¿La pregunta?", RespuestasEtiquetadas);
+            Assert.That(Cuerpos.VerificarEscritura(pegado, pegado), Is.Null);
+            Assert.That(Cuerpos.VerificarEscritura(conArchivo, conArchivo), Is.Null);
+
+            var duro = ((char)0xA0).ToString();
+            Assert.That(Cuerpos.VerificarEscritura(pegado, pegado.Replace("\n", "\r\n").Replace(" ", duro)), Is.Null);
+
+            var partido = pegado.Replace("LIMITACION:CORPUS", "LIMITACION:\n[[CC-MARCA-099-t]]\nCORPUS");
+            Assert.That(Cuerpos.VerificarEscritura(partido, partido), Is.Null);
+
+            Assert.That(Cuerpos.VerificarEscritura(pegado, pegado.Replace("DIVERGENCIA", "DIVERGENC1A")), Is.EqualTo("prompt incompleto: faltan DIVERGENCIA"));
+
+            var lineas = pegado.Split('\n').Length;
+            Assert.That(Cuerpos.VerificarEscritura(pegado, pegado + "x"),
+                Is.EqualTo($"el compositor no es igual al prompt: {lineas} de {lineas} líneas, {pegado.Length + 1} de {pegado.Length} caracteres"));
+        }
+
         [Test]
         public void LosRolesPorDefectoSonLosDeLaVersionElectronYCumplenSusReglas()
         {

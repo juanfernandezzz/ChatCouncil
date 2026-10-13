@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Autoprueba: ronda</title></head>
+<body>
+  <!-- La página de un operador para PruebaRonda.cs: chat, compositor de textarea y adjunto. Con ?sucio=1 la conversación
+       "nueva" llega con un mensaje, como un proveedor que arrastra el chat anterior. -->
+  <main id="chat"></main>
+  <textarea id="compositor" rows="6" cols="60"></textarea>
+  <input type="file" id="adjunto">
+  <output id="archivo"></output>
+  <script>
+    if (new URLSearchParams(location.search).get("sucio") === "1") {
+      const r = document.createElement("div");
+      r.className = "respuesta";
+      r.textContent = "Mensaje que quedó del chat anterior.";
+      document.getElementById("chat").append(r);
+    }
+    // Lo que el input recibió, para que la prueba lo compare con el archivo que adjuntó la app.
+    document.getElementById("adjunto").addEventListener("change", (e) => {
+      const f = e.target.files[0];
+      document.getElementById("archivo").textContent = f ? f.name + "|" + f.size : "";
+    });
+  </script>
+</body>
+</html>

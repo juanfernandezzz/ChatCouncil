@@ -19,8 +19,13 @@ namespace ChatCouncil.Interfaz
     /// </summary>
     public sealed class PruebaRonda : MonoBehaviour
     {
-        /// <summary>Un compositor y un chat (autoprueba/textarea.html); el parámetro solo distingue las páginas.</summary>
-        public static string Url(string id) => $"https://cc-prueba.test/textarea.html?p={id}";
+        /// <summary>
+        /// Un chat, un compositor y un adjunto (autoprueba/ronda.html); el parámetro distingue las páginas. Los de Sucios
+        /// abren la conversación "nueva" con un mensaje, como un proveedor que arrastra el chat anterior.
+        /// </summary>
+        public static string Url(string id) => $"https://cc-prueba.test/ronda.html?p={id}" + (Sucios.Contains(id) ? "&sucio=1" : "");
+
+        static readonly HashSet<string> Sucios = new HashSet<string>();
 
         /// <summary>La misma spec para los siete: el fin se observa porque desaparece el botón de detener.</summary>
         public const string Spec =
@@ -229,8 +234,19 @@ namespace ChatCouncil.Interfaz
             var qwen = Hechos.OfType<Respuesta>().SingleOrDefault(r => r.ProveedorId == "qwen");
             Anotar(qwen?.Procedencia?.Continuidad == "confirmada", "continuidad confirmada", qwen?.Procedencia?.Continuidad ?? "sin respuesta");
             await Esperar(() => Raiz.Q<Label>("barra-titulo").text == "Operación · 3 de 7");
-            Anotar(Raiz.Q<Label>("barra-titulo").text == "Operación · 3 de 7" && Paso == "Pegar la operación en los paneles" && !Raiz.Q<Button>("paso-ancha").enabledSelf,
-                "fin de la investigación", $"\"{Raiz.Q<Label>("barra-titulo").text}\", \"{Paso}\" deshabilitado hasta T21");
+            Anotar(Raiz.Q<Label>("barra-titulo").text == "Operación · 3 de 7" && Paso == "Pegar la operación en los paneles" && Raiz.Q<Button>("paso-ancha").enabledSelf
+                   && Pool.All(id => EstadoEnLaLista(id) == "Por pegar"),
+                "fin de la investigación", $"\"{Raiz.Q<Label>("barra-titulo").text}\", \"{Paso}\"; {string.Join(", ", Pool.Select(id => $"{id} {EstadoEnLaLista(id)}"))}");
+
+            await RecorridoDeOperacion();
+
+            // Un diálogo cancelado no deja su acción: un "Aceptar" después no abandona nada (defecto visto en T21).
+            var rondaAntes = Ronda.Puerta.RondaActual;
+            await Pulsar("menu-ronda");
+            await Pulsar("item-Abandonar la ronda");
+            await Pulsar("dialogo-cancelar");
+            await Pulsar("dialogo-aceptar");
+            Anotar(Ronda.Puerta.RondaActual == rondaAntes && rondaAntes != null, "diálogo cancelado", $"la ronda sigue abierta: {Ronda.Puerta.RondaActual == rondaAntes}");
 
             // Abandonar la ronda (D13): vuelve a Pregunta sin escribir nada.
             var lineasAntes = LineasDelRegistro;
@@ -251,7 +267,7 @@ namespace ChatCouncil.Interfaz
             await Pulsar("item-Capturar lo que ya está en los paneles");
             await Esperar(() => Paso == "Declarar la pregunta de esta ronda", 60);
             var sinEnvio = Hechos.OfType<Ronda>().LastOrDefault();
-            Anotar(sinEnvio?.Prompt == Puerta.PromptSinRonda && sinEnvio.Indice == 1 && Hechos.OfType<Respuesta>().Count(r => r.RondaId == sinEnvio.Id) == 7,
+            Anotar(sinEnvio?.Prompt == Puerta.PromptSinRonda && sinEnvio.Indice == 2 && Hechos.OfType<Respuesta>().Count(r => r.RondaId == sinEnvio.Id) == 7,
                 "capturar sin pegar", $"ronda {sinEnvio?.Indice} con el marcador; {Hechos.OfType<Respuesta>().Count(r => r.RondaId == sinEnvio?.Id)} respuestas; \"{Paso}\"");
             await Pulsar("paso-ancha");
             Raiz.Q<TextField>("dialogo-campo").value = AMano;
@@ -260,6 +276,96 @@ namespace ChatCouncil.Interfaz
             var declarada = Hechos.OfType<PreguntaDeclarada>().SingleOrDefault();
             Anotar(declarada?.Texto == AMano && declarada.RondaId == sinEnvio?.Id && Raiz.Q<Label>("barra-titulo").text == "Operación · 3 de 7",
                 "declarar la pregunta", $"\"{declarada?.Texto}\"; \"{Raiz.Q<Label>("barra-titulo").text}\"");
+        }
+
+        // ---------------------------------------------------------------- la operación (T21)
+
+        async Task RecorridoDeOperacion()
+        {
+            var ronda = Ronda.Puerta.RondaActual;
+            var navAntes = Pool.ToDictionary(id => id, id => Ronda.PanelDe(id).Navegaciones);
+
+            // Pegar en los siete, con la conversación de Mistral sin vaciar.
+            Sucios.Add("mistral");
+            await Pulsar("paso-ancha");
+            var aviso = Raiz.Q("capa").ClassListContains("capa--abierta") && Raiz.Q<Label>("dialogo-titulo").text == "Antes de pegar la operación"
+                        && Raiz.Q<Toggle>("dialogo-casilla").text == "Pegarla como texto, sin archivo";
+            Anotar(aviso, "aviso de la operación", $"diálogo «{Raiz.Q<Label>("dialogo-titulo").text}», casilla «{Raiz.Q<Toggle>("dialogo-casilla").text}»");
+            await Pulsar("dialogo-aceptar");
+            await Esperar(() => Resultado.StartsWith("Operación pegada", StringComparison.Ordinal), 240);
+            Anotar(Resultado == "Operación pegada en 6 de 7. No se pegó en: Mistral; cada uno dice qué pasó. Comprueba que el archivo quedó adjunto, revísala y envíala.",
+                "resultado de la operación", Resultado);
+
+            // Conversación nueva (una navegación), vacía, el texto idéntico al armado y el archivo adjunto (historia 41).
+            var bien = new List<string>();
+            foreach (var id in Pool.Where(id => id != "mistral"))
+            {
+                var op = Ronda.OperacionDe(id);
+                var navegaciones = Ronda.PanelDe(id).Navegaciones - navAntes[id];
+                var vacio = (bool?)await Ronda.PanelDe(id).Correr("chatVacio", Spec) == true;
+                var adjunto = (string)JsonEstricto.Leer(await En(id, "document.getElementById('archivo').textContent"));
+                var ruta = Path.Combine(app.CarpetaDatos, "operaciones", op?.NombreArchivo ?? "-");
+                if (op?.CuerpoArchivo != null && navegaciones == 1 && vacio && await Compositor(id) == op.Texto && File.Exists(ruta)
+                    && adjunto == $"{op.NombreArchivo}|{new FileInfo(ruta).Length}" && File.ReadAllText(ruta) == op.CuerpoArchivo)
+                    bien.Add(id);
+            }
+            Anotar(bien.Count == 6, "chat nuevo, texto y archivo", $"{bien.Count} de 6: [{string.Join(",", bien)}]");
+            Anotar(Hechos.OfType<Sello>().Count(s => s.RondaId == ronda) == 7, "sello de la ronda", $"{Hechos.OfType<Sello>().Count(s => s.RondaId == ronda)} etiquetas");
+
+            Ronda.Seleccionar("mistral");
+            var problema = Raiz.Q<Label>("cabecera-problema").text;
+            Anotar(EstadoEnLaLista("mistral") == "Con problema" && problema.StartsWith("La operación no se pegó: la conversación nueva no quedó vacía", StringComparison.Ordinal)
+                   && await Compositor("mistral") == "" && Ronda.OperacionDe("mistral") == null,
+                "conversación nueva que no quedó vacía", $"«{EstadoEnLaLista("mistral")}»; {problema}");
+
+            // Mistral otra vez, por la vía del texto: el aviso ya se dio en esta ronda.
+            Sucios.Remove("mistral");
+            await Pulsar("menu-panel");
+            await Pulsar("item-Pegar la operación aquí como texto");
+            var sinAviso = !Raiz.Q("capa").ClassListContains("capa--abierta");
+            await Esperar(() => Resultado.StartsWith("Operación pegada en 1 de 1", StringComparison.Ordinal), 60);
+            var opMistral = Ronda.OperacionDe("mistral");
+            Anotar(sinAviso && opMistral?.CuerpoArchivo == null && opMistral.Texto.Contains("[[CC-MARCA-") && await Compositor("mistral") == opMistral.Texto
+                   && EstadoEnLaLista("mistral") == "Pegado, falta que envíes",
+                "operación como texto, con el aviso una vez por ronda", $"sin aviso: {sinAviso}; «{Resultado}»; «{EstadoEnLaLista("mistral")}»");
+
+            // Los siete envían y responden con un hallazgo; la captura los registra como operación.
+            foreach (var id in Pool) await Enviar(id);
+            foreach (var id in Pool) await Responder(id, $"CONVERGENCIA|ALCANCE|P1,P2|Las respuestas coinciden en el punto central ({id}).");
+            await Esperar(() => Paso == "Capturar los que terminaron (7)");
+            await Pulsar("paso-ancha");
+            await Esperar(() => Raiz.Q<Label>("barra-titulo").text == "Integración · 4 de 7", 60);
+            var salidas = Hechos.OfType<SalidaOperador>().Where(x => x.RondaId == ronda).ToList();
+            var hallazgos = Hechos.OfType<HallazgoHecho>().Count(h => salidas.Any(x => x.Id == h.SalidaOperadorId));
+            Anotar(salidas.Count == 7 && salidas.All(x => x.PromptCompleto == Ronda.OperacionDe(x.OperadorId)?.PromptCompleto) && hallazgos == 7
+                   && salidas.Single(x => x.OperadorId == "chatgpt").PromptCompleto.Contains("=== ARCHIVO ADJUNTO:") && Raiz.Q<Label>("barra-titulo").text == "Integración · 4 de 7",
+                "capturar la operación", $"{salidas.Count} salidas con su prompt, {hallazgos} hallazgos; «{Raiz.Q<Label>("barra-titulo").text}»");
+
+            // Ronda nueva con las respuestas copiadas, y un operador que reutiliza su operación.
+            await Pulsar("menu-ronda");
+            await Pulsar("item-Ronda nueva con las respuestas copiadas");
+            await Pulsar("dialogo-aceptar");
+            await Cuadros(5);
+            var copiada = Ronda.Puerta.RondaActual;
+            var copias = Hechos.OfType<Respuesta>().Where(r => r.RondaId == copiada).ToList();
+            Anotar(copiada != ronda && Resultado.StartsWith("Ronda nueva abierta", StringComparison.Ordinal) && copias.Count == 7 && copias.All(r => r.CopiadaDe?.RondaId == ronda)
+                   && Raiz.Q<Label>("barra-titulo").text == "Operación · 3 de 7",
+                "ronda nueva con las respuestas copiadas", $"«{Resultado}»; {copias.Count} copias; «{Raiz.Q<Label>("barra-titulo").text}»");
+            // Reutilizar necesita el sello de la ronda nueva: primero se pega la operación en un panel, y el aviso vuelve.
+            Ronda.Seleccionar("gemini");
+            await Esperar(() => Raiz.Q<Button>("accion-panel").text == "Pegar la operación aquí");
+            await Pulsar("accion-panel");
+            var deNuevo = Raiz.Q("capa").ClassListContains("capa--abierta") && Raiz.Q<Label>("dialogo-titulo").text == "Antes de pegar la operación";
+            Anotar(deNuevo, "el aviso vuelve en la ronda nueva", $"diálogo abierto: {deNuevo}");
+            await Pulsar("dialogo-aceptar");
+            await Esperar(() => Resultado.StartsWith("Operación pegada en 1 de 1", StringComparison.Ordinal), 60);
+            Ronda.Seleccionar("chatgpt");
+            await Pulsar("menu-panel");
+            await Pulsar("item-Usar su operación anterior");
+            var reusada = Hechos.OfType<SalidaOperador>().SingleOrDefault(x => x.RondaId == copiada && x.OperadorId == "chatgpt");
+            Anotar(Resultado.StartsWith("ChatGPT: se reutilizó", StringComparison.Ordinal) && reusada?.CopiadaDe?.RondaId == ronda && EstadoEnLaLista("chatgpt") == "Capturado",
+                "usar la operación anterior", $"«{Resultado}»; «{EstadoEnLaLista("chatgpt")}»");
+
         }
 
         static void Copiar(string desde, string hasta)

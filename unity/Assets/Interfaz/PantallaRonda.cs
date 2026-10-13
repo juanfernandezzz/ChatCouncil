@@ -43,6 +43,11 @@ namespace ChatCouncil.Interfaz
 
         const string PegarAqui = "Pegar la pregunta aquí";
         const string CapturarEste = "Capturar este panel";
+        const string PegarOperacionAqui = "Pegar la operación aquí";
+        const string PegarOperacionTexto = "Pegar la operación aquí como texto";
+        const string UsarAnterior = "Usar su operación anterior";
+        /// <summary>Cuánto se espera, después de abrir la conversación nueva, a que el chat y el compositor queden vacíos.</summary>
+        const int EsperaChatNuevoMs = 20_000;
 
         readonly VisualElement raiz;
         readonly string carpetaDatos;
@@ -56,12 +61,18 @@ namespace ChatCouncil.Interfaz
         List<string> activos, pool;
         string visible, etapaMostrada;
         bool frasePlegada, avisoOmitido, seccionVisible = true, capaAbierta, ocupado, sondeando;
+        // De la ronda que se ve: la operación pegada en cada panel, los pegados que fallaron y si ya se dio el aviso.
+        readonly Dictionary<string, Operacion> operaciones = new Dictionary<string, Operacion>();
+        readonly Dictionary<string, string> fallaOperacion = new Dictionary<string, string>();
+        string rondaVista, rondaConAvisoOperacion;
+        bool operacionPorTexto;
         Action<string, bool> alAceptar;
 
         public Puerta Puerta { get; private set; }
         public List<string> Operadores { get; private set; } = new List<string>();
         public string Visible => visible;
         public Panel PanelDe(string id) => paneles.TryGetValue(id, out var p) ? p : null;
+        public Operacion OperacionDe(string id) => operaciones.TryGetValue(id, out var o) ? o : null;
 
         /// <param name="urlDe">La página de cada proveedor: la de su spec, o una de prueba.</param>
         /// <param name="specDe">La spec de cada proveedor, en JSON: la de specs.json, o una de prueba.</param>
@@ -232,12 +243,21 @@ namespace ChatCouncil.Interfaz
         public string EstadoDe(string id)
         {
             var (generando, fin) = pagina.TryGetValue(id, out var p) ? p : (null, null);
-            return Puerta.EstadoDePanel(id, generando, fin);
+            var estado = Puerta.EstadoDePanel(id, generando, fin);
+            // En la operación el motor no conoce los pegados fallidos: los sabe la interfaz, que los intentó.
+            return estado == "por-pegar" && fallaOperacion.ContainsKey(id) ? "con-problema" : estado;
         }
 
-        /// <summary>La etapa que dice el registro; sin ronda abierta, la Pregunta.</summary>
-        string EtapaDelRegistro() =>
-            Puerta.RondaActual == null ? "pregunta" : Dominio.EtapaDeRonda(Puerta.LeerRegistro().Hechos, Puerta.RondaActual, pool.Count);
+        /// <summary>
+        /// La etapa que dice el registro; sin ronda abierta, la Pregunta. Con la investigación completa, la operación,
+        /// aunque todavía no haya sello (la misma regla que Puerta.EstadoDePanel).
+        /// </summary>
+        string EtapaDelRegistro()
+        {
+            if (Puerta.RondaActual == null) return "pregunta";
+            var etapa = Dominio.EtapaDeRonda(Puerta.LeerRegistro().Hechos, Puerta.RondaActual, pool.Count);
+            return etapa == "investigacion" && Puerta.PasoSiguiente().Etapa == "operacion" ? "operacion" : etapa;
+        }
 
         static bool Terminado(string estado) => estado.StartsWith("parece-terminado", StringComparison.Ordinal);
 
@@ -249,6 +269,13 @@ namespace ChatCouncil.Interfaz
         {
             if (fallaAlAbrir.TryGetValue(id, out var f))
                 return ($"La página no se pudo abrir: {f}. Cierra y vuelve a abrir la app.", "La página no se abrió: cierra y abre la app.", null);
+            if (etapa == "operacion")
+            {
+                if (fallaOperacion.TryGetValue(id, out var falla))
+                    return ($"La operación no se pegó: {falla}.", "No se pegó la operación: pégala otra vez desde «Más…».", PegarOperacionAqui);
+                var enOperacion = EstadoDe(id);
+                return (null, null, enOperacion == "por-pegar" ? PegarOperacionAqui : Terminado(enOperacion) ? CapturarEste : null);
+            }
             if (etapa != "investigacion") return (null, null, null);
             var estado = EstadoDe(id);
             if (estado == "por-pegar") return (null, null, PegarAqui);
@@ -269,6 +296,12 @@ namespace ChatCouncil.Interfaz
         public void Refrescar()
         {
             if (Puerta == null) return;
+            if (Puerta.RondaActual != rondaVista)
+            {
+                rondaVista = Puerta.RondaActual;
+                operaciones.Clear();
+                fallaOperacion.Clear();
+            }
             var paso = Puerta.PasoSiguiente();
             var etapa = EtapaDelRegistro();
             if (paso.Etapa != etapaMostrada)
@@ -351,9 +384,10 @@ namespace ChatCouncil.Interfaz
             switch (paso.Accion)
             {
                 case "pegar-pregunta": return (paso.Texto, true);
-                case "capturar" when paso.Etapa == "investigacion": return ($"{paso.Texto} ({terminados})", terminados > 0);
+                case "capturar" when paso.Etapa == "investigacion" || paso.Etapa == "operacion": return ($"{paso.Texto} ({terminados})", terminados > 0);
                 case "declarar-pregunta": return (paso.Texto, true);
-                default: return (paso.Texto, false); // las etapas siguientes se conectan en T21 y T22
+                case "pegar-operacion": return (paso.Texto, true);
+                default: return (paso.Texto, false); // las etapas de los roles se conectan en T22
             }
         }
 
@@ -426,8 +460,11 @@ namespace ChatCouncil.Interfaz
                 case "pegar-pregunta":
                     PegarPregunta();
                     break;
-                case "capturar" when paso.Etapa == "investigacion":
+                case "capturar" when paso.Etapa == "investigacion" || paso.Etapa == "operacion":
                     _ = Capturar(Operadores.Where(id => Terminado(EstadoDe(id))).ToList());
+                    break;
+                case "pegar-operacion":
+                    ConAvisoDeOperacion(Operadores.Where(id => EstadoDe(id) == "por-pegar" || EstadoDe(id) == "con-problema").ToList(), null);
                     break;
                 case "declarar-pregunta":
                     DialogoDeclarar();
@@ -440,6 +477,7 @@ namespace ChatCouncil.Interfaz
             var accion = raiz.Q<Button>("accion-panel").text;
             if (accion == PegarAqui) _ = PegarEnEste();
             else if (accion == CapturarEste) _ = Capturar(new List<string> { visible });
+            else if (accion == PegarOperacionAqui) ConAvisoDeOperacion(new List<string> { visible }, null);
         }
 
         /// <summary>Pegar en los operadores, después del aviso de capacidades (historia 20), que se puede omitir en esta sesión.</summary>
@@ -621,6 +659,161 @@ namespace ChatCouncil.Interfaz
                 });
         }
 
+        // ---------------------------------------------------------------- operación (T21)
+
+        /// <summary>
+        /// El aviso antes de pegar la operación, una vez por ronda (pedido de Juan del 2026-09-30). En él se elige la
+        /// vía de la ronda: archivo, la predeterminada, o texto. porTexto fuerza la vía de un solo panel.
+        /// </summary>
+        void ConAvisoDeOperacion(List<string> ids, bool? porTexto)
+        {
+            if (ids.Count == 0) return;
+            if (rondaConAvisoOperacion == Puerta.RondaActual)
+            {
+                _ = PegarOperaciones(ids, porTexto ?? operacionPorTexto);
+                return;
+            }
+            AbrirDialogo("Antes de pegar la operación",
+                "La app abre una conversación nueva en cada panel y comprueba que quedó vacía antes de pegar: si el operador " +
+                "siguiera el hilo anterior, leería su propia respuesta y la evaluación dejaría de ser ciega. Deja activados el " +
+                "razonamiento avanzado y la búsqueda si el proveedor los tiene. Nada se envía: revisa y envía tú; si va con " +
+                "archivo, comprueba que quedó adjunto.",
+                false, "Pegarla como texto, sin archivo", "Entendido, pegar",
+                (campo, marcada) =>
+                {
+                    rondaConAvisoOperacion = Puerta.RondaActual;
+                    operacionPorTexto = marcada;
+                    _ = PegarOperaciones(ids, porTexto ?? marcada);
+                });
+        }
+
+        /// <summary>De a un panel por vez y con ese panel al frente, como en Electron (la única forma medida con textos largos).</summary>
+        async Task PegarOperaciones(List<string> ids, bool porTexto)
+        {
+            ocupado = true;
+            int ok = 0;
+            for (int i = 0; i < ids.Count; i++)
+            {
+                var id = ids[i];
+                Resultado($"Pegando la operación: {i + 1} de {ids.Count} ({Dominio.NombreProveedor(id)})…");
+                Seleccionar(id);
+                var error = await PegarOperacion(id, porTexto);
+                if (error == null)
+                {
+                    fallaOperacion.Remove(id);
+                    ok++;
+                }
+                else fallaOperacion[id] = error;
+                Refrescar();
+            }
+            ocupado = false;
+            var fallaron = ids.Where(fallaOperacion.ContainsKey).Select(Dominio.NombreProveedor).ToList();
+            Resultado($"Operación pegada en {ok} de {ids.Count}." +
+                      (fallaron.Count > 0 ? $" No se pegó en: {string.Join(", ", fallaron)}; cada uno dice qué pasó." : "") +
+                      (ok > 0 ? porTexto ? " Revísala y envíala." : " Comprueba que el archivo quedó adjunto, revísala y envíala." : ""),
+                fallaron.Count > 0);
+            Refrescar();
+        }
+
+        /// <summary>
+        /// Conversación nueva, comprobada vacía (historia 41); la operación por la vía elegida; lo escrito, verificado
+        /// contra lo armado (Cuerpos.VerificarEscritura); y con archivo, el adjunto. El error, o null si quedó pegada.
+        /// </summary>
+        async Task<string> PegarOperacion(string id, bool porTexto)
+        {
+            if (!paneles.TryGetValue(id, out var p)) return "el panel no está abierto";
+            var spec = specDe(id);
+            try
+            {
+                await p.Navegar(urlDe(id));
+            }
+            catch (Exception e)
+            {
+                return "no se pudo abrir una conversación nueva: " + e.Message;
+            }
+            var limite = DateTime.UtcNow.AddMilliseconds(EsperaChatNuevoMs);
+            int vacias = 0;
+            for (;;)
+            {
+                // Tres lecturas seguidas con el chat sin mensajes y el compositor vacío: un editor puede restaurar un
+                // borrador propio después de navegar (esperarCompositorVacioEstable de Electron).
+                try
+                {
+                    var compositor = await p.Correr("leerCompositor", spec, esperaMs: 5_000);
+                    var vacio = (bool?)await p.Correr("chatVacio", spec, esperaMs: 5_000) == true;
+                    vacias = compositor.Type == JTokenType.String && ((string)compositor).Trim().Length == 0 && vacio ? vacias + 1 : 0;
+                }
+                catch (Exception)
+                {
+                    vacias = 0; // la página todavía está cargando
+                }
+                if (vacias >= 3) break;
+                if (DateTime.UtcNow > limite)
+                    return "la conversación nueva no quedó vacía: no se pega, porque el operador leería su propia respuesta. Abre una conversación nueva a mano y vuelve a pegar";
+                await Task.Delay(300);
+            }
+
+            Operacion op;
+            try
+            {
+                op = Puerta.ArmarOperacion(id, conArchivo: !porTexto);
+            }
+            catch (InvalidOperationException e)
+            {
+                return e.Message;
+            }
+            try
+            {
+                var r = await p.Correr("escribir", spec, op.Texto, 90_000);
+                if ((bool?)r["ok"] != true) return (string)r["error"];
+                var leido = await p.Correr("leerCompositor", spec);
+                var error = Cuerpos.VerificarEscritura(op.Texto, leido.Type == JTokenType.String ? (string)leido : "");
+                if (error != null) return error;
+            }
+            catch (Exception e)
+            {
+                return e.Message;
+            }
+            if (!porTexto)
+            {
+                var ruta = Path.Combine(carpetaDatos, "operaciones", op.NombreArchivo);
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(ruta));
+                    File.WriteAllText(ruta, op.CuerpoArchivo, new UTF8Encoding(false));
+                    await p.Adjuntar(spec, ruta);
+                }
+                catch (Exception e)
+                {
+                    return $"el texto quedó pegado pero el archivo no se adjuntó ({e.Message}). Está en {ruta}: adjúntalo a mano o pega la operación como texto";
+                }
+            }
+            Puerta.OperacionPegada(op);
+            operaciones[id] = op;
+            return null;
+        }
+
+        void UsarOperacionAnterior()
+        {
+            var (ok, mensaje) = Puerta.ReutilizarOperacion(visible);
+            Resultado(mensaje, !ok);
+            Refrescar();
+        }
+
+        void DialogoRondaCopiada()
+        {
+            AbrirDialogo("Ronda nueva con las respuestas copiadas",
+                "Se abre una ronda nueva con la misma pregunta y la última respuesta de cada operador, copiadas. La ronda actual " +
+                "queda intacta. Después puedes recapturar lo que quieras corregir, y los operadores que leen exactamente lo mismo " +
+                "pueden usar su operación anterior.",
+                false, null, "Abrir la ronda nueva", (_, __) =>
+                {
+                    var mensaje = Puerta.RondaNuevaConRespuestasCopiadas();
+                    Resultado(mensaje, !mensaje.StartsWith("Ronda nueva abierta", StringComparison.Ordinal));
+                    Refrescar();
+                });
+        }
+
         // ---------------------------------------------------------------- menús (D6, D7)
 
         sealed class Item
@@ -631,8 +824,22 @@ namespace ChatCouncil.Interfaz
 
         List<Item> ItemsDelPanel()
         {
-            var accion = visible == null ? null : Situacion(visible, EtapaDelRegistro()).Accion;
+            var etapa = EtapaDelRegistro();
+            var accion = visible == null ? null : Situacion(visible, etapa).Accion;
             var grupo = "Este panel" + (visible == null ? "" : ": " + Dominio.NombreProveedor(visible));
+            if (etapa == "operacion")
+            {
+                var pegable = accion == PegarOperacionAqui ? null : "Solo cuando el panel está por pegar o el pegado falló.";
+                return new List<Item>
+                {
+                    new Item { Grupo = grupo, Texto = PegarOperacionAqui, Accion = () => ConAvisoDeOperacion(new List<string> { visible }, false), Motivo = pegable },
+                    new Item { Grupo = grupo, Texto = PegarOperacionTexto, Accion = () => ConAvisoDeOperacion(new List<string> { visible }, true), Motivo = pegable },
+                    new Item { Grupo = grupo, Texto = UsarAnterior, Accion = UsarOperacionAnterior,
+                        Motivo = pegable == null ? null : "Solo cuando el panel todavía no operó en esta ronda." },
+                    new Item { Grupo = grupo, Texto = CapturarEste, Accion = () => _ = Capturar(new List<string> { visible }),
+                        Motivo = accion == CapturarEste ? null : "Solo cuando el panel parece terminado." },
+                };
+            }
             return new List<Item>
             {
                 new Item { Grupo = grupo, Texto = PegarAqui, Accion = () => _ = PegarEnEste(),
@@ -652,6 +859,8 @@ namespace ChatCouncil.Interfaz
                     Motivo = sinRonda ? null : "Ya hay una ronda abierta: usa «Capturar los que terminaron»." },
                 new Item { Grupo = "Ronda", Texto = "Declarar la pregunta de esta ronda", Accion = DialogoDeclarar,
                     Motivo = paso.Accion == "declarar-pregunta" ? null : "Solo cuando se capturó sin pegar la pregunta con la app." },
+                new Item { Grupo = "Ronda", Texto = "Ronda nueva con las respuestas copiadas", Accion = DialogoRondaCopiada,
+                    Motivo = sinRonda ? "No hay una ronda abierta." : null },
                 new Item { Grupo = "Ronda", Texto = "Abandonar la ronda", Accion = DialogoAbandonar,
                     Motivo = sinRonda ? "No hay una ronda abierta." : null },
             };
@@ -722,6 +931,7 @@ namespace ChatCouncil.Interfaz
         {
             raiz.Q("capa").RemoveFromClassList("capa--abierta");
             capaAbierta = false;
+            alAceptar = null; // un diálogo cerrado no deja su acción para el siguiente "Aceptar"
             Ubicar();
         }
 

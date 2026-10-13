@@ -666,7 +666,7 @@ namespace ChatCouncil.Motor
             if (!poolOperadores.Contains(operadorId)) return (false, $"\"{nombre}\" no es un operador del pool.");
             var hechos = LeerRegistro().Hechos;
             var sello = hechos.OfType<Sello>().Where(s => s.RondaId == RondaActual).ToList();
-            if (sello.Count == 0) return (false, "Esta ronda todavía no tiene sello: pega primero la operación en algún panel (\"Pegar operación en este panel\").");
+            if (sello.Count == 0) return (false, "Esta ronda todavía no tiene sello: pega primero la operación en algún panel («Pegar la operación aquí»).");
             var vigentes = new Dictionary<string, Respuesta>();
             foreach (var r in hechos.OfType<Respuesta>().Where(r => r.RondaId == RondaActual)) vigentes[r.ProveedorId] = r;
             var leidas = poolOperadores.Where(id => id != operadorId).ToList();
@@ -1122,6 +1122,9 @@ namespace ChatCouncil.Motor
             var hechos = LeerRegistro().Hechos;
             var rondaId = RondaActual;
             var etapa = Dominio.EtapaDeRonda(hechos, rondaId, poolOperadores.Count);
+            // Con la investigación completa el paso ya es la operación, aunque el registro no tenga todavía sello:
+            // sin esto, cada operador seguía "capturado" por su respuesta y no había nada que pegar.
+            if (etapa == "investigacion" && PasoSiguiente().Etapa == "operacion") etapa = "operacion";
             bool capturado, problema, pegado;
             if (etapa == "investigacion")
             {

@@ -1,0 +1,36 @@
+Prueba de la Ronda (T20), 2026-10-13 15:30:15, WindowsPlayer, 0.1.0
+OK paneles del pool: operadores [chatgpt,gemini,claude,grok,mistral,kimi,qwen]; sin página el integrador y el verificador (historia 26)
+OK etapa Pregunta: "Pegar la pregunta en los paneles", campo de la pregunta a la vista
+OK pregunta vacía: "Escribe la pregunta antes de pegarla.", sin ronda
+OK aviso de capacidades: diálogo abierto: True; la página se aparta: True
+OK ronda abierta: prompt idéntico: True; condición: 9 cargados, integra deepseek
+OK un intento por proveedor: 7 intentos, 6 bien; Grok: "el compositor ya tenía texto: no se escribe encima de un borrador"
+OK saltos de línea y borrador: pregunta idéntica en 6 de 6; el borrador de Grok sigue intacto
+OK resultado del pegado: Pegada en 6 de 7. Los que fallaron dicen qué hacer en su cabecera.
+OK problema en la cabecera y en el selector: cabecera "La pregunta no se pegó: el compositor ya tenía texto: no se escribe encima de un borrador. Revisa el compositor y vuelve a pegarla."; selector "No se pegó: pégala otra vez desde «Más…»."
+OK pegar en este panel: "Pegada en Grok. Revísala y envíala."; intentos 7, rondas 1
+OK indicador: respondiendo: chatgpt Respondiendo, gemini Respondiendo, claude Respondiendo, grok Con problema, mistral Respondiendo, kimi Respondiendo, qwen Respondiendo
+OK indicador: parece terminado: "Capturar los que terminaron (5)"; chatgpt Parece terminado, gemini Parece terminado, claude Parece terminado, grok Con problema, mistral Parece terminado, kimi Parece terminado, qwen Respondiendo
+OK contadores: Enviados 6 de 7 · Parecen terminados 5 · Capturados 0
+OK capturar los que terminaron: respuestas de [chatgpt,gemini,claude,mistral,kimi]; "Capturados 5 de 5. Prompt de usuario: coincide en los 5 proveedores donde se pudo leer."
+OK aviso de prompts que coinciden: sin el color del problema
+OK texto y procedencia: texto idéntico; continuidad indeterminada
+OK respuesta corta marcada: respuesta sospechosamente corta: puede haber quedado fuera de la captura
+OK capturar este panel: Grok capturado; respuestas 6
+OK continuidad confirmada: confirmada
+OK fin de la investigación: "Operación · 3 de 7", "Pegar la operación en los paneles"; chatgpt Por pegar, gemini Por pegar, claude Por pegar, grok Por pegar, mistral Por pegar, kimi Por pegar, qwen Por pegar
+OK aviso de la operación: diálogo «Antes de pegar la operación», casilla «Pegarla como texto, sin archivo»
+OK resultado de la operación: Operación pegada en 6 de 7. No se pegó en: Mistral; cada uno dice qué pasó. Comprueba que el archivo quedó adjunto, revísala y envíala.
+OK chat nuevo, texto y archivo: 6 de 6: [chatgpt,gemini,claude,grok,kimi,qwen]
+OK sello de la ronda: 7 etiquetas
+OK conversación nueva que no quedó vacía: «Con problema»; La operación no se pegó: la conversación nueva no quedó vacía: no se pega, porque el operador leería su propia respuesta. Abre una conversación nueva a mano y vuelve a pegar.
+OK operación como texto, con el aviso una vez por ronda: sin aviso: True; «Operación pegada en 1 de 1. Revísala y envíala.»; «Pegado, falta que envíes»
+OK capturar la operación: 7 salidas con su prompt, 7 hallazgos; «Integración · 4 de 7»
+OK ronda nueva con las respuestas copiadas: «Ronda nueva abierta (b5ca88f1) con 7 respuestas copiadas de la ronda 22a181ca. Recaptura con "Capturar este panel" lo que quieras corregir.»; 7 copias; «Operación · 3 de 7»
+OK el aviso vuelve en la ronda nueva: diálogo abierto: True
+OK usar la operación anterior: «ChatGPT: se reutilizó su operación de la ronda 22a181ca (1 hallazgos, 1 con etiqueta inválida). No hace falta pegarle la operación de nuevo.»; «Capturado»
+OK diálogo cancelado: la ronda sigue abierta: True
+OK abandonar la ronda: "Pegar la pregunta en los paneles"; líneas del registro 57 → 57
+OK capturar sin pegar: ronda 2 con el marcador; 7 respuestas; "Declarar la pregunta de esta ronda"
+OK declarar la pregunta: "Pregunta escrita a mano en cada página"; "Operación · 3 de 7"
+Resultado: 34/34

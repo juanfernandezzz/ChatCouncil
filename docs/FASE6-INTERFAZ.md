@@ -381,3 +381,18 @@ páginas van apiladas en el área de la página, con la del panel visible al fre
 
 Resultados y capturas: `docs/evidencia/fase6/T20-resultados.md` y `docs/evidencia/fase6/T20/`.
 
+## 9. Operación conectada (T21)
+
+- **«Pegar la operación en los paneles»** va de a un panel, con ese panel al frente. En cada uno, la
+  app abre la conversación nueva y comprueba que quedó vacía; si no, no pega y la cabecera dice qué
+  hacer (D36).
+- **La vía de archivo es la predeterminada:** el prompt en el compositor y el cuerpo en un `.txt`
+  adjunto. La de texto se elige en el aviso, que sale una vez por ronda, o en el menú del panel
+  (D37).
+- **Lo escrito se verifica** contra lo armado (D38).
+- **En el menú del panel:** pegar aquí, como archivo o como texto; usar su operación anterior; y
+  capturar este panel.
+- **En el menú de la Ronda:** ronda nueva con las respuestas copiadas.
+
+Resultados y capturas: `docs/evidencia/fase6/T21-resultados.md` y `docs/evidencia/fase6/T21/`.
+

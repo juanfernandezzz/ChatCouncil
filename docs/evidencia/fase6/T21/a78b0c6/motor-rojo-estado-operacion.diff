@@ -1,0 +1,10 @@
+--- a/motor/Runtime/Puerta.cs
++++ b/motor/Runtime/Puerta.cs
+@@ -1124,7 +1124,6 @@
+             var etapa = Dominio.EtapaDeRonda(hechos, rondaId, poolOperadores.Count);
+             // Con la investigación completa el paso ya es la operación, aunque el registro no tenga todavía sello:
+             // sin esto, cada operador seguía "capturado" por su respuesta y no había nada que pegar.
+-            if (etapa == "investigacion" && PasoSiguiente().Etapa == "operacion") etapa = "operacion";
+             bool capturado, problema, pegado;
+             if (etapa == "investigacion")
+             {

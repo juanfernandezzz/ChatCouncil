@@ -1,0 +1,17 @@
+  Determinando los proyectos que se van a restaurar...
+  Todos los proyectos están actualizados para la restauración.
+  Motor -> C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\17bb5b5b-98c9-47f5-8968-ef0cf33d15ce\scratchpad\m21a\motor\Dotnet~\Motor\bin\Debug\netstandard2.1\Motor.dll
+  Pruebas -> C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\17bb5b5b-98c9-47f5-8968-ef0cf33d15ce\scratchpad\m21a\motor\Dotnet~\Pruebas\bin\Debug\net8.0\Pruebas.dll
+Serie de pruebas para C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\17bb5b5b-98c9-47f5-8968-ef0cf33d15ce\scratchpad\m21a\motor\Dotnet~\Pruebas\bin\Debug\net8.0\Pruebas.dll (.NETCoreApp,Version=v8.0)
+Versión 17.11.1 (x64) de VSTest
+Iniciando la ejecución de pruebas, espere...
+1 archivos de prueba en total coincidieron con el patrón especificado.
+  Con error LaOperacionEscritaSeVerificaComoEnElectron [96 ms]
+  Mensaje de error:
+     Assert.That(Cuerpos.VerificarEscritura(pegado, pegado), Is.Null)
+  Expected: null
+  But was:  <string.Empty>
+  Seguimiento de la pila:
+     at ChatCouncil.Motor.Pruebas.PromptsPruebas.LaOperacionEscritaSeVerificaComoEnElectron() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\17bb5b5b-98c9-47f5-8968-ef0cf33d15ce\scratchpad\m21a\motor\Tests\PromptsPruebas.cs:line 130
+1)    at ChatCouncil.Motor.Pruebas.PromptsPruebas.LaOperacionEscritaSeVerificaComoEnElectron() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\17bb5b5b-98c9-47f5-8968-ef0cf33d15ce\scratchpad\m21a\motor\Tests\PromptsPruebas.cs:line 130
+Con error! - Con error:     1, Superado:    75, Omitido:     0, Total:    76, Duración: 4 s - Pruebas.dll (net8.0)

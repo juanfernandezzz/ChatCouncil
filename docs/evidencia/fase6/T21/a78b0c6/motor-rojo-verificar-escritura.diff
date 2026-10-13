@@ -1,0 +1,24 @@
+--- a/motor/Runtime/Cuerpos.cs
++++ b/motor/Runtime/Cuerpos.cs
+@@ -178,20 +178,7 @@
+         /// con \r\n y el espacio duro normalizados (escribirYVerificarOperacion de Electron). Las marcas y las
+         /// cadenas pasan con un compositor que mezcló texto viejo; la igualdad no.
+         /// </summary>
+-        public static string VerificarEscritura(string esperado, string leido)
+-        {
+-            string Normalizar(string t) => t.Replace("\r\n", "\n").Replace((char)0xA0, ' ');
+-            // Electron buscaba las cadenas en el texto crudo: un espacio duro de ChatGPT en "LA PREGUNTA ORIGINAL FUE:"
+-            // la daba por faltante aunque la igualdad, que sí normaliza, la aceptara. Aquí se normaliza antes.
+-            var sinMarcas = MarcaConSaltos.Replace(Normalizar(leido), "");
+-            var faltantes = RequisitosPromptOperacion.Where(r => !sinMarcas.Contains(r)).ToList();
+-            if (faltantes.Count > 0) return "prompt incompleto: faltan " + string.Join(", ", faltantes);
+-            var final = Normalizar(leido);
+-            if (final == Normalizar(esperado)) return null;
+-            var lineasPrompt = esperado.Replace("\r\n", "\n").Split('\n').Length;
+-            var lineasCompositor = final.Length == 0 ? 0 : final.Split('\n').Length;
+-            return $"el compositor no es igual al prompt: {lineasCompositor} de {lineasPrompt} líneas, {final.Length} de {esperado.Length} caracteres";
+-        }
++        public static string VerificarEscritura(string esperado, string leido) => "";
+ 
+         /// <summary>
+         /// "completo" si están todas las marcas; "truncado" si faltan en un tramo

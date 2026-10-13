@@ -399,12 +399,21 @@ su ruta.
     vista al entrar en la etapa (era 57 %).
   Android no se compiló en esta tarea.
 
-- [ ] **T21. Operación conectada.**
+- [x] **T21. Operación conectada.**
   Acepta: el chat nuevo con comprobación, la vía de archivo predeterminada y
   la de pegado como opción, el aviso de una vez por ronda, la reutilización
   de una operación y la ronda nueva con respuestas copiadas.
   Verifica: igual que T20, sobre la etapa de operación.
   Depende de: T20. Tamaño: M.
+
+  **Hecha el 2026-10-13** sobre `a78b0c6` (decisiones D36 a D39;
+  `docs/evidencia/fase6/T21-resultados.md`):
+  - la operación con la conversación nueva comprobada vacía, la vía de archivo con adjunto
+    automático y la de texto como opción, y el aviso una vez por ronda;
+  - usar la operación anterior y la ronda nueva con las respuestas copiadas;
+  - `PruebaRonda.cs` en el `.exe`: 34/34 en tres corridas; T19 y la autoprueba del panel, sin cambios;
+    el motor, 76/76, con su XML.
+  Android no se compiló en esta tarea.
 
 - [ ] **T22. Roles e informe conectados.**
   Acepta: integrador, verificador y redactor (con el adjunto), las

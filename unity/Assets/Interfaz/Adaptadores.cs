@@ -57,12 +57,13 @@ namespace ChatCouncil.Interfaz
             "pre { white-space: pre-wrap; margin: 0.4em 0 1em 0; padding: 0.5em 0.7em; background: #f0f0f0; border-left: 3px solid #ddd; } " +
             "pre code { background: none; padding: 0; } ul, ol { margin: 0 0 0.8em 1.2em; padding: 0; } li { margin-bottom: 0.3em; }";
 
+        // image: la dirección se escribe como texto; dibujarla haría que el panel pida una URL que escribió un modelo.
         // breaks: el informe usa saltos simples como líneas sueltas (un operador o un hallazgo por línea); sin esto se
         // juntan en un párrafo. Se arma concatenando, no reemplazando marcadores: un título con "{{CONTENIDO}}" no
         // puede reentrar (spec).
         const string Escribir = @"((md, titulo, estilo) => {
   const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/""/g, '&quot;').replace(/'/g, '&#39;');
-  const m = new marked.Marked({ breaks: true, renderer: { html: ({ text }) => esc(text) } });
+  const m = new marked.Marked({ breaks: true, renderer: { html: ({ text }) => esc(text), image: ({ href, text }) => esc((text ? text + ': ' : '') + href) } });
   const html = '<!DOCTYPE html><html lang=""es""><head><meta charset=""utf-8""><title>' + esc(titulo) + '</title><style>' + estilo + '</style></head><body>' + m.parse(md, { async: false }) + '</body></html>';
   document.open(); document.write(html); document.close();
   return 'ok';

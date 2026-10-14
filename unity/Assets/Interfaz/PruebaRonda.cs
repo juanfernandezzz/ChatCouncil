@@ -714,7 +714,8 @@ namespace ChatCouncil.Interfaz
                        && adjunto == esperado && File.ReadAllText(archivos[0]).Contains("[[CC-MARCA-FIN-"),
                     "pegar el redactor con el adjunto", $"«{Resultado}»; adjunto «{adjunto}», esperado «{esperado}»");
                 await Enviar("deepseek");
-                await ResponderEnParrafos("deepseek", "Respuesta del redactor para la persona.", "Lo firme está en [H1].");
+                // La imagen apunta al servidor local: el panel del PDF no la pide (T24), la escribe como texto.
+                await ResponderEnParrafos("deepseek", "Respuesta del redactor para la persona.", "Lo firme está en [H1].", $"![figura]({b}/imagen)");
                 await Esperar(() => Paso == "Capturar la respuesta del redactor" && Habilitado);
                 await Pulsar("paso-ancha");
                 await Esperar(() => Titulo == "Informe · 7 de 7", 60);
@@ -731,7 +732,7 @@ namespace ChatCouncil.Interfaz
                 const string local = "es una dirección local o de la red privada: no se comprueba";
                 var urls = comprobadas.Select(u => $"{u.Url} {u.Codigo?.ToString() ?? "sin código"} ({u.Detalle})").ToList();
                 Anotar(comprobadas.Count == 5 && comprobadas.All(u => u.Codigo == null) && comprobadas.Count(u => u.Detalle == local) == 4 && servidor.Pedidos.Count == 0,
-                    "las URLs locales no se piden", $"{string.Join("; ", urls)}; pedidos al servidor: {servidor.Pedidos.Count}");
+                    "las URLs locales y la imagen del PDF no se piden", $"{string.Join("; ", urls)}; pedidos al servidor: {string.Join("; ", servidor.Pedidos)}");
                 var carpeta = Directory.Exists(Path.Combine(app.CarpetaDatos, "informes")) ? Directory.GetDirectories(Path.Combine(app.CarpetaDatos, "informes")).SingleOrDefault() : null;
                 var nombre = carpeta == null ? "-" : Path.GetFileName(carpeta);
                 var md = carpeta == null ? "" : File.ReadAllText(Path.Combine(carpeta, nombre + ".md"));

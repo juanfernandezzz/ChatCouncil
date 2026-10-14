@@ -396,3 +396,73 @@ Resultados y capturas: `docs/evidencia/fase6/T20-resultados.md` y `docs/evidenci
 
 Resultados y capturas: `docs/evidencia/fase6/T21-resultados.md` y `docs/evidencia/fase6/T21/`.
 
+
+## 10. Roles e informe conectados (T22)
+
+- **Los roles** abren su página en su etapa, en una conversación nueva comprobada vacía, y entran en
+  el recorrido; en una ronda nueva salen (D42, D43).
+- **El informe** se arma en .md y PDF Carta con pie numerado, y al terminar se abre su carpeta
+  (D40, D41, D47).
+
+Resultados y capturas: `docs/evidencia/fase6/T22-resultados.md` y `docs/evidencia/fase6/T22/`.
+
+## 11. Secciones, mantenimiento, teclado y accesibilidad (T23)
+
+- **Secciones:** Ronda, Historial, Ajustes y Ayuda (D48). Apariencia en Ajustes (D51). Recargar,
+  diagnóstico y cerrar la sesión en «Más…» de cada panel (D52).
+- **Teclado:** F9, Ctrl+Tab, F6 y F1 (D49). **Lector de pantalla:** Lector.cs (D50).
+
+### 11.1 Lista de chequeo WCAG 2.2 AA, medida en la app compilada de Windows
+
+Cómo se midió: **P** = comprobación de `PruebaRonda` en el `.exe`; **U** = el árbol de UI
+Automation que lee Narrador, leído por PowerShell; **C** = captura; **G** = `pnpm guard:contraste`.
+Android no se compiló en T23: nada de esta lista se midió allí.
+
+| Criterio | Resultado | Cómo |
+|---|---|---|
+| 1.1.1 Contenido no textual | Cumple. El ícono de estado va siempre con la palabra, y el lector nombra la fila con el proveedor y su estado | U |
+| 1.3.1 Información y relaciones | Cumple desde T23. Los títulos son encabezados para el lector y la etapa actual se dice con palabras («3 Operación, etapa actual»); antes solo la barra la marcaba | U |
+| 1.3.2 Secuencia con significado | Cumple. El lector recorre en el orden del documento, que es el visual | U |
+| 1.4.1 Uso del color | Cumple. Cada estado lleva forma y palabra (D21) | C |
+| 1.4.3 y 1.4.11 Contraste | Cumple. 68 pares de tokens en los dos temas | G |
+| 1.4.4 Cambiar el tamaño del texto | Cumple. Al 200 % la interfaz mide la mitad en dp (1024 → 512) y pasa a la clase angosta sin perder controles | P, C |
+| 1.4.10 Reflujo | Cumple desde T23. A 320 dp se cortaban «Más…» y el «de 7» del selector (D54) | C |
+| 2.1.1 Teclado | Cumple desde T23. La página del proveedor se alcanza con F6 y la lista de paneles se usa con Enter (medido); los demás controles son botones, campos y casillas de UI Toolkit, que se alcanzan con Tab por construcción (ver 2.4.3) | P (en parte) |
+| 2.1.2 Sin trampa de teclado | Cumple desde T23. Con teclas reales, F6 y el Tab que sale de la página devuelven el foco a la app; sin el arreglo de panel.cpp, no (mutación) | P |
+| 2.1.4 Atajos de una tecla de carácter | Cumple. Los atajos son teclas de función y Ctrl+Tab | — |
+| 2.4.3 Orden del foco | Por construcción, es el orden del documento. Se midió el orden de las regiones con F6; el Tab no se recorrió elemento por elemento | P (en parte) |
+| 2.4.6 Encabezados y etiquetas | Cumple. Cada sección y bloque lleva su título, y cada campo su etiqueta | C, U |
+| 2.4.7 Foco visible | Cumple desde T23. Botón, campo, casilla y desplegable muestran el borde con el token de foco; antes el tema de Unity lo pintaba con #006AA6, bajo 3:1 en el tema oscuro (D53) | P |
+| 2.4.11 Foco no tapado | Cumple. Los menús y diálogos apartan la página nativa (D33) y el foco de Unity nunca queda debajo de ella | P |
+| 2.5.3 Etiqueta en el nombre | Cumple. El nombre de cada botón es su texto visible | U |
+| 2.5.7 Movimientos de arrastre | No hay arrastres | — |
+| 2.5.8 Tamaño del objetivo | Cumple. Todos los controles de las cuatro secciones miden 48 dp o más (D19) | P |
+| 3.1.1 Idioma de la página | **No se puede declarar:** la jerarquía de accesibilidad de Unity no tiene un campo de idioma. Narrador lee con la voz del sistema | — |
+| 3.2.1 y 3.2.2 Al recibir el foco y al cambiar un valor | Cumple. El foco no cambia de contexto; el tema y el tamaño cambian el aspecto al elegirlos, que es lo que se pide (D51) | P |
+| 3.3.1 y 3.3.2 Errores, etiquetas e instrucciones | Cumple. Cada problema dice qué pasó y qué hacer (D9) | P |
+| 4.1.2 Nombre, función y valor | Cumple desde T23, medido por UI Automation: 25 elementos con su nombre y su función, y rectángulos en coordenadas de pantalla (D50). **No se probó con una persona usando Narrador ni con TalkBack** | U, P |
+| 4.1.3 Mensajes de estado | Implementado: el resultado de cada paso se anuncia al lector. **No medido:** el anuncio no se puede leer desde UI Automation sin escuchar a Narrador | — |
+
+### 11.2 Evaluación heurística repetida sobre la app compilada
+
+Mismo método que §4.1: las 10 heurísticas de Nielsen, severidad de 0 a 4, un evaluador (el agente),
+ahora sobre el `.exe` (las pruebas de T20 a T23 y las capturas de `docs/evidencia/fase6/T23/`).
+
+| # | Heurística | Hallazgo | Sev. | Estado |
+|---|---|---|---|---|
+| H4 | 1. Visibilidad del estado | En el teléfono solo se ve el estado del panel visible; los contadores aparecen solo en Investigación | 2 | Se acepta: «Ver todos» lista el estado de cada uno a un toque |
+| H7 | Historia 23 | En el teléfono la página ocupa el 56,2 % del alto con la frase de la etapa a la vista y el 66,9 % plegada (Operación); en Pregunta, el 40,9 %, por el campo de la pregunta | 2 | Se acepta: la frase se pliega con un toque y la pregunta solo está en su etapa |
+| H12 | 2. Coincidencia con el mundo real | «Operadores» y «roles» eran palabras del método | 1 | **Corregido:** la lista dice «Proveedores», como Ajustes, y la Ayuda explica las palabras |
+| N1 | 2.1.2 / 3. Control y libertad | Con el teclado no se salía de la página del proveedor | 4 | **Corregido** (D49), medido con teclas reales |
+| N2 | 4.1.2 / 7. Flexibilidad | Las filas de la lista no se activaban con el teclado ni las veía el lector | 3 | **Corregido** (D54) |
+| N3 | 1.4.10 | A 320 dp se cortaba «Más…» | 3 | **Corregido** (D54) |
+| N4 | 2.4.7 / 1. Visibilidad | El foco en el tema oscuro quedaba bajo 3:1 | 3 | **Corregido** (D53) |
+| N5 | Historia 23 | Al 200 % en una pantalla de 1366 × 768, a la página le queda una franja de unos 40 dp mientras la frase de la etapa está a la vista | 2 | Se acepta: con «Entendido» la frase se pliega; en pantallas más altas no pasa |
+| N6 | 8. Diseño minimalista | En el teléfono, «Más…» junta los ítems del panel, los de mantenimiento y los de la ronda en una sola hoja larga | 1 | Se acepta: son de emergencia (D6) y van agrupados con su título |
+| N7 | 7. Flexibilidad y eficiencia | Los atajos solo se aprenden en la Ayuda | 1 | Se acepta: F1 abre la Ayuda desde cualquier sección |
+
+**Severidad 3 y 4: cuatro hallazgos nuevos (N1 a N4), los cuatro corregidos y medidos en el `.exe`.
+Ninguno queda abierto.** Un solo evaluador encuentra una parte de los problemas: la prueba con
+personas, con Narrador y con TalkBack queda abierta (§11.1).
+
+Resultados y capturas: `docs/evidencia/fase6/T23-resultados.md` y `docs/evidencia/fase6/T23/`.

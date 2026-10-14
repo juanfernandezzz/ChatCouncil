@@ -1,0 +1,26 @@
+﻿Ventana: ChatCouncil en 163,0 1040x807
+ControlType.Button|Ronda|175,38,79x56|habilitado=True|clase=
+ControlType.Button|Historial|175,98,79x56|habilitado=True|clase=
+ControlType.Button|Ajustes|175,158,79x56|habilitado=True|clase=
+ControlType.Button|Ayuda|175,218,79x56|habilitado=True|clase=
+ControlType.Text|1 Pregunta, hecha|277,46,119x27|habilitado=True|clase=
+ControlType.Text|2 Investigación, hecha|406,46,119x27|habilitado=True|clase=
+ControlType.Text|3 Operación, etapa actual|535,46,119x27|habilitado=True|clase=
+ControlType.Text|4 Integración|664,46,120x27|habilitado=True|clase=
+ControlType.Text|5 Verificación|794,46,119x27|habilitado=True|clase=
+ControlType.Text|6 Redacción|923,46,119x27|habilitado=True|clase=
+ControlType.Text|7 Informe|1052,46,119x27|habilitado=True|clase=
+ControlType.Button|Pegar la operación en los paneles|275,117,287x48|habilitado=True|clase=
+ControlType.Text|En cada panel, revisa la operación y envíala tú. Si va con archivo, comprueba que quedó adjunto.|580,101,479x53|habilitado=True|clase=
+ControlType.Button|Ronda…|1087,117,92x48|habilitado=True|clase=
+ControlType.Text|Proveedores (7)|275,217,247x27|habilitado=True|clase=
+ControlType.Button|ChatGPT, Por pegar|267,248,263x48|habilitado=True|clase=
+ControlType.Button|Gemini, Por pegar|267,296,263x48|habilitado=True|clase=
+ControlType.Button|Claude, Por pegar|267,344,263x48|habilitado=True|clase=
+ControlType.Button|Grok, Por pegar|267,392,263x48|habilitado=True|clase=
+ControlType.Button|Mistral, Por pegar|267,440,263x48|habilitado=True|clase=
+ControlType.Button|Kimi, Por pegar|267,488,263x48|habilitado=True|clase=
+ControlType.Button|Qwen, Por pegar|267,536,263x48|habilitado=True|clase=
+ControlType.Text|ChatGPT · Por pegar|589,216,278x29|habilitado=True|clase=
+ControlType.Button|Pegar la operación aquí|891,205,204x48|habilitado=True|clase=
+ControlType.Button|Más…|1103,205,76x48|habilitado=True|clase=

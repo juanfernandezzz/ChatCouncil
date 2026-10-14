@@ -434,7 +434,7 @@ su ruta.
     cambios; el motor, 80/80, con su XML.
   Android no se compiló en esta tarea.
 
-- [ ] **T23. Acciones secundarias, capacidades aceptadas, teléfono y
+- [x] **T23. Acciones secundarias, capacidades aceptadas, teléfono y
   accesibilidad.**
   Acepta:
   - recargar, cerrar la sesión del panel y el diagnóstico, donde los ubicó
@@ -459,8 +459,22 @@ su ruta.
   - los hallazgos heurísticos de severidad 3 y 4 en cero o explicados.
   Depende de: T22. Tamaño: M.
 
+  **Hecha el 2026-10-14** sobre `da82926` (decisiones D48 a D54;
+  `docs/evidencia/fase6/T23-resultados.md`; lista de chequeo y evaluación en
+  `docs/FASE6-INTERFAZ.md` §11):
+  - Historial, Ayuda con Acerca de, Apariencia (tema y tamaño hasta 200 %), y en «Más…» recargar,
+    el diagnóstico en un archivo y cerrar la sesión;
+  - atajos F9, Ctrl+Tab, F6 y F1; la página del proveedor entra en F6 y ya no atrapa el teclado;
+    los lectores de pantalla leen la app (medido por UI Automation);
+  - defectos corregidos con prueba: la trampa de teclado, el foco con el color de Unity, el reflujo
+    a 320 dp y la lista que no se usaba con el teclado; de T19 y T20, el título repetido, la barra de
+    desplazamiento y la lista de la etapa Pregunta;
+  - `PruebaRonda.cs` en el `.exe`: 63/63 en tres corridas; T19 y la autoprueba del panel, sin
+    cambios; el motor, 81/81, con su XML.
+  Android no se compiló en esta tarea.
+
 **Control de la etapa 5:** capturas, recorrido completo en modo autoprueba,
-informe y push.
+informe y push. Hecho el 2026-10-14: `docs/evidencia/fase6/etapa5-informe.md`.
 
 ### Etapa 6 — Pruebas y revisión
 

@@ -1,0 +1,51 @@
+diff --git a/panel/windows/panel.cpp b/panel/windows/panel.cpp
+index 4bb9fba..f32e2ea 100644
+--- a/panel/windows/panel.cpp
++++ b/panel/windows/panel.cpp
+@@ -314,24 +314,7 @@ int CrearPanel(const std::wstring& perfil, const std::wstring& url, HWND ventana
+                 return S_OK;
+             }
+             p->controlador = c;
+-            // WCAG 2.1.2: sin esto el teclado queda atrapado en la página. El Tab que sale de ella y F6 (el salto entre
+-            // regiones de Windows y de los navegadores) devuelven el foco a la ventana de la app.
+-            EventRegistrationToken t;
+-            c->add_MoveFocusRequested(Callback<ICoreWebView2MoveFocusRequestedEventHandler>(
+-                [](ICoreWebView2Controller*, ICoreWebView2MoveFocusRequestedEventArgs* a) -> HRESULT {
+-                    SetFocus(padre);
+-                    return a->put_Handled(TRUE);
+-                }).Get(), &t);
+-            c->add_AcceleratorKeyPressed(Callback<ICoreWebView2AcceleratorKeyPressedEventHandler>(
+-                [](ICoreWebView2Controller*, ICoreWebView2AcceleratorKeyPressedEventArgs* a) -> HRESULT {
+-                    COREWEBVIEW2_KEY_EVENT_KIND tipo;
+-                    UINT tecla;
+-                    if (SUCCEEDED(a->get_KeyEventKind(&tipo)) && tipo == COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && SUCCEEDED(a->get_VirtualKey(&tecla)) && tecla == VK_F6) {
+-                        SetFocus(padre);
+-                        return a->put_Handled(TRUE);
+-                    }
+-                    return S_OK;
+-                }).Get(), &t);
++            // MUTANTE: sin MoveFocusRequested ni F6
+             c->get_CoreWebView2(&p->vista);
+             RECT rc;
+             GetClientRect(p->hwnd, &rc);
+diff --git a/unity/Assets/Interfaz/Interfaz.uss b/unity/Assets/Interfaz/Interfaz.uss
+index fe0b512..b35399b 100644
+--- a/unity/Assets/Interfaz/Interfaz.uss
++++ b/unity/Assets/Interfaz/Interfaz.uss
+@@ -379,15 +379,7 @@
+ .unity-scroller .unity-repeat-button { background-color: var(--color-superficie); border-color: var(--color-borde); }
+ .unity-scroller .unity-repeat-button > * { -unity-background-image-tint-color: var(--color-texto-2); }
+ 
+-/* El tema de Unity pinta el foco con su color (#006AA6) en una regla con :enabled, más específica que .boton:focus:
+-   medido en T23. En el oscuro ese azul queda bajo 3:1 (WCAG 1.4.11). El foco va siempre con el token. */
+-.boton:focus:enabled, .boton-primario:focus:enabled, .riel-item:focus:enabled { border-color: var(--color-foco); }
+-.hoja .campo:focus:enabled > .unity-base-field__input,
+-.hoja .campo > .unity-base-field__input:focus:enabled,
+-.raiz .campo:focus:enabled > .unity-base-field__input,
+-.raiz .campo > .unity-base-field__input:focus:enabled { border-color: var(--color-foco); }
+-.hoja .marca:focus:enabled .unity-toggle__checkmark,
+-.hoja .marca .unity-toggle__input:focus:enabled .unity-toggle__checkmark { border-color: var(--color-foco); }
++/* MUTANTE: sin las reglas de foco de D53 */
+ .fila-panel:focus { border-color: var(--color-foco); }
+ 
+ /* A 320 dp (WCAG 1.4.10, medido en T23) se cortaban "Más…" y el "de 7" del selector: el texto se parte, los botones no se encogen. */

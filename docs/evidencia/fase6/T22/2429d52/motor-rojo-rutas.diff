@@ -1,0 +1,11 @@
+--- orig.cs	2026-10-13 23:06:49.429141700 -0300
++++ motor/Runtime/Puerta.cs	2026-10-13 23:06:49.569655300 -0300
+@@ -962,7 +962,7 @@
+             // dejar la nota de faltantes fuera del límite; mover la carpeta de datos más arriba si alguien la tiene tan honda.
+             var nombreMax = Math.Min((259 - Path.GetFullPath(dir).Length - 6) / 2,
+                 259 - Path.GetFullPath(dir).Length - 3 - InformeFinal.SubcarpetaRespuestas.Length - NombreFaltantes.Length) - 6;
+-            var nombre = TituloInforme.NombreLibreDeInforme(TituloInforme.NombreBaseDeInforme(titulo, pregunta, reloj().DateTime, nombreMax - 18),
++            var nombre = TituloInforme.NombreLibreDeInforme(TituloInforme.NombreBaseDeInforme(titulo, pregunta, reloj().DateTime),
+                 n => Directory.Exists(Path.Combine(dir, n)) || File.Exists(Path.Combine(dir, n + ".md")) || File.Exists(Path.Combine(dir, n + ".pdf")));
+             // Las respuestas de los INVESTIGADORES a la pregunta, en el orden del pool; nunca las salidas de operador.
+             var respuestas = new List<(string Archivo, string Titulo, string Markdown)>();

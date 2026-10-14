@@ -1,0 +1,26 @@
+  Determinando los proyectos que se van a restaurar...
+  Se ha restaurado C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\c7926bff-c68e-4a24-aef2-2fa82b89ca91\scratchpad\mot\estado-roles\motor\Dotnet~\Pruebas\Pruebas.csproj (en 525 ms).
+  Se ha restaurado C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\c7926bff-c68e-4a24-aef2-2fa82b89ca91\scratchpad\mot\estado-roles\motor\Dotnet~\Motor\Motor.csproj (en 506 ms).
+  Motor -> C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\c7926bff-c68e-4a24-aef2-2fa82b89ca91\scratchpad\mot\estado-roles\motor\Dotnet~\Motor\bin\Debug\netstandard2.1\Motor.dll
+  Pruebas -> C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\c7926bff-c68e-4a24-aef2-2fa82b89ca91\scratchpad\mot\estado-roles\motor\Dotnet~\Pruebas\bin\Debug\net8.0\Pruebas.dll
+Serie de pruebas para C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\c7926bff-c68e-4a24-aef2-2fa82b89ca91\scratchpad\mot\estado-roles\motor\Dotnet~\Pruebas\bin\Debug\net8.0\Pruebas.dll (.NETCoreApp,Version=v8.0)
+Versión 17.11.1 (x64) de VSTest
+
+Iniciando la ejecución de pruebas, espere...
+1 archivos de prueba en total coincidieron con el patrón especificado.
+  Con error EnLasEtapasDeLosRolesLoYaCapturadoSigueCapturado [382 ms]
+  Mensaje de error:
+     Assert.That(puerta.EstadoDePanel("chatgpt", null, null), Is.EqualTo("capturado"))
+  String lengths are both 9. Strings differ at index 0.
+  Expected: "capturado"
+  But was:  "por-pegar"
+  -----------^
+
+  Seguimiento de la pila:
+     at ChatCouncil.Motor.Pruebas.PuertaPruebas.EnLasEtapasDeLosRolesLoYaCapturadoSigueCapturado() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\c7926bff-c68e-4a24-aef2-2fa82b89ca91\scratchpad\mot\estado-roles\motor\Tests\PuertaPruebas.cs:line 266
+
+1)    at ChatCouncil.Motor.Pruebas.PuertaPruebas.EnLasEtapasDeLosRolesLoYaCapturadoSigueCapturado() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\c7926bff-c68e-4a24-aef2-2fa82b89ca91\scratchpad\mot\estado-roles\motor\Tests\PuertaPruebas.cs:line 266
+
+
+
+Con error! - Con error:     1, Superado:    79, Omitido:     0, Total:    80, Duración: 3 s - Pruebas.dll (net8.0)

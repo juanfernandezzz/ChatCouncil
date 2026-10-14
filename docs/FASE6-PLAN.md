@@ -415,13 +415,24 @@ su ruta.
     el motor, 76/76, con su XML.
   Android no se compiló en esta tarea.
 
-- [ ] **T22. Roles e informe conectados.**
+- [x] **T22. Roles e informe conectados.**
   Acepta: integrador, verificador y redactor (con el adjunto), las
   recapturas, mostrar u ocultar los paneles de los roles, la comprobación de
   URLs y la carpeta del informe que se abre al terminar.
   Verifica: igual que T20 hasta el informe en disco, con su `.md` y su
   `.pdf`.
   Depende de: T21. Tamaño: M.
+
+  **Hecha el 2026-10-13** sobre `2429d52` (decisiones D40 a D47;
+  `docs/evidencia/fase6/T22-resultados.md`):
+  - los tres roles en una conversación nueva comprobada vacía, con el prompt verificado por igualdad
+    y el archivo del redactor adjunto; las recapturas; mostrar u ocultar los roles; las URLs sin
+    cookies; el informe en .md y PDF Carta con pie numerado, y la carpeta que se abre;
+  - defectos corregidos con prueba: estados en las etapas de los roles (D44), la recaptura fallida
+    que reemplazaba a la buena (D45) y las rutas de 260 caracteres que Windows no escribe (D47);
+  - `PruebaRonda.cs` en el `.exe`: 51/51 en tres corridas; T19 y la autoprueba del panel, sin
+    cambios; el motor, 80/80, con su XML.
+  Android no se compiló en esta tarea.
 
 - [ ] **T23. Acciones secundarias, capacidades aceptadas, teléfono y
   accesibilidad.**

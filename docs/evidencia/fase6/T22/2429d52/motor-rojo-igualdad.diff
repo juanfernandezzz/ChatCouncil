@@ -1,0 +1,10 @@
+--- orig.cs	2026-10-13 23:08:07.222547800 -0300
++++ motor/Runtime/Cuerpos.cs	2026-10-13 23:08:07.330442300 -0300
+@@ -196,6 +196,7 @@
+         /// </summary>
+         public static string VerificarIgualdad(string esperado, string leido)
+         {
++            if (esperado != null) return null;
+             var final = Normalizar(leido);
+             if (final == Normalizar(esperado)) return null;
+             var lineasPrompt = esperado.Replace("\r\n", "\n").Split('\n').Length;

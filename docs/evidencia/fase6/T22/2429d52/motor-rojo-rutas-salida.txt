@@ -1,0 +1,34 @@
+  Determinando los proyectos que se van a restaurar...
+  Se ha restaurado C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\c7926bff-c68e-4a24-aef2-2fa82b89ca91\scratchpad\mot\rutas\motor\Dotnet~\Motor\Motor.csproj (en 586 ms).
+  Se ha restaurado C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\c7926bff-c68e-4a24-aef2-2fa82b89ca91\scratchpad\mot\rutas\motor\Dotnet~\Pruebas\Pruebas.csproj (en 632 ms).
+  Motor -> C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\c7926bff-c68e-4a24-aef2-2fa82b89ca91\scratchpad\mot\rutas\motor\Dotnet~\Motor\bin\Debug\netstandard2.1\Motor.dll
+  Pruebas -> C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\c7926bff-c68e-4a24-aef2-2fa82b89ca91\scratchpad\mot\rutas\motor\Dotnet~\Pruebas\bin\Debug\net8.0\Pruebas.dll
+Serie de pruebas para C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\c7926bff-c68e-4a24-aef2-2fa82b89ca91\scratchpad\mot\rutas\motor\Dotnet~\Pruebas\bin\Debug\net8.0\Pruebas.dll (.NETCoreApp,Version=v8.0)
+Versión 17.11.1 (x64) de VSTest
+
+Iniciando la ejecución de pruebas, espere...
+1 archivos de prueba en total coincidieron con el patrón especificado.
+  Con error NingunaRutaDelInformePasaDe259Caracteres [203 ms]
+  Mensaje de error:
+     C:\Users\Juan Fernández\AppData\Local\Temp\cc-puerta-9f353e4a36a544b0bd561b0848189532\ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\informes\2026-10-06 0900 - ¿Cuáles investigaciones longitudinales comparables documentan efectos\2026-10-06 0900 - ¿Cuáles investigaciones longitudinales comparables documentan efectos.pdf
+Assert.That(rutas.Max(x => x.Length), Is.LessThanOrEqualTo(259))
+  Expected: less than or equal to 259
+  But was:  340
+
+  Seguimiento de la pila:
+     at ChatCouncil.Motor.Pruebas.PuertaPruebas.NingunaRutaDelInformePasaDe259Caracteres() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\c7926bff-c68e-4a24-aef2-2fa82b89ca91\scratchpad\mot\rutas\motor\Tests\PuertaPruebas.cs:line 243
+   at NUnit.Framework.Internal.TaskAwaitAdapter.GenericAdapter`1.GetResult()
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await[TResult](TestExecutionContext context, Func`1 invoke)
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await(TestExecutionContext context, Func`1 invoke)
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.RunTestMethod(TestExecutionContext context)
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.Execute(TestExecutionContext context)
+   at NUnit.Framework.Internal.Commands.BeforeAndAfterTestCommand.<>c__DisplayClass1_0.<Execute>b__0()
+   at NUnit.Framework.Internal.Commands.DelegatingTestCommand.RunTestMethodInThreadAbortSafeZone(TestExecutionContext context, Action action)
+
+1)    at ChatCouncil.Motor.Pruebas.PuertaPruebas.NingunaRutaDelInformePasaDe259Caracteres() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\c7926bff-c68e-4a24-aef2-2fa82b89ca91\scratchpad\mot\rutas\motor\Tests\PuertaPruebas.cs:line 243
+   at System.Runtime.CompilerServices.AsyncMethodBuilderCore.Start[TStateMachine](TStateMachine& stateMachine)
+   at ChatCouncil.Motor.Pruebas.PuertaPruebas.NingunaRutaDelInformePasaDe259Caracteres()
+
+
+
+Con error! - Con error:     1, Superado:    79, Omitido:     0, Total:    80, Duración: 4 s - Pruebas.dll (net8.0)

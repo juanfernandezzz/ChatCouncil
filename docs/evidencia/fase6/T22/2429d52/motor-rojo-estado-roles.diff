@@ -1,0 +1,11 @@
+--- orig.cs	2026-10-13 23:06:22.497016900 -0300
++++ motor/Runtime/Puerta.cs	2026-10-13 23:06:22.617580600 -0300
+@@ -1160,7 +1160,7 @@
+             {
+                 var rolDeLaEtapa = etapa == "integracion" ? roles.Integrador : etapa == "verificacion" ? roles.Verificador : roles.Redactor;
+                 // T22: quien no es el rol de esta etapa ya terminó lo suyo (un operador o un rol anterior): capturado si dejó su hecho.
+-                capturado = proveedorId != rolDeLaEtapa
++                capturado = false && proveedorId != rolDeLaEtapa
+                     ? hechos.OfType<SalidaOperador>().Any(s => s.RondaId == rondaId && s.OperadorId == proveedorId)
+                       || hechos.OfType<InformeIntegrador>().Any(h => h.RondaId == rondaId && h.OperadorId == proveedorId)
+                       || hechos.OfType<SalidaVerificador>().Any(h => h.RondaId == rondaId && h.VerificadorId == proveedorId)

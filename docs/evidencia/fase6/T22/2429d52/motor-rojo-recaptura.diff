@@ -1,0 +1,11 @@
+--- orig.cs	2026-10-13 23:07:46.313249900 -0300
++++ motor/Runtime/Puerta.cs	2026-10-13 23:07:46.456734500 -0300
+@@ -599,7 +599,7 @@
+             // Una lectura fallida o bajo el umbral nunca reemplaza a la buena: queda como ErrorCaptura, y el último bueno sigue siendo el que vale.
+             var error = !string.IsNullOrEmpty(lectura.Error) ? lectura.Error
+                 : lectura.Text.Length < UmbralLecturaMinimo ? $"lectura por debajo del umbral ({lectura.Text.Length} de {UmbralLecturaMinimo} caracteres)" : null;
+-            if (error != null)
++            if (error != null && lectura == null)
+             {
+                 EscribirErrorCaptura(RondaActual, Dominio.EtapaDeRonda(hechos, RondaActual, poolOperadores.Count),
+                     rol == "integrador" ? "informe-integrador" : "salida-verificador", error, lectura.Id);

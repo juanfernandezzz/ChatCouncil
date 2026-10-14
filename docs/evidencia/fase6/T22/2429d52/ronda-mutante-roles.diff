@@ -1,0 +1,13 @@
+diff --git a/unity/Assets/Interfaz/PantallaRonda.cs b/unity/Assets/Interfaz/PantallaRonda.cs
+index 7d54752..365c8fe 100644
+--- a/unity/Assets/Interfaz/PantallaRonda.cs
++++ b/unity/Assets/Interfaz/PantallaRonda.cs
+@@ -349,7 +349,7 @@ namespace ChatCouncil.Interfaz
+                 fallaOperacion.Clear();
+                 fallaRol.Clear();
+                 // En una ronda nueva los roles muestran la conversación de la anterior: salen del recorrido hasta su etapa.
+-                rolesMostrados.Clear();
++                // MUTANTE: sin rolesMostrados.Clear()
+                 if (visible != null && !Operadores.Contains(visible)) visible = Operadores.FirstOrDefault();
+                 Ubicar();
+             }

@@ -2845,6 +2845,14 @@ Decisiones de T22 (roles e informe conectados):
   menú del rol, está siempre en su etapa: después de reabrir la app no queda el
   prompt en memoria, el paso vuelve a "Pegar" y sin esto no habría forma de
   capturar lo que el rol ya respondió (se registra con el prompt no disponible).
+· D47, 2026-10-13, ninguna ruta dentro de la carpeta del informe pasa de 259
+  caracteres (MAX_PATH de Windows): si la carpeta de datos es honda, el título del
+  nombre se acorta hasta que entran el PDF, que repite el nombre, y la nota de
+  faltantes. Medido en T22: con rutas de 260 caracteres o más, dos PDF y la nota
+  que los nombraba no se escribieron. Criterio técnico: la carpeta tiene que
+  escribirse en cualquier Windows y poder copiarse o comprimirse entera. Un
+  informe con archivos faltantes se muestra en el color del problema (el motor
+  devuelve si quedó completo).
 
 ---
 

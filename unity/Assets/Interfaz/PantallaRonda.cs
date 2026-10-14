@@ -1020,7 +1020,7 @@ namespace ChatCouncil.Interfaz
             ocupado = true;
             Resultado("Comprobando las URLs y armando el informe…");
             Refrescar();
-            var (ok, mensaje, ruta) = await Puerta.ArmarInforme(Http, Pdf);
+            var (ok, mensaje, ruta, completo) = await Puerta.ArmarInforme(Http, Pdf);
             // Ya comprobadas para esta verificación: no vuelve a salir a la red, solo da la cuenta.
             var urls = ok ? await Puerta.ComprobarUrls(Http) : null;
             ocupado = false;
@@ -1028,7 +1028,7 @@ namespace ChatCouncil.Interfaz
                 : $" URLs del verificador: responden {urls.Urls.Count(u => u.Codigo >= 200 && u.Codigo <= 299)} de {urls.Urls.Count}.";
             // Sin PDF, el motor devuelve el .md: la carpeta es la suya.
             var carpeta = ok ? Directory.Exists(ruta) ? ruta : Path.GetDirectoryName(ruta) : null;
-            Resultado(mensaje + cuenta, !ok || carpeta != ruta);
+            Resultado(mensaje + cuenta, !completo);
             if (carpeta != null) AbrirCarpeta(carpeta);
             Refrescar();
         }

@@ -850,7 +850,7 @@ namespace ChatCouncil.Motor
         /// y PDF, y una subcarpeta con la respuesta de cada investigador. Antes
         /// comprueba las URLs de la verificación, si las hay y no se comprobaron.
         /// </summary>
-        public async Task<(bool Ok, string Mensaje, string Ruta)> ArmarInforme(IHttp http, IPdf pdf)
+        public async Task<(bool Ok, string Mensaje, string Ruta, bool Completo)> ArmarInforme(IHttp http, IPdf pdf)
         {
             try
             {
@@ -858,13 +858,13 @@ namespace ChatCouncil.Motor
             }
             catch (Exception e)
             {
-                return (false, $"No se pudo armar el informe final: {e.Message}", null);
+                return (false, $"No se pudo armar el informe final: {e.Message}", null, false);
             }
         }
 
-        async Task<(bool Ok, string Mensaje, string Ruta)> ArmarInformeOTirar(IHttp http, IPdf pdf)
+        async Task<(bool Ok, string Mensaje, string Ruta, bool Completo)> ArmarInformeOTirar(IHttp http, IPdf pdf)
         {
-            var sinRonda = (false, "No hay una ronda activa para armar el informe.", (string)null);
+            var sinRonda = (false, "No hay una ronda activa para armar el informe.", (string)null, false);
             if (ConversacionActual == null || RondaActual == null) return sinRonda;
             var hechos = LeerRegistro().Hechos;
             var ronda = hechos.OfType<Ronda>().FirstOrDefault(r => r.Id == RondaActual);
@@ -956,7 +956,12 @@ namespace ChatCouncil.Motor
             var titulo = informeIntegrador == null ? null
                 : !string.IsNullOrEmpty(informeIntegrador.Html) ? TituloInforme.ExtraerTituloDelInforme(textoIntegrador).Titulo
                 : informeIntegrador.Titulo ?? TituloInforme.ExtraerTituloDelInforme(informeIntegrador.InformeCrudo).Titulo;
-            var nombre = TituloInforme.NombreLibreDeInforme(TituloInforme.NombreBaseDeInforme(titulo, pregunta, reloj().DateTime),
+            // D47: ninguna ruta de la carpeta pasa de 259 caracteres (MAX_PATH). Las más largas son el PDF, que repite
+            // el nombre, y la nota de faltantes; se reservan " (999)" y "AAAA-MM-DD HHMM - ".
+            // shortcut: con una carpeta de datos de más de ~200 caracteres no entra ni el título de reserva; entonces falla y lo dice.
+            var nombreMax = Math.Min((259 - Path.GetFullPath(dir).Length - 6) / 2,
+                259 - Path.GetFullPath(dir).Length - 3 - InformeFinal.SubcarpetaRespuestas.Length - NombreFaltantes.Length) - 6;
+            var nombre = TituloInforme.NombreLibreDeInforme(TituloInforme.NombreBaseDeInforme(titulo, pregunta, reloj().DateTime, nombreMax - 18),
                 n => Directory.Exists(Path.Combine(dir, n)) || File.Exists(Path.Combine(dir, n + ".md")) || File.Exists(Path.Combine(dir, n + ".pdf")));
             // Las respuestas de los INVESTIGADORES a la pregunta, en el orden del pool; nunca las salidas de operador.
             var respuestas = new List<(string Archivo, string Titulo, string Markdown)>();
@@ -988,7 +993,7 @@ namespace ChatCouncil.Motor
         /// La carpeta del informe. Una respuesta cuyo .md o PDF falla no se omite en
         /// silencio: las demás se escriben igual y un archivo FALTAN las nombra.
         /// </summary>
-        static async Task<(bool Ok, string Mensaje, string Ruta)> EntregarCarpeta(string dirInformes, string nombreBase, string textoInforme,
+        static async Task<(bool Ok, string Mensaje, string Ruta, bool Completo)> EntregarCarpeta(string dirInformes, string nombreBase, string textoInforme,
             List<(string Archivo, string Titulo, string Markdown)> respuestas, IPdf pdf)
         {
             var carpetaInforme = Path.Combine(dirInformes, nombreBase);
@@ -1068,8 +1073,8 @@ namespace ChatCouncil.Motor
                 : conAlgunFallo == 0 ? $"{completas} respuestas de investigador, cada una en .md y en PDF."
                 : $"{completas} de {respuestas.Count} respuestas completas; {conAlgunFallo} con archivos faltantes{(notaEscrita ? $" (nombrados en \"{NombreFaltantes}\")" : ", y la nota que los nombra tampoco se pudo escribir")}.";
             return falloInforme != null
-                ? (true, $"Carpeta del informe: {carpetaInforme}. El informe quedó solo en Markdown: no se pudo generar el PDF ({falloInforme}). {detalle}", rutaMd)
-                : (true, $"Carpeta del informe: {carpetaInforme}. El informe está en .md y en PDF. {detalle}", carpetaInforme);
+                ? (true, $"Carpeta del informe: {carpetaInforme}. El informe quedó solo en Markdown: no se pudo generar el PDF ({falloInforme}). {detalle}", rutaMd, false)
+                : (true, $"Carpeta del informe: {carpetaInforme}. El informe está en .md y en PDF. {detalle}", carpetaInforme, faltantes.Count == 0 && falloSubcarpeta == null);
         }
 
         // ---------------------------------------------------------------- guía

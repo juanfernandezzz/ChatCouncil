@@ -130,7 +130,7 @@ namespace ChatCouncil.Motor.Pruebas
             Assert.That(segunda.YaComprobadas, Is.EqualTo(Referencias.SegundaComprobacionSinRed));
             Assert.That(http.Pedidos, Is.EqualTo(pedidos), "la segunda comprobación y el informe no salen a la red");
             var carpetaInforme = Path.Combine(carpeta, "informes", Referencias.NombreBaseInforme);
-            Assert.That(informe.Ok, Is.True, informe.Mensaje);
+            Assert.That(informe.Ok && informe.Completo, Is.True, informe.Mensaje);
             Assert.That(File.ReadAllText(Path.Combine(carpetaInforme, Referencias.NombreBaseInforme + ".md")), Is.EqualTo(Referencias.InformeDeRonda));
             foreach (var (archivo, titulo, markdown) in Referencias.RespuestasDeCarpeta)
             {
@@ -220,6 +220,33 @@ namespace ChatCouncil.Motor.Pruebas
             Assert.That(Directory.GetFiles(respuestas, "*.pdf"), Has.Length.EqualTo(6));
             Assert.That(File.ReadAllText(Path.Combine(respuestas, "FALTAN - respuestas sin PDF.txt")), Does.Contain("- 4 - Grok: no se pudo generar el PDF (la impresora de prueba falló)"));
             Assert.That(r.Mensaje, Does.EndWith("6 de 7 respuestas completas; 1 con archivos faltantes (nombrados en \"FALTAN - respuestas sin PDF.txt\")."));
+            Assert.That(r.Completo, Is.False, "un informe con archivos faltantes no está completo");
+        }
+
+        // D47: medido en T22, una carpeta de datos honda y un título largo dejaban rutas de 260 caracteres o más, y
+        // Windows no las escribe (MAX_PATH): faltaban PDF y la nota que los nombra. El título se acorta para que entren.
+        [Test]
+        public async Task NingunaRutaDelInformePasaDe259Caracteres()
+        {
+            var raiz = carpeta;
+            carpeta = Path.Combine(raiz, new string('d', 150 - raiz.Length));
+            Directory.CreateDirectory(carpeta);
+            try
+            {
+                var puerta = NuevaPuerta();
+                puerta.AbrirRonda("¿Cuáles investigaciones longitudinales comparables documentan efectos persistentes?");
+                puerta.RegistrarCapturas(((JObject)JsonEstricto.Leer(Referencias.LotesOperacion))["investigacion"].ToObject<List<Lectura>>(), Confirmada);
+                var r = await puerta.ArmarInforme(new HttpFalso(), new PdfFalso());
+                var rutas = Directory.GetFiles(Path.Combine(carpeta, "informes"), "*", SearchOption.AllDirectories);
+                Assert.That(r.Ok && r.Completo, Is.True, r.Mensaje);
+                Assert.That(rutas, Has.Length.EqualTo(16));
+                Assert.That(rutas.Max(x => x.Length), Is.LessThanOrEqualTo(259), rutas.OrderByDescending(x => x.Length).First());
+                Assert.That(Path.GetFileName(r.Ruta), Does.StartWith("2026-10-06 0900 - ¿Cuáles"), "el título se acorta, no se pierde");
+            }
+            finally
+            {
+                carpeta = raiz;
+            }
         }
 
         // T22: en las etapas de los roles, un operador que ya operó y un rol cuya etapa pasó están capturados;

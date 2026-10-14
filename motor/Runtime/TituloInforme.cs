@@ -76,10 +76,10 @@ namespace ChatCouncil.Motor
         /// control, guiones largos a simples (para poder comprimir en ZIP),
         /// espacios colapsados, 80 caracteres y sin puntos ni espacios al final.
         /// </summary>
-        public static string LimpiarTituloParaArchivo(string titulo)
+        public static string LimpiarTituloParaArchivo(string titulo, int maxTitulo = MaxTitulo)
         {
             var limpio = Js.Trim(Blancos.Replace(Control.Replace(Guiones.Replace(ProhibidosWindows.Replace(titulo, " "), "-"), " "), " "));
-            if (limpio.Length > MaxTitulo) limpio = limpio.Substring(0, MaxTitulo);
+            if (limpio.Length > maxTitulo) limpio = limpio.Substring(0, Math.Max(0, maxTitulo));
             return PuntosYEspaciosFinales.Replace(limpio, "");
         }
 
@@ -94,10 +94,11 @@ namespace ChatCouncil.Motor
         const string TituloDeReserva = "Informe de ronda";
 
         /// <summary>"AAAA-MM-DD HHMM - título" sin extensión; sin título del integrador, las seis primeras palabras de la pregunta.</summary>
-        public static string NombreBaseDeInforme(string titulo, string pregunta, DateTime ahora)
+        public static string NombreBaseDeInforme(string titulo, string pregunta, DateTime ahora, int maxTitulo = MaxTitulo)
         {
-            var delIntegrador = titulo == null ? "" : LimpiarTituloParaArchivo(titulo);
-            var dePregunta = delIntegrador.Length > 0 ? "" : LimpiarTituloParaArchivo(TituloDesdePregunta(pregunta));
+            maxTitulo = Math.Min(maxTitulo, MaxTitulo);
+            var delIntegrador = titulo == null ? "" : LimpiarTituloParaArchivo(titulo, maxTitulo);
+            var dePregunta = delIntegrador.Length > 0 ? "" : LimpiarTituloParaArchivo(TituloDesdePregunta(pregunta), maxTitulo);
             var elegido = delIntegrador.Length > 0 ? delIntegrador : dePregunta.Length > 0 ? dePregunta : TituloDeReserva;
             return $"{SelloFechaLocal(ahora)} - {elegido}";
         }

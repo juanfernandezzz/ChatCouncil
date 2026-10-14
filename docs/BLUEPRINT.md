@@ -2873,17 +2873,28 @@ MoveFocusRequested y AcceleratorKeyPressed, y MoveFocus.
   del .md, sin cambiar el esquema del registro (historia 69). En el teléfono, el
   título grande no repite el de la barra (pendiente de T19). La lista de paneles
   dice "Proveedores", la palabra de Ajustes; "operador" queda en la ayuda (H12).
-· D49, 2026-10-14, atajos (D8): F9 el paso siguiente, Ctrl+Tab y Ctrl+Mayús+Tab
-  el panel siguiente y el anterior, F6 y Mayús+F6 las regiones (riel, guía,
-  lista, cabecera, la página del proveedor, abajo) y F1 la ayuda. Criterios: F9
-  no es de texto y Chromium no la usa (F5, F6, F7, F11 y F12 sí), así que no puede
-  escribir ni enviar en una página; Ctrl+Tab es el cambio de pestaña de los
-  navegadores y cada panel es una página [NH 4]; F6 es el salto entre regiones de
-  Windows y de los navegadores. La página del proveedor es una región: F6 le da el
-  foco del teclado, y desde ella F6 o el Tab que sale vuelven a la app (panel.cpp,
-  [WV2]). Antes no había forma de entrar a la página sin mouse ni de salir de ella
-  con el teclado: una trampa de teclado [WCAG 2.1.1, 2.1.2], medida en T23 con
-  teclas reales.
+· D49, 2026-10-14 (rehecha el mismo día), atajos (D8) para un teclado de una
+  mano: F1 el panel anterior, F2 el panel siguiente, F3 el paso siguiente, F4 la
+  región siguiente y F5 la anterior (riel, guía, lista, cabecera, la página del
+  proveedor, abajo); cada acción con su tecla, sin Mayús ni Ctrl. Ctrl+Tab y
+  Ctrl+Mayús+Tab quedan como alias del panel siguiente y el anterior para un
+  teclado completo, porque es el cambio de pestaña de los navegadores y cada
+  panel es una página [NH 4]. La Ayuda deja de tener atajo: se usa poco y está
+  en el riel y en el cajón. Criterios: la persona usa un teclado de una mano
+  (lado izquierdo) que solo alcanza F1 a F5, 1 a 5, Q a T, A a G, Z a B y
+  Espacio (pedido de Juan del 2026-10-14). De esas, las de carácter y Espacio
+  escriben en el compositor de la página; las de función no, y además quedan
+  fuera de WCAG 2.1.4 (atajos de una tecla de carácter, que exige poder
+  apagarlos o reasignarlos) [WCAG 2.1.4]. Flexibilidad y eficiencia [NH 7]. Con
+  el foco dentro de la página del proveedor, F1 a F5 llegan igual a la app: el
+  panel devuelve el foco a la ventana de la app y le entrega la tecla (panel.cpp
+  en Windows [WV2]; en Android el WebView se la pasa a la vista de Unity). Así no
+  hay trampa de teclado y el Tab que sale de la página también vuelve a la app
+  [WCAG 2.1.1, 2.1.2]. Se pierden, solo dentro de las páginas, la ayuda (F1), la
+  búsqueda (F3) y la recarga (F5) del navegador; recargar queda en el menú
+  "Más…" del panel (D52). Alt+F4 no se toca: es cerrar la ventana. Límite:
+  Android no se compila desde T17, así que su paso de teclas queda cableado y
+  sin medir.
 · D50, 2026-10-14, los lectores de pantalla (Narrador, TalkBack) leen la app: UI
   Toolkit no publica sus controles, y Lector.cs arma la jerarquía de
   accesibilidad de Unity 6.3 con lo que está a la vista, en el orden del

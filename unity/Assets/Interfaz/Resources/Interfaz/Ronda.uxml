@@ -153,10 +153,10 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="bloque">
                         <ui:Label text="Atajos de teclado" class="titulo-bloque semibold" />
-                        <ui:Label class="envolver separado" text="F9: el paso siguiente (el botón principal)." />
-                        <ui:Label class="envolver separado" text="Ctrl+Tab y Ctrl+Mayús+Tab: el panel siguiente y el anterior." />
-                        <ui:Label class="envolver separado" text="F6 y Mayús+F6: pasar entre la guía, la lista de paneles y el panel. Dentro de la página de un proveedor, F6 vuelve a la app." />
-                        <ui:Label class="envolver separado" text="F1: esta ayuda." />
+                        <ui:Label class="envolver separado" text="F1 y F2: el panel anterior y el siguiente. Ctrl+Mayús+Tab y Ctrl+Tab hacen lo mismo." />
+                        <ui:Label class="envolver separado" text="F3: el paso siguiente (el botón principal)." />
+                        <ui:Label class="envolver separado" text="F4 y F5: pasar a la parte siguiente o a la anterior de la pantalla: la guía, la lista de paneles, el panel y la página del proveedor." />
+                        <ui:Label class="envolver separado" text="Funcionan también con el foco dentro de la página de un proveedor: la tecla vuelve a la app." />
                         <ui:Label class="envolver texto-2 separado" text="Ninguno usa Enter ni Ctrl+Enter, que en las páginas envían." />
                     </ui:VisualElement>
                     <ui:VisualElement class="bloque">

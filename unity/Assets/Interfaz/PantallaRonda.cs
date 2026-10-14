@@ -1052,7 +1052,7 @@ namespace ChatCouncil.Interfaz
 
         internal static string NombreDeEtapa(string etapa) => NombresEtapa[Array.IndexOf(Etapas, etapa)];
 
-        /// <summary>F6 (D49): el foco del teclado dentro de la página visible. false si no hay página a la vista.</summary>
+        /// <summary>F4 y F5 (D49): el foco del teclado dentro de la página visible. false si no hay página a la vista.</summary>
         public bool FocoEnPagina()
         {
             if (!seccionVisible || capaAbierta || visible == null || !paneles.TryGetValue(visible, out var p)) return false;

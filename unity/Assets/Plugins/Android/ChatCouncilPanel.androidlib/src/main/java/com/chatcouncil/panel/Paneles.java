@@ -8,6 +8,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.SystemClock;
 import android.view.InputDevice;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.print.ImpresionPdf;
 import android.view.ViewGroup;
@@ -162,6 +163,15 @@ public final class Paneles {
         ProfileStore.getInstance().getOrCreateProfile(perfil).getCookieManager().setAcceptThirdPartyCookies(w, true);
         w.setBackgroundColor(Color.WHITE);
         w.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> { p.x = l; p.y = t; p.ancho = r - l; p.alto = b - t; });
+        // F1 a F5 (D49) llegan a la app aunque el foco esté en la página: el foco vuelve a la vista de Unity, la primera
+        // del contenido (la capa de los paneles se agrega después), y se le entrega la tecla (WCAG 2.1.2).
+        w.setOnKeyListener((v, codigo, ev) -> {
+            if (codigo < KeyEvent.KEYCODE_F1 || codigo > KeyEvent.KEYCODE_F5 || ev.isAltPressed()) return false;
+            android.view.View unity = ((ViewGroup) actividad.findViewById(android.R.id.content)).getChildAt(0);
+            unity.requestFocus();
+            unity.dispatchKeyEvent(ev);
+            return true;
+        });
 
         if (!origenesIframe.isEmpty() && WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
                 && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {

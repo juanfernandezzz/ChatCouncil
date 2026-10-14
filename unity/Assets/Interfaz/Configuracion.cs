@@ -283,7 +283,7 @@ namespace ChatCouncil.Interfaz
             panel.Frente();
         }
 
-        /// <summary>F6 (D49): el foco del teclado dentro de la página de la cuenta, para entrar sin mouse.</summary>
+        /// <summary>F4 y F5 (D49): el foco del teclado dentro de la página de la cuenta, para entrar sin mouse.</summary>
         public bool FocoEnCuenta()
         {
             if (cuentaVisible == null || !paneles.TryGetValue(cuentaVisible, out var panel)) return false;

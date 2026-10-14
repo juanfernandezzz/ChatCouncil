@@ -331,12 +331,16 @@ namespace ChatCouncil.Interfaz
 
         void Teclas(KeyDownEvent e)
         {
+            // Teclado de una mano (D49): cada acción con su tecla de F1 a F5. Alt+F4 es del sistema.
+            if (e.altKey) return;
             var enRonda = seccionRonda.style.display != DisplayStyle.None && !raiz.Q("capa").ClassListContains("capa--abierta");
-            // En la guía no: es la única salida, y en la clase ancha no hay riel para volver.
-            if (e.keyCode == KeyCode.F1 && !raiz.ClassListContains("primer-arranque")) Mostrar("ayuda");
-            else if (e.keyCode == KeyCode.F9 && enRonda) Ronda.Paso();
-            else if (e.keyCode == KeyCode.F6) Region(e.shiftKey ? -1 : 1);
+            if (e.keyCode == KeyCode.F1 && enRonda) Ronda.Mover(-1);
+            else if (e.keyCode == KeyCode.F2 && enRonda) Ronda.Mover(1);
+            else if (e.keyCode == KeyCode.F3 && enRonda) Ronda.Paso();
+            else if (e.keyCode == KeyCode.F4) Region(1);
+            else if (e.keyCode == KeyCode.F5) Region(-1);
             else return;
+            if (e.keyCode <= KeyCode.F3) focoEnPagina = false; // desde la página, la tecla devolvió el foco a la app
             e.StopPropagation();
         }
 
@@ -357,8 +361,8 @@ namespace ChatCouncil.Interfaz
         }
 
         /// <summary>
-        /// F6: la región siguiente (riel, guía, lista, cabecera, la página del proveedor, abajo). La página nativa recibe
-        /// el foco del panel; desde ella, F6 vuelve a la app (panel.cpp) y la región siguiente es la primera.
+        /// F4 y F5: la región siguiente o la anterior (riel, guía, lista, cabecera, la página del proveedor, abajo). La página
+        /// nativa recibe el foco del panel; desde ella, la tecla vuelve a la app (panel.cpp) y sigue desde la página.
         /// </summary>
         void Region(int paso)
         {

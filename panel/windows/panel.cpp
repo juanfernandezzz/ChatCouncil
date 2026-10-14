@@ -314,8 +314,8 @@ int CrearPanel(const std::wstring& perfil, const std::wstring& url, HWND ventana
                 return S_OK;
             }
             p->controlador = c;
-            // WCAG 2.1.2: sin esto el teclado queda atrapado en la página. El Tab que sale de ella y F6 (el salto entre
-            // regiones de Windows y de los navegadores) devuelven el foco a la ventana de la app.
+            // WCAG 2.1.2: sin esto el teclado queda atrapado en la página. El Tab que sale de ella devuelve el foco a la
+            // ventana de la app, y F1 a F5 (los atajos de D49) también, entregándole la tecla para que el atajo funcione.
             EventRegistrationToken t;
             c->add_MoveFocusRequested(Callback<ICoreWebView2MoveFocusRequestedEventHandler>(
                 [](ICoreWebView2Controller*, ICoreWebView2MoveFocusRequestedEventArgs* a) -> HRESULT {
@@ -326,8 +326,15 @@ int CrearPanel(const std::wstring& perfil, const std::wstring& url, HWND ventana
                 [](ICoreWebView2Controller*, ICoreWebView2AcceleratorKeyPressedEventArgs* a) -> HRESULT {
                     COREWEBVIEW2_KEY_EVENT_KIND tipo;
                     UINT tecla;
-                    if (SUCCEEDED(a->get_KeyEventKind(&tipo)) && tipo == COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && SUCCEEDED(a->get_VirtualKey(&tecla)) && tecla == VK_F6) {
+                    // Alt+F4 llega como SYSTEM_KEY_DOWN: no entra aquí y sigue cerrando la ventana.
+                    if (SUCCEEDED(a->get_KeyEventKind(&tipo)) && tipo == COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && SUCCEEDED(a->get_VirtualKey(&tecla))
+                        && tecla >= VK_F1 && tecla <= VK_F5) {
                         SetFocus(padre);
+                        INPUT e[2] = {};
+                        e[0].type = e[1].type = INPUT_KEYBOARD;
+                        e[0].ki.wVk = e[1].ki.wVk = (WORD)tecla;
+                        e[1].ki.dwFlags = KEYEVENTF_KEYUP;
+                        SendInput(2, e, sizeof(INPUT));
                         return a->put_Handled(TRUE);
                     }
                     return S_OK;

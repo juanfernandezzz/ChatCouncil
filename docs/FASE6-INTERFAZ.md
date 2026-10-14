@@ -174,7 +174,7 @@ y se resuelve por la frecuencia del inventario; ver D3 en el BLUEPRINT.
 
 - Una tecla para el paso siguiente y otra para cambiar de panel. **Nunca** combinaciones que la
   página del proveedor use para enviar (Enter, Ctrl+Enter).
-- F6 para pasar el foco entre la guía, la lista y el panel, como en las apps de Windows.
+- Una tecla para pasar el foco entre la guía, la lista y el panel (F4 y F5 desde la D49 rehecha).
 - Las teclas exactas se fijan en T23, contra los atajos de los nueve sitios.
 
 ## 4. Evaluación del boceto antes de construir
@@ -410,7 +410,7 @@ Resultados y capturas: `docs/evidencia/fase6/T22-resultados.md` y `docs/evidenci
 
 - **Secciones:** Ronda, Historial, Ajustes y Ayuda (D48). Apariencia en Ajustes (D51). Recargar,
   diagnóstico y cerrar la sesión en «Más…» de cada panel (D52).
-- **Teclado:** F9, Ctrl+Tab, F6 y F1 (D49). **Lector de pantalla:** Lector.cs (D50).
+- **Teclado:** F1 a F5 para una mano, y Ctrl+Tab como alias (D49). **Lector de pantalla:** Lector.cs (D50).
 
 ### 11.1 Lista de chequeo WCAG 2.2 AA, medida en la app compilada de Windows
 
@@ -427,10 +427,10 @@ Android no se compiló en T23: nada de esta lista se midió allí.
 | 1.4.3 y 1.4.11 Contraste | Cumple. 68 pares de tokens en los dos temas | G |
 | 1.4.4 Cambiar el tamaño del texto | Cumple. Al 200 % la interfaz mide la mitad en dp (1024 → 512) y pasa a la clase angosta sin perder controles | P, C |
 | 1.4.10 Reflujo | Cumple desde T23. A 320 dp se cortaban «Más…» y el «de 7» del selector (D54) | C |
-| 2.1.1 Teclado | Cumple desde T23. La página del proveedor se alcanza con F6 y la lista de paneles se usa con Enter (medido); los demás controles son botones, campos y casillas de UI Toolkit, que se alcanzan con Tab por construcción (ver 2.4.3) | P (en parte) |
-| 2.1.2 Sin trampa de teclado | Cumple desde T23. Con teclas reales, F6 y el Tab que sale de la página devuelven el foco a la app; sin el arreglo de panel.cpp, no (mutación) | P |
+| 2.1.1 Teclado | Cumple desde T23. La página del proveedor se alcanza con F4 y F5, y la lista de paneles se usa con Enter (medido); los demás controles son botones, campos y casillas de UI Toolkit, que se alcanzan con Tab por construcción (ver 2.4.3) | P (en parte) |
+| 2.1.2 Sin trampa de teclado | Cumple desde T23. Con teclas reales, F1 a F5 y el Tab que sale de la página devuelven el foco a la app (T24; antes, F6 con la mutación de T23). Android: cableado, sin medir | P |
 | 2.1.4 Atajos de una tecla de carácter | Cumple. Los atajos son teclas de función y Ctrl+Tab | — |
-| 2.4.3 Orden del foco | Por construcción, es el orden del documento. Se midió el orden de las regiones con F6; el Tab no se recorrió elemento por elemento | P (en parte) |
+| 2.4.3 Orden del foco | Por construcción, es el orden del documento. Se midió el orden de las regiones con F4 y F5; el Tab no se recorrió elemento por elemento | P (en parte) |
 | 2.4.6 Encabezados y etiquetas | Cumple. Cada sección y bloque lleva su título, y cada campo su etiqueta | C, U |
 | 2.4.7 Foco visible | Cumple desde T23. Botón, campo, casilla y desplegable muestran el borde con el token de foco; antes el tema de Unity lo pintaba con #006AA6, bajo 3:1 en el tema oscuro (D53) | P |
 | 2.4.11 Foco no tapado | Cumple. Los menús y diálogos apartan la página nativa (D33) y el foco de Unity nunca queda debajo de ella | P |
@@ -459,7 +459,7 @@ ahora sobre el `.exe` (las pruebas de T20 a T23 y las capturas de `docs/evidenci
 | N4 | 2.4.7 / 1. Visibilidad | El foco en el tema oscuro quedaba bajo 3:1 | 3 | **Corregido** (D53) |
 | N5 | Historia 23 | Al 200 % en una pantalla de 1366 × 768, a la página le queda una franja de unos 40 dp mientras la frase de la etapa está a la vista | 2 | Se acepta: con «Entendido» la frase se pliega; en pantallas más altas no pasa |
 | N6 | 8. Diseño minimalista | En el teléfono, «Más…» junta los ítems del panel, los de mantenimiento y los de la ronda en una sola hoja larga | 1 | Se acepta: son de emergencia (D6) y van agrupados con su título |
-| N7 | 7. Flexibilidad y eficiencia | Los atajos solo se aprenden en la Ayuda | 1 | Se acepta: F1 abre la Ayuda desde cualquier sección |
+| N7 | 7. Flexibilidad y eficiencia | Los atajos solo se aprenden en la Ayuda | 1 | Se acepta: la Ayuda está en el riel y en el cajón desde cualquier sección (desde T24 sin atajo, D49) |
 
 **Severidad 3 y 4: cuatro hallazgos nuevos (N1 a N4), los cuatro corregidos y medidos en el `.exe`.
 Ninguno queda abierto.** Un solo evaluador encuentra una parte de los problemas: la prueba con

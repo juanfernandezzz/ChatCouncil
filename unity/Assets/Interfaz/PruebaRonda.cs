@@ -359,10 +359,12 @@ namespace ChatCouncil.Interfaz
                    && conInforme[0].name == "historial-" + primera.Id && abierta != null && abierta.Contains("Informe recapturado"),
                 "rondas anteriores", $"{filas.Count} rondas, la primera «{filas.FirstOrDefault()?.Q<Label>().text}»; con informe {conInforme.Count}; abierta «{abierta}»");
 
-            // F1: la ayuda, con los atajos y la versión.
+            // La Ayuda, con los atajos y la versión, desde el riel; F1 ya no la abre (D49: F1 es el panel anterior).
             await Evento(KeyDownEvent.GetPooled('\0', KeyCode.F1, EventModifiers.None));
-            Anotar(Seccion == "ayuda" && Raiz.Q<Label>("version").text == $"ChatCouncil, versión {Application.version}.",
-                "F1 abre la ayuda", $"sección «{Seccion}», «{Raiz.Q<Label>("version").text}»");
+            var conF1 = Seccion;
+            await Pulsar("ir-ayuda");
+            Anotar(conF1 == "historial" && Seccion == "ayuda" && Raiz.Q<Label>("version").text == $"ChatCouncil, versión {Application.version}.",
+                "la ayuda desde el riel, no con F1", $"con F1 «{conF1}»; desde el riel «{Seccion}», «{Raiz.Q<Label>("version").text}»");
 
             // Apariencia (D17): el tema oscuro y el texto al 200 %, guardados; después vuelven.
             await Pulsar("ir-ajustes");
@@ -418,15 +420,21 @@ namespace ChatCouncil.Interfaz
             await Cuadros(5);
             Anotar(colores.All(c => c.EndsWith("3A79E0", StringComparison.Ordinal)), "foco visible con el color de foco", string.Join(", ", colores));
 
-            // F9 (D49): el paso siguiente; en Operación abre el aviso. Ctrl+Tab: el panel siguiente.
-            await Evento(KeyDownEvent.GetPooled('\0', KeyCode.F9, EventModifiers.None));
+            // D49, teclado de una mano: F3 el paso siguiente (en Operación abre el aviso); F2 y F1 el panel siguiente y el
+            // anterior; Ctrl+Tab y Ctrl+Mayús+Tab siguen como alias.
+            await Evento(KeyDownEvent.GetPooled('\0', KeyCode.F3, EventModifiers.None));
             var aviso = Raiz.Q("capa").ClassListContains("capa--abierta") && Raiz.Q<Label>("dialogo-titulo").text == "Antes de pegar la operación";
-            await Pulsar("dialogo-cancelar");
+            if (aviso) await Pulsar("dialogo-cancelar");
             Ronda.Seleccionar("chatgpt");
+            await Evento(KeyDownEvent.GetPooled('\0', KeyCode.F2, EventModifiers.None));
+            var conF2 = Ronda.Visible;
+            await Evento(KeyDownEvent.GetPooled('\0', KeyCode.F1, EventModifiers.None));
+            var conF1EnRonda = Ronda.Visible;
             await Evento(NavigationMoveEvent.GetPooled(NavigationMoveEvent.Direction.Next, EventModifiers.Control));
             var siguiente = Ronda.Visible;
             await Evento(NavigationMoveEvent.GetPooled(NavigationMoveEvent.Direction.Previous, EventModifiers.Control));
-            Anotar(aviso && siguiente == "gemini" && Ronda.Visible == "chatgpt", "F9 y Ctrl+Tab", $"aviso con F9: {aviso}; Ctrl+Tab → {siguiente}, Ctrl+Mayús+Tab → {Ronda.Visible}");
+            Anotar(aviso && conF2 == "gemini" && conF1EnRonda == "chatgpt" && siguiente == "gemini" && Ronda.Visible == "chatgpt", "F3, F2, F1 y Ctrl+Tab",
+                $"aviso con F3: {aviso}; F2 → {conF2}, F1 → {conF1EnRonda}; Ctrl+Tab → {siguiente}, Ctrl+Mayús+Tab → {Ronda.Visible}");
 
             // Mantenimiento del panel (historias 12, 72 a 74), sobre Gemini.
             Ronda.Seleccionar("gemini");
@@ -458,30 +466,62 @@ namespace ChatCouncil.Interfaz
             Anotar(confirmacion == "Cerrar la sesión de Gemini" && Resultado.StartsWith("Sesión de Gemini cerrada", StringComparison.Ordinal) && restos == "[null,\"\"]",
                 "cerrar la sesión con confirmación", $"diálogo «{confirmacion}»; «{Resultado}»; lo que quedó {restos}");
 
-            // F6 con teclas reales (D49, WCAG 2.1.1 y 2.1.2): de la app a la página y de vuelta, y el Tab que sale de la página.
+            // F4 y F5 con teclas reales (D49, WCAG 2.1.1 y 2.1.2): de la app a la página y de vuelta a la región siguiente o
+            // la anterior; F1, F2 y F3 con el foco en la página llegan igual a la app; el Tab sale de la página.
             SetForegroundWindow(VentanaDeLaApp);
             await Task.Delay(500);
             var adelante = GetForegroundWindow() == VentanaDeLaApp;
+            string RegionActual() => RegionDe(Raiz.focusController.focusedElement as VisualElement);
+            bool EnLaPagina() => Foco() != VentanaDeLaApp && Foco() != IntPtr.Zero;
+            async Task<List<string>> HastaLaPagina(ushort tecla)
+            {
+                var vistas = new List<string>();
+                for (var i = 0; i < 7 && !EnLaPagina(); i++)
+                {
+                    await Tecla(tecla);
+                    vistas.Add(EnLaPagina() ? "página" : RegionActual());
+                }
+                return vistas;
+            }
             Raiz.Q<Button>("paso-ancha").Focus();
             await Cuadros(3);
-            var regiones = new List<string>();
-            var enPagina = false;
-            for (var i = 0; i < 6 && !enPagina; i++)
+            var conF4 = await HastaLaPagina(0x73);
+            await Tecla(0x73); // F4 dentro de la página
+            var trasF4 = EnLaPagina() ? "página" : RegionActual();
+            var conF5 = await HastaLaPagina(0x74);
+            await Tecla(0x74); // F5 dentro de la página
+            var trasF5 = EnLaPagina() ? "página" : RegionActual();
+
+            async Task<bool> EnPaginaYTecla(ushort tecla)
             {
-                await Tecla(0x75); // F6
-                var foco = Raiz.focusController.focusedElement as VisualElement;
-                enPagina = Foco() != VentanaDeLaApp && Foco() != IntPtr.Zero;
-                regiones.Add(enPagina ? "página" : RegionDe(foco));
+                Ronda.FocoEnPagina();
+                await Task.Delay(400);
+                var dentro = EnLaPagina();
+                await Tecla(tecla);
+                return dentro && !EnLaPagina();
             }
-            await Tecla(0x75); // F6 dentro de la página
-            var volvioConF6 = Foco() == VentanaDeLaApp;
+            Ronda.Seleccionar("chatgpt");
+            await Cuadros(3);
+            var f2 = await EnPaginaYTecla(0x71);
+            var paginaF2 = Ronda.Visible;
+            var f1 = await EnPaginaYTecla(0x70);
+            var paginaF1 = Ronda.Visible;
+            var f3 = await EnPaginaYTecla(0x72);
+            var avisoF3 = Raiz.Q("capa").ClassListContains("capa--abierta");
+            if (avisoF3) await Pulsar("dialogo-cancelar");
+
             Ronda.FocoEnPagina();
             await Task.Delay(400);
-            var entroOtraVez = Foco() != VentanaDeLaApp;
+            var entroOtraVez = EnLaPagina();
             for (var i = 0; i < 6 && Foco() != VentanaDeLaApp; i++) await Tecla(0x09); // Tab hasta salir de la página
             var volvioConTab = Foco() == VentanaDeLaApp;
-            Anotar(adelante && enPagina && volvioConF6 && entroOtraVez && volvioConTab, "F6 entra a la página y sale; el Tab sale",
-                $"al frente {adelante}; regiones {string.Join(" → ", regiones)}; F6 vuelve {volvioConF6}; Tab vuelve {volvioConTab}");
+            // En la clase ancha la página es la última región visible (la barra y "abajo" son de la angosta): F4 vuelve al riel.
+            Anotar(adelante && conF4.LastOrDefault() == "página" && trasF4 == "riel" && conF5.LastOrDefault() == "página" && trasF5 == "cabecera",
+                "F4 y F5 entran a la página y salen a la región siguiente o la anterior",
+                $"al frente {adelante}; F4 {string.Join(" → ", conF4)} → {trasF4}; F5 {string.Join(" → ", conF5)} → {trasF5}");
+            Anotar(f2 && paginaF2 == "gemini" && f1 && paginaF1 == "chatgpt" && f3 && avisoF3 && entroOtraVez && volvioConTab,
+                "F1, F2 y F3 desde la página llegan a la app; el Tab sale",
+                $"F2 {f2} → {paginaF2}; F1 {f1} → {paginaF1}; F3 {f3}, aviso {avisoF3}; Tab vuelve {volvioConTab}");
 
             // El lector de pantalla (D50): la jerarquía con los controles a la vista, con su nombre y su función.
             UnityEngine.Accessibility.AssistiveSupport.screenReaderStatusOverride = UnityEngine.Accessibility.AssistiveSupport.ScreenReaderStatusOverride.ForceEnabled;

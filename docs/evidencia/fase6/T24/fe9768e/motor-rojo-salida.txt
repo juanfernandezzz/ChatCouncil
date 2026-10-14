@@ -1,0 +1,87 @@
+  Determinando los proyectos que se van a restaurar...
+  Se ha restaurado C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\027923d6-4347-4194-8d09-b787ef795a74\scratchpad\motor-rojo\motor\Dotnet~\Motor\Motor.csproj (en 1,8 s).
+  Se ha restaurado C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\027923d6-4347-4194-8d09-b787ef795a74\scratchpad\motor-rojo\motor\Dotnet~\Pruebas\Pruebas.csproj (en 2,32 s).
+  Motor -> C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\027923d6-4347-4194-8d09-b787ef795a74\scratchpad\motor-rojo\motor\Dotnet~\Motor\bin\Debug\netstandard2.1\Motor.dll
+  Pruebas -> C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\027923d6-4347-4194-8d09-b787ef795a74\scratchpad\motor-rojo\motor\Dotnet~\Pruebas\bin\Debug\net8.0\Pruebas.dll
+Serie de pruebas para C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\027923d6-4347-4194-8d09-b787ef795a74\scratchpad\motor-rojo\motor\Dotnet~\Pruebas\bin\Debug\net8.0\Pruebas.dll (.NETCoreApp,Version=v8.0)
+Versión 17.11.1 (x64) de VSTest
+
+Iniciando la ejecución de pruebas, espere...
+1 archivos de prueba en total coincidieron con el patrón especificado.
+  Con error ElRegistroSinCambiosNoSeVuelveALeer [79 ms]
+  Mensaje de error:
+     Assert.That(puerta.LeerRegistro(), Is.SameAs(primera))
+  Expected: same as <ChatCouncil.Motor.RegistroLeido>
+  But was:  <ChatCouncil.Motor.RegistroLeido>
+
+  Seguimiento de la pila:
+     at ChatCouncil.Motor.Pruebas.PuertaPruebas.ElRegistroSinCambiosNoSeVuelveALeer() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\027923d6-4347-4194-8d09-b787ef795a74\scratchpad\motor-rojo\motor\Tests\PuertaPruebas.cs:line 558
+
+1)    at ChatCouncil.Motor.Pruebas.PuertaPruebas.ElRegistroSinCambiosNoSeVuelveALeer() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\027923d6-4347-4194-8d09-b787ef795a74\scratchpad\motor-rojo\motor\Tests\PuertaPruebas.cs:line 558
+
+
+  Con error LasUrlsLocalesOConOtroEsquemaNoSePiden [9 ms]
+  Mensaje de error:
+     http://localhost:8080/x
+Assert.That(await Puerta.ComprobarUrl(url, http, TimeSpan.FromSeconds(10)), Is.EqualTo(((int?)null, local)))
+  Expected: (null, "es una dirección local o de la red privada: no se comprueba")
+  But was:  (200, null)
+
+  Seguimiento de la pila:
+     at ChatCouncil.Motor.Pruebas.PuertaPruebas.LasUrlsLocalesOConOtroEsquemaNoSePiden() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\027923d6-4347-4194-8d09-b787ef795a74\scratchpad\motor-rojo\motor\Tests\PuertaPruebas.cs:line 225
+   at NUnit.Framework.Internal.TaskAwaitAdapter.GenericAdapter`1.GetResult()
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await[TResult](TestExecutionContext context, Func`1 invoke)
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await(TestExecutionContext context, Func`1 invoke)
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.RunTestMethod(TestExecutionContext context)
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.Execute(TestExecutionContext context)
+   at NUnit.Framework.Internal.Commands.BeforeAndAfterTestCommand.<>c__DisplayClass1_0.<Execute>b__0()
+   at NUnit.Framework.Internal.Commands.DelegatingTestCommand.RunTestMethodInThreadAbortSafeZone(TestExecutionContext context, Action action)
+
+1)    at ChatCouncil.Motor.Pruebas.PuertaPruebas.LasUrlsLocalesOConOtroEsquemaNoSePiden() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\027923d6-4347-4194-8d09-b787ef795a74\scratchpad\motor-rojo\motor\Tests\PuertaPruebas.cs:line 225
+   at System.Runtime.CompilerServices.AsyncMethodBuilderCore.Start[TStateMachine](TStateMachine& stateMachine)
+   at ChatCouncil.Motor.Pruebas.PuertaPruebas.LasUrlsLocalesOConOtroEsquemaNoSePiden()
+
+
+  Con error UnArchivoIlegibleNoRompeElHistorial [97 ms]
+  Mensaje de error:
+   System.IO.IOException : The process cannot access the file 'C:\Users\Juan Fernández\AppData\Local\Temp\cc-puerta-91f0080b40a3461c8483e993525b167a\informes\2026-10-06 0900 - ¿Primera pregunta\2026-10-06 0900 - ¿Primera pregunta.md' because it is being used by another process.
+  Seguimiento de la pila:
+     at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Encoding encoding, Int32 bufferSize)
+   at System.IO.File.ReadAllText(String path, Encoding encoding)
+   at ChatCouncil.Motor.Puerta.<>c.<RondasAnteriores>b__30_2(ValueTuple`2 x) in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\027923d6-4347-4194-8d09-b787ef795a74\scratchpad\motor-rojo\motor\Runtime\Puerta.cs:line 228
+   at System.Linq.Enumerable.WhereSelectEnumerableIterator`2.ToList()
+   at System.Linq.Enumerable.ToList[TSource](IEnumerable`1 source)
+   at ChatCouncil.Motor.Puerta.RondasAnteriores() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\027923d6-4347-4194-8d09-b787ef795a74\scratchpad\motor-rojo\motor\Runtime\Puerta.cs:line 226
+   at ChatCouncil.Motor.Pruebas.PuertaPruebas.UnArchivoIlegibleNoRompeElHistorial() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\027923d6-4347-4194-8d09-b787ef795a74\scratchpad\motor-rojo\motor\Tests\PuertaPruebas.cs:line 317
+   at NUnit.Framework.Internal.TaskAwaitAdapter.GenericAdapter`1.GetResult()
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await[TResult](TestExecutionContext context, Func`1 invoke)
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await(TestExecutionContext context, Func`1 invoke)
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.RunTestMethod(TestExecutionContext context)
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.Execute(TestExecutionContext context)
+   at NUnit.Framework.Internal.Commands.BeforeAndAfterTestCommand.<>c__DisplayClass1_0.<Execute>b__0()
+   at NUnit.Framework.Internal.Commands.DelegatingTestCommand.RunTestMethodInThreadAbortSafeZone(TestExecutionContext context, Action action)
+1)    at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Encoding encoding, Int32 bufferSize)
+   at System.IO.File.ReadAllText(String path, Encoding encoding)
+   at ChatCouncil.Motor.Puerta.<>c.<RondasAnteriores>b__30_2(ValueTuple`2 x) in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\027923d6-4347-4194-8d09-b787ef795a74\scratchpad\motor-rojo\motor\Runtime\Puerta.cs:line 228
+   at System.Linq.Enumerable.WhereSelectEnumerableIterator`2.ToList()
+   at System.Linq.Enumerable.ToList[TSource](IEnumerable`1 source)
+   at ChatCouncil.Motor.Puerta.RondasAnteriores() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\027923d6-4347-4194-8d09-b787ef795a74\scratchpad\motor-rojo\motor\Runtime\Puerta.cs:line 226
+   at ChatCouncil.Motor.Pruebas.PuertaPruebas.UnArchivoIlegibleNoRompeElHistorial() in C:\Users\Juan Fernández\AppData\Local\Temp\claude\C--Users-Juan-Fern-ndez-Documents-Proyectos-ChatCouncil-main\027923d6-4347-4194-8d09-b787ef795a74\scratchpad\motor-rojo\motor\Tests\PuertaPruebas.cs:line 317
+   at NUnit.Framework.Internal.TaskAwaitAdapter.GenericAdapter`1.GetResult()
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await[TResult](TestExecutionContext context, Func`1 invoke)
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await(TestExecutionContext context, Func`1 invoke)
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.RunTestMethod(TestExecutionContext context)
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.Execute(TestExecutionContext context)
+   at NUnit.Framework.Internal.Commands.BeforeAndAfterTestCommand.<>c__DisplayClass1_0.<Execute>b__0()
+   at NUnit.Framework.Internal.Commands.DelegatingTestCommand.RunTestMethodInThreadAbortSafeZone(TestExecutionContext context, Action action)
+
+
+Con error! - Con error:     3, Superado:    81, Omitido:     0, Total:    84, Duración: 4 s - Pruebas.dll (net8.0)

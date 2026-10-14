@@ -187,7 +187,6 @@ namespace ChatCouncil.Interfaz
                 cajon.AddToClassList("cajon--abierto");
             };
             raiz.Query<Button>(className: "abre-cajon").ForEach(b => b.clicked += () => cajon.AddToClassList("cajon--abierto"));
-            Configuracion.Raiz.Q<Button>("menu-configuracion").clicked += () => cajon.AddToClassList("cajon--abierto");
             raiz.Q<Label>("version").text = $"ChatCouncil, versión {Application.version}.";
             raiz.Q<Button>("ver-versiones").clicked += () => Application.OpenURL(PaginaDeVersiones);
         }
@@ -268,9 +267,11 @@ namespace ChatCouncil.Interfaz
                 tema = Array.IndexOf(Temas, (string)j["tema"]) >= 0 ? (string)j["tema"] : tema;
                 texto = Array.IndexOf(Tamanos, (int?)j["texto"] ?? 0) >= 0 ? (int)j["texto"] : texto;
             }
-            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is JsonException)
+            catch (Exception)
             {
-                // sin archivo o ilegible: la del sistema
+                // sin archivo, ilegible o con un valor de otro tipo: las del sistema, nunca una app que no arranca
+                tema = "sistema";
+                texto = 0;
             }
             var dTema = Configuracion.Raiz.Q<DropdownField>("tema");
             var dTexto = Configuracion.Raiz.Q<DropdownField>("tamano-texto");
@@ -331,7 +332,8 @@ namespace ChatCouncil.Interfaz
         void Teclas(KeyDownEvent e)
         {
             var enRonda = seccionRonda.style.display != DisplayStyle.None && !raiz.Q("capa").ClassListContains("capa--abierta");
-            if (e.keyCode == KeyCode.F1) Mostrar("ayuda");
+            // En la guía no: es la única salida, y en la clase ancha no hay riel para volver.
+            if (e.keyCode == KeyCode.F1 && !raiz.ClassListContains("primer-arranque")) Mostrar("ayuda");
             else if (e.keyCode == KeyCode.F9 && enRonda) Ronda.Paso();
             else if (e.keyCode == KeyCode.F6) Region(e.shiftKey ? -1 : 1);
             else return;

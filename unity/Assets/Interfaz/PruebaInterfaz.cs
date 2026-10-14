@@ -133,6 +133,15 @@ namespace ChatCouncil.Interfaz
                 "primer arranque", $"sin archivo de selección arranca la guía, sin riel (sección visible: {(Visible(Config) ? "configuración" : "ronda")})");
             Anotar(Config.Q<Label>("paso-guia").text == "Paso 1 de 2: tu consejo" && !Visible(Config.Q("bloque-cuentas")), "paso 1", Config.Q<Label>("paso-guia").text);
 
+            // T24: F1 llevaba a la Ayuda, y en la clase ancha, sin riel, la persona quedaba sin salida.
+            using (var e = KeyDownEvent.GetPooled('\0', KeyCode.F1, EventModifiers.None))
+            {
+                e.target = Raiz.panel.visualTree;
+                Raiz.panel.visualTree.SendEvent(e);
+            }
+            await Cuadros(3);
+            Anotar(Visible(Config) && !Visible(Raiz.Q("seccion-ayuda")), "F1 en la guía no la deja", $"configuración visible: {Visible(Config)}; ayuda visible: {Visible(Raiz.Q("seccion-ayuda"))}");
+
             var invalidas = new (string[] Marcados, string I, string V, string R, string Error)[]
             {
                 (new string[0], "deepseek", "glm", "deepseek", Roles.ErrorSeleccionVacia),
@@ -175,6 +184,8 @@ namespace ChatCouncil.Interfaz
             await Cuadros(5);
             Anotar(Visible(Raiz.Q("seccion-ronda")) && !Raiz.ClassListContains("primer-arranque") && Visible(Riel), "fin de la guía", "la Ronda queda a la vista, con el riel");
             ComprobarRonda("ronda con el consejo recién guardado", OperadoresEsperados);
+            // Para la fase 2: unas preferencias con un tamaño que no es un número (T24: la app no arrancaba).
+            File.WriteAllText(Path.Combine(app.CarpetaDatos, "apariencia.json"), "{\"tema\":\"oscuro\",\"texto\":\"abc\"}");
         }
 
         void ComprobarRonda(string nombre, string[] operadores)
@@ -190,6 +201,9 @@ namespace ChatCouncil.Interfaz
         async Task Fase2()
         {
             Anotar(!Raiz.ClassListContains("primer-arranque") && Visible(Raiz.Q("seccion-ronda")) && !Visible(Config), "reabrir", "con archivo de selección arranca en la Ronda, sin la guía");
+            var tema = Config.Q<DropdownField>("tema").value;
+            var tamano = Config.Q<DropdownField>("tamano-texto").value;
+            Anotar(tema == "El del sistema" && tamano == "El del sistema", "preferencias ilegibles: las del sistema", $"tema «{tema}», texto «{tamano}»");
             ComprobarRonda("el consejo guardado se aplica al reabrir", OperadoresEsperados);
             var titulo = Raiz.Q<Label>("barra-titulo").text;
             var paso = Raiz.Q<Button>("paso-ancha").text;

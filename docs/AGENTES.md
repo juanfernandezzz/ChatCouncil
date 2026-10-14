@@ -62,13 +62,12 @@ romper una, la tarea está mal planteada: **detente y dilo.**
   —pensamiento extendido, búsqueda web, razonamiento— no se mapean afuera.
 - Nada se codifica por cantidad de proveedores. Sumar un investigador es
   agregarlo a la lista y nada más.
-- **Electron no es la referencia de diseño** (pedido de Juan del 2026-10-13,
-  vigente hasta el verdadero 1.0). Sus criterios no son finales: cada uno se
-  cuestiona y el diseño final se decide a conciencia. Toda decisión que no sea
-  estrictamente técnica se justifica con razonamiento propio (la persona, el
-  dato, la fuente de UX), nunca con "así lo hacía Electron". Electron sirve para
-  saber qué existía y qué falló, no para decidir. Fijado ya: el PDF en tamaño
-  Carta.
+- **Electron no es, ni será, criterio de diseño.** No lo es en ningún momento,
+  tampoco después del 1.0. Electron sirve únicamente para portar su código base
+  de funcionamiento: saber qué hacía y cómo lo resolvía a nivel técnico. Ninguna
+  decisión de diseño se justifica con "así lo hacía Electron"; cada una se decide
+  a conciencia, con razonamiento propio y su fuente (la persona, el dato, la
+  fuente de UX). Fijado ya: el PDF en tamaño Carta.
 
 ### Seguridad y cuentas
 

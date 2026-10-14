@@ -489,7 +489,8 @@ Una aplicación nueva en Unity 6, para Windows (.exe instalable) y Android
   - El iframe de otro origen se lee con un script de inicio de documento
     restringido a ese origen.
 - **Los paneles de los roles** (integrador, verificador y redactor) se cargan
-  recién en su etapa y se cierran al abrir una ronda nueva, como en Electron.
+  recién en su etapa, porque su prompt sale de la etapa anterior, y se cierran
+  al abrir una ronda nueva, para que esa ronda no herede sus conversaciones.
 - **Techo externo de 90 s** sobre toda escritura grande, controlado desde el
   motor, fuera del hilo de la página. Un panel colgado se informa y no
   bloquea a los demás.
@@ -559,10 +560,8 @@ donde nombran una distribución (22 y 23) es hipótesis.
   - cómo se navega en PC y en el teléfono.
 - **La distribución, la forma y la jerarquía de cada control**, y la
   dirección visual.
-- **Si los botones del flujo se bloquean o no fuera de su etapa.** En
-  Electron no se bloquean desde el 2026-09-19. Eso es costumbre, no
-  evidencia: se decide contra la prevención de errores y el control del
-  usuario.
+- **Si los botones del flujo se bloquean o no fuera de su etapa.** Se decide
+  contra la prevención de errores y el control del usuario.
 - **Qué capacidades de producto entran a la versión 1.** El inventario
   candidato es el de la tabla de abajo. Ninguna entra ni sale sin un
   criterio.

@@ -2597,8 +2597,7 @@ están en docs/FASE6-INTERFAZ.md. Fuentes, citadas por su sigla:
   fuera de su etapa (recapturar) queda habilitado en el menú de la ronda.
   Criterio: prevención de errores [NH 5], control y libertad [NH 3],
   controlabilidad [ISO], y deshabilitado con explicación mejor que oculto
-  [UXT]. Electron dejó de bloquear el 2026-09-19 por costumbre: aquí el
-  bloqueo se reduce a lo que el método exige.
+  [UXT]. El bloqueo se reduce a lo que el método exige.
 · D8, 2026-10-10, atajos de teclado en el PC: el paso siguiente, el cambio
   de panel y F6 entre regiones; nunca Enter ni Ctrl+Enter, que envían en las
   páginas. Criterio: flexibilidad y eficiencia [NH 7], operable por teclado
@@ -2621,7 +2620,8 @@ están en docs/FASE6-INTERFAZ.md. Fuentes, citadas por su sigla:
   Criterio: salida de emergencia [NH 3]. Límite medido en el código
   (Puerta.RestaurarRondaActiva): si la app se cierra antes de pegar la
   pregunta nueva, al reabrir vuelve la abandonada. Cambiar eso exige un hecho
-  nuevo, y el esquema es el de Electron (historia 69). T20.
+  nuevo, y el esquema no cambia para que el registro se siga leyendo con las
+  mismas herramientas (historia 69). T20.
 · D14, 2026-10-10, se acepta una sección de ayuda: el método, cada etapa y
   los atajos. Criterio: [NH 10]; el método no es evidente. T23.
 · D15, 2026-10-10, se acepta mostrar dónde está la carpeta de datos y cómo
@@ -2775,7 +2775,9 @@ Decisiones de T21 (Operación conectada):
   texto es la opción: en el aviso, para toda la ronda, y en el menú del panel,
   para uno. El aviso se da una vez por ronda (pedido de Juan del 2026-09-30) y
   vuelve en una ronda nueva. Se pega de a un panel por vez y con ese panel al
-  frente, como lo midió Electron con textos largos.
+  frente: es el único camino medido que escribe completos los cuerpos de
+  ~100.000 caracteres en los ocho proveedores; en paralelo, con los paneles
+  atrás, gemini, grok y mistral fallaban (medición del 2026-09-14).
 · D38, 2026-10-13, lo escrito se verifica contra lo armado (Cuerpos.
   VerificarEscritura, port de escribirYVerificarOperacion): las diez cadenas del
   prompt y la igualdad carácter por carácter, con \r\n y el espacio duro

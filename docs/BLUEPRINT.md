@@ -2887,7 +2887,9 @@ MoveFocusRequested y AcceleratorKeyPressed, y MoveFocus.
   accesibilidad de Unity 6.3 con lo que está a la vista, en el orden del
   documento, con nombre, función, estado y valor; activarlos desde el lector es
   pulsarlos. Se rearma solo cuando algo cambia, porque rearmarla siempre movería
-  el foco del lector. Criterio: nombre, función, valor [WCAG 4.1.2]. Las páginas
+  el foco del lector. El resultado de cada paso se anuncia sin mover el foco
+  (mensajes de estado, [WCAG 4.1.3]). Criterio: nombre, función, valor [WCAG
+  4.1.2]. Las páginas
   de los proveedores ya tienen la suya: son ventanas nativas. Límite: medido por
   UI Automation, no con una persona usando Narrador ni con TalkBack.
 · D51, 2026-10-14, apariencia en Ajustes, aplicada al elegirla y sin "Guardar"

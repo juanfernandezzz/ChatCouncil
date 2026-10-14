@@ -455,6 +455,8 @@ namespace ChatCouncil.Interfaz
 
         void Resultado(string texto, bool problema = false)
         {
+            // El resultado de un paso es un mensaje de estado: el lector lo dice sin mover el foco (WCAG 4.1.3).
+            if (UnityEngine.Accessibility.AssistiveSupport.isScreenReaderEnabled) UnityEngine.Accessibility.AssistiveSupport.notificationDispatcher.SendAnnouncement(texto);
             foreach (var nombre in new[] { "resultado-ancha", "resultado-angosta" })
             {
                 var l = raiz.Q<Label>(nombre);

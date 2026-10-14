@@ -958,7 +958,8 @@ namespace ChatCouncil.Motor
                 : informeIntegrador.Titulo ?? TituloInforme.ExtraerTituloDelInforme(informeIntegrador.InformeCrudo).Titulo;
             // D47: ninguna ruta de la carpeta pasa de 259 caracteres (MAX_PATH). Las más largas son el PDF, que repite
             // el nombre, y la nota de faltantes; se reservan " (999)" y "AAAA-MM-DD HHMM - ".
-            // shortcut: con una carpeta de datos de más de ~200 caracteres no entra ni el título de reserva; entonces falla y lo dice.
+            // shortcut: con la carpeta "informes" en más de ~168 caracteres no entra ningún título y va el de reserva, que puede
+            // dejar la nota de faltantes fuera del límite; mover la carpeta de datos más arriba si alguien la tiene tan honda.
             var nombreMax = Math.Min((259 - Path.GetFullPath(dir).Length - 6) / 2,
                 259 - Path.GetFullPath(dir).Length - 3 - InformeFinal.SubcarpetaRespuestas.Length - NombreFaltantes.Length) - 6;
             var nombre = TituloInforme.NombreLibreDeInforme(TituloInforme.NombreBaseDeInforme(titulo, pregunta, reloj().DateTime, nombreMax - 18),

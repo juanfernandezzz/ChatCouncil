@@ -1,0 +1,4 @@
+Prueba de la interfaz (T19), fase 3, 2026-10-14 17:14:50, WindowsPlayer, 0.1.0
+OK el cambio se aplica al reabrir: filas [chatgpt,gemini,glm,kimi,deepseek,claude,grok], Claude: "Integra y redacta"
+OK preferencias sin el tamaño: el tema se conserva: tema «Oscuro», texto «El del sistema»
+Resultado: 2/2

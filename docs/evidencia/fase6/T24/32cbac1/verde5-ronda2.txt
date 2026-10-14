@@ -1,0 +1,67 @@
+Prueba de la Ronda (T20), 2026-10-14 17:20:48, WindowsPlayer, 0.1.0
+OK paneles del pool: operadores [chatgpt,gemini,claude,grok,mistral,kimi,qwen]; sin página el integrador y el verificador (historia 26)
+OK etapa Pregunta: "Pegar la pregunta en los paneles", campo de la pregunta a la vista
+OK pregunta vacía: "Escribe la pregunta antes de pegarla.", sin ronda
+OK aviso de capacidades: diálogo abierto: True; la página se aparta: True
+OK ronda abierta: prompt idéntico: True; condición: 9 cargados, integra deepseek
+OK un intento por proveedor: 7 intentos, 6 bien; Grok: "el compositor ya tenía texto: no se escribe encima de un borrador"
+OK saltos de línea y borrador: pregunta idéntica en 6 de 6; el borrador de Grok sigue intacto
+OK resultado del pegado: Pegada en 6 de 7. Los que fallaron dicen qué hacer en su cabecera.
+OK problema en la cabecera y en el selector: cabecera "La pregunta no se pegó: el compositor ya tenía texto: no se escribe encima de un borrador. Revisa el compositor y vuelve a pegarla."; selector "No se pegó: pégala otra vez desde «Más…»."
+OK pegar en este panel: "Pegada en Grok. Revísala y envíala."; intentos 7, rondas 1
+OK indicador: respondiendo: chatgpt Respondiendo, gemini Respondiendo, claude Respondiendo, grok Con problema, mistral Respondiendo, kimi Respondiendo, qwen Respondiendo
+OK indicador: parece terminado: "Capturar los que terminaron (5)"; chatgpt Parece terminado, gemini Parece terminado, claude Parece terminado, grok Con problema, mistral Parece terminado, kimi Parece terminado, qwen Respondiendo
+OK contadores: Enviados 6 de 7 · Parecen terminados 5 · Capturados 0
+OK capturar los que terminaron: respuestas de [chatgpt,gemini,claude,mistral,kimi]; "Capturados 5 de 5. Prompt de usuario: coincide en los 5 proveedores donde se pudo leer."
+OK aviso de prompts que coinciden: sin el color del problema
+OK texto y procedencia: texto idéntico; continuidad indeterminada
+OK respuesta corta marcada: respuesta sospechosamente corta: puede haber quedado fuera de la captura
+OK capturar este panel: Grok capturado; respuestas 6
+OK continuidad confirmada: confirmada
+OK fin de la investigación: "Operación · 3 de 7", "Pegar la operación en los paneles"; chatgpt Por pegar, gemini Por pegar, claude Por pegar, grok Por pegar, mistral Por pegar, kimi Por pegar, qwen Por pegar
+OK aviso de la operación: diálogo «Antes de pegar la operación», casilla «Pegarla como texto, sin archivo»
+OK resultado de la operación: Operación pegada en 6 de 7. No se pegó en: Mistral; cada uno dice qué pasó. Comprueba que el archivo quedó adjunto, revísala y envíala.
+OK chat nuevo, texto y archivo: 6 de 6: [chatgpt,gemini,claude,grok,kimi,qwen]
+OK sello de la ronda: 7 etiquetas
+OK conversación nueva que no quedó vacía: «Con problema»; La operación no se pegó: la conversación nueva no quedó vacía: no se pega, porque el modelo leería su propia respuesta. Abre una conversación nueva a mano y vuelve a pegar.
+OK operación como texto, con el aviso una vez por ronda: sin aviso: True; «Operación pegada en 1 de 1. Revísala y envíala.»; «Pegado, falta que envíes»
+OK capturar la operación: 7 salidas con su prompt, 7 hallazgos; «Integración · 4 de 7»
+OK etapa Integración: «Integración · 4 de 7», «Pegar el prompt del integrador»; sin página el integrador: True; «Integra y redacta»
+OK pegar el integrador: «Prompt pegado en DeepSeek. Revísalo y envíalo.»; chat nuevo vacío: True; a la vista deepseek, 8 en el recorrido; «Integra y redacta · Pegado, falta que envíes»
+OK capturar el integrador: título «Informe de prueba»; prompt registrado idéntico: True; «Integra y redacta · Capturado»
+OK recapturar el integrador: «DeepSeek: integrador recapturado, 83 caracteres (2 en el registro; se usa el último)»; 2 informes, el último «Informe recapturado»
+OK etapa Verificación: «Pegar el prompt del verificador»
+OK pegar el verificador: «Prompt pegado en GLM. Revísalo y envíalo.»; a la vista glm, 9 en el recorrido
+OK capturar la verificación: prompt registrado idéntico: True; «Verifica · Capturado»
+OK etapa Redacción: «Pegar el prompt y el archivo del redactor»
+OK pegar el redactor con el adjunto: «Prompt pegado en DeepSeek. Comprueba que el archivo quedó adjunto, revísalo y envíalo.»; adjunto «redactor-2026-10-14-1721.txt|4584», esperado «redactor-2026-10-14-1721.txt|4584»
+OK capturar el redactor: marcas [[CC-MARCA-0000-855d5284-793c-4d08-849e-26f495c02fe5]] … [[CC-MARCA-FIN-855d5284-793c-4d08-849e-26f495c02fe5]]; «Armar el informe»
+OK las URLs locales y la imagen del PDF no se piden: http://127.0.0.1:6450/ok sin código (es una dirección local o de la red privada: no se comprueba); https://x.invalid/p sin código (An error occurred while sending the request); http://127.0.0.1:6450/404 sin código (es una dirección local o de la red privada: no se comprueba); http://0x7f.0.0.1:6450/hex sin código (es una dirección local o de la red privada: no se comprueba); http://2130706433:6450/entero sin código (es una dirección local o de la red privada: no se comprueba); pedidos al servidor: 
+OK informe en .md y PDF, en Carta: carpeta «2026-10-14 1721 - Informe recapturado»; .md 4550 caracteres; PDF «%PDF-» 72365 bytes; páginas /MediaBox [0 0 612 792] ×4
+OK respuestas de los investigadores: 7 .md y 7 PDF
+OK la carpeta se abre al terminar: abierta «C:\cc-ev\verde5-r2\informes\2026-10-14 1721 - Informe recapturado»; «Carpeta del informe: C:\cc-ev\verde5-r2\informes\2026-10-14 1721 - Informe recapturado. El informe está en .md y en PDF. 7 respuestas de investigador, cada una en .md y en PDF. URLs del verificador: responden 0 de 5.»
+OK el adaptador HTTP, sin cookies: HEAD /ok 200; HEAD /sin-head 405; GET /sin-head 200; GET /404 404; el servidor vio GET /404; GET /sin-head; HEAD /ok; HEAD /sin-head
+OK ocultar y mostrar los roles: ocultos: True; mostrados: 9 en el recorrido
+OK ronda nueva con las respuestas copiadas: «Ronda nueva abierta (3ed9f044) con 7 respuestas copiadas de la ronda dde319a5. Recaptura con "Capturar este panel" lo que quieras corregir.»; 7 copias; «Operación · 3 de 7»
+OK los roles salen del recorrido en la ronda nueva: en la vista [chatgpt,gemini,claude,grok,mistral,kimi,qwen], visible chatgpt
+OK el aviso vuelve en la ronda nueva: diálogo abierto: True
+OK usar la operación anterior: «ChatGPT: se reutilizó su operación de la ronda dde319a5 (1 hallazgos, 1 con etiqueta inválida). No hace falta pegarle la operación de nuevo.»; «Capturado»
+OK diálogo cancelado: la ronda sigue abierta: True
+OK abandonar la ronda: "Pegar la pregunta en los paneles"; líneas del registro 66 → 66
+OK capturar sin pegar: ronda 2 con el marcador; 7 respuestas; "Declarar la pregunta de esta ronda"
+OK declarar la pregunta: "Pregunta escrita a mano en cada página"; "Operación · 3 de 7"
+OK rondas anteriores: 3 rondas, la primera «Pregunta escrita a mano en cada página»; con informe 1; abierta «C:\cc-ev\verde5-r2\informes\2026-10-14 1721 - Informe recapturado»
+OK la ayuda desde el riel, no con F1: con F1 «historial»; desde el riel «ayuda», «ChatCouncil, versión 0.1.0.»
+OK tema y tamaño del texto: oscuro True; «{"tema":"oscuro","texto":200}»; ancho 1024 → 512 dp
+OK objetivos de 48 dp en las cuatro secciones: todos
+OK foco visible con el color de foco: paso 3A79E0, campo 3A79E0, casilla 3A79E0, desplegable 3A79E0
+OK F3, F2, F1 y Ctrl+Tab: aviso con F3: True; F2 → gemini, F1 → chatgpt; Ctrl+Tab → gemini, Ctrl+Mayús+Tab → chatgpt
+OK recargar la página: navegaciones 3 → 4; «Se recargó la página de Gemini.»
+OK diagnóstico de selectores en un archivo: «Diagnóstico de Gemini guardado en C:\cc-ev\verde5-r2\diagnosticos\gemini-2026-10-14-172202.json. Mándalo junto con lo que pasó para que se corrijan los selectores.»; compositor encontrado 1 vez; carpeta abierta True
+OK cerrar la sesión con confirmación: diálogo «Cerrar la sesión de Gemini»; «Sesión de Gemini cerrada. Entra con la cuenta que quieras en su página.»; lo que quedó [null,""]
+OK F4 y F5 entran a la página y salen a la región siguiente o la anterior: al frente True; F4 unity-scroll-view → cabecera → página → riel; F5 página → cabecera
+OK F1, F2 y F3 desde la página llegan a la app; el Tab sale: F2 True → gemini; F1 True → chatgpt; F3 True, aviso True; Tab vuelve True
+OK jerarquía para el lector de pantalla: 26 nodos; «Pegar la operación en los paneles» como Button, marco (x:104.00, y:109.00, width:286.00, height:48.00); fila «Kimi, Por pegar» como Button; «3 Operación, etapa actual»
+OK un texto nuevo no rearma la jerarquía: la misma jerarquía: True; nodo con el texto nuevo: True
+OK la lista de paneles con el teclado: Enter sobre Kimi: a la vista kimi
+Resultado: 65/65

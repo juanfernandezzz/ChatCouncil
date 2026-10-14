@@ -165,8 +165,24 @@ namespace ChatCouncil.Motor
         public string ConversacionActual { get; private set; }
         public string RondaActual { get; private set; }
 
-        /// <summary>El registro de la conversación en curso.</summary>
-        public RegistroLeido LeerRegistro() => Registro.LeerArchivo(carpeta, ConversacionActual);
+        Tuple<string, long, DateTime, RegistroLeido> ultimaLectura;
+
+        /// <summary>
+        /// El registro de la conversación en curso. Se relee solo si el archivo cambió de largo o de fecha:
+        /// la interfaz lo consulta muchas veces por refresco. Nadie modifica las listas devueltas.
+        /// </summary>
+        public RegistroLeido LeerRegistro()
+        {
+            var archivo = new FileInfo(Registro.RutaArchivo(carpeta, ConversacionActual));
+            if (!archivo.Exists) return Registro.LeerArchivo(carpeta, ConversacionActual);
+            var previa = ultimaLectura;
+            if (previa != null && previa.Item1 == ConversacionActual && previa.Item2 == archivo.Length && previa.Item3 == archivo.LastWriteTimeUtc)
+                return previa.Item4;
+            // Se mide antes de leer: si el archivo crece en el medio, la próxima llamada ve otro largo y relee.
+            var leido = Registro.LeerArchivo(carpeta, ConversacionActual);
+            ultimaLectura = Tuple.Create(ConversacionActual, archivo.Length, archivo.LastWriteTimeUtc, leido);
+            return leido;
+        }
 
         string Ahora() => reloj().UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
 

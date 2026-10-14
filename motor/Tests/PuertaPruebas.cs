@@ -501,5 +501,22 @@ namespace ChatCouncil.Motor.Pruebas
             foreach (var (textos, etapa, aviso) in Referencias.AvisosPrompts)
                 Assert.That(Puerta.AvisoPromptsDeCaptura(textos, etapa), Is.EqualTo(aviso), string.Join("|", textos));
         }
+
+        // T24: el registro no se vuelve a leer si no cambió. Medido: 284 ms por lectura de 11,5 MB, y la interfaz lo
+        // consulta unas 21 veces cada 1,5 s. Lo que agrega otro escritor (el registro solo crece) se ve en la siguiente.
+        [Test]
+        public void ElRegistroSinCambiosNoSeVuelveALeer()
+        {
+            var puerta = NuevaPuerta();
+            puerta.AbrirRonda("¿Pregunta?");
+            var primera = puerta.LeerRegistro();
+            Assert.That(puerta.LeerRegistro(), Is.SameAs(primera));
+            Registro.Agregar(carpeta, puerta.ConversacionActual, new PreguntaDeclarada { Id = "otra", RondaId = puerta.RondaActual, Texto = "x", DeclaradaEn = "y" });
+            var despues = puerta.LeerRegistro();
+            Assert.That(despues, Is.Not.SameAs(primera));
+            Assert.That(despues.Hechos.Count, Is.EqualTo(primera.Hechos.Count + 1));
+            puerta.DeclararPregunta("de la puerta");
+            Assert.That(puerta.LeerRegistro().Hechos.OfType<PreguntaDeclarada>().Count(), Is.EqualTo(2));
+        }
     }
 }

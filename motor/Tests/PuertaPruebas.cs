@@ -298,6 +298,27 @@ namespace ChatCouncil.Motor.Pruebas
             Assert.That(rondas[1].EnviadaEn, Is.EqualTo("2026-10-06T12:00:00.000Z"));
         }
 
+        // T24: un archivo que no se puede leer (otro programa lo tiene abierto) no rompe el historial: se salta, como
+        // en RestaurarRondaActiva, y las demás rondas salen igual. Lo mismo con el .md de un informe.
+        [Test]
+        public async Task UnArchivoIlegibleNoRompeElHistorial()
+        {
+            var puerta = NuevaPuerta();
+            puerta.AbrirRonda("¿Primera pregunta?");
+            puerta.RegistrarCapturas(((JObject)JsonEstricto.Leer(Referencias.LotesOperacion))["investigacion"].ToObject<List<Lectura>>(), Confirmada);
+            var informe = await puerta.ArmarInforme(new HttpFalso(), new PdfFalso());
+            var primera = puerta.RondaActual;
+            var archivoPrimera = Registro.RutaArchivo(carpeta, puerta.ConversacionActual);
+            Registro.Agregar(carpeta, "otra", new Conversacion { Id = "otra", CreadaEn = "2026-10-07T12:00:00.000Z" });
+            Registro.Agregar(carpeta, "otra", new Ronda { Id = "r-otra", ConversacionId = "otra", Indice = 0, Prompt = "¿Otra?", EnviadaEn = "2026-10-07T12:00:00.000Z" });
+
+            var md = Directory.GetFiles(informe.Ruta, "*.md").Single();
+            using (new FileStream(md, FileMode.Open, FileAccess.Read, FileShare.None))
+                Assert.That(puerta.RondasAnteriores().Select(r => (r.RondaId, r.CarpetaInforme)), Is.EqualTo(new[] { ("r-otra", (string)null), (primera, (string)null) }));
+            using (new FileStream(archivoPrimera, FileMode.Open, FileAccess.Read, FileShare.None))
+                Assert.That(puerta.RondasAnteriores().Select(r => r.RondaId), Is.EqualTo(new[] { "r-otra" }));
+        }
+
         // T22: en las etapas de los roles, un operador que ya operó y un rol cuya etapa pasó están capturados;
         // el rol de la etapa sigue su propio estado (aunque el redactor sea el mismo integrador).
         [Test]

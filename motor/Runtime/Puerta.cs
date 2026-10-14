@@ -243,13 +243,13 @@ namespace ChatCouncil.Motor
             var dirInformes = Path.Combine(carpeta, "informes");
             var informes = Directory.Exists(dirInformes)
                 ? Directory.GetDirectories(dirInformes).Select(d => (Carpeta: d, Md: Path.Combine(d, Path.GetFileName(d) + ".md"))).Where(x => File.Exists(x.Md))
-                    .Select(x => (x.Carpeta, Texto: File.ReadAllText(x.Md))).ToList()
+                    .Select(x => (x.Carpeta, Texto: LeerONulo(() => File.ReadAllText(x.Md)))).Where(x => x.Texto != null).ToList()
                 : new List<(string Carpeta, string Texto)>();
             foreach (var archivo in Directory.GetFiles(dir, "*.jsonl"))
             {
                 var id = Path.GetFileNameWithoutExtension(archivo);
-                var hechos = Registro.LeerArchivo(carpeta, id).Hechos;
-                if (hechos.OfType<Conversacion>().FirstOrDefault(h => h.Id == id)?.EsPrueba != false) continue;
+                var hechos = LeerONulo(() => Registro.LeerArchivo(carpeta, id).Hechos);
+                if (hechos?.OfType<Conversacion>().FirstOrDefault(h => h.Id == id)?.EsPrueba != false) continue;
                 foreach (var r in hechos.OfType<Ronda>().Where(r => r.ConversacionId == id))
                     rondas.Add(new RondaAnterior
                     {
@@ -259,6 +259,19 @@ namespace ChatCouncil.Motor
                     });
             }
             return rondas.OrderByDescending(r => r.EnviadaEn, StringComparer.Ordinal).ThenByDescending(r => r.Indice).ToList();
+        }
+
+        // Un archivo que no se puede leer (otro programa lo tiene abierto) no bloquea a los demás.
+        static T LeerONulo<T>(Func<T> leer) where T : class
+        {
+            try
+            {
+                return leer();
+            }
+            catch (IOException)
+            {
+                return null;
+            }
         }
 
         /// <summary>

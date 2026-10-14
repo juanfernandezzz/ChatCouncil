@@ -220,7 +220,8 @@ namespace ChatCouncil.Motor.Pruebas
                 "http://10.1.2.3/", "http://172.16.0.1/", "http://172.31.255.255/", "http://192.168.1.1/", "http://169.254.169.254/latest/meta-data",
                 "http://100.64.0.1/", "http://[::1]/", "http://[::]/", "http://[fe80::1]/", "http://[fc00::1]/", "http://[fd12:3456::1]/",
                 "http://[::ffff:127.0.0.1]/", "http://[::ffff:192.168.0.1]/", "http://0x7f.0.0.1/", "http://2130706433/", "http://017700000001/",
-                "http://intranet/", "http://impresora.local/", "HTTP://LOCALHOST/",
+                "http://intranet/", "http://impresora.local/", "HTTP://LOCALHOST/", "http://255.255.255.255/", "http://224.0.0.1/",
+                "http://239.255.255.250:1900/", "http://[ff02::1]/", "http://nas.lan/", "http://router.home.arpa/", "http://api.internal/",
             })
                 Assert.That(await Puerta.ComprobarUrl(url, http, TimeSpan.FromSeconds(10)), Is.EqualTo(((int?)null, local)), url);
             foreach (var url in new[] { "file:///C:/Windows/win.ini", "ftp://a.org/x", "javascript:alert(1)", "data:text/plain,hola", "a.org/sin-esquema", "" })
@@ -317,6 +318,9 @@ namespace ChatCouncil.Motor.Pruebas
                 Assert.That(puerta.RondasAnteriores().Select(r => (r.RondaId, r.CarpetaInforme)), Is.EqualTo(new[] { ("r-otra", (string)null), (primera, (string)null) }));
             using (new FileStream(archivoPrimera, FileMode.Open, FileAccess.Read, FileShare.None))
                 Assert.That(puerta.RondasAnteriores().Select(r => r.RondaId), Is.EqualTo(new[] { "r-otra" }));
+            // Un editor que guarda el .md con CRLF no lo separa de su ronda.
+            File.WriteAllText(md, File.ReadAllText(md).Replace("\n", "\r\n"));
+            Assert.That(puerta.RondasAnteriores().Single(r => r.RondaId == primera).CarpetaInforme, Is.EqualTo(informe.Ruta));
         }
 
         // T22: en las etapas de los roles, un operador que ya operó y un rol cuya etapa pasó están capturados;

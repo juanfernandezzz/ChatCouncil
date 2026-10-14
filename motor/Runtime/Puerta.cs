@@ -169,17 +169,18 @@ namespace ChatCouncil.Motor
 
         Tuple<string, long, DateTime, RegistroLeido> ultimaLectura;
 
-        /// <summary>
-        /// El registro de la conversación en curso. Se relee solo si el archivo cambió de largo o de fecha:
-        /// la interfaz lo consulta muchas veces por refresco. Nadie modifica las listas devueltas.
-        /// </summary>
+        /// <summary>El registro de la conversación en curso; se relee solo si el archivo cambió de largo o de fecha.</summary>
+        // shortcut: la lectura se comparte entre llamadas, así que nadie debe modificar sus listas; si alguien llega a
+        // hacerlo, devolver una copia.
         public RegistroLeido LeerRegistro()
         {
             var archivo = new FileInfo(Registro.RutaArchivo(carpeta, ConversacionActual));
             if (!archivo.Exists) return Registro.LeerArchivo(carpeta, ConversacionActual);
-            var previa = ultimaLectura;
-            if (previa != null && previa.Item1 == ConversacionActual && previa.Item2 == archivo.Length && previa.Item3 == archivo.LastWriteTimeUtc)
-                return previa.Item4;
+            if (ultimaLectura != null)
+            {
+                var (conversacion, largo, fecha, registro) = ultimaLectura;
+                if (conversacion == ConversacionActual && largo == archivo.Length && fecha == archivo.LastWriteTimeUtc) return registro;
+            }
             // Se mide antes de leer: si el archivo crece en el medio, la próxima llamada ve otro largo y relee.
             var leido = Registro.LeerArchivo(carpeta, ConversacionActual);
             ultimaLectura = Tuple.Create(ConversacionActual, archivo.Length, archivo.LastWriteTimeUtc, leido);
@@ -243,7 +244,7 @@ namespace ChatCouncil.Motor
             var dirInformes = Path.Combine(carpeta, "informes");
             var informes = Directory.Exists(dirInformes)
                 ? Directory.GetDirectories(dirInformes).Select(d => (Carpeta: d, Md: Path.Combine(d, Path.GetFileName(d) + ".md"))).Where(x => File.Exists(x.Md))
-                    .Select(x => (x.Carpeta, Texto: LeerONulo(() => File.ReadAllText(x.Md)))).Where(x => x.Texto != null).ToList()
+                    .Select(x => (x.Carpeta, Texto: LeerONulo(() => File.ReadAllText(x.Md).Replace("\r\n", "\n")))).Where(x => x.Texto != null).ToList()
                 : new List<(string Carpeta, string Texto)>();
             foreach (var archivo in Directory.GetFiles(dir, "*.jsonl"))
             {
@@ -880,18 +881,19 @@ namespace ChatCouncil.Motor
             var host = uri.DnsSafeHost.ToLowerInvariant();
             var local = IPAddress.TryParse(host, out var ip)
                 ? EsLocal(ip)
-                : !host.Contains('.') || host.EndsWith(".localhost", StringComparison.Ordinal) || host.EndsWith(".local", StringComparison.Ordinal);
+                : !host.Contains('.') || new[] { ".localhost", ".local", ".lan", ".internal", ".home.arpa" }.Any(s => host.EndsWith(s, StringComparison.Ordinal));
             return local ? "es una dirección local o de la red privada: no se comprueba" : null;
         }
 
-        // Bucle local, sin especificar, privadas (RFC 1918 y 4193), de enlace local y la compartida del operador (100.64/10).
+        // Bucle local, sin especificar, privadas (RFC 1918 y 4193), de enlace local, la compartida del operador (100.64/10),
+        // multidifusión y de 240/4 en adelante (reservadas y difusión).
         static bool EsLocal(IPAddress ip)
         {
             if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
             if (ip.AddressFamily == AddressFamily.InterNetworkV6)
-                return IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.IPv6Any) || ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || (ip.GetAddressBytes()[0] & 0xFE) == 0xFC;
+                return IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.IPv6Any) || ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || ip.IsIPv6Multicast || (ip.GetAddressBytes()[0] & 0xFE) == 0xFC;
             var b = ip.GetAddressBytes();
-            return b[0] == 0 || b[0] == 10 || b[0] == 127 || (b[0] == 172 && b[1] >= 16 && b[1] <= 31) || (b[0] == 192 && b[1] == 168)
+            return b[0] == 0 || b[0] == 10 || b[0] == 127 || b[0] >= 224 || (b[0] == 172 && b[1] >= 16 && b[1] <= 31) || (b[0] == 192 && b[1] == 168)
                 || (b[0] == 169 && b[1] == 254) || (b[0] == 100 && b[1] >= 64 && b[1] <= 127);
         }
 

@@ -336,6 +336,14 @@ public final class Paneles {
         return 0;
     }
 
+    /** Desde el WebView, no con un script: una página trabada no corre scripts (historia 74). */
+    public static int recargar(int id) {
+        Panel p = buscar(id);
+        if (p == null) return fallar("el panel no existe");
+        ui.post(() -> p.vista.reload());
+        return 0;
+    }
+
     /** 0: navegaciones que empezaron; 1: bloqueadas; 2: terminadas; 3: última emergente; 4: archivos entregados al selector. */
     public static int contador(int id, int cual) {
         Panel p = buscar(id);

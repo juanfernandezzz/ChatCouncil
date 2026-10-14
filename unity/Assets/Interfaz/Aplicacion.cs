@@ -265,7 +265,7 @@ namespace ChatCouncil.Interfaz
             {
                 var j = JObject.Parse(File.ReadAllText(RutaApariencia));
                 tema = Array.IndexOf(Temas, (string)j["tema"]) >= 0 ? (string)j["tema"] : tema;
-                texto = Array.IndexOf(Tamanos, (int?)j["texto"] ?? 0) >= 0 ? (int)j["texto"] : texto;
+                texto = j["texto"]?.Type == JTokenType.Integer && Array.IndexOf(Tamanos, (int)j["texto"]) >= 0 ? (int)j["texto"] : texto;
             }
             catch (Exception)
             {

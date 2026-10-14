@@ -395,6 +395,20 @@ namespace ChatCouncil.Autoprueba
             var msTecho = reloj.ElapsedMilliseconds;
             Anotar(corte != null && msTecho >= 2_900 && msTecho < 6_000, "techo externo sobre una página colgada", $"cortó a los {msTecho} ms: {corte ?? "no cortó"}");
             Anotar(respuesta == "responde" && msOtro < 1_500, "un panel colgado no bloquea a los demás", $"el otro panel respondió en {msOtro} ms");
+
+            // T24 (historia 74), medido, no exigido: cuánto tarda en volver una página recargada con el bucle en curso (le quedan
+            // ~12 s). Medido en T24: espera a que el bucle termine.
+            var recarga = Stopwatch.StartNew();
+            string fallo = null, vuelve = null;
+            try
+            {
+                await c.Recargar();
+                vuelve = (string)JToken.Parse(await c.Ejecutar("'vuelve'", techoMs: 3_000));
+            }
+            catch (Exception ex) { fallo = ex.Message; }
+            var msTotal = reloj.ElapsedMilliseconds;
+            lineas.Add($"MEDIDO recargar una página trabada: {(vuelve == "vuelve" ? "respondió" : "no respondió")} a los {msTotal} ms del bucle de 15 s "
+                       + $"(recarga {recarga.ElapsedMilliseconds} ms){(fallo != null ? ": " + fallo : "")}");
             c.Cerrar();
         }
     }

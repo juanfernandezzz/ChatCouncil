@@ -457,6 +457,14 @@ EXPORTAR int CC_Navegar(int id, const wchar_t* url) {
     return FAILED(hr) ? Fallar(Hr(L"Navigate falló", hr)) : 0;
 }
 
+// Desde el navegador, no con un script: una página trabada no corre scripts (historia 74).
+EXPORTAR int CC_Recargar(int id) {
+    Panel* p = Buscar(id);
+    if (!p || !p->vista) return Fallar(L"el panel no existe o no está listo");
+    HRESULT hr = p->vista->Reload();
+    return FAILED(hr) ? Fallar(Hr(L"Reload falló", hr)) : 0;
+}
+
 // 0: navegaciones que empezaron; 1: bloqueadas por cierre de sesión; 2: navegaciones terminadas;
 // 3: id de la última emergente que abrió (0 si ninguna).
 EXPORTAR int CC_Contador(int id, int cual) {

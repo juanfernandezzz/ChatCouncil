@@ -203,7 +203,7 @@ namespace ChatCouncil.Interfaz
             Anotar(!Raiz.ClassListContains("primer-arranque") && Visible(Raiz.Q("seccion-ronda")) && !Visible(Config), "reabrir", "con archivo de selección arranca en la Ronda, sin la guía");
             var tema = Config.Q<DropdownField>("tema").value;
             var tamano = Config.Q<DropdownField>("tamano-texto").value;
-            Anotar(tema == "El del sistema" && tamano == "El del sistema", "preferencias ilegibles: las del sistema", $"tema «{tema}», texto «{tamano}»");
+            Anotar(tema == "Oscuro" && tamano == "El del sistema", "un tamaño ilegible: el del sistema, y el tema se conserva", $"tema «{tema}», texto «{tamano}»");
             ComprobarRonda("el consejo guardado se aplica al reabrir", OperadoresEsperados);
             var titulo = Raiz.Q<Label>("barra-titulo").text;
             var paso = Raiz.Q<Button>("paso-ancha").text;
@@ -222,10 +222,18 @@ namespace ChatCouncil.Interfaz
             Anotar(Mensaje == "Guardado. Se aplica la próxima vez que abras ChatCouncil.", "cambio guardado", Mensaje);
             await Pulsar(Raiz, "ir-ronda");
             ComprobarRonda("el cambio no se aplica antes de reabrir", OperadoresEsperados);
+            // Para la fase 3: un archivo con el tema y sin el tamaño; el tema se conserva.
+            File.WriteAllText(Path.Combine(app.CarpetaDatos, "apariencia.json"), "{\"tema\":\"oscuro\"}");
         }
 
         // ---------------------------------------------------------------- fase 3
 
-        void Fase3() => ComprobarRonda("el cambio se aplica al reabrir", OperadoresEsperados.Where(id => id != "qwen").ToArray());
+        void Fase3()
+        {
+            ComprobarRonda("el cambio se aplica al reabrir", OperadoresEsperados.Where(id => id != "qwen").ToArray());
+            var tema = Config.Q<DropdownField>("tema").value;
+            var tamano = Config.Q<DropdownField>("tamano-texto").value;
+            Anotar(tema == "Oscuro" && tamano == "El del sistema", "preferencias sin el tamaño: el tema se conserva", $"tema «{tema}», texto «{tamano}»");
+        }
     }
 }

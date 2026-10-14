@@ -1,5 +1,5 @@
+using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using UnityEngine;
 using UnityEngine.Accessibility;
 using UnityEngine.UIElements;
@@ -9,15 +9,17 @@ namespace ChatCouncil.Interfaz
     /// <summary>
     /// Los controles de UI Toolkit para los lectores de pantalla (D50, WCAG 4.1.2): Narrador en Windows y TalkBack en
     /// Android. UI Toolkit no los publica solo; esto arma la jerarquía de accesibilidad con lo que está a la vista, en el
-    /// orden del documento, y la rearma solo cuando cambia algo (rearmarla siempre movería el foco del lector).
-    /// Las páginas de los proveedores no pasan por acá: son ventanas nativas con su propia accesibilidad.
+    /// orden del documento. La rearma solo cuando cambian los controles a la vista; si cambia un texto, un valor o un
+    /// estado, actualiza su nodo (rearmarla movería el foco del lector). Las páginas de los proveedores no pasan por
+    /// aquí: son ventanas nativas con su propia accesibilidad.
     /// </summary>
     public sealed class Lector : MonoBehaviour
     {
         const float CadaSegundos = 0.5f;
 
         VisualElement arbol;
-        string firma;
+        List<VisualElement> armados;
+        List<AccessibilityNode> nodos = new List<AccessibilityNode>();
         float proxima;
 
         public void Iniciar(VisualElement arbol) => this.arbol = arbol;
@@ -27,27 +29,38 @@ namespace ChatCouncil.Interfaz
             if (arbol?.panel == null || !AssistiveSupport.isScreenReaderEnabled || Time.unscaledTime < proxima) return;
             proxima = Time.unscaledTime + CadaSegundos;
             var elementos = arbol.Query<VisualElement>().Where(e => Rol(e) != AccessibilityRole.None && Visible(e)).ToList();
-            var nueva = new StringBuilder();
-            foreach (var e in elementos) nueva.Append(Rol(e)).Append('|').Append(Nombre(e)).Append('|').Append(Valor(e)).Append('|').Append(e.enabledInHierarchy).Append('\n');
-            if (nueva.ToString() == firma)
+            if (armados != null && elementos.SequenceEqual(armados) && elementos.Select(Rol).SequenceEqual(nodos.Select(n => n.role)))
             {
+                for (var i = 0; i < nodos.Count; i++) Actualizar(nodos[i], elementos[i]);
                 AssistiveSupport.activeHierarchy?.RefreshNodeFrames();
                 return;
             }
-            firma = nueva.ToString();
             var h = new AccessibilityHierarchy();
+            armados = elementos;
+            nodos = new List<AccessibilityNode>();
             foreach (var e in elementos)
             {
                 var n = h.AddNode(Nombre(e));
                 n.role = Rol(e);
-                n.value = Valor(e);
-                n.state = !e.enabledInHierarchy ? AccessibilityState.Disabled : e is Toggle t && t.value ? AccessibilityState.Selected : AccessibilityState.None;
+                Actualizar(n, e);
+                nodos.Add(n);
                 var x = e;
                 n.frameGetter = () => Marco(x);
                 n.invoked += () => Activar(x);
                 n.focusChanged += (nodo, enfocado) => { if (enfocado && x.focusable) x.Focus(); };
             }
             AssistiveSupport.activeHierarchy = h;
+        }
+
+        // Solo si cambió: asignar avisa al lector.
+        static void Actualizar(AccessibilityNode n, VisualElement e)
+        {
+            var nombre = Nombre(e);
+            var valor = Valor(e);
+            var estado = !e.enabledInHierarchy ? AccessibilityState.Disabled : e is Toggle t && t.value ? AccessibilityState.Selected : AccessibilityState.None;
+            if (n.label != nombre) n.label = nombre;
+            if (n.value != valor) n.value = valor;
+            if (n.state != estado) n.state = estado;
         }
 
         internal static AccessibilityRole Rol(VisualElement e)

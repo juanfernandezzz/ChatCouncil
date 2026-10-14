@@ -127,6 +127,16 @@ namespace ChatCouncil.Panel
             if (Bloqueadas > bloqueadas) throw new InvalidOperationException($"La navegación a {url} se bloqueó: es un cierre de sesión.");
         }
 
+        /// <summary>Recarga desde el navegador, sin depender de un script de la página, y espera a que termine.</summary>
+        // shortcut: medido en T24, con un script en bucle la recarga (y Runtime.terminateExecution de DevTools) espera a que
+        // termine; si hace falta, matar el renderer (GetProcessExtendedInfos en WebView2, WebViewRenderProcess en Android).
+        public async Task Recargar()
+        {
+            var terminadas = Nativo.CC_Contador(id, 2);
+            Nativo.Comprobar(Nativo.CC_Recargar(id), "recargar");
+            await Paneles.Esperar(() => Nativo.CC_Contador(id, 2) > terminadas ? 1 : 0, "recargar", id);
+        }
+
         /// <summary>
         /// Ejecuta un script en el marco principal y devuelve su resultado como JSON. Un panel colgado corta en el techo.
         /// Medido en T16: si el resultado trae un surrogate suelto, ExecuteScript no devuelve nada nunca. Todo script que
@@ -298,6 +308,7 @@ namespace ChatCouncil.Panel
             x = r[0]; y = r[1]; ancho = r[2]; alto = r[3];
         }
         internal static int CC_Navegar(int id, string url) => J.CallStatic<int>("navegar", id, url);
+        internal static int CC_Recargar(int id) => J.CallStatic<int>("recargar", id);
         /// <summary>Los de Windows y 4: archivos que el selector del sistema entregó.</summary>
         internal static int CC_Contador(int id, int cual) => J.CallStatic<int>("contador", id, cual);
         internal static int CC_Ejecutar(int id, string script) => J.CallStatic<int>("ejecutar", id, script);
@@ -342,6 +353,7 @@ namespace ChatCouncil.Panel
         [DllImport(Dll)] internal static extern int CC_EsFrente(int id);
         [DllImport(Dll)] internal static extern void CC_RectReal(int id, out int x, out int y, out int ancho, out int alto);
         [DllImport(Dll, CharSet = CharSet.Unicode)] internal static extern int CC_Navegar(int id, string url);
+        [DllImport(Dll)] internal static extern int CC_Recargar(int id);
         [DllImport(Dll)] internal static extern int CC_Contador(int id, int cual);
         [DllImport(Dll, CharSet = CharSet.Unicode)] internal static extern int CC_Ejecutar(int id, string script);
         [DllImport(Dll, CharSet = CharSet.Unicode)] internal static extern int CC_EjecutarEnIframe(int id, string urlContiene, string script);

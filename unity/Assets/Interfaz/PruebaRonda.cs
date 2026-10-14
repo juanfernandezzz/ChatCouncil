@@ -433,7 +433,7 @@ namespace ChatCouncil.Interfaz
             var nav = Ronda.PanelDe("gemini").Navegaciones;
             await Pulsar("menu-panel");
             await Pulsar("item-Recargar la página");
-            var recargo = await Esperar(() => Ronda.PanelDe("gemini").Navegaciones > nav, 20);
+            var recargo = await Esperar(() => Resultado == "Se recargó la página de Gemini.", 20) && Ronda.PanelDe("gemini").Navegaciones > nav;
             Anotar(recargo && Resultado == "Se recargó la página de Gemini.", "recargar la página", $"navegaciones {nav} → {Ronda.PanelDe("gemini").Navegaciones}; «{Resultado}»");
 
             for (var i = 0; i < 40 && await En("gemini", "document.readyState") != "\"complete\""; i++) await Task.Delay(250);
@@ -503,6 +503,21 @@ namespace ChatCouncil.Interfaz
                    && fila?.role == UnityEngine.Accessibility.AccessibilityRole.Button && etapa?.label == "3 Operación, etapa actual"
                    && nodos.All(n => n.label != "Página del proveedor (vista nativa)" && n.label != "Kimi"),
                 "jerarquía para el lector de pantalla", $"{nodos.Count} nodos; «{boton?.label}» como {boton?.role}, marco {boton?.frame}; fila «{fila?.label}» como {fila?.role}; «{etapa?.label}»");
+
+            // T24 (D50): un texto que cambia no rearma la jerarquía (eso movería el foco del lector); se actualiza su nodo.
+            var resultado = Raiz.Q<Label>("resultado-ancha");
+            var textoResultado = resultado.text;
+            resultado.text = "Primer resultado"; // si estaba vacío, aparece un nodo y ahí sí se rearma
+            await Task.Delay(1500);
+            var antes = UnityEngine.Accessibility.AssistiveSupport.activeHierarchy;
+            resultado.text = "Resultado de prueba del lector";
+            await Task.Delay(1500);
+            var despues = UnityEngine.Accessibility.AssistiveSupport.activeHierarchy;
+            nodos.Clear();
+            if (despues != null) Juntar(despues.rootNodes);
+            Anotar(antes != null && ReferenceEquals(antes, despues) && nodos.Any(n => n.label == "Resultado de prueba del lector"),
+                "un texto nuevo no rearma la jerarquía", $"la misma jerarquía: {ReferenceEquals(antes, despues)}; nodo con el texto nuevo: {nodos.Any(n => n.label == "Resultado de prueba del lector")}");
+            resultado.text = textoResultado;
 
             // La lista con el teclado: Enter sobre una fila la pone a la vista (WCAG 2.1.1).
             var filaKimi = Raiz.Q("fila-kimi");

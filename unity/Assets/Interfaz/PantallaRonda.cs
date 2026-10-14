@@ -1078,7 +1078,7 @@ namespace ChatCouncil.Interfaz
         {
             try
             {
-                await paneles[id].Ejecutar("location.reload(); 'ok'");
+                await paneles[id].Recargar();
                 Resultado($"Se recargó la página de {Dominio.NombreProveedor(id)}.");
             }
             catch (Exception e)

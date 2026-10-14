@@ -341,6 +341,8 @@ namespace ChatCouncil.Interfaz
                    && salidas.Single(x => x.OperadorId == "chatgpt").PromptCompleto.Contains("=== ARCHIVO ADJUNTO:") && Raiz.Q<Label>("barra-titulo").text == "Integración · 4 de 7",
                 "capturar la operación", $"{salidas.Count} salidas con su prompt, {hallazgos} hallazgos; «{Raiz.Q<Label>("barra-titulo").text}»");
 
+            await RecorridoDeRoles();
+
             // Ronda nueva con las respuestas copiadas, y un operador que reutiliza su operación.
             await Pulsar("menu-ronda");
             await Pulsar("item-Ronda nueva con las respuestas copiadas");
@@ -351,6 +353,8 @@ namespace ChatCouncil.Interfaz
             Anotar(copiada != ronda && Resultado.StartsWith("Ronda nueva abierta", StringComparison.Ordinal) && copias.Count == 7 && copias.All(r => r.CopiadaDe?.RondaId == ronda)
                    && Raiz.Q<Label>("barra-titulo").text == "Operación · 3 de 7",
                 "ronda nueva con las respuestas copiadas", $"«{Resultado}»; {copias.Count} copias; «{Raiz.Q<Label>("barra-titulo").text}»");
+            Anotar(Ronda.EnLaVista.SequenceEqual(Pool) && Pool.Contains(Ronda.Visible), "los roles salen del recorrido en la ronda nueva",
+                $"en la vista [{string.Join(",", Ronda.EnLaVista)}], visible {Ronda.Visible}");
             // Reutilizar necesita el sello de la ronda nueva: primero se pega la operación en un panel, y el aviso vuelve.
             Ronda.Seleccionar("gemini");
             await Esperar(() => Raiz.Q<Button>("accion-panel").text == "Pegar la operación aquí");
@@ -366,6 +370,196 @@ namespace ChatCouncil.Interfaz
             Anotar(Resultado.StartsWith("ChatGPT: se reutilizó", StringComparison.Ordinal) && reusada?.CopiadaDe?.RondaId == ronda && EstadoEnLaLista("chatgpt") == "Capturado",
                 "usar la operación anterior", $"«{Resultado}»; «{EstadoEnLaLista("chatgpt")}»");
 
+        }
+
+        // ---------------------------------------------------------------- los roles y el informe (T22)
+
+        /// <summary>Lo que hace el rol: responder en párrafos, como los proveedores que dejan cada línea en un &lt;p&gt;.</summary>
+        Task ResponderEnParrafos(string id, params string[] lineas) => En(id,
+            "(() => { const r = document.createElement('div'); r.className = 'respuesta'; for (const l of " + JsonConvert.SerializeObject(lineas) +
+            ") { const p = document.createElement('p'); p.textContent = l; r.append(p); } document.getElementById('chat').append(r);" +
+            " document.getElementById('detener')?.remove(); return 'ok'; })()");
+
+        string Titulo => Raiz.Q<Label>("barra-titulo").text;
+        bool Habilitado => Raiz.Q<Button>("paso-ancha").enabledSelf;
+
+        async Task RecorridoDeRoles()
+        {
+            var ronda = Ronda.Puerta.RondaActual;
+            using (var servidor = new ServidorDePrueba())
+            {
+                // Integración: el rol aparece en su etapa, en una conversación nueva, con el prompt idéntico.
+                Anotar(Titulo == "Integración · 4 de 7" && Paso == "Pegar el prompt del integrador" && Habilitado && Ronda.PanelDe("deepseek") == null
+                       && EstadoEnLaLista("deepseek") == "Integra y redacta",
+                    "etapa Integración", $"«{Titulo}», «{Paso}»; sin página el integrador: {Ronda.PanelDe("deepseek") == null}; «{EstadoEnLaLista("deepseek")}»");
+                await Pulsar("paso-ancha");
+                await Esperar(() => Resultado.StartsWith("Prompt pegado", StringComparison.Ordinal) || Resultado.StartsWith("No se", StringComparison.Ordinal), 90);
+                var promptIntegrador = Ronda.Puerta.ArmarPromptIntegrador();
+                var vacio = Ronda.PanelDe("deepseek") != null && (bool?)await Ronda.PanelDe("deepseek").Correr("chatVacio", Spec) == true;
+                Anotar(Resultado == "Prompt pegado en DeepSeek. Revísalo y envíalo." && vacio && await Compositor("deepseek") == promptIntegrador
+                       && Ronda.Visible == "deepseek" && Ronda.EnLaVista.Count == 8 && EstadoEnLaLista("deepseek") == "Integra y redacta · Pegado, falta que envíes",
+                    "pegar el integrador", $"«{Resultado}»; chat nuevo vacío: {vacio}; a la vista {Ronda.Visible}, {Ronda.EnLaVista.Count} en el recorrido; «{EstadoEnLaLista("deepseek")}»");
+
+                await Enviar("deepseek");
+                await ResponderEnParrafos("deepseek", "TITULO: Informe de prueba", "1. TIPOS DE DIVERGENCIA", "No hay divergencias de fondo [H2].",
+                    "5. QUE CONVIENE RESCATAR", "Lo firme está en [H1].");
+                await Esperar(() => Paso == "Capturar el informe del integrador" && Habilitado);
+                await Pulsar("paso-ancha");
+                await Esperar(() => Titulo == "Verificación · 5 de 7", 60);
+                var informe = Hechos.OfType<InformeIntegrador>().SingleOrDefault(h => h.RondaId == ronda);
+                Anotar(informe?.Titulo == "Informe de prueba" && informe.PromptCompleto == promptIntegrador && EstadoEnLaLista("deepseek") == "Integra y redacta · Capturado",
+                    "capturar el integrador", $"título «{informe?.Titulo}»; prompt registrado idéntico: {informe?.PromptCompleto == promptIntegrador}; «{EstadoEnLaLista("deepseek")}»");
+
+                // Recapturar el integrador después de su etapa (historia 58): gana el último.
+                await ResponderEnParrafos("deepseek", "TITULO: Informe recapturado", "5. QUE CONVIENE RESCATAR", "Lo firme está en [H1] y en [H2].");
+                await Pulsar("menu-ronda");
+                await Pulsar("item-Recapturar el informe del integrador");
+                await Esperar(() => Resultado.Contains("recaptur"), 60);
+                var informes = Hechos.OfType<InformeIntegrador>().Where(h => h.RondaId == ronda).ToList();
+                Anotar(informes.Count == 2 && informes.Last().Titulo == "Informe recapturado" && Resultado.StartsWith("DeepSeek: integrador recapturado", StringComparison.Ordinal),
+                    "recapturar el integrador", $"«{Resultado}»; {informes.Count} informes, el último «{informes.LastOrDefault()?.Titulo}»");
+
+                // Verificación: el prompt cita lo que rescata el último informe.
+                Anotar(Paso == "Pegar el prompt del verificador" && Habilitado && Ronda.PanelDe("glm") == null, "etapa Verificación", $"«{Paso}»");
+                await Pulsar("paso-ancha");
+                await Esperar(() => Resultado.StartsWith("Prompt pegado", StringComparison.Ordinal) || Resultado.StartsWith("No se", StringComparison.Ordinal), 90);
+                var promptVerificador = Ronda.Puerta.ArmarPromptVerificador();
+                Anotar(Resultado == "Prompt pegado en GLM. Revísalo y envíalo." && await Compositor("glm") == promptVerificador && promptVerificador.Contains("[H2]")
+                       && Ronda.Visible == "glm" && Ronda.EnLaVista.Count == 9,
+                    "pegar el verificador", $"«{Resultado}»; a la vista {Ronda.Visible}, {Ronda.EnLaVista.Count} en el recorrido");
+                await Enviar("glm");
+                var b = $"http://127.0.0.1:{servidor.Puerto}";
+                await ResponderEnParrafos("glm", "Reviso las fuentes.", $"CONFIRMA|OFICIAL|H1|{b}/ok|\"cita\"", "CONTRADICE|SECUNDARIA|H2|https://x.invalid/p|\"otra\"",
+                    $"CONFIRMA|PRIMARIA|H1|{b}/404|\"no está\"", $"CONFIRMA|OFICIAL|H2|{b}/sin-head|\"sin HEAD\"");
+                await Esperar(() => Paso == "Capturar la verificación" && Habilitado);
+                await Pulsar("paso-ancha");
+                await Esperar(() => Titulo == "Redacción · 6 de 7", 60);
+                var verificacion = Hechos.OfType<SalidaVerificador>().SingleOrDefault(h => h.RondaId == ronda);
+                Anotar(verificacion?.PromptCompleto == promptVerificador && EstadoEnLaLista("glm") == "Verifica · Capturado",
+                    "capturar la verificación", $"prompt registrado idéntico: {verificacion?.PromptCompleto == promptVerificador}; «{EstadoEnLaLista("glm")}»");
+
+                // Redacción: el prompt y el archivo adjunto (historia 56).
+                Anotar(Paso == "Pegar el prompt y el archivo del redactor" && Habilitado, "etapa Redacción", $"«{Paso}»");
+                await Pulsar("paso-ancha");
+                await Esperar(() => Resultado.StartsWith("Prompt pegado", StringComparison.Ordinal) || Resultado.StartsWith("No se", StringComparison.Ordinal), 90);
+                var archivos = Directory.Exists(Path.Combine(app.CarpetaDatos, "redactor")) ? Directory.GetFiles(Path.Combine(app.CarpetaDatos, "redactor")) : new string[0];
+                var adjunto = (string)JsonEstricto.Leer(await En("deepseek", "document.getElementById('archivo').textContent"));
+                var esperado = archivos.Length == 1 ? $"{Path.GetFileName(archivos[0])}|{new FileInfo(archivos[0]).Length}" : "-";
+                Anotar(Resultado == "Prompt pegado en DeepSeek. Comprueba que el archivo quedó adjunto, revísalo y envíalo." && await Compositor("deepseek") == Ronda.Puerta.ArmarRedactor().Prompt
+                       && adjunto == esperado && File.ReadAllText(archivos[0]).Contains("[[CC-MARCA-FIN-"),
+                    "pegar el redactor con el adjunto", $"«{Resultado}»; adjunto «{adjunto}», esperado «{esperado}»");
+                await Enviar("deepseek");
+                await ResponderEnParrafos("deepseek", "Respuesta del redactor para la persona.", "Lo firme está en [H1].");
+                await Esperar(() => Paso == "Capturar la respuesta del redactor" && Habilitado);
+                await Pulsar("paso-ancha");
+                await Esperar(() => Titulo == "Informe · 7 de 7", 60);
+                var redaccion = Hechos.OfType<RespuestaRedactor>().SingleOrDefault(h => h.RondaId == ronda);
+                Anotar(redaccion != null && redaccion.MarcaUltima?.StartsWith("[[CC-MARCA-FIN-", StringComparison.Ordinal) == true && Paso == "Armar el informe" && Habilitado,
+                    "capturar el redactor", $"marcas {redaccion?.MarcaPrimera} … {redaccion?.MarcaUltima}; «{Paso}»");
+
+                // El informe: las URLs sin cookies, la carpeta con .md y PDF, y la carpeta que se abre.
+                string abierta = null;
+                Ronda.AbrirCarpeta = r => abierta = r;
+                await Pulsar("paso-ancha");
+                await Esperar(() => Resultado.StartsWith("Carpeta del informe", StringComparison.Ordinal) || Resultado.StartsWith("No se pudo", StringComparison.Ordinal), 300);
+                var urls = Hechos.OfType<UrlComprobada>().Where(u => u.RondaId == ronda).OrderBy(u => u.Url).Select(u => $"{u.Url.Replace(b, "")} {u.Codigo?.ToString() ?? "sin código"}").ToList();
+                Anotar(urls.SequenceEqual(new[] { "/404 404", "/ok 200", "/sin-head 200", "https://x.invalid/p sin código" }), "comprobar las URLs", string.Join("; ", urls));
+                var pedidos = servidor.Pedidos.OrderBy(x => x).ToList();
+                Anotar(pedidos.SequenceEqual(new[] { "GET /404", "GET /sin-head", "HEAD /404", "HEAD /ok", "HEAD /sin-head" }), "HEAD y después GET, sin cookies", string.Join("; ", pedidos));
+                var carpeta = Directory.Exists(Path.Combine(app.CarpetaDatos, "informes")) ? Directory.GetDirectories(Path.Combine(app.CarpetaDatos, "informes")).SingleOrDefault() : null;
+                var nombre = carpeta == null ? "-" : Path.GetFileName(carpeta);
+                var md = carpeta == null ? "" : File.ReadAllText(Path.Combine(carpeta, nombre + ".md"));
+                var pdf = Path.Combine(carpeta ?? "-", nombre + ".pdf");
+                var bytesPdf = File.Exists(pdf) ? System.Text.Encoding.ASCII.GetString(File.ReadAllBytes(pdf)) : "";
+                var cabecera = bytesPdf.Length >= 5 ? bytesPdf.Substring(0, 5) : "";
+                // Carta (D40): 612 × 792 puntos en cada página.
+                var paginas = System.Text.RegularExpressions.Regex.Matches(bytesPdf, @"/MediaBox \[[^\]]*\]").Cast<System.Text.RegularExpressions.Match>().Select(m => m.Value).ToList();
+                Anotar(nombre.EndsWith("Informe recapturado", StringComparison.Ordinal) && md.Contains("Respuesta del redactor para la persona.") && cabecera == "%PDF-" && bytesPdf.Length > 1000
+                       && paginas.Count > 0 && paginas.All(p => p == "/MediaBox [0 0 612 792]"),
+                    "informe en .md y PDF, en Carta", $"carpeta «{nombre}»; .md {md.Length} caracteres; PDF «{cabecera}» {bytesPdf.Length} bytes; páginas {string.Join(", ", paginas.Distinct())} ×{paginas.Count}");
+                var respuestas = carpeta == null ? "-" : Path.Combine(carpeta, InformeFinal.SubcarpetaRespuestas);
+                var mds = Directory.Exists(respuestas) ? Directory.GetFiles(respuestas, "*.md").Length : 0;
+                var pdfs = Directory.Exists(respuestas) ? Directory.GetFiles(respuestas, "*.pdf").Count(f => new FileInfo(f).Length > 1000) : 0;
+                Anotar(mds == 7 && pdfs == 7, "respuestas de los investigadores", $"{mds} .md y {pdfs} PDF");
+                Anotar(abierta == carpeta && Resultado.EndsWith("URLs del verificador: responden 2 de 4.", StringComparison.Ordinal) && !Raiz.Q("resultado-ancha").ClassListContains("problema"),
+                    "la carpeta se abre al terminar", $"abierta «{abierta}»; «{Resultado}»");
+                Copiar(Path.Combine(app.CarpetaDatos, "informes"), salida + ".informe");
+                // Para las capturas de la etapa Informe.
+                Copiar(app.CarpetaDatos, salida + ".roles");
+
+                // Ocultar y mostrar los roles (historia 59).
+                await Pulsar("menu-ronda");
+                await Pulsar("item-Ocultar los paneles de los roles");
+                var oculto = Ronda.EnLaVista.SequenceEqual(Pool) && Pool.Contains(Ronda.Visible) && Ronda.PanelDe("glm").RectReal.ancho == 0 && EstadoEnLaLista("glm") == "Verifica";
+                await Pulsar("menu-ronda");
+                await Pulsar("item-Mostrar los paneles de los roles");
+                await Esperar(() => Ronda.EnLaVista.Count == 9);
+                Anotar(oculto && Ronda.EnLaVista.Count == 9 && EstadoEnLaLista("glm") == "Verifica · Capturado", "ocultar y mostrar los roles",
+                    $"ocultos: {oculto}; mostrados: {Ronda.EnLaVista.Count} en el recorrido");
+            }
+        }
+
+        /// <summary>
+        /// Un servidor HTTP en 127.0.0.1 para la comprobación de URLs con el adaptador real: /404 da 404, /sin-head
+        /// rechaza HEAD con 405, lo demás 200. Anota método y ruta, y "cookie" si el pedido trae cookies.
+        /// </summary>
+        sealed class ServidorDePrueba : IDisposable
+        {
+            readonly System.Net.Sockets.TcpListener escucha = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            readonly List<string> pedidos = new List<string>();
+
+            public ServidorDePrueba()
+            {
+                escucha.Start();
+                _ = Atender();
+            }
+
+            public int Puerto => ((System.Net.IPEndPoint)escucha.LocalEndpoint).Port;
+
+            public List<string> Pedidos
+            {
+                get
+                {
+                    lock (pedidos) return pedidos.ToList();
+                }
+            }
+
+            async Task Atender()
+            {
+                for (;;)
+                {
+                    System.Net.Sockets.TcpClient cliente;
+                    try
+                    {
+                        cliente = await escucha.AcceptTcpClientAsync();
+                    }
+                    catch (Exception)
+                    {
+                        return; // cerrado
+                    }
+                    _ = Responder(cliente);
+                }
+            }
+
+            async Task Responder(System.Net.Sockets.TcpClient cliente)
+            {
+                using (cliente)
+                {
+                    var flujo = cliente.GetStream();
+                    var lector = new StreamReader(flujo, System.Text.Encoding.ASCII);
+                    var partes = ((await lector.ReadLineAsync()) ?? "").Split(' ');
+                    var cookie = false;
+                    for (var h = await lector.ReadLineAsync(); !string.IsNullOrEmpty(h); h = await lector.ReadLineAsync())
+                        cookie |= h.StartsWith("Cookie:", StringComparison.OrdinalIgnoreCase);
+                    if (partes.Length < 2) return;
+                    lock (pedidos) pedidos.Add($"{partes[0]} {partes[1]}{(cookie ? " cookie" : "")}");
+                    var codigo = partes[1] == "/404" ? 404 : partes[1] == "/sin-head" && partes[0] == "HEAD" ? 405 : 200;
+                    var bytes = System.Text.Encoding.ASCII.GetBytes($"HTTP/1.1 {codigo} Prueba\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                    await flujo.WriteAsync(bytes, 0, bytes.Length);
+                }
+            }
+
+            public void Dispose() => escucha.Stop();
         }
 
         static void Copiar(string desde, string hasta)

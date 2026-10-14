@@ -180,12 +180,22 @@ namespace ChatCouncil.Motor
         /// </summary>
         public static string VerificarEscritura(string esperado, string leido)
         {
-            string Normalizar(string t) => t.Replace("\r\n", "\n").Replace((char)0xA0, ' ');
             // Electron buscaba las cadenas en el texto crudo: un espacio duro de ChatGPT en "LA PREGUNTA ORIGINAL FUE:"
             // la daba por faltante aunque la igualdad, que sí normaliza, la aceptara. Aquí se normaliza antes.
             var sinMarcas = MarcaConSaltos.Replace(Normalizar(leido), "");
             var faltantes = RequisitosPromptOperacion.Where(r => !sinMarcas.Contains(r)).ToList();
             if (faltantes.Count > 0) return "prompt incompleto: faltan " + string.Join(", ", faltantes);
+            return VerificarIgualdad(esperado, leido);
+        }
+
+        static string Normalizar(string t) => t.Replace("\r\n", "\n").Replace((char)0xA0, ' ');
+
+        /// <summary>
+        /// El prompt de un rol escrito en el compositor (T22): solo la igualdad carácter por carácter, con \r\n y el
+        /// espacio duro normalizados (pegarEnPanelDeRol de Electron). El error, o null si quedó igual.
+        /// </summary>
+        public static string VerificarIgualdad(string esperado, string leido)
+        {
             var final = Normalizar(leido);
             if (final == Normalizar(esperado)) return null;
             var lineasPrompt = esperado.Replace("\r\n", "\n").Split('\n').Length;

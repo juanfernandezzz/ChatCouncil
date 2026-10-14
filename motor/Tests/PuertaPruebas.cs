@@ -137,7 +137,8 @@ namespace ChatCouncil.Motor.Pruebas
                 Assert.That(File.ReadAllText(Path.Combine(carpetaInforme, InformeFinal.SubcarpetaRespuestas, archivo + ".md")), Is.EqualTo(markdown), archivo);
                 Assert.That(pdf.Pedidos, Does.Contain((Path.Combine(carpetaInforme, InformeFinal.SubcarpetaRespuestas, archivo + ".pdf"), titulo)));
             }
-            Assert.That(informe.Mensaje, Does.EndWith("Se abrio el PDF del informe. 7 respuestas de investigador, cada una en .md y en PDF."));
+            // El motor no abre nada (D41): la carpeta la abre la interfaz.
+            Assert.That(informe.Mensaje, Is.EqualTo($"Carpeta del informe: {carpetaInforme}. El informe está en .md y en PDF. 7 respuestas de investigador, cada una en .md y en PDF."));
 
             Assert.That(pasos, Is.EqualTo(new[]
             {
@@ -219,6 +220,71 @@ namespace ChatCouncil.Motor.Pruebas
             Assert.That(Directory.GetFiles(respuestas, "*.pdf"), Has.Length.EqualTo(6));
             Assert.That(File.ReadAllText(Path.Combine(respuestas, "FALTAN - respuestas sin PDF.txt")), Does.Contain("- 4 - Grok: no se pudo generar el PDF (la impresora de prueba falló)"));
             Assert.That(r.Mensaje, Does.EndWith("6 de 7 respuestas completas; 1 con archivos faltantes (nombrados en \"FALTAN - respuestas sin PDF.txt\")."));
+        }
+
+        // T22: en las etapas de los roles, un operador que ya operó y un rol cuya etapa pasó están capturados;
+        // el rol de la etapa sigue su propio estado (aunque el redactor sea el mismo integrador).
+        [Test]
+        public void EnLasEtapasDeLosRolesLoYaCapturadoSigueCapturado()
+        {
+            var puerta = NuevaPuerta();
+            var lotes = (JObject)JsonEstricto.Leer(Referencias.LotesOperacion);
+            List<Lectura> Lote(string nombre) => lotes[nombre].ToObject<List<Lectura>>();
+            puerta.AbrirRonda(Referencias.PreguntaOperacion);
+            puerta.RegistrarCapturas(Lote("investigacion"), Confirmada);
+            foreach (var op in Referencias.PoolPuerta) puerta.OperacionPegada(puerta.ArmarOperacion(op, conArchivo: false));
+            puerta.RegistrarCapturas(Lote("operadores1"), Confirmada);
+            puerta.RegistrarCapturas(Lote("operadores2"), Confirmada);
+            Assert.That(puerta.PasoSiguiente().Etapa, Is.EqualTo("integracion"));
+            Assert.That(puerta.EstadoDePanel("chatgpt", null, null), Is.EqualTo("capturado"));
+            Assert.That(puerta.EstadoDePanel("deepseek", null, null), Is.EqualTo("por-pegar"));
+            Assert.That(puerta.EstadoDePanel("glm", null, null), Is.EqualTo("por-pegar"));
+
+            puerta.IntegradorPegado(puerta.ArmarPromptIntegrador());
+            Assert.That(puerta.EstadoDePanel("deepseek", false, "observado"), Is.EqualTo("parece-terminado-observado"));
+            puerta.RegistrarCapturas(new List<Lectura> { lotes["integradorCompleto"].ToObject<Lectura>() }, Confirmada);
+            Assert.That(puerta.PasoSiguiente().Etapa, Is.EqualTo("verificacion"));
+            Assert.That(puerta.EstadoDePanel("chatgpt", null, null), Is.EqualTo("capturado"));
+            Assert.That(puerta.EstadoDePanel("glm", null, null), Is.EqualTo("por-pegar"));
+            Assert.That(puerta.EstadoDePanel("deepseek", null, null), Is.EqualTo("capturado"));
+
+            puerta.VerificadorPegado(puerta.ArmarPromptVerificador());
+            puerta.RegistrarCapturas(Lote("verificador"), Confirmada);
+            Assert.That(puerta.PasoSiguiente().Etapa, Is.EqualTo("redaccion"));
+            Assert.That(puerta.EstadoDePanel("glm", null, null), Is.EqualTo("capturado"));
+            Assert.That(puerta.EstadoDePanel("deepseek", null, null), Is.EqualTo("por-pegar"), "el redactor es el integrador: su etapa vuelve a empezar");
+
+            puerta.RedactorPegado(puerta.ArmarRedactor());
+            puerta.RegistrarCapturas(new List<Lectura> { JsonEstricto.Leer(Referencias.LecturaRedactorOperacion).ToObject<Lectura>() }, Confirmada);
+            Assert.That(puerta.PasoSiguiente().Etapa, Is.EqualTo("informe"));
+            Assert.That(puerta.EstadoDePanel("deepseek", null, null), Is.EqualTo("capturado"));
+            Assert.That(puerta.EstadoDePanel("chatgpt", null, null), Is.EqualTo("capturado"));
+        }
+
+        // T22: una recaptura que falla o queda bajo el umbral no reemplaza al informe bueno: queda como ErrorCaptura
+        // (recapturarRol de Electron), y el último informe sigue siendo el anterior.
+        [Test]
+        public void UnaRecapturaFallidaQuedaComoErrorYNoReemplaza()
+        {
+            var puerta = NuevaPuerta();
+            var lotes = (JObject)JsonEstricto.Leer(Referencias.LotesOperacion);
+            List<Lectura> Lote(string nombre) => lotes[nombre].ToObject<List<Lectura>>();
+            puerta.AbrirRonda(Referencias.PreguntaOperacion);
+            puerta.RegistrarCapturas(Lote("investigacion"), Confirmada);
+            foreach (var op in Referencias.PoolPuerta) puerta.OperacionPegada(puerta.ArmarOperacion(op, conArchivo: false));
+            puerta.RegistrarCapturas(Lote("operadores1"), Confirmada);
+            puerta.RegistrarCapturas(Lote("operadores2"), Confirmada);
+            puerta.IntegradorPegado(puerta.ArmarPromptIntegrador());
+            puerta.RegistrarCapturas(new List<Lectura> { lotes["integradorCompleto"].ToObject<Lectura>() }, Confirmada);
+
+            var fallida = puerta.Recapturar("integrador", new Lectura { Id = "deepseek", Text = "", Error = "el panel no está abierto" });
+            var corta = puerta.Recapturar("integrador", new Lectura { Id = "deepseek", Text = "corto" });
+            var hechos = puerta.LeerRegistro().Hechos;
+            Assert.That(fallida, Is.EqualTo((false, "DeepSeek: el integrador no se recapturó (el panel no está abierto)")));
+            Assert.That(corta.Ok, Is.False);
+            Assert.That(hechos.OfType<InformeIntegrador>().Count(), Is.EqualTo(1));
+            Assert.That(Dominio.UltimoInformeIntegrador(hechos, puerta.RondaActual).Titulo, Is.EqualTo("La dosis"));
+            Assert.That(hechos.OfType<ErrorCaptura>().Where(e => e.TipoCapturaIntentado == "informe-integrador").Select(e => e.ProveedorId), Is.EqualTo(new[] { "deepseek", "deepseek" }));
         }
 
         // Una respuesta guardada con error o un envío fallido es un panel con problema, no uno capturado.

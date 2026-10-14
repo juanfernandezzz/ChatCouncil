@@ -2789,6 +2789,63 @@ Decisiones de T21 (Operación conectada):
   no tenía a quién pegar (defecto medido en la prueba de T21). Criterio: el estado
   sigue al paso que da el motor [NH 1].
 
+Decisiones de T22 (roles e informe conectados):
+
+· D40, 2026-10-13, el PDF es la presentación del .md, que sigue siendo el dato.
+  Se arma con marked 18.0.14 (dependencia ya fijada en el repositorio, copiada sin
+  cambios en Resources/Interfaz/marked.txt, con su licencia MIT; SHA-256 igual al
+  del paquete) en una página en blanco de un panel oculto con su propio perfil, sin
+  cookies de los proveedores, y el panel lo imprime (Panel.ImprimirPdf, de T16).
+  Criterios: un intérprete de Markdown probado antes que uno escrito para esto
+  (las tablas y las listas del informe); breaks, porque el informe usa saltos
+  simples como líneas sueltas (un operador o un hallazgo por línea); el HTML crudo
+  del Markdown escapado, porque lo escribió un modelo y tiene que verse escrito,
+  nunca insertarse; break-word y pre-wrap, porque un trozo sin cortes se recortaba
+  en silencio (dato perdido). Tamaño Carta en todo (decisión de Juan del
+  2026-10-13), márgenes de 2 cm y un pie "ChatCouncil · página N de M": el informe
+  se cita (historia 61) y sin número de página no hay cómo señalar dónde está algo.
+· D41, 2026-10-13, al terminar se abre la carpeta del informe y no un archivo,
+  porque la carpeta tiene el informe en .md y PDF y las respuestas de los
+  investigadores, y la persona elige qué abrir (plan de T22, frase de la etapa). El mensaje del motor ya no
+  dice "Se abrio el PDF": dice que el informe está en .md y en PDF; abrir es de
+  la interfaz. Sin PDF, se abre la carpeta del .md y el resultado va en el color
+  del problema. En Android no se abre (file:// da FileUriExposedException): se
+  dice dónde está. Al final se dice cuántas URLs del verificador responden.
+· D42, 2026-10-13, los roles no tienen página hasta su etapa (historia 26): el
+  paso que les pega el prompt la abre, y desde ahí el rol entra en el recorrido
+  (la lista y ‹ ›) detrás de los operadores, con su función y su estado en la
+  fila. En una ronda nueva salen del recorrido, porque sus páginas muestran la
+  conversación de la ronda anterior y verlas invita a capturar algo viejo.
+  "Mostrar los paneles de los roles" y "Ocultar…" van en el menú de la
+  Ronda (D6, historia 59), y tocar la fila de un rol lo muestra. Un rol fuera de
+  su etapa está para mirarlo: no recibe la pregunta ni la operación. Criterio:
+  visibilidad del estado [NH 1] y control del usuario [NH 3] sin sumar páginas
+  que no se usan en esa etapa.
+· D43, 2026-10-13, el prompt de cada rol va en una conversación nueva comprobada
+  vacía, como la operación (D36), y se verifica por igualdad carácter por carácter
+  (Cuerpos.VerificarIgualdad: el prompt de un rol no tiene las cadenas de la
+  operación). El del redactor va con su archivo adjunto solo (historia 56),
+  guardado en la carpeta de datos, en "redactor". Si el prompt no se puede armar
+  (la verificación sin "Qué conviene rescatar"), se dice por qué antes de tocar el
+  panel (historia 55). Criterio: un rol que sigue el hilo anterior lee el informe
+  o la verificación de otra ronda y su salida deja de depender solo del material
+  de esta; y lo que la app puede hacer sola (abrir el chat, adjuntar) no se le
+  deja a la persona [NH 5, prevenir errores].
+· D44, 2026-10-13, en las etapas de los roles, un operador que ya operó y un rol
+  cuya etapa pasó están "capturados"; antes salían "por pegar" (defecto visto al
+  conectar T22). El rol de la etapa sigue su propio estado, también cuando el
+  redactor es el integrador. Criterio: el estado sigue al registro [NH 1].
+· D45, 2026-10-13, una recaptura que falla o queda bajo el umbral no reemplaza al
+  informe o la verificación buenos: queda como ErrorCaptura. Antes la Puerta la
+  guardaba igual y, como gana el último, la vacía reemplazaba a la buena.
+  Criterio: un fallo de captura nunca se descarta ni se adivina, y tampoco borra
+  un dato bueno.
+· D46, 2026-10-13, "Capturar" del paso, en la etapa de un rol, se habilita cuando
+  su página parece terminada o su captura falló (D7). "Capturar este panel", en el
+  menú del rol, está siempre en su etapa: después de reabrir la app no queda el
+  prompt en memoria, el paso vuelve a "Pegar" y sin esto no habría forma de
+  capturar lo que el rol ya respondió (se registra con el prompt no disponible).
+
 ---
 
 ## 6. Criterios de aceptación

@@ -143,6 +143,19 @@ namespace ChatCouncil.Motor.Pruebas
                 Is.EqualTo($"el compositor no es igual al prompt: {lineas} de {lineas} líneas, {pegado.Length + 1} de {pegado.Length} caracteres"));
         }
 
+        // T22: el prompt de un rol no lleva las cadenas de la operación; se verifica solo la igualdad
+        // (pegarEnPanelDeRol de Electron), con la misma normalización.
+        [Test]
+        public void ElPromptDeUnRolSeVerificaPorIgualdad()
+        {
+            var prompt = Prompts.ArmarPromptRedactor("¿La pregunta?");
+            Assert.That(Cuerpos.VerificarIgualdad(prompt, prompt.Replace("\n", "\r\n").Replace(" ", ((char)0xA0).ToString())), Is.Null);
+            var lineas = prompt.Split('\n').Length;
+            Assert.That(Cuerpos.VerificarIgualdad(prompt, prompt.Substring(1)),
+                Is.EqualTo($"el compositor no es igual al prompt: {lineas} de {lineas} líneas, {prompt.Length - 1} de {prompt.Length} caracteres"));
+            Assert.That(Cuerpos.VerificarIgualdad(prompt, ""), Is.EqualTo($"el compositor no es igual al prompt: 0 de {lineas} líneas, 0 de {prompt.Length} caracteres"));
+        }
+
         [Test]
         public void LosRolesPorDefectoSonLosDeLaVersionElectronYCumplenSusReglas()
         {

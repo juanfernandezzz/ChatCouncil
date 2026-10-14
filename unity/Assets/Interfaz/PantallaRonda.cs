@@ -46,6 +46,7 @@ namespace ChatCouncil.Interfaz
         const string PegarOperacionAqui = "Pegar la operación aquí";
         const string PegarOperacionTexto = "Pegar la operación aquí como texto";
         const string UsarAnterior = "Usar su operación anterior";
+        const string PegarPromptAqui = "Pegar el prompt aquí";
         /// <summary>Cuánto se espera, después de abrir la conversación nueva, a que el chat y el compositor queden vacíos.</summary>
         const int EsperaChatNuevoMs = 20_000;
 
@@ -67,10 +68,26 @@ namespace ChatCouncil.Interfaz
         string rondaVista, rondaConAvisoOperacion;
         bool operacionPorTexto;
         Action<string, bool> alAceptar;
+        // T22: los roles a la vista (en la lista y en ‹ ›), su función en la lista, los pegados de rol que fallaron
+        // y el panel oculto que imprime los PDF.
+        readonly List<string> rolesMostrados = new List<string>();
+        readonly Dictionary<string, string> funcion = new Dictionary<string, string>();
+        readonly Dictionary<string, string> fallaRol = new Dictionary<string, string>();
+        Panel panelPdf;
 
         public Puerta Puerta { get; private set; }
         public List<string> Operadores { get; private set; } = new List<string>();
         public string Visible => visible;
+        /// <summary>Los paneles por los que se navega: los operadores y, desde su etapa o a pedido, los roles (D42).</summary>
+        public List<string> EnLaVista => Operadores.Concat(RolesDeLaRonda.Where(rolesMostrados.Contains)).ToList();
+        List<string> RolesDeLaRonda => new[] { roles.Integrador, roles.Verificador, roles.Redactor }.Distinct().ToList();
+        public IHttp Http { get; set; } = new HttpSinCookies();
+        public IPdf Pdf { get; set; }
+        /// <summary>Al terminar el informe. Android no abre carpetas con file:// (FileUriExposedException): ahí solo se dice dónde está.</summary>
+        public Action<string> AbrirCarpeta { get; set; } = ruta =>
+        {
+            if (Application.platform != RuntimePlatform.Android) Application.OpenURL(new Uri(ruta).AbsoluteUri);
+        };
         public Panel PanelDe(string id) => paneles.TryGetValue(id, out var p) ? p : null;
         public Operacion OperacionDe(string id) => operaciones.TryGetValue(id, out var o) ? o : null;
 
@@ -83,6 +100,7 @@ namespace ChatCouncil.Interfaz
             this.iniciarNavegador = iniciarNavegador;
             this.urlDe = urlDe;
             this.specDe = specDe;
+            Pdf = new PdfEnPanel(PanelDelPdf);
 
             void Al(string nombre, Action accion) => raiz.Q<Button>(nombre).clicked += accion;
             Al("paso-ancha", Paso);
@@ -157,9 +175,17 @@ namespace ChatCouncil.Interfaz
                 lista.Add(fila);
             }
             lista.Add(Titulo("Roles (aparecen en su etapa)"));
-            lista.Add(Fila(roles.Integrador, roles.Redactor == roles.Integrador ? "Integra y redacta" : "Integra"));
-            lista.Add(Fila(roles.Verificador, "Verifica"));
-            if (roles.Redactor != roles.Integrador) lista.Add(Fila(roles.Redactor, "Redacta"));
+            funcion.Clear();
+            funcion[roles.Integrador] = roles.Redactor == roles.Integrador ? "Integra y redacta" : "Integra";
+            funcion[roles.Verificador] = "Verifica";
+            funcion[roles.Redactor] = roles.Redactor == roles.Integrador ? funcion[roles.Integrador] : "Redacta";
+            foreach (var id in RolesDeLaRonda)
+            {
+                var fila = Fila(id, funcion[id]);
+                // Tocar un rol lo muestra y lo pone a la vista (historia 59), aunque no sea su etapa.
+                fila.RegisterCallback<ClickEvent>(evento => { _ = MostrarRol(id, true); });
+                lista.Add(fila);
+            }
             Refrescar();
         }
 
@@ -197,7 +223,7 @@ namespace ChatCouncil.Interfaz
             sondeando = true;
             for (;;)
             {
-                foreach (var id in Operadores.ToList())
+                foreach (var id in paneles.Keys.ToList())
                 {
                     if (!paneles.TryGetValue(id, out var p)) continue;
                     try
@@ -244,9 +270,14 @@ namespace ChatCouncil.Interfaz
         {
             var (generando, fin) = pagina.TryGetValue(id, out var p) ? p : (null, null);
             var estado = Puerta.EstadoDePanel(id, generando, fin);
-            // En la operación el motor no conoce los pegados fallidos: los sabe la interfaz, que los intentó.
-            return estado == "por-pegar" && fallaOperacion.ContainsKey(id) ? "con-problema" : estado;
+            // En la operación y en los roles el motor no conoce los pegados fallidos: los sabe la interfaz, que los intentó.
+            return estado == "por-pegar" && (fallaOperacion.ContainsKey(id) || fallaRol.ContainsKey(id)) ? "con-problema" : estado;
         }
+
+        /// <summary>El proveedor que trabaja en esa etapa de rol; null en las de los operadores.</summary>
+        string RolDeLaEtapa(string etapa) =>
+            etapa == "integracion" ? roles.Integrador : etapa == "verificacion" ? roles.Verificador
+            : etapa == "redaccion" || etapa == "informe" ? roles.Redactor : null;
 
         /// <summary>
         /// La etapa que dice el registro; sin ronda abierta, la Pregunta. Con la investigación completa, la operación,
@@ -269,6 +300,21 @@ namespace ChatCouncil.Interfaz
         {
             if (fallaAlAbrir.TryGetValue(id, out var f))
                 return ($"La página no se pudo abrir: {f}. Cierra y vuelve a abrir la app.", "La página no se abrió: cierra y abre la app.", null);
+            var rol = RolDeLaEtapa(etapa);
+            // Un rol fuera de su etapa está para mirarlo (historia 59): no recibe la pregunta ni la operación.
+            if (!Operadores.Contains(id) && id != rol) return (null, null, null);
+            if (rol != null)
+            {
+                if (id != rol) return (null, null, null);
+                if (fallaRol.TryGetValue(id, out var fr))
+                    return ($"El prompt no se pegó: {fr}.", "No se pegó el prompt: pégalo otra vez desde «Más…».", PegarPromptAqui);
+                var enRol = EstadoDe(id);
+                if (enRol == "por-pegar") return (null, null, PegarPromptAqui);
+                if (Terminado(enRol)) return (null, null, CapturarEste);
+                if (enRol != "con-problema") return (null, null, null);
+                var error = Puerta.LeerRegistro().Hechos.OfType<ErrorCaptura>().LastOrDefault(e => e.RondaId == Puerta.RondaActual && e.ProveedorId == id && e.EtapaEsperada == etapa);
+                return ($"La captura no sirvió: {error?.Detalle}. Revisa la página y vuelve a capturar.", "La captura no sirvió: captura otra vez desde «Más…».", CapturarEste);
+            }
             if (etapa == "operacion")
             {
                 if (fallaOperacion.TryGetValue(id, out var falla))
@@ -301,6 +347,11 @@ namespace ChatCouncil.Interfaz
                 rondaVista = Puerta.RondaActual;
                 operaciones.Clear();
                 fallaOperacion.Clear();
+                fallaRol.Clear();
+                // En una ronda nueva los roles muestran la conversación de la anterior: salen del recorrido hasta su etapa.
+                rolesMostrados.Clear();
+                if (visible != null && !Operadores.Contains(visible)) visible = Operadores.FirstOrDefault();
+                Ubicar();
             }
             var paso = Puerta.PasoSiguiente();
             var etapa = EtapaDelRegistro();
@@ -328,12 +379,16 @@ namespace ChatCouncil.Interfaz
             raiz.EnableInClassList("etapa-pregunta", paso.Etapa == "pregunta");
             raiz.Q<Label>("barra-titulo").text = $"{NombresEtapa[actual]} · {actual + 1} de {Etapas.Length}";
 
-            var estados = Operadores.ToDictionary(id => id, EstadoDe);
-            int enviados = estados.Values.Count(e => e == "respondiendo" || Terminado(e) || e == "capturado");
-            int terminados = estados.Values.Count(Terminado);
-            int capturados = estados.Values.Count(e => e == "capturado");
+            var estados = Operadores.Concat(RolesDeLaRonda).Distinct().ToDictionary(id => id, EstadoDe);
+            var deOperadores = Operadores.Select(id => estados[id]).ToList();
+            int enviados = deOperadores.Count(e => e == "respondiendo" || Terminado(e) || e == "capturado");
+            int terminados = deOperadores.Count(Terminado);
+            int capturados = deOperadores.Count(e => e == "capturado");
+            // Capturar un rol: cuando su página parece terminada o su captura falló (D7: lo imposible, deshabilitado).
+            var rolDelPaso = RolDeLaEtapa(paso.Etapa);
+            var rolListo = rolDelPaso != null && paneles.ContainsKey(rolDelPaso) && (Terminado(estados[rolDelPaso]) || estados[rolDelPaso] == "con-problema");
 
-            var (texto, habilitado) = TextoDelPaso(paso, terminados);
+            var (texto, habilitado) = TextoDelPaso(paso, terminados, rolListo);
             foreach (var nombre in new[] { "paso-ancha", "paso-angosta" })
             {
                 var b = raiz.Q<Button>(nombre);
@@ -355,16 +410,23 @@ namespace ChatCouncil.Interfaz
                 fila.Q<Label>(className: "fila-estado").text = palabra;
                 fila.EnableInClassList("fila-panel--actual", id == visible);
             }
-            foreach (var id in new[] { roles.Integrador, roles.Verificador, roles.Redactor })
-                raiz.Q("fila-" + id).Q<IconoEstado>().Estado = Estados[Puerta.EstadoDePanel(id, null, null)].Icono;
+            foreach (var id in RolesDeLaRonda)
+            {
+                var fila = raiz.Q("fila-" + id);
+                var (icono, palabra) = Estados[estados[id]];
+                fila.Q<IconoEstado>().Estado = icono;
+                fila.Q<Label>(className: "fila-estado").text = rolesMostrados.Contains(id) ? $"{funcion[id]} · {palabra}" : funcion[id];
+                fila.EnableInClassList("fila-panel--actual", id == visible);
+            }
 
             if (visible != null)
             {
                 var (icono, palabra) = Estados[estados[visible]];
                 var (problema, corto, accion) = Situacion(visible, etapa);
+                var enLaVista = EnLaVista;
                 raiz.Q<IconoEstado>("icono-cabecera").Estado = raiz.Q<IconoEstado>("icono-selector").Estado = icono;
                 raiz.Q<Label>("cabecera-titulo").text = $"{Dominio.NombreProveedor(visible)} · {palabra}";
-                raiz.Q<Label>("selector-texto").text = $"{Dominio.NombreProveedor(visible)} · {palabra} · {Operadores.IndexOf(visible) + 1} de {n}";
+                raiz.Q<Label>("selector-texto").text = $"{Dominio.NombreProveedor(visible)} · {palabra} · {enLaVista.IndexOf(visible) + 1} de {enLaVista.Count}";
                 foreach (var (nombre, linea) in new[] { ("cabecera-problema", problema), ("selector-problema", corto) })
                 {
                     raiz.Q<Label>(nombre).text = linea ?? "";
@@ -379,15 +441,13 @@ namespace ChatCouncil.Interfaz
         }
 
         /// <summary>El texto del botón primario y si se puede usar ahora. Lo imposible queda deshabilitado (D7).</summary>
-        static (string, bool) TextoDelPaso(Paso paso, int terminados)
+        static (string, bool) TextoDelPaso(Paso paso, int terminados, bool rolListo)
         {
             switch (paso.Accion)
             {
-                case "pegar-pregunta": return (paso.Texto, true);
                 case "capturar" when paso.Etapa == "investigacion" || paso.Etapa == "operacion": return ($"{paso.Texto} ({terminados})", terminados > 0);
-                case "declarar-pregunta": return (paso.Texto, true);
-                case "pegar-operacion": return (paso.Texto, true);
-                default: return (paso.Texto, false); // las etapas de los roles se conectan en T22
+                case "capturar": return (paso.Texto, rolListo);
+                default: return (paso.Texto, true);
             }
         }
 
@@ -414,9 +474,10 @@ namespace ChatCouncil.Interfaz
 
         void Mover(int paso)
         {
-            if (Operadores.Count == 0) return;
-            var i = (Operadores.IndexOf(visible) + paso + Operadores.Count) % Operadores.Count;
-            Seleccionar(Operadores[i]);
+            var enLaVista = EnLaVista;
+            if (enLaVista.Count == 0) return;
+            var i = (enLaVista.IndexOf(visible) + paso + enLaVista.Count) % enLaVista.Count;
+            Seleccionar(enLaVista[i]);
         }
 
         public void PlegarFrase()
@@ -442,9 +503,11 @@ namespace ChatCouncil.Interfaz
             var area = raiz.Q(raiz.ClassListContains("ancha") ? "pagina-ancha" : "pagina-angosta").worldBound;
             var k = Screen.width / raiz.panel.visualTree.worldBound.width;
             var mostrar = seccionVisible && !capaAbierta && visible != null && paneles.ContainsKey(visible) && area.width > 0;
-            foreach (var p in paneles.Values)
+            var enLaVista = EnLaVista;
+            foreach (var (id, p) in paneles.Select(x => (x.Key, x.Value)))
             {
-                if (mostrar) p.Rect(Mathf.RoundToInt(area.x * k), Mathf.RoundToInt(area.y * k), Mathf.RoundToInt(area.width * k), Mathf.RoundToInt(area.height * k));
+                // Un rol oculto se aparta: detrás de la página visible seguiría ocupando el área.
+                if (mostrar && enLaVista.Contains(id)) p.Rect(Mathf.RoundToInt(area.x * k), Mathf.RoundToInt(area.y * k), Mathf.RoundToInt(area.width * k), Mathf.RoundToInt(area.height * k));
                 else p.Rect(0, 0, 0, 0);
             }
             if (mostrar) paneles[visible].Frente();
@@ -469,6 +532,17 @@ namespace ChatCouncil.Interfaz
                 case "declarar-pregunta":
                     DialogoDeclarar();
                     break;
+                case "pegar-integrador":
+                case "pegar-verificacion":
+                case "pegar-redactor":
+                    _ = PegarRol();
+                    break;
+                case "capturar":
+                    _ = Capturar(new List<string> { RolDeLaEtapa(paso.Etapa) });
+                    break;
+                case "armar-informe":
+                    _ = ArmarInforme();
+                    break;
             }
         }
 
@@ -478,6 +552,7 @@ namespace ChatCouncil.Interfaz
             if (accion == PegarAqui) _ = PegarEnEste();
             else if (accion == CapturarEste) _ = Capturar(new List<string> { visible });
             else if (accion == PegarOperacionAqui) ConAvisoDeOperacion(new List<string> { visible }, null);
+            else if (accion == PegarPromptAqui) _ = PegarRol();
         }
 
         /// <summary>Pegar en los operadores, después del aviso de capacidades (historia 20), que se puede omitir en esta sesión.</summary>
@@ -721,6 +796,31 @@ namespace ChatCouncil.Interfaz
         /// </summary>
         async Task<string> PegarOperacion(string id, bool porTexto)
         {
+            var error = await AbrirChatNuevo(id);
+            if (error != null) return error;
+            Operacion op;
+            try
+            {
+                op = Puerta.ArmarOperacion(id, conArchivo: !porTexto);
+            }
+            catch (InvalidOperationException e)
+            {
+                return e.Message;
+            }
+            error = await EscribirYAdjuntar(id, op.Texto, Cuerpos.VerificarEscritura, op.CuerpoArchivo,
+                porTexto ? null : Path.Combine(carpetaDatos, "operaciones", op.NombreArchivo), " o pega la operación como texto");
+            if (error != null) return error;
+            Puerta.OperacionPegada(op);
+            operaciones[id] = op;
+            return null;
+        }
+
+        /// <summary>
+        /// Una conversación nueva, comprobada vacía (historia 41): sin esto el operador o el rol leería el hilo anterior.
+        /// El error, o null si quedó vacía.
+        /// </summary>
+        async Task<string> AbrirChatNuevo(string id)
+        {
             if (!paneles.TryGetValue(id, out var p)) return "el panel no está abierto";
             var spec = specDe(id);
             try
@@ -747,49 +847,44 @@ namespace ChatCouncil.Interfaz
                 {
                     vacias = 0; // la página todavía está cargando
                 }
-                if (vacias >= 3) break;
+                if (vacias >= 3) return null;
                 if (DateTime.UtcNow > limite)
-                    return "la conversación nueva no quedó vacía: no se pega, porque el operador leería su propia respuesta. Abre una conversación nueva a mano y vuelve a pegar";
+                    return "la conversación nueva no quedó vacía: no se pega, porque el modelo leería su propia respuesta. Abre una conversación nueva a mano y vuelve a pegar";
                 await Task.Delay(300);
             }
+        }
 
-            Operacion op;
+        /// <summary>
+        /// El texto en el compositor, verificado contra lo armado (verificar da el error o null); con cuerpoArchivo, el
+        /// archivo escrito en ruta y adjunto. El error, o null si quedó todo.
+        /// </summary>
+        async Task<string> EscribirYAdjuntar(string id, string texto, Func<string, string, string> verificar, string cuerpoArchivo, string ruta, string otraVia)
+        {
+            if (!paneles.TryGetValue(id, out var p)) return "el panel no está abierto";
+            var spec = specDe(id);
             try
             {
-                op = Puerta.ArmarOperacion(id, conArchivo: !porTexto);
-            }
-            catch (InvalidOperationException e)
-            {
-                return e.Message;
-            }
-            try
-            {
-                var r = await p.Correr("escribir", spec, op.Texto, 90_000);
+                var r = await p.Correr("escribir", spec, texto, 90_000);
                 if ((bool?)r["ok"] != true) return (string)r["error"];
                 var leido = await p.Correr("leerCompositor", spec);
-                var error = Cuerpos.VerificarEscritura(op.Texto, leido.Type == JTokenType.String ? (string)leido : "");
+                var error = verificar(texto, leido.Type == JTokenType.String ? (string)leido : "");
                 if (error != null) return error;
             }
             catch (Exception e)
             {
                 return e.Message;
             }
-            if (!porTexto)
+            if (cuerpoArchivo == null) return null;
+            try
             {
-                var ruta = Path.Combine(carpetaDatos, "operaciones", op.NombreArchivo);
-                try
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(ruta));
-                    File.WriteAllText(ruta, op.CuerpoArchivo, new UTF8Encoding(false));
-                    await p.Adjuntar(spec, ruta);
-                }
-                catch (Exception e)
-                {
-                    return $"el texto quedó pegado pero el archivo no se adjuntó ({e.Message}). Está en {ruta}: adjúntalo a mano o pega la operación como texto";
-                }
+                Directory.CreateDirectory(Path.GetDirectoryName(ruta));
+                File.WriteAllText(ruta, cuerpoArchivo, new UTF8Encoding(false));
+                await p.Adjuntar(spec, ruta);
             }
-            Puerta.OperacionPegada(op);
-            operaciones[id] = op;
+            catch (Exception e)
+            {
+                return $"el texto quedó pegado pero el archivo no se adjuntó ({e.Message}). Está en {ruta}: adjúntalo a mano{otraVia}";
+            }
             return null;
         }
 
@@ -814,6 +909,141 @@ namespace ChatCouncil.Interfaz
                 });
         }
 
+        // ---------------------------------------------------------------- roles e informe (T22)
+
+        /// <summary>
+        /// Abre la página del rol si todavía no está (los roles no tienen página hasta que se los necesita, historia 26)
+        /// y lo pone en el recorrido. true si la página está abierta.
+        /// </summary>
+        public async Task<bool> MostrarRol(string id, bool seleccionar)
+        {
+            if (!paneles.ContainsKey(id))
+            {
+                try
+                {
+                    paneles[id] = await Paneles.Crear(id, urlDe(id));
+                    fallaAlAbrir.Remove(id);
+                }
+                catch (Exception e)
+                {
+                    fallaAlAbrir[id] = e.Message;
+                }
+            }
+            if (!rolesMostrados.Contains(id)) rolesMostrados.Add(id);
+            if (seleccionar) Seleccionar(id);
+            else
+            {
+                Ubicar();
+                Refrescar();
+            }
+            return paneles.ContainsKey(id);
+        }
+
+        async void MostrarRoles()
+        {
+            foreach (var id in RolesDeLaRonda) await MostrarRol(id, false);
+        }
+
+        void OcultarRoles()
+        {
+            rolesMostrados.Clear();
+            if (visible != null && !Operadores.Contains(visible)) visible = Operadores.FirstOrDefault();
+            Ubicar();
+            Refrescar();
+        }
+
+        /// <summary>
+        /// El prompt del rol de la etapa, en una conversación nueva comprobada vacía, verificado por igualdad; el del
+        /// redactor, con su archivo adjunto (historia 56). Nunca envía. Si no se puede armar, se dice por qué antes de
+        /// tocar el panel (historia 55: nunca un prompt vacío).
+        /// </summary>
+        async Task PegarRol()
+        {
+            var etapa = EtapaDelRegistro();
+            var id = RolDeLaEtapa(etapa);
+            if (id == null) return;
+            string texto;
+            ArchivoRedactor archivo = null;
+            try
+            {
+                texto = etapa == "integracion" ? Puerta.ArmarPromptIntegrador()
+                    : etapa == "verificacion" ? Puerta.ArmarPromptVerificador()
+                    : (archivo = Puerta.ArmarRedactor()).Prompt;
+            }
+            catch (InvalidOperationException e)
+            {
+                Resultado($"No se armó el prompt: {e.Message}.", true);
+                return;
+            }
+            var nombre = Dominio.NombreProveedor(id);
+            ocupado = true;
+            Resultado($"Pegando el prompt en {nombre}…");
+            Refrescar();
+            var error = await MostrarRol(id, true) ? await AbrirChatNuevo(id) : "la página no se pudo abrir";
+            error = error ?? await EscribirYAdjuntar(id, texto, Cuerpos.VerificarIgualdad, archivo?.CuerpoArchivo,
+                archivo == null ? null : Path.Combine(carpetaDatos, "redactor", archivo.NombreArchivo), "");
+            ocupado = false;
+            if (error == null)
+            {
+                fallaRol.Remove(id);
+                if (etapa == "integracion") Puerta.IntegradorPegado(texto);
+                else if (etapa == "verificacion") Puerta.VerificadorPegado(texto);
+                else Puerta.RedactorPegado(archivo);
+                Resultado($"Prompt pegado en {nombre}." + (archivo == null ? " Revísalo y envíalo." : " Comprueba que el archivo quedó adjunto, revísalo y envíalo.")
+                          + (archivo?.Aviso == null ? "" : " " + archivo.Aviso));
+            }
+            else
+            {
+                fallaRol[id] = error;
+                Resultado($"No se pegó en {nombre}: {error}.", true);
+            }
+            Refrescar();
+        }
+
+        /// <summary>Recapturar el integrador o el verificador en cualquier etapa (historia 58): agrega un hecho y gana el último.</summary>
+        async Task Recapturar(string rol)
+        {
+            var id = rol == "integrador" ? roles.Integrador : roles.Verificador;
+            ocupado = true;
+            Resultado($"Recapturando el {rol}…");
+            Refrescar();
+            await MostrarRol(id, true);
+            var (ok, mensaje) = Puerta.Recapturar(rol, await Leer(id));
+            ocupado = false;
+            Resultado(mensaje, !ok);
+            Refrescar();
+        }
+
+        /// <summary>Comprueba las URLs del verificador, arma la carpeta del informe y la abre (D41).</summary>
+        async Task ArmarInforme()
+        {
+            ocupado = true;
+            Resultado("Comprobando las URLs y armando el informe…");
+            Refrescar();
+            var (ok, mensaje, ruta) = await Puerta.ArmarInforme(Http, Pdf);
+            // Ya comprobadas para esta verificación: no vuelve a salir a la red, solo da la cuenta.
+            var urls = ok ? await Puerta.ComprobarUrls(Http) : null;
+            ocupado = false;
+            var cuenta = urls?.Urls == null || urls.Urls.Count == 0 ? ""
+                : $" URLs del verificador: responden {urls.Urls.Count(u => u.Codigo >= 200 && u.Codigo <= 299)} de {urls.Urls.Count}.";
+            // Sin PDF, el motor devuelve el .md: la carpeta es la suya.
+            var carpeta = ok ? Directory.Exists(ruta) ? ruta : Path.GetDirectoryName(ruta) : null;
+            Resultado(mensaje + cuenta, !ok || carpeta != ruta);
+            if (carpeta != null) AbrirCarpeta(carpeta);
+            Refrescar();
+        }
+
+        async Task<Panel> PanelDelPdf()
+        {
+            if (panelPdf == null)
+            {
+                // Su propio perfil: la página del PDF no comparte cookies con los proveedores.
+                panelPdf = await Paneles.Crear("informe-pdf", "about:blank");
+                panelPdf.Rect(0, 0, 0, 0);
+            }
+            return panelPdf;
+        }
+
         // ---------------------------------------------------------------- menús (D6, D7)
 
         sealed class Item
@@ -827,6 +1057,19 @@ namespace ChatCouncil.Interfaz
             var etapa = EtapaDelRegistro();
             var accion = visible == null ? null : Situacion(visible, etapa).Accion;
             var grupo = "Este panel" + (visible == null ? "" : ": " + Dominio.NombreProveedor(visible));
+            if (visible != null && !Operadores.Contains(visible))
+            {
+                // Un rol: pegar solo en su etapa; capturar en su etapa siempre (después de reabrir la app no queda el
+                // prompt en memoria y el paso vuelve a "Pegar"), fuera de ella con "Recapturar" del menú Ronda.
+                var suEtapa = RolDeLaEtapa(etapa) == visible;
+                return new List<Item>
+                {
+                    new Item { Grupo = grupo, Texto = PegarPromptAqui, Accion = () => _ = PegarRol(),
+                        Motivo = accion == PegarPromptAqui ? null : "Solo en su etapa, cuando el panel está por pegar o el pegado falló." },
+                    new Item { Grupo = grupo, Texto = CapturarEste, Accion = () => _ = Capturar(new List<string> { visible }),
+                        Motivo = suEtapa ? null : "Solo en su etapa: fuera de ella, usa «Recapturar» del menú Ronda." },
+                };
+            }
             if (etapa == "operacion")
             {
                 var pegable = accion == PegarOperacionAqui ? null : "Solo cuando el panel está por pegar o el pegado falló.";
@@ -853,8 +1096,18 @@ namespace ChatCouncil.Interfaz
         {
             var sinRonda = Puerta.RondaActual == null;
             var paso = Puerta.PasoSiguiente();
+            var hechos = sinRonda ? new List<Hecho>() : Puerta.LeerRegistro().Hechos;
+            var sinInforme = sinRonda || Dominio.UltimoInformeIntegrador(hechos, Puerta.RondaActual) == null;
+            var sinVerificacion = sinRonda || Dominio.UltimaSalidaVerificador(hechos, Puerta.RondaActual) == null;
             return new List<Item>
             {
+                new Item { Grupo = "Ronda", Texto = "Recapturar el informe del integrador", Accion = () => _ = Recapturar("integrador"),
+                    Motivo = sinInforme ? "Solo cuando la ronda ya tiene un informe del integrador." : null },
+                new Item { Grupo = "Ronda", Texto = "Recapturar la verificación", Accion = () => _ = Recapturar("verificador"),
+                    Motivo = sinVerificacion ? "Solo cuando la ronda ya tiene una verificación." : null },
+                rolesMostrados.Count > 0
+                    ? new Item { Grupo = "Ronda", Texto = "Ocultar los paneles de los roles", Accion = OcultarRoles }
+                    : new Item { Grupo = "Ronda", Texto = "Mostrar los paneles de los roles", Accion = () => MostrarRoles() },
                 new Item { Grupo = "Ronda", Texto = "Capturar lo que ya está en los paneles", Accion = () => _ = Capturar(Operadores.ToList()),
                     Motivo = sinRonda ? null : "Ya hay una ronda abierta: usa «Capturar los que terminaron»." },
                 new Item { Grupo = "Ronda", Texto = "Declarar la pregunta de esta ronda", Accion = DialogoDeclarar,
@@ -867,7 +1120,7 @@ namespace ChatCouncil.Interfaz
         }
 
         List<Item> ItemsDePaneles() =>
-            Operadores.Select(id => new Item { Grupo = "Paneles", Texto = $"{Dominio.NombreProveedor(id)} · {Estados[EstadoDe(id)].Palabra}", Accion = () => Seleccionar(id) }).ToList();
+            EnLaVista.Select(id => new Item { Grupo = "Paneles", Texto = $"{Dominio.NombreProveedor(id)} · {Estados[EstadoDe(id)].Palabra}", Accion = () => Seleccionar(id) }).ToList();
 
         /// <summary>Un menú propio, no el de Unity: tiene que apartar las páginas mientras está abierto.</summary>
         void AbrirMenu(VisualElement origen, List<Item> items)

@@ -595,6 +595,16 @@ namespace ChatCouncil.Motor
         {
             if (ConversacionActual == null || RondaActual == null) return (false, "no hay una ronda activa");
             var hechos = LeerRegistro().Hechos;
+            if (rol != "integrador" && rol != "verificador") throw new ArgumentException($"no se recaptura el rol \"{rol}\"", nameof(rol));
+            // Una lectura fallida o bajo el umbral nunca reemplaza a la buena: queda como ErrorCaptura, y el último bueno sigue siendo el que vale.
+            var error = !string.IsNullOrEmpty(lectura.Error) ? lectura.Error
+                : lectura.Text.Length < UmbralLecturaMinimo ? $"lectura por debajo del umbral ({lectura.Text.Length} de {UmbralLecturaMinimo} caracteres)" : null;
+            if (error != null)
+            {
+                EscribirErrorCaptura(RondaActual, Dominio.EtapaDeRonda(hechos, RondaActual, poolOperadores.Count),
+                    rol == "integrador" ? "informe-integrador" : "salida-verificador", error, lectura.Id);
+                return (false, $"{Dominio.NombreProveedor(lectura.Id)}: el {rol} no se recapturó ({error})");
+            }
             if (rol == "integrador")
             {
                 var previos = hechos.OfType<InformeIntegrador>().Where(h => h.RondaId == RondaActual).ToList();
@@ -1035,7 +1045,7 @@ namespace ChatCouncil.Motor
                     }
                     if (faltantes.Count > 0)
                     {
-                        var nota = string.Join("\n", new[] { "Estos archivos de respuesta de investigador no se pudieron escribir.", "El texto de cada una sigue entero en el registro de la conversacion.", "" }
+                        var nota = string.Join("\n", new[] { "Estos archivos de respuesta de investigador no se pudieron escribir.", "El texto de cada una sigue entero en el registro de la conversación.", "" }
                             .Concat(faltantes.Select(f => $"- {f}")).Concat(new[] { "" }));
                         try
                         {
@@ -1054,12 +1064,12 @@ namespace ChatCouncil.Motor
             int conAlgunFallo = faltantes.Select(f => f.Split(':')[0]).Distinct().Count();
             int completas = respuestas.Count - conAlgunFallo;
             var detalle = respuestas.Count == 0 ? "Sin respuestas de investigador en el registro de esta ronda."
-                : falloSubcarpeta != null ? $"NINGUNA de las {respuestas.Count} respuestas de investigador se escribio: no se pudo crear la subcarpeta \"{InformeFinal.SubcarpetaRespuestas}\" ({falloSubcarpeta}). El texto de todas sigue entero en el registro."
+                : falloSubcarpeta != null ? $"NINGUNA de las {respuestas.Count} respuestas de investigador se escribió: no se pudo crear la subcarpeta \"{InformeFinal.SubcarpetaRespuestas}\" ({falloSubcarpeta}). El texto de todas sigue entero en el registro."
                 : conAlgunFallo == 0 ? $"{completas} respuestas de investigador, cada una en .md y en PDF."
                 : $"{completas} de {respuestas.Count} respuestas completas; {conAlgunFallo} con archivos faltantes{(notaEscrita ? $" (nombrados en \"{NombreFaltantes}\")" : ", y la nota que los nombra tampoco se pudo escribir")}.";
             return falloInforme != null
-                ? (true, $"Carpeta del informe: {carpetaInforme}. El informe quedo solo en Markdown: no se pudo generar el PDF ({falloInforme}). {detalle}", rutaMd)
-                : (true, $"Carpeta del informe: {carpetaInforme}. Se abrio el PDF del informe. {detalle}", carpetaInforme);
+                ? (true, $"Carpeta del informe: {carpetaInforme}. El informe quedó solo en Markdown: no se pudo generar el PDF ({falloInforme}). {detalle}", rutaMd)
+                : (true, $"Carpeta del informe: {carpetaInforme}. El informe está en .md y en PDF. {detalle}", carpetaInforme);
         }
 
         // ---------------------------------------------------------------- guía
@@ -1142,11 +1152,17 @@ namespace ChatCouncil.Motor
             }
             else
             {
-                capturado = etapa == "redaccion" && hechos.OfType<RespuestaRedactor>().Any(r => r.RondaId == rondaId && r.RedactorId == proveedorId);
+                var rolDeLaEtapa = etapa == "integracion" ? roles.Integrador : etapa == "verificacion" ? roles.Verificador : roles.Redactor;
+                // T22: quien no es el rol de esta etapa ya terminó lo suyo (un operador o un rol anterior): capturado si dejó su hecho.
+                capturado = proveedorId != rolDeLaEtapa
+                    ? hechos.OfType<SalidaOperador>().Any(s => s.RondaId == rondaId && s.OperadorId == proveedorId)
+                      || hechos.OfType<InformeIntegrador>().Any(h => h.RondaId == rondaId && h.OperadorId == proveedorId)
+                      || hechos.OfType<SalidaVerificador>().Any(h => h.RondaId == rondaId && h.VerificadorId == proveedorId)
+                    : etapa == "redaccion" && hechos.OfType<RespuestaRedactor>().Any(r => r.RondaId == rondaId && r.RedactorId == proveedorId);
                 problema = hechos.OfType<ErrorCaptura>().Any(e => e.RondaId == rondaId && e.ProveedorId == proveedorId && e.EtapaEsperada == etapa);
-                pegado = etapa == "integracion" ? promptIntegrador != null && proveedorId == roles.Integrador
-                    : etapa == "verificacion" ? promptVerificador != null && proveedorId == roles.Verificador
-                    : promptRedactor != null && proveedorId == roles.Redactor;
+                pegado = proveedorId == rolDeLaEtapa && (etapa == "integracion" ? promptIntegrador != null
+                    : etapa == "verificacion" ? promptVerificador != null
+                    : promptRedactor != null);
             }
             if (capturado) return "capturado";
             if (problema) return "con-problema";

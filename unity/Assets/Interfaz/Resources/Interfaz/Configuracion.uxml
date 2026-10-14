@@ -2,14 +2,14 @@
     <!-- Ajustes y primer arranque (T19; D10, D11, D15). Configuracion.cs llena las listas y muestra lo que corresponde. -->
     <ui:VisualElement name="seccion-configuracion" class="trabajo">
         <!-- Clase compacta: el Menú abre el cajón de secciones (D3). -->
-        <ui:VisualElement class="barra solo-compacta oculta-primer-arranque">
-            <ui:Button name="menu-configuracion" text="Menú" class="boton" />
+        <ui:VisualElement class="barra solo-compacta oculta-primer-arranque region">
+            <ui:Button name="menu-configuracion" text="Menú" class="boton abre-cajon" />
             <ui:Label text="Ajustes" class="barra-titulo semibold" />
         </ui:VisualElement>
 
-        <ui:ScrollView name="formulario" class="formulario">
+        <ui:ScrollView name="formulario" class="formulario region">
             <ui:VisualElement class="hoja">
-                <ui:Label name="titulo" text="Ajustes" class="titulo-seccion semibold" />
+                <ui:Label name="titulo" text="Ajustes" class="titulo-seccion titulo-repetido semibold" />
                 <ui:Label name="bienvenida" text="Antes de la primera ronda, elige tu consejo y entra a tu cuenta en cada proveedor. Después puedes cambiarlo en Ajustes." class="envolver separado solo-primer-arranque" />
                 <ui:Label name="paso-guia" class="texto-2 solo-primer-arranque" />
 
@@ -36,6 +36,14 @@
                     <ui:Button name="empezar" text="Ir a la ronda" class="boton boton-primario semibold boton-solo solo-primer-arranque" />
                 </ui:VisualElement>
 
+                <!-- Apariencia (D17): se aplica al elegir, sin Guardar. -->
+                <ui:VisualElement name="bloque-apariencia" class="bloque solo-ajustes">
+                    <ui:Label text="Apariencia" class="titulo-bloque semibold" />
+                    <ui:DropdownField name="tema" label="Tema" class="campo" />
+                    <ui:DropdownField name="tamano-texto" label="Tamaño del texto y de los controles" class="campo" />
+                    <ui:Label text="El del sistema sigue lo que elegiste en Windows o en Android." class="envolver texto-2" />
+                </ui:VisualElement>
+
                 <!-- Datos (D15) -->
                 <ui:VisualElement name="bloque-datos" class="bloque solo-ajustes">
                     <ui:Label text="Tus datos" class="titulo-bloque semibold" />
@@ -60,7 +68,7 @@
                 </ui:VisualElement>
                 <ui:Button name="comprobar" text="Comprobar" class="boton" />
             </ui:VisualElement>
-            <ui:VisualElement name="cuenta-pagina" class="pagina" />
+            <ui:VisualElement name="cuenta-pagina" class="pagina region" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

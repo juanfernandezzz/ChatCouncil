@@ -314,6 +314,24 @@ int CrearPanel(const std::wstring& perfil, const std::wstring& url, HWND ventana
                 return S_OK;
             }
             p->controlador = c;
+            // WCAG 2.1.2: sin esto el teclado queda atrapado en la página. El Tab que sale de ella y F6 (el salto entre
+            // regiones de Windows y de los navegadores) devuelven el foco a la ventana de la app.
+            EventRegistrationToken t;
+            c->add_MoveFocusRequested(Callback<ICoreWebView2MoveFocusRequestedEventHandler>(
+                [](ICoreWebView2Controller*, ICoreWebView2MoveFocusRequestedEventArgs* a) -> HRESULT {
+                    SetFocus(padre);
+                    return a->put_Handled(TRUE);
+                }).Get(), &t);
+            c->add_AcceleratorKeyPressed(Callback<ICoreWebView2AcceleratorKeyPressedEventHandler>(
+                [](ICoreWebView2Controller*, ICoreWebView2AcceleratorKeyPressedEventArgs* a) -> HRESULT {
+                    COREWEBVIEW2_KEY_EVENT_KIND tipo;
+                    UINT tecla;
+                    if (SUCCEEDED(a->get_KeyEventKind(&tipo)) && tipo == COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && SUCCEEDED(a->get_VirtualKey(&tecla)) && tecla == VK_F6) {
+                        SetFocus(padre);
+                        return a->put_Handled(TRUE);
+                    }
+                    return S_OK;
+                }).Get(), &t);
             c->get_CoreWebView2(&p->vista);
             RECT rc;
             GetClientRect(p->hwnd, &rc);
@@ -399,6 +417,11 @@ EXPORTAR void CC_Rect(int id, int x, int y, int ancho, int alto) {
 // Los paneles se apilan como ventanas hijas en el mismo rectángulo: el activo pasa arriba, sin ocultar los demás.
 EXPORTAR void CC_Frente(int id) {
     if (Panel* p = Buscar(id)) SetWindowPos(p->hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+}
+
+// El foco del teclado dentro de la página (WCAG 2.1.1): sin esto, solo se llega a ella con el mouse.
+EXPORTAR void CC_Foco(int id) {
+    if (Panel* p = Buscar(id); p && p->controlador) p->controlador->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
 }
 
 EXPORTAR void CC_Atras(int id) {

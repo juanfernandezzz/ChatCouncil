@@ -73,6 +73,18 @@ namespace ChatCouncil.Motor
         public string Recordatorio { get; set; }
     }
 
+    /// <summary>Una ronda de este aparato para la sección de rondas anteriores (D12).</summary>
+    public sealed class RondaAnterior
+    {
+        public string RondaId { get; set; }
+        public int Indice { get; set; }
+        public string EnviadaEn { get; set; }
+        public string Pregunta { get; set; }
+        public string Etapa { get; set; }
+        /// <summary>null si la ronda no tiene informe en la carpeta "informes".</summary>
+        public string CarpetaInforme { get; set; }
+    }
+
     /// <summary>La operación de un panel: lo que se pega y, por la vía de archivo, el archivo que se adjunta.</summary>
     public sealed class Operacion
     {
@@ -199,6 +211,36 @@ namespace ChatCouncil.Motor
             ConversacionActual = mejor.Id;
             RondaActual = mejorRonda.Id;
             indiceRonda = mejorRonda.Indice + 1;
+        }
+
+        /// <summary>
+        /// D12: las rondas de este aparato, la más nueva primero, sin las conversaciones de prueba. La etapa es la
+        /// del registro; la carpeta del informe, la que tiene un .md con la línea "Ronda: id".
+        /// </summary>
+        public List<RondaAnterior> RondasAnteriores()
+        {
+            var rondas = new List<RondaAnterior>();
+            var dir = Path.Combine(carpeta, "conversaciones");
+            if (!Directory.Exists(dir)) return rondas;
+            var dirInformes = Path.Combine(carpeta, "informes");
+            var informes = Directory.Exists(dirInformes)
+                ? Directory.GetDirectories(dirInformes).Select(d => (Carpeta: d, Md: Path.Combine(d, Path.GetFileName(d) + ".md"))).Where(x => File.Exists(x.Md))
+                    .Select(x => (x.Carpeta, Texto: File.ReadAllText(x.Md))).ToList()
+                : new List<(string Carpeta, string Texto)>();
+            foreach (var archivo in Directory.GetFiles(dir, "*.jsonl"))
+            {
+                var id = Path.GetFileNameWithoutExtension(archivo);
+                var hechos = Registro.LeerArchivo(carpeta, id).Hechos;
+                if (hechos.OfType<Conversacion>().FirstOrDefault(h => h.Id == id)?.EsPrueba != false) continue;
+                foreach (var r in hechos.OfType<Ronda>().Where(r => r.ConversacionId == id))
+                    rondas.Add(new RondaAnterior
+                    {
+                        RondaId = r.Id, Indice = r.Indice, EnviadaEn = r.EnviadaEn, Pregunta = Dominio.PreguntaEfectivaDeRonda(hechos, r) ?? r.Prompt,
+                        Etapa = Dominio.EtapaDeRonda(hechos, r.Id, poolOperadores.Count),
+                        CarpetaInforme = informes.LastOrDefault(i => i.Texto.Contains($"Ronda: {r.Id}\n")).Carpeta,
+                    });
+            }
+            return rondas.OrderByDescending(r => r.EnviadaEn, StringComparer.Ordinal).ThenByDescending(r => r.Indice).ToList();
         }
 
         /// <summary>

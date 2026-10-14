@@ -2,10 +2,12 @@
     <!-- La app: riel de secciones y pantalla de Ronda (T18). PantallaRonda.cs la conecta; Aplicacion.cs agrega Configuracion.uxml. Arquitectura: docs/FASE6-INTERFAZ.md. -->
     <ui:VisualElement name="raiz" class="raiz">
 
-        <!-- Riel de secciones (D2, D3): desde 600 dp; debajo, el botón Menú de la barra abre el cajón. Historial y Ayuda llegan en T23. -->
-        <ui:VisualElement class="riel">
+        <!-- Riel de secciones (D2, D3, D48): desde 600 dp; debajo, el botón Menú de la barra abre el cajón. -->
+        <ui:VisualElement class="riel region">
             <ui:Button name="ir-ronda" text="Ronda" class="riel-item" />
+            <ui:Button name="ir-historial" text="Historial" class="riel-item" />
             <ui:Button name="ir-ajustes" text="Ajustes" class="riel-item" />
+            <ui:Button name="ir-ayuda" text="Ayuda" class="riel-item" />
         </ui:VisualElement>
 
         <ui:VisualElement name="secciones" class="trabajo">
@@ -13,7 +15,7 @@
 
             <!-- ===== Ancha (D4) ===== -->
             <ui:VisualElement class="solo-ancha trabajo">
-                <ui:VisualElement class="guia">
+                <ui:VisualElement class="guia region">
                     <ui:VisualElement class="etapas">
                         <ui:VisualElement class="etapa"><ui:Label text="1 Pregunta" class="etapa-nombre" /><ui:VisualElement class="etapa-barra" /></ui:VisualElement>
                         <ui:VisualElement class="etapa"><ui:Label text="2 Investigación" class="etapa-nombre" /><ui:VisualElement class="etapa-barra" /></ui:VisualElement>
@@ -37,9 +39,9 @@
                 </ui:VisualElement>
 
                 <ui:VisualElement class="cuerpo">
-                    <ui:ScrollView name="lista" class="lista" />
+                    <ui:ScrollView name="lista" class="lista region" />
                     <ui:VisualElement class="panel">
-                        <ui:VisualElement class="cabecera">
+                        <ui:VisualElement class="cabecera region">
                             <cc:IconoEstado name="icono-cabecera" />
                             <ui:VisualElement class="cabecera-texto">
                                 <ui:Label name="cabecera-titulo" class="semibold" />
@@ -48,7 +50,7 @@
                             <ui:Button name="accion-panel" class="boton" />
                             <ui:Button name="menu-panel" text="Más…" class="boton" />
                         </ui:VisualElement>
-                        <ui:VisualElement name="pagina-ancha" class="pagina">
+                        <ui:VisualElement name="pagina-ancha" class="pagina region">
                             <ui:Label text="Página del proveedor (vista nativa)" class="texto-2" />
                         </ui:VisualElement>
                     </ui:VisualElement>
@@ -57,7 +59,7 @@
 
             <!-- ===== Angosta (D5) ===== -->
             <ui:VisualElement class="solo-angosta trabajo">
-                <ui:VisualElement class="barra">
+                <ui:VisualElement class="barra region">
                     <ui:Button name="menu" text="Menú" class="boton solo-compacta" />
                     <ui:Label name="barra-titulo" class="barra-titulo semibold" />
                     <ui:Button name="menu-angosta" text="Más…" class="boton" />
@@ -71,10 +73,10 @@
                     <ui:VisualElement class="etapa-barra" />
                     <ui:VisualElement class="etapa-barra" />
                 </ui:VisualElement>
-                <ui:VisualElement name="pagina-angosta" class="pagina">
+                <ui:VisualElement name="pagina-angosta" class="pagina region">
                     <ui:Label text="Página del proveedor (vista nativa)" class="texto-2" />
                 </ui:VisualElement>
-                <ui:VisualElement class="abajo">
+                <ui:VisualElement class="abajo region">
                     <ui:VisualElement class="selector">
                         <ui:Button name="anterior" text="‹" class="boton boton-icono" />
                         <!-- El problema del panel va dentro del selector (H7). -->
@@ -104,13 +106,79 @@
             </ui:VisualElement>
 
         </ui:VisualElement>
+
+        <!-- Rondas anteriores (D12): Aplicacion.cs llena la lista al entrar. -->
+        <ui:VisualElement name="seccion-historial" class="trabajo">
+            <ui:VisualElement class="barra solo-compacta region">
+                <ui:Button text="Menú" class="boton abre-cajon" />
+                <ui:Label text="Rondas anteriores" class="barra-titulo semibold" />
+            </ui:VisualElement>
+            <ui:ScrollView class="formulario region">
+                <ui:VisualElement class="hoja">
+                    <ui:Label text="Rondas anteriores" class="titulo-seccion titulo-repetido semibold" />
+                    <ui:Label text="Las rondas de este aparato, la más nueva primero." class="envolver texto-2 separado" />
+                    <ui:VisualElement name="lista-historial" />
+                </ui:VisualElement>
+            </ui:ScrollView>
+        </ui:VisualElement>
+
+        <!-- Ayuda y Acerca de (D14, D16). -->
+        <ui:VisualElement name="seccion-ayuda" class="trabajo">
+            <ui:VisualElement class="barra solo-compacta region">
+                <ui:Button text="Menú" class="boton abre-cajon" />
+                <ui:Label text="Ayuda" class="barra-titulo semibold" />
+            </ui:VisualElement>
+            <ui:ScrollView class="formulario region">
+                <ui:VisualElement class="hoja lectura">
+                    <ui:Label text="Ayuda" class="titulo-seccion titulo-repetido semibold" />
+                    <ui:VisualElement class="bloque">
+                        <ui:Label text="Cómo funciona una ronda" class="titulo-bloque semibold" />
+                        <ui:Label class="envolver separado" text="Haces una pregunta a varios proveedores de IA a la vez, cada uno en su página y con tu cuenta. Después cada proveedor revisa a ciegas lo que respondieron los demás y anota en qué coinciden y en qué no. Un integrador junta esos hallazgos en un informe, un verificador revisa las fuentes en la web y un redactor escribe la respuesta final." />
+                        <ui:Label class="envolver separado" text="La app pega, captura y arma el informe. Enviar en cada página lo haces tú: así eliges qué activar en cada proveedor y nada sale sin que lo revises." />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="bloque">
+                        <ui:Label text="Las siete etapas" class="titulo-bloque semibold" />
+                        <ui:Label class="envolver separado" text="1. Pregunta: escribes la pregunta y la app la pega en cada página." />
+                        <ui:Label class="envolver separado" text="2. Investigación: en cada página activas la búsqueda web y envías; cuando terminan, la app captura las respuestas." />
+                        <ui:Label class="envolver separado" text="3. Operación: la app abre una conversación nueva en cada página y le pega las respuestas de los demás, sin decir de quién son. Tú envías y la app captura lo que cada uno encontró." />
+                        <ui:Label class="envolver separado" text="4. Integración: el integrador recibe la tabla de hallazgos y escribe el informe." />
+                        <ui:Label class="envolver separado" text="5. Verificación: el verificador revisa en la web las fuentes de lo que conviene rescatar." />
+                        <ui:Label class="envolver separado" text="6. Redacción: el redactor recibe todo el material en un archivo adjunto y escribe la respuesta final." />
+                        <ui:Label class="envolver separado" text="7. Informe: la app comprueba las direcciones web que citó el verificador y arma una carpeta con el informe en Markdown y PDF y las respuestas de cada proveedor." />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="bloque">
+                        <ui:Label text="Palabras de la app" class="titulo-bloque semibold" />
+                        <ui:Label class="envolver separado" text="Proveedores: los servicios de IA de tu consejo (ChatGPT, Gemini y los demás). Los que no tienen un rol investigan y después evalúan las respuestas de los otros." />
+                        <ui:Label class="envolver separado" text="Roles: integrador, verificador y redactor. Cada uno trabaja en su etapa; el redactor puede ser el mismo integrador." />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="bloque">
+                        <ui:Label text="Atajos de teclado" class="titulo-bloque semibold" />
+                        <ui:Label class="envolver separado" text="F9: el paso siguiente (el botón principal)." />
+                        <ui:Label class="envolver separado" text="Ctrl+Tab y Ctrl+Mayús+Tab: el panel siguiente y el anterior." />
+                        <ui:Label class="envolver separado" text="F6 y Mayús+F6: pasar entre la guía, la lista de paneles y el panel. Dentro de la página de un proveedor, F6 vuelve a la app." />
+                        <ui:Label class="envolver separado" text="F1: esta ayuda." />
+                        <ui:Label class="envolver texto-2 separado" text="Ninguno usa Enter ni Ctrl+Enter, que en las páginas envían." />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="bloque">
+                        <ui:Label text="Acerca de ChatCouncil" class="titulo-bloque semibold" />
+                        <ui:Label name="version" class="envolver separado" />
+                        <ui:Label class="envolver separado" text="La app no busca versiones nuevas por su cuenta. Las versiones publicadas están en la página del proyecto." />
+                        <ui:Button name="ver-versiones" text="Ver las versiones publicadas" class="boton boton-solo" />
+                        <ui:Label text="Licencias de terceros" class="subtitulo semibold" />
+                        <ui:Label class="envolver separado" text="Atkinson Hyperlegible Next, del Braille Institute: SIL Open Font License 1.1. marked: licencia MIT. Newtonsoft.Json: licencia MIT. Microsoft Edge WebView2: licencia del SDK de Microsoft. AndroidX WebKit: licencia Apache 2.0. Hecha con Unity: términos de Unity." />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:ScrollView>
+        </ui:VisualElement>
         </ui:VisualElement>
 
         <!-- Cajón modal de la clase compacta (D3): las mismas secciones que el riel. -->
         <ui:VisualElement name="cajon" class="cajon">
             <ui:VisualElement class="cajon-hoja">
                 <ui:Button name="cajon-ronda" text="Ronda" class="boton cajon-item" />
+                <ui:Button name="cajon-historial" text="Historial" class="boton cajon-item" />
                 <ui:Button name="cajon-ajustes" text="Ajustes" class="boton cajon-item" />
+                <ui:Button name="cajon-ayuda" text="Ayuda" class="boton cajon-item" />
             </ui:VisualElement>
             <ui:Button name="cajon-fondo" class="cajon-fondo" />
         </ui:VisualElement>

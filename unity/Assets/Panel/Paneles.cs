@@ -96,6 +96,8 @@ namespace ChatCouncil.Panel
         public void Rect(int x, int y, int ancho, int alto) => Nativo.CC_Rect(id, x, y, ancho, alto);
         public void Frente() => Nativo.CC_Frente(id);
         public void Atras() => Nativo.CC_Atras(id);
+        /// <summary>Pone el foco del teclado dentro de la página.</summary>
+        public void Foco() => Nativo.CC_Foco(id);
         public bool EsFrente => Nativo.CC_EsFrente(id) == 1;
 
         public (int x, int y, int ancho, int alto) RectReal
@@ -288,6 +290,7 @@ namespace ChatCouncil.Panel
         internal static void CC_Rect(int id, int x, int y, int ancho, int alto) => J.CallStatic("rect", id, x, y, ancho, alto);
         internal static void CC_Frente(int id) => J.CallStatic("frente", id);
         internal static void CC_Atras(int id) => J.CallStatic("atras", id);
+        internal static void CC_Foco(int id) => J.CallStatic("foco", id);
         internal static int CC_EsFrente(int id) => J.CallStatic<int>("esFrente", id);
         internal static void CC_RectReal(int id, out int x, out int y, out int ancho, out int alto)
         {
@@ -335,6 +338,7 @@ namespace ChatCouncil.Panel
         [DllImport(Dll)] internal static extern void CC_Rect(int id, int x, int y, int ancho, int alto);
         [DllImport(Dll)] internal static extern void CC_Frente(int id);
         [DllImport(Dll)] internal static extern void CC_Atras(int id);
+        [DllImport(Dll)] internal static extern void CC_Foco(int id);
         [DllImport(Dll)] internal static extern int CC_EsFrente(int id);
         [DllImport(Dll)] internal static extern void CC_RectReal(int id, out int x, out int y, out int ancho, out int alto);
         [DllImport(Dll, CharSet = CharSet.Unicode)] internal static extern int CC_Navegar(int id, string url);

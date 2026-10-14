@@ -2817,8 +2817,11 @@ Decisiones de T22 (roles e informe conectados):
   fila. En una ronda nueva salen del recorrido, porque sus páginas muestran la
   conversación de la ronda anterior y verlas invita a capturar algo viejo.
   "Mostrar los paneles de los roles" y "Ocultar…" van en el menú de la
-  Ronda (D6, historia 59), y tocar la fila de un rol lo muestra. Un rol fuera de
-  su etapa está para mirarlo: no recibe la pregunta ni la operación. Criterio:
+  Ronda (D6, historia 59). Desde T23 la fila de un rol está en la lista solo
+  mientras el rol está en el recorrido: en las etapas en que no hace nada no le
+  quita alto a la lista de paneles, que en la etapa Pregunta del PC dejaba de
+  entrar sin desplazarse [NH 8]. Un rol fuera de su etapa está para mirarlo: no
+  recibe la pregunta ni la operación. Criterio:
   visibilidad del estado [NH 1] y control del usuario [NH 3] sin sumar páginas
   que no se usan en esa etapa.
 · D43, 2026-10-13, el prompt de cada rol va en una conversación nueva comprobada
@@ -2853,6 +2856,66 @@ Decisiones de T22 (roles e informe conectados):
   escribirse en cualquier Windows y poder copiarse o comprimirse entera. Un
   informe con archivos faltantes se muestra en el color del problema (el motor
   devuelve si quedó completo).
+
+Decisiones de T23 (acciones secundarias, capacidades aceptadas, teléfono y
+accesibilidad). Fuente nueva:
+[WV2] Microsoft, documentación de WebView2: ICoreWebView2Controller, eventos
+MoveFocusRequested y AcceleratorKeyPressed, y MoveFocus.
+
+· D48, 2026-10-14, cuatro destinos en el riel y en el cajón, en el orden de §3.1:
+  Ronda, Historial, Ajustes y Ayuda. "Historial" en el riel porque es la palabra
+  con que los navegadores nombran lo mismo [NH 4]; el título de la sección dice
+  "Rondas anteriores". Cada fila del historial lleva la pregunta, la fecha local,
+  la etapa a la que llegó (la del registro, sin inferir pasos) y "Abrir el
+  informe" si lo tiene; la ronda se une con su carpeta por la línea "Ronda: id"
+  del .md, sin cambiar el esquema del registro (historia 69). En el teléfono, el
+  título grande no repite el de la barra (pendiente de T19). La lista de paneles
+  dice "Proveedores", la palabra de Ajustes; "operador" queda en la ayuda (H12).
+· D49, 2026-10-14, atajos (D8): F9 el paso siguiente, Ctrl+Tab y Ctrl+Mayús+Tab
+  el panel siguiente y el anterior, F6 y Mayús+F6 las regiones (riel, guía,
+  lista, cabecera, la página del proveedor, abajo) y F1 la ayuda. Criterios: F9
+  no es de texto y Chromium no la usa (F5, F6, F7, F11 y F12 sí), así que no puede
+  escribir ni enviar en una página; Ctrl+Tab es el cambio de pestaña de los
+  navegadores y cada panel es una página [NH 4]; F6 es el salto entre regiones de
+  Windows y de los navegadores. La página del proveedor es una región: F6 le da el
+  foco del teclado, y desde ella F6 o el Tab que sale vuelven a la app (panel.cpp,
+  [WV2]). Antes no había forma de entrar a la página sin mouse ni de salir de ella
+  con el teclado: una trampa de teclado [WCAG 2.1.1, 2.1.2], medida en T23 con
+  teclas reales.
+· D50, 2026-10-14, los lectores de pantalla (Narrador, TalkBack) leen la app: UI
+  Toolkit no publica sus controles, y Lector.cs arma la jerarquía de
+  accesibilidad de Unity 6.3 con lo que está a la vista, en el orden del
+  documento, con nombre, función, estado y valor; activarlos desde el lector es
+  pulsarlos. Se rearma solo cuando algo cambia, porque rearmarla siempre movería
+  el foco del lector. Criterio: nombre, función, valor [WCAG 4.1.2]. Las páginas
+  de los proveedores ya tienen la suya: son ventanas nativas. Límite: medido por
+  UI Automation, no con una persona usando Narrador ni con TalkBack.
+· D51, 2026-10-14, apariencia en Ajustes, aplicada al elegirla y sin "Guardar"
+  porque es reversible y se ve al instante [NH 1]: el tema (el del sistema,
+  claro u oscuro; D20) y el tamaño (el del sistema, 100, 125, 150 o 200 %). El
+  tamaño agranda todo, como el zoom de un navegador, y la ronda pasa sola a la
+  clase angosta cuando no entra: el texto llega al 200 % sin perder contenido ni
+  desplazar en dos direcciones [WCAG 1.4.4, 1.4.10]. El del sistema toma la escala
+  de texto del sistema (hasta 200 %) y el tema de Windows (AppsUseLightTheme) o de
+  Android (uiMode). Se guarda en apariencia.json, en la carpeta de datos.
+· D52, 2026-10-14, el menú "Más…" de cada panel suma "Recargar la página",
+  "Diagnóstico de selectores" y "Cerrar la sesión de este panel…" (historias 12 y
+  72 a 74), de emergencia y en cualquier etapa (D6). El diagnóstico es el de solo
+  lectura del script de página; se guarda en "diagnosticos", en la carpeta de
+  datos, y se abre su carpeta para mandarlo (D18). Cerrar la sesión pide
+  confirmación, borra los datos del perfil de ese proveedor (cookies,
+  almacenamiento) y vuelve a abrir su página sin cuenta.
+· D53, 2026-10-14, el foco del teclado se dibuja siempre con el token de foco. El
+  tema de Unity lo pintaba con su azul (#006AA6) en botones, campos, casillas y
+  desplegables, con reglas más específicas que las de la app; en el tema oscuro
+  ese azul queda por debajo de 3:1 [WCAG 1.4.11, 2.4.7]. Defecto medido en T23.
+· D54, 2026-10-14, a 320 dp de ancho el título de la barra y el texto del
+  selector se parten en dos líneas y los botones no se encogen. Medido en la
+  captura: "Más…" quedaba cortado contra el borde y el selector perdía "de 7"
+  [WCAG 1.4.10]. La lista de paneles y las filas de los roles se usan también con
+  el teclado (enfocables, Enter las pone a la vista) y el lector las presenta como
+  botones con el proveedor y su estado [WCAG 2.1.1, 4.1.2]; la etapa actual se
+  dice con palabras, no solo con la barra [WCAG 1.3.1].
 
 ---
 

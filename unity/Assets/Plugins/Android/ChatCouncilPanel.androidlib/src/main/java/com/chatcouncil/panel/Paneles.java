@@ -288,6 +288,17 @@ public final class Paneles {
         }
     }
 
+    /** El foco del teclado dentro de la página (WCAG 2.1.1). */
+    public static void foco(int id) {
+        Panel p = buscar(id);
+        if (p == null) return;
+        try {
+            enUi(() -> { p.vista.requestFocus(); return null; });
+        } catch (Exception e) {
+            fallar("no se pudo poner el foco en el panel: " + e);
+        }
+    }
+
     public static void atras(int id) {
         Panel p = buscar(id);
         if (p == null) return;

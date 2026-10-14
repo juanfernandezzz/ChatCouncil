@@ -276,6 +276,269 @@ namespace ChatCouncil.Interfaz
             var declarada = Hechos.OfType<PreguntaDeclarada>().SingleOrDefault();
             Anotar(declarada?.Texto == AMano && declarada.RondaId == sinEnvio?.Id && Raiz.Q<Label>("barra-titulo").text == "Operación · 3 de 7",
                 "declarar la pregunta", $"\"{declarada?.Texto}\"; \"{Raiz.Q<Label>("barra-titulo").text}\"");
+
+            await RecorridoDeT23();
+        }
+
+        // ---------------------------------------------------------------- T23: secciones, mantenimiento, teclado, apariencia y lector
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        struct Rect32 { public int Izq, Arriba, Der, Abajo; }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        struct InfoHilo
+        {
+            public int Tamano, Banderas;
+            public IntPtr Activa, Foco, Captura, Menu, Mover, Cursor;
+            public Rect32 Caret;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        struct Entrada
+        {
+            public int Tipo;
+            public int Relleno;
+            public ushort Tecla, Escaneo;
+            public uint Banderas, Tiempo;
+            public IntPtr Extra;
+            public long Relleno2;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool GetGUIThreadInfo(uint hilo, ref InfoHilo info);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr ventana, IntPtr proceso);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr ventana);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern uint SendInput(uint cuantas, Entrada[] entradas, int tamano);
+
+        static IntPtr VentanaDeLaApp => System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
+
+        /// <summary>La ventana con el foco del teclado en el hilo de la app: la de Unity, o una de adentro de una página.</summary>
+        static IntPtr Foco()
+        {
+            var info = new InfoHilo { Tamano = System.Runtime.InteropServices.Marshal.SizeOf<InfoHilo>() };
+            return GetGUIThreadInfo(GetWindowThreadProcessId(VentanaDeLaApp, IntPtr.Zero), ref info) ? info.Foco : IntPtr.Zero;
+        }
+
+        /// <summary>Una tecla de verdad, por la cola de Windows: llega a quien tenga el foco, sea Unity o la página.</summary>
+        static async Task Tecla(ushort vk, bool mayus = false)
+        {
+            var entradas = new List<Entrada>();
+            if (mayus) entradas.Add(new Entrada { Tipo = 1, Tecla = 0x10 });
+            entradas.Add(new Entrada { Tipo = 1, Tecla = vk });
+            entradas.Add(new Entrada { Tipo = 1, Tecla = vk, Banderas = 2 });
+            if (mayus) entradas.Add(new Entrada { Tipo = 1, Tecla = 0x10, Banderas = 2 });
+            SendInput((uint)entradas.Count, entradas.ToArray(), System.Runtime.InteropServices.Marshal.SizeOf<Entrada>());
+            await Task.Delay(400);
+        }
+
+        async Task Evento(EventBase e)
+        {
+            using (e)
+            {
+                e.target = Raiz.panel.visualTree;
+                Raiz.panel.visualTree.SendEvent(e);
+            }
+            await Cuadros(3);
+        }
+
+        string Seccion => new[] { "ronda", "historial", "ayuda" }.FirstOrDefault(s => Raiz.Q("seccion-" + s).resolvedStyle.display == DisplayStyle.Flex)
+                          ?? (app.Configuracion.Raiz.resolvedStyle.display == DisplayStyle.Flex ? "ajustes" : "-");
+
+        async Task RecorridoDeT23()
+        {
+            // Rondas anteriores (D12): las tres rondas, la más nueva primero, y el informe de la primera se abre.
+            await Pulsar("ir-historial");
+            await Cuadros(5);
+            var filas = Raiz.Q("lista-historial").Query(className: "fila-historial").ToList();
+            var conInforme = filas.Where(f => f.Q<Button>() != null).ToList();
+            string abierta = null;
+            Ronda.AbrirCarpeta = r => abierta = r;
+            if (conInforme.Count == 1) await PulsarBoton(conInforme[0].Q<Button>());
+            var primera = Hechos.OfType<Ronda>().First(r => r.Indice == 0);
+            Anotar(Seccion == "historial" && filas.Count == 3 && filas[0].Q<Label>().text == "Pregunta escrita a mano en cada página" && conInforme.Count == 1
+                   && conInforme[0].name == "historial-" + primera.Id && abierta != null && abierta.Contains("Informe recapturado"),
+                "rondas anteriores", $"{filas.Count} rondas, la primera «{filas.FirstOrDefault()?.Q<Label>().text}»; con informe {conInforme.Count}; abierta «{abierta}»");
+
+            // F1: la ayuda, con los atajos y la versión.
+            await Evento(KeyDownEvent.GetPooled('\0', KeyCode.F1, EventModifiers.None));
+            Anotar(Seccion == "ayuda" && Raiz.Q<Label>("version").text == $"ChatCouncil, versión {Application.version}.",
+                "F1 abre la ayuda", $"sección «{Seccion}», «{Raiz.Q<Label>("version").text}»");
+
+            // Apariencia (D17): el tema oscuro y el texto al 200 %, guardados; después vuelven.
+            await Pulsar("ir-ajustes");
+            var tema = app.Configuracion.Raiz.Q<DropdownField>("tema");
+            var texto = app.Configuracion.Raiz.Q<DropdownField>("tamano-texto");
+            var anchoAntes = Raiz.panel.visualTree.worldBound.width;
+            tema.index = 2;
+            texto.index = 4;
+            await Cuadros(10);
+            var archivo = File.ReadAllText(Path.Combine(app.CarpetaDatos, "apariencia.json"));
+            var oscuro = Raiz.panel.visualTree.ClassListContains("tema-oscuro");
+            var anchoDespues = Raiz.panel.visualTree.worldBound.width;
+            Anotar(oscuro && archivo == "{\"tema\":\"oscuro\",\"texto\":200}" && Mathf.Abs(anchoDespues * 2 - anchoAntes) < 2,
+                "tema y tamaño del texto", $"oscuro {oscuro}; «{archivo}»; ancho {anchoAntes} → {anchoDespues} dp");
+            tema.index = 1;
+            texto.index = 1;
+            await Cuadros(10);
+
+            // Objetivos de 48 dp (D19) en las cuatro secciones, y el foco visible con el color de foco.
+            var chicos = new List<string>();
+            foreach (var s in new[] { "ronda", "historial", "ajustes", "ayuda" })
+            {
+                app.Mostrar(s);
+                await Cuadros(5);
+                foreach (var c in Raiz.panel.visualTree.Query<VisualElement>().Where(e => (e is Button || e is Toggle || e is DropdownField || e is TextField) && EsVisible(e)).ToList())
+                {
+                    var r = c is BaseField<string> campo && campo.Q(className: "unity-base-field__input") != null ? campo.Q(className: "unity-base-field__input").worldBound : c.worldBound;
+                    if (r.height < 47.5f || r.width < 47.5f) chicos.Add($"{s}/{c.name}«{Lector.Nombre(c)}» {r.width:0}×{r.height:0}");
+                }
+            }
+            Anotar(chicos.Count == 0, "objetivos de 48 dp en las cuatro secciones", chicos.Count == 0 ? "todos" : string.Join("; ", chicos));
+            app.Mostrar("ronda");
+            await Cuadros(5);
+            var paso = Raiz.Q<Button>("paso-ancha");
+            paso.Focus();
+            await Cuadros(3);
+            var colores = new List<string> { "paso " + ColorUtility.ToHtmlStringRGB(paso.resolvedStyle.borderTopColor) };
+            app.Mostrar("ajustes");
+            await Cuadros(5);
+            var conf = app.Configuracion.Raiz;
+            foreach (var (nombre, control, borde) in new (string, VisualElement, Func<VisualElement>)[]
+                     {
+                         ("campo", conf.Q<TextField>("ruta-datos"), () => conf.Q<TextField>("ruta-datos").Q(className: "unity-base-field__input")),
+                         ("casilla", conf.Q<Toggle>("marca-chatgpt"), () => conf.Q<Toggle>("marca-chatgpt").Q(className: "unity-toggle__checkmark")),
+                         ("desplegable", conf.Q<DropdownField>("tema"), () => conf.Q<DropdownField>("tema").Q(className: "unity-base-field__input")),
+                     })
+            {
+                control.Focus();
+                await Cuadros(3);
+                colores.Add(nombre + " " + ColorUtility.ToHtmlStringRGB(borde().resolvedStyle.borderTopColor));
+            }
+            app.Mostrar("ronda");
+            await Cuadros(5);
+            Anotar(colores.All(c => c.EndsWith("3A79E0", StringComparison.Ordinal)), "foco visible con el color de foco", string.Join(", ", colores));
+
+            // F9 (D49): el paso siguiente; en Operación abre el aviso. Ctrl+Tab: el panel siguiente.
+            await Evento(KeyDownEvent.GetPooled('\0', KeyCode.F9, EventModifiers.None));
+            var aviso = Raiz.Q("capa").ClassListContains("capa--abierta") && Raiz.Q<Label>("dialogo-titulo").text == "Antes de pegar la operación";
+            await Pulsar("dialogo-cancelar");
+            Ronda.Seleccionar("chatgpt");
+            await Evento(NavigationMoveEvent.GetPooled(NavigationMoveEvent.Direction.Next, EventModifiers.Control));
+            var siguiente = Ronda.Visible;
+            await Evento(NavigationMoveEvent.GetPooled(NavigationMoveEvent.Direction.Previous, EventModifiers.Control));
+            Anotar(aviso && siguiente == "gemini" && Ronda.Visible == "chatgpt", "F9 y Ctrl+Tab", $"aviso con F9: {aviso}; Ctrl+Tab → {siguiente}, Ctrl+Mayús+Tab → {Ronda.Visible}");
+
+            // Mantenimiento del panel (historias 12, 72 a 74), sobre Gemini.
+            Ronda.Seleccionar("gemini");
+            var nav = Ronda.PanelDe("gemini").Navegaciones;
+            await Pulsar("menu-panel");
+            await Pulsar("item-Recargar la página");
+            var recargo = await Esperar(() => Ronda.PanelDe("gemini").Navegaciones > nav, 20);
+            Anotar(recargo && Resultado == "Se recargó la página de Gemini.", "recargar la página", $"navegaciones {nav} → {Ronda.PanelDe("gemini").Navegaciones}; «{Resultado}»");
+
+            for (var i = 0; i < 40 && await En("gemini", "document.readyState") != "\"complete\""; i++) await Task.Delay(250);
+            abierta = null;
+            await Pulsar("menu-panel");
+            await Pulsar("item-Diagnóstico de selectores");
+            await Esperar(() => Resultado.StartsWith("Diagnóstico de Gemini", StringComparison.Ordinal) || Resultado.StartsWith("No se pudo", StringComparison.Ordinal), 40);
+            var diagnosticos = Directory.Exists(Path.Combine(app.CarpetaDatos, "diagnosticos")) ? Directory.GetFiles(Path.Combine(app.CarpetaDatos, "diagnosticos")) : new string[0];
+            var diag = diagnosticos.Length == 1 ? Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(diagnosticos[0])) : null;
+            Anotar(diag != null && (string)diag["proveedor"] == "gemini" && (int?)diag["diagnostico"]?["selectores"]?["composer.selector"] == 1
+                   && abierta == Path.Combine(app.CarpetaDatos, "diagnosticos"),
+                "diagnóstico de selectores en un archivo", $"«{Resultado}»; compositor encontrado {diag?["diagnostico"]?["selectores"]?["composer.selector"]} vez; carpeta abierta {abierta != null}");
+
+            await En("gemini", "localStorage.setItem('marca', '1'); document.cookie = 'marca=1; max-age=3600; path=/'; 'ok'");
+            await Pulsar("menu-panel");
+            await Pulsar("item-Cerrar la sesión de este panel…");
+            var confirmacion = Raiz.Q<Label>("dialogo-titulo").text;
+            await Pulsar("dialogo-aceptar");
+            await Esperar(() => Resultado.StartsWith("Sesión de Gemini cerrada", StringComparison.Ordinal) || Resultado.StartsWith("No se pudo", StringComparison.Ordinal), 40);
+            await Task.Delay(1000);
+            var restos = (string)JsonEstricto.Leer(await En("gemini", "JSON.stringify([localStorage.getItem('marca'), document.cookie])"));
+            Anotar(confirmacion == "Cerrar la sesión de Gemini" && Resultado.StartsWith("Sesión de Gemini cerrada", StringComparison.Ordinal) && restos == "[null,\"\"]",
+                "cerrar la sesión con confirmación", $"diálogo «{confirmacion}»; «{Resultado}»; lo que quedó {restos}");
+
+            // F6 con teclas reales (D49, WCAG 2.1.1 y 2.1.2): de la app a la página y de vuelta, y el Tab que sale de la página.
+            SetForegroundWindow(VentanaDeLaApp);
+            await Task.Delay(500);
+            var adelante = GetForegroundWindow() == VentanaDeLaApp;
+            Raiz.Q<Button>("paso-ancha").Focus();
+            await Cuadros(3);
+            var regiones = new List<string>();
+            var enPagina = false;
+            for (var i = 0; i < 6 && !enPagina; i++)
+            {
+                await Tecla(0x75); // F6
+                var foco = Raiz.focusController.focusedElement as VisualElement;
+                enPagina = Foco() != VentanaDeLaApp && Foco() != IntPtr.Zero;
+                regiones.Add(enPagina ? "página" : RegionDe(foco));
+            }
+            await Tecla(0x75); // F6 dentro de la página
+            var volvioConF6 = Foco() == VentanaDeLaApp;
+            Ronda.FocoEnPagina();
+            await Task.Delay(400);
+            var entroOtraVez = Foco() != VentanaDeLaApp;
+            for (var i = 0; i < 6 && Foco() != VentanaDeLaApp; i++) await Tecla(0x09); // Tab hasta salir de la página
+            var volvioConTab = Foco() == VentanaDeLaApp;
+            Anotar(adelante && enPagina && volvioConF6 && entroOtraVez && volvioConTab, "F6 entra a la página y sale; el Tab sale",
+                $"al frente {adelante}; regiones {string.Join(" → ", regiones)}; F6 vuelve {volvioConF6}; Tab vuelve {volvioConTab}");
+
+            // El lector de pantalla (D50): la jerarquía con los controles a la vista, con su nombre y su función.
+            UnityEngine.Accessibility.AssistiveSupport.screenReaderStatusOverride = UnityEngine.Accessibility.AssistiveSupport.ScreenReaderStatusOverride.ForceEnabled;
+            await Task.Delay(1500);
+            var nodos = new List<UnityEngine.Accessibility.AccessibilityNode>();
+            void Juntar(IEnumerable<UnityEngine.Accessibility.AccessibilityNode> n)
+            {
+                foreach (var x in n)
+                {
+                    nodos.Add(x);
+                    Juntar(x.children);
+                }
+            }
+            if (UnityEngine.Accessibility.AssistiveSupport.activeHierarchy != null) Juntar(UnityEngine.Accessibility.AssistiveSupport.activeHierarchy.rootNodes);
+            var boton = nodos.FirstOrDefault(n => n.label == Paso);
+            var fila = nodos.FirstOrDefault(n => n.label.StartsWith("Kimi, ", StringComparison.Ordinal));
+            var etapa = nodos.FirstOrDefault(n => n.label.EndsWith(", etapa actual", StringComparison.Ordinal));
+            Anotar(boton?.role == UnityEngine.Accessibility.AccessibilityRole.Button && nodos.Any(n => n.label == "Ronda…") && boton.frame.width > 0
+                   && fila?.role == UnityEngine.Accessibility.AccessibilityRole.Button && etapa?.label == "3 Operación, etapa actual"
+                   && nodos.All(n => n.label != "Página del proveedor (vista nativa)" && n.label != "Kimi"),
+                "jerarquía para el lector de pantalla", $"{nodos.Count} nodos; «{boton?.label}» como {boton?.role}, marco {boton?.frame}; fila «{fila?.label}» como {fila?.role}; «{etapa?.label}»");
+
+            // La lista con el teclado: Enter sobre una fila la pone a la vista (WCAG 2.1.1).
+            var filaKimi = Raiz.Q("fila-kimi");
+            filaKimi.Focus();
+            using (var e = NavigationSubmitEvent.GetPooled())
+            {
+                e.target = filaKimi;
+                filaKimi.SendEvent(e);
+            }
+            await Cuadros(3);
+            Anotar(Ronda.Visible == "kimi" && filaKimi.focusable, "la lista de paneles con el teclado", $"Enter sobre Kimi: a la vista {Ronda.Visible}");
+            UnityEngine.Accessibility.AssistiveSupport.screenReaderStatusOverride = UnityEngine.Accessibility.AssistiveSupport.ScreenReaderStatusOverride.OSDriven;
+        }
+
+        static string RegionDe(VisualElement e)
+        {
+            for (var x = e; x != null; x = x.parent)
+                if (x.ClassListContains("region")) return x.GetClasses().First();
+            return "-";
+        }
+
+        static bool EsVisible(VisualElement e)
+        {
+            for (var x = e; x != null; x = x.parent)
+                if (x.resolvedStyle.display == DisplayStyle.None) return false;
+            return e.worldBound.width > 0 && e.worldBound.height > 0;
+        }
+
+        async Task PulsarBoton(Button boton)
+        {
+            using (var e = NavigationSubmitEvent.GetPooled())
+            {
+                e.target = boton;
+                boton.SendEvent(e);
+            }
+            await Cuadros(3);
         }
 
         // ---------------------------------------------------------------- la operación (T21)

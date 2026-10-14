@@ -359,3 +359,41 @@
 .marca-ancha { width: auto; }
 /* En la clase compacta, el diálogo ocupa la pantalla (§3.4) y el menú es una hoja abajo (PantallaRonda.AbrirMenu). */
 .compacta .dialogo { width: 100%; max-width: none; height: 100%; border-radius: 0; border-width: 0; }
+
+/* ---------- secciones de T23 (D48) ---------- */
+
+/* En el teléfono la barra ya dice dónde estás: el título grande no se repite (pendiente de T19).
+   En el primer arranque no hay barra, y el título es la bienvenida. */
+.compacta .titulo-repetido { display: none; }
+.compacta.primer-arranque .titulo-repetido { display: flex; }
+/* La ayuda es texto largo: 18 o más (Rello y otros 2016). */
+.lectura .unity-label { font-size: var(--texto-lectura); }
+.lectura .titulo-bloque { font-size: var(--texto-titulo); }
+.lectura .titulo-seccion { font-size: var(--texto-encabezado); }
+.fila-historial { flex-direction: row; align-items: center; padding: var(--esp-2) 0; }
+
+/* Barras de desplazamiento con los tokens, en los dos temas (pendiente de T19). */
+.unity-scroller { background-color: var(--color-superficie); }
+.unity-scroller .unity-base-slider__tracker { background-color: var(--color-superficie-2); border-color: var(--color-borde); }
+.unity-scroller .unity-base-slider__dragger { background-color: var(--color-borde-control); border-color: var(--color-borde-control); }
+.unity-scroller .unity-repeat-button { background-color: var(--color-superficie); border-color: var(--color-borde); }
+.unity-scroller .unity-repeat-button > * { -unity-background-image-tint-color: var(--color-texto-2); }
+
+/* El tema de Unity pinta el foco con su color (#006AA6) en una regla con :enabled, más específica que .boton:focus:
+   medido en T23. En el oscuro ese azul queda bajo 3:1 (WCAG 1.4.11). El foco va siempre con el token. */
+.boton:focus:enabled, .boton-primario:focus:enabled, .riel-item:focus:enabled { border-color: var(--color-foco); }
+.hoja .campo:focus:enabled > .unity-base-field__input,
+.hoja .campo > .unity-base-field__input:focus:enabled,
+.raiz .campo:focus:enabled > .unity-base-field__input,
+.raiz .campo > .unity-base-field__input:focus:enabled { border-color: var(--color-foco); }
+.hoja .marca:focus:enabled .unity-toggle__checkmark,
+.hoja .marca .unity-toggle__input:focus:enabled .unity-toggle__checkmark { border-color: var(--color-foco); }
+.fila-panel:focus { border-color: var(--color-foco); }
+
+/* A 320 dp (WCAG 1.4.10, medido en T23) se cortaban "Más…" y el "de 7" del selector: el texto se parte, los botones no se encogen. */
+.barra-titulo { flex-shrink: 1; flex-basis: 0; min-width: 0; white-space: normal; }
+.selector-actual { flex-basis: 0; min-width: 0; }
+.barra .boton { flex-shrink: 0; }
+.selector .boton-icono { flex-shrink: 0; }
+.selector-fila { flex-shrink: 1; min-width: 0; }
+.selector-texto { flex-shrink: 1; min-width: 0; white-space: normal; -unity-text-align: middle-center; }

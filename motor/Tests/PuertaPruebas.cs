@@ -249,6 +249,31 @@ namespace ChatCouncil.Motor.Pruebas
             }
         }
 
+        // T23 (D12): las rondas de este aparato, la más nueva primero, con su fecha, su pregunta, la etapa a la
+        // que llegaron y la carpeta de su informe (por la línea "Ronda: <id>" del .md); sin las de prueba.
+        [Test]
+        public async Task LasRondasAnterioresSalenDelRegistroConSuInforme()
+        {
+            var puerta = NuevaPuerta();
+            Assert.That(puerta.RondasAnteriores(), Is.Empty);
+            puerta.AbrirRonda("¿Primera pregunta?");
+            puerta.RegistrarCapturas(((JObject)JsonEstricto.Leer(Referencias.LotesOperacion))["investigacion"].ToObject<List<Lectura>>(), Confirmada);
+            var primera = puerta.RondaActual;
+            var informe = await puerta.ArmarInforme(new HttpFalso(), new PdfFalso());
+            puerta.AbandonarRonda();
+            puerta.AbrirRonda("¿Segunda pregunta?");
+            Registro.Agregar(carpeta, "prueba", new Conversacion { Id = "prueba", CreadaEn = "2026-10-06T12:00:00.000Z", EsPrueba = true });
+            Registro.Agregar(carpeta, "prueba", new Ronda { Id = "r-prueba", ConversacionId = "prueba", Indice = 0, Prompt = "no va", EnviadaEn = "2026-10-06T12:00:00.000Z" });
+
+            var rondas = puerta.RondasAnteriores();
+            Assert.That(rondas.Select(r => (r.RondaId, r.Pregunta, r.Etapa, r.CarpetaInforme)), Is.EqualTo(new[]
+            {
+                (puerta.RondaActual, "¿Segunda pregunta?", "investigacion", (string)null),
+                (primera, "¿Primera pregunta?", "investigacion", informe.Ruta),
+            }));
+            Assert.That(rondas[1].EnviadaEn, Is.EqualTo("2026-10-06T12:00:00.000Z"));
+        }
+
         // T22: en las etapas de los roles, un operador que ya operó y un rol cuya etapa pasó están capturados;
         // el rol de la etapa sigue su propio estado (aunque el redactor sea el mismo integrador).
         [Test]

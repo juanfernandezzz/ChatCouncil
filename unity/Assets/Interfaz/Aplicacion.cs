@@ -1,6 +1,9 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using ChatCouncil.Motor;
 using ChatCouncil.Panel;
@@ -16,7 +19,7 @@ namespace ChatCouncil.Interfaz
     /// La app: las secciones de docs/FASE6-INTERFAZ.md con los tokens de Tokens.uss. Sin archivo de selección
     /// arranca guiada (D10); con él, arma la Ronda (PantallaRonda.cs) con ese consejo y la ronda activa del
     /// registro. No arranca con -autoprueba.
-    /// Argumentos: -datos CARPETA (si no, la de Unity para la app); -tema oscuro; -seccion ajustes;
+    /// Argumentos: -datos CARPETA (si no, la de Unity para la app); -tema claro|oscuro; -texto 100|125|150|200; -seccion ronda|historial|ajustes|ayuda;
     /// -captura RUTA [-ancho N -alto N] [-panel ID] [-frase plegada]: dibuja la interfaz en una textura de N×N dp
     /// a escala 1, sin páginas, la guarda como PNG y cierra la app; -pruebainterfaz RUTA -fase N: PruebaInterfaz.cs;
     /// -pruebaronda RUTA: PruebaRonda.cs.
@@ -32,6 +35,7 @@ namespace ChatCouncil.Interfaz
 
         string[] args;
         RenderTexture textura;
+        PanelSettings ajustes;
         VisualElement raiz, seccionRonda;
         Task navegador;
 
@@ -61,7 +65,7 @@ namespace ChatCouncil.Interfaz
         {
             CarpetaDatos = Arg("-datos") ?? Application.persistentDataPath;
 
-            var ajustes = ScriptableObject.CreateInstance<PanelSettings>();
+            ajustes = ScriptableObject.CreateInstance<PanelSettings>();
             // El tema importa Tokens.uss e Interfaz.uss: así alcanzan también a los menús desplegables, que cuelgan de la raíz del panel.
             ajustes.themeStyleSheet = Resources.Load<ThemeStyleSheet>("Interfaz/Tema");
             // 1 px de USS = 1 dp en Android (160 dpi) y 1 píxel efectivo en Windows (96 dpi a escala 100 %).
@@ -85,8 +89,6 @@ namespace ChatCouncil.Interfaz
 
             var arbol = doc.rootVisualElement;
             arbol.style.flexGrow = 1;
-            // En la raíz del panel, para que el tema oscuro y la fuente alcancen también a los menús desplegables.
-            if (Arg("-tema") == "oscuro") arbol.panel.visualTree.AddToClassList("tema-oscuro");
             arbol.panel.visualTree.style.unityFontDefinition = FontDefinition.FromSDFFont(Fuente("AtkinsonHyperlegibleNext-Regular"));
             semibold = FontDefinition.FromSDFFont(Fuente("AtkinsonHyperlegibleNext-SemiBold"));
 
@@ -119,11 +121,18 @@ namespace ChatCouncil.Interfaz
             };
 
             Navegacion();
+            // En la raíz del panel, para que el tema oscuro alcance también a los menús desplegables.
+            Apariencia();
+            arbol.panel.visualTree.RegisterCallback<KeyDownEvent>(Teclas, TrickleDown.TrickleDown);
+            arbol.panel.visualTree.RegisterCallback<NavigationMoveEvent>(Navegar, TrickleDown.TrickleDown);
+            gameObject.AddComponent<Lector>().Iniciar(arbol);
+            // -lector: la jerarquía aunque no haya un lector encendido, para medirla por UI Automation.
+            if (Array.IndexOf(args, "-lector") >= 0) UnityEngine.Accessibility.AssistiveSupport.screenReaderStatusOverride = UnityEngine.Accessibility.AssistiveSupport.ScreenReaderStatusOverride.ForceEnabled;
             AplicarSemibold(raiz);
             // En el primer arranque, la guía es la única salida: sin riel ni cajón hasta terminarla.
             raiz.EnableInClassList("primer-arranque", primerArranque);
             if (!primerArranque) ArmarRonda(ruta == null);
-            Mostrar(primerArranque || Arg("-seccion") == "ajustes" ? "ajustes" : "ronda");
+            Mostrar(primerArranque ? "ajustes" : Array.IndexOf(Secciones, Arg("-seccion")) >= 0 ? Arg("-seccion") : "ronda");
 
             if (ruta != null)
             {
@@ -155,13 +164,18 @@ namespace ChatCouncil.Interfaz
 
         // ---------------------------------------------------------------- secciones (D2, D3)
 
+        static readonly string[] Secciones = { "ronda", "historial", "ajustes", "ayuda" };
+
+        VisualElement Seccion(string nombre) => nombre == "ajustes" ? Configuracion.Raiz : raiz.Q("seccion-" + nombre);
+
         void Navegacion()
         {
             var cajon = raiz.Q("cajon");
-            raiz.Q<Button>("ir-ronda").clicked += () => Mostrar("ronda");
-            raiz.Q<Button>("ir-ajustes").clicked += () => Mostrar("ajustes");
-            raiz.Q<Button>("cajon-ronda").clicked += () => Mostrar("ronda");
-            raiz.Q<Button>("cajon-ajustes").clicked += () => Mostrar("ajustes");
+            foreach (var s in Secciones)
+            {
+                raiz.Q<Button>("ir-" + s).clicked += () => Mostrar(s);
+                raiz.Q<Button>("cajon-" + s).clicked += () => Mostrar(s);
+            }
             raiz.Q<Button>("cajon-fondo").clicked += () =>
             {
                 cajon.RemoveFromClassList("cajon--abierto");
@@ -172,20 +186,199 @@ namespace ChatCouncil.Interfaz
                 Ronda.MostrarSeccion(false); // el cajón va encima de la página: la página se aparta
                 cajon.AddToClassList("cajon--abierto");
             };
+            raiz.Query<Button>(className: "abre-cajon").ForEach(b => b.clicked += () => cajon.AddToClassList("cajon--abierto"));
             Configuracion.Raiz.Q<Button>("menu-configuracion").clicked += () => cajon.AddToClassList("cajon--abierto");
+            raiz.Q<Label>("version").text = $"ChatCouncil, versión {Application.version}.";
+            raiz.Q<Button>("ver-versiones").clicked += () => Application.OpenURL(PaginaDeVersiones);
         }
 
-        /// <summary>"ronda" o "ajustes".</summary>
+        const string PaginaDeVersiones = "https://github.com/juanfernandezzz/ChatCouncil/releases";
+
+        /// <summary>"ronda", "historial", "ajustes" o "ayuda".</summary>
         public void Mostrar(string seccion)
         {
-            var ronda = seccion == "ronda";
-            seccionRonda.style.display = ronda ? DisplayStyle.Flex : DisplayStyle.None;
-            Configuracion.Raiz.style.display = ronda ? DisplayStyle.None : DisplayStyle.Flex;
-            if (ronda) Configuracion.Ocultar();
-            Ronda.MostrarSeccion(ronda);
-            raiz.Q("ir-ronda").EnableInClassList("riel-item--actual", ronda);
-            raiz.Q("ir-ajustes").EnableInClassList("riel-item--actual", !ronda);
+            foreach (var s in Secciones)
+            {
+                Seccion(s).style.display = s == seccion ? DisplayStyle.Flex : DisplayStyle.None;
+                raiz.Q("ir-" + s).EnableInClassList("riel-item--actual", s == seccion);
+            }
+            if (seccion != "ajustes") Configuracion.Ocultar();
+            if (seccion == "historial") ArmarHistorial();
+            Ronda.MostrarSeccion(seccion == "ronda");
             raiz.Q("cajon").RemoveFromClassList("cajon--abierto");
+        }
+
+        /// <summary>Las rondas de este aparato (D12): fecha, pregunta, etapa alcanzada y su informe.</summary>
+        void ArmarHistorial()
+        {
+            var lista = raiz.Q("lista-historial");
+            lista.Clear();
+            var rondas = Ronda.Puerta?.RondasAnteriores() ?? new List<RondaAnterior>();
+            if (rondas.Count == 0) lista.Add(new Label("Todavía no hay rondas en este aparato.") { name = "historial-vacio" });
+            var android = Application.platform == RuntimePlatform.Android;
+            foreach (var r in rondas)
+            {
+                var fila = new VisualElement { name = "historial-" + r.RondaId };
+                fila.AddToClassList("fila-cuenta");
+                fila.AddToClassList("fila-historial");
+                var texto = new VisualElement();
+                texto.AddToClassList("cabecera-texto");
+                var fecha = DateTime.TryParse(r.EnviadaEn, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var utc)
+                    ? utc.ToLocalTime().ToString("d 'de' MMMM 'de' yyyy, HH:mm", new CultureInfo("es")) : r.EnviadaEn;
+                var pregunta = new Label(r.Pregunta == Puerta.PromptSinRonda ? "(capturada sin pegar la pregunta, y sin declararla)" : r.Pregunta);
+                pregunta.AddToClassList("envolver");
+                pregunta.AddToClassList("semibold");
+                // En Android la carpeta no se abre (D41): se dice dónde está.
+                var detalle = new Label($"{fecha} · llegó a {PantallaRonda.NombreDeEtapa(r.CarpetaInforme != null ? "informe" : r.Etapa)}"
+                                        + (r.CarpetaInforme == null ? " · sin informe" : android ? $" · informe en {r.CarpetaInforme}" : ""));
+                detalle.AddToClassList("pequeno");
+                detalle.AddToClassList("texto-2");
+                detalle.AddToClassList("envolver");
+                texto.Add(pregunta);
+                texto.Add(detalle);
+                fila.Add(texto);
+                if (r.CarpetaInforme != null && !android)
+                {
+                    var abrir = new Button(() => Ronda.AbrirCarpeta(r.CarpetaInforme)) { text = "Abrir el informe" };
+                    abrir.AddToClassList("boton");
+                    fila.Add(abrir);
+                }
+                lista.Add(fila);
+            }
+            AplicarSemibold(lista);
+        }
+
+        // ---------------------------------------------------------------- apariencia (D17, D20)
+
+        const string ArchivoApariencia = "apariencia.json";
+        static readonly string[] Temas = { "sistema", "claro", "oscuro" };
+        static readonly string[] NombresTema = { "El del sistema", "Claro", "Oscuro" };
+        /// <summary>0 es el del sistema; el resto, porcentajes. 200 % es el tope de WCAG 1.4.4.</summary>
+        static readonly int[] Tamanos = { 0, 100, 125, 150, 200 };
+
+        string RutaApariencia => Path.Combine(CarpetaDatos, ArchivoApariencia);
+
+        void Apariencia()
+        {
+            string tema = "sistema";
+            int texto = 0;
+            try
+            {
+                var j = JObject.Parse(File.ReadAllText(RutaApariencia));
+                tema = Array.IndexOf(Temas, (string)j["tema"]) >= 0 ? (string)j["tema"] : tema;
+                texto = Array.IndexOf(Tamanos, (int?)j["texto"] ?? 0) >= 0 ? (int)j["texto"] : texto;
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is JsonException)
+            {
+                // sin archivo o ilegible: la del sistema
+            }
+            var dTema = Configuracion.Raiz.Q<DropdownField>("tema");
+            var dTexto = Configuracion.Raiz.Q<DropdownField>("tamano-texto");
+            dTema.choices = NombresTema.ToList();
+            dTema.index = Array.IndexOf(Temas, tema);
+            dTexto.choices = Tamanos.Select(t => t == 0 ? "El del sistema" : $"{t} %").ToList();
+            dTexto.index = Array.IndexOf(Tamanos, texto);
+            void Elegir()
+            {
+                var t = Temas[dTema.index];
+                var n = Tamanos[dTexto.index];
+                AplicarApariencia(t, n);
+                try
+                {
+                    File.WriteAllText(RutaApariencia, new JObject { ["tema"] = t, ["texto"] = n }.ToString(Formatting.None));
+                }
+                catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                {
+                    // se aplica igual; la próxima vez vuelve la anterior
+                }
+            }
+            dTema.RegisterValueChangedCallback(_ => Elegir());
+            dTexto.RegisterValueChangedCallback(_ => Elegir());
+            // Las capturas fijan el tema y el tamaño por argumento: no dependen de la máquina.
+            AplicarApariencia(Arg("-tema") ?? (Arg("-captura") != null ? "claro" : tema), Arg("-texto") != null ? int.Parse(Arg("-texto")) : texto);
+        }
+
+        void AplicarApariencia(string tema, int texto)
+        {
+            raiz.panel.visualTree.EnableInClassList("tema-oscuro", tema == "oscuro" || tema == "sistema" && SistemaOscuro());
+            // Todo crece junto (como el zoom de un navegador) y la ronda pasa sola a la clase angosta cuando no entra (WCAG 1.4.10).
+            ajustes.scale = texto == 0 ? Mathf.Clamp(UnityEngine.Accessibility.AccessibilitySettings.fontScale, 1, 2) : texto / 100f;
+        }
+
+        static bool SistemaOscuro()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            using (var unity = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+            using (var actividad = unity.GetStatic<AndroidJavaObject>("currentActivity"))
+            using (var recursos = actividad.Call<AndroidJavaObject>("getResources"))
+            using (var config = recursos.Call<AndroidJavaObject>("getConfiguration"))
+                return (config.Get<int>("uiMode") & 0x30) == 0x20; // UI_MODE_NIGHT_YES
+#else
+            // AppsUseLightTheme vale 0 con el tema oscuro de Windows; sin el valor, claro (D20).
+            int valor = 1, largo = 4;
+            return RegGetValueW(new UIntPtr(0x80000001u), @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 0x10, IntPtr.Zero, ref valor, ref largo) == 0
+                   && valor == 0;
+#endif
+        }
+
+        [System.Runtime.InteropServices.DllImport("advapi32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        static extern int RegGetValueW(UIntPtr clave, string subclave, string valor, uint banderas, IntPtr tipo, ref int datos, ref int largo);
+
+        // ---------------------------------------------------------------- atajos (D8, D49)
+
+        bool focoEnPagina;
+
+        void Teclas(KeyDownEvent e)
+        {
+            var enRonda = seccionRonda.style.display != DisplayStyle.None && !raiz.Q("capa").ClassListContains("capa--abierta");
+            if (e.keyCode == KeyCode.F1) Mostrar("ayuda");
+            else if (e.keyCode == KeyCode.F9 && enRonda) Ronda.Paso();
+            else if (e.keyCode == KeyCode.F6) Region(e.shiftKey ? -1 : 1);
+            else return;
+            e.StopPropagation();
+        }
+
+        void Navegar(NavigationMoveEvent e)
+        {
+            if (!e.ctrlKey || e.direction != NavigationMoveEvent.Direction.Next && e.direction != NavigationMoveEvent.Direction.Previous) return;
+            if (seccionRonda.style.display == DisplayStyle.None) return;
+            Ronda.Mover(e.direction == NavigationMoveEvent.Direction.Next ? 1 : -1);
+            e.StopPropagation();
+            raiz.focusController.IgnoreEvent(e);
+        }
+
+        static bool Visible(VisualElement e)
+        {
+            for (var x = e; x != null; x = x.parent)
+                if (x.resolvedStyle.display == DisplayStyle.None) return false;
+            return e.worldBound.width > 0;
+        }
+
+        /// <summary>
+        /// F6: la región siguiente (riel, guía, lista, cabecera, la página del proveedor, abajo). La página nativa recibe
+        /// el foco del panel; desde ella, F6 vuelve a la app (panel.cpp) y la región siguiente es la primera.
+        /// </summary>
+        void Region(int paso)
+        {
+            var regiones = raiz.Query(className: "region").Where(Visible).ToList();
+            if (regiones.Count == 0) return;
+            var foco = raiz.focusController.focusedElement as VisualElement;
+            var actual = focoEnPagina ? regiones.FindIndex(r => r.ClassListContains("pagina")) : regiones.FindIndex(r => foco != null && r.Contains(foco));
+            focoEnPagina = false;
+            for (var i = 1; i <= regiones.Count; i++)
+            {
+                var r = regiones[((actual < 0 ? (paso > 0 ? -1 : 0) : actual) + paso * i + regiones.Count * 2) % regiones.Count];
+                if (r.ClassListContains("pagina"))
+                {
+                    if (!(r.name == "cuenta-pagina" ? Configuracion.FocoEnCuenta() : Ronda.FocoEnPagina())) continue;
+                    focoEnPagina = true;
+                    return;
+                }
+                var destino = r.Query<VisualElement>().Where(x => x.focusable && x.canGrabFocus && x.enabledInHierarchy && Visible(x)).First();
+                if (destino == null) continue;
+                destino.Focus();
+                return;
+            }
         }
 
         // ---------------------------------------------------------------- fuente y captura

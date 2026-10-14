@@ -106,9 +106,9 @@ namespace ChatCouncil.Interfaz
             Al("paso-ancha", Paso);
             Al("paso-angosta", Paso);
             Al("accion-panel", AccionDelPanel);
-            Al("menu-panel", () => AbrirMenu(raiz.Q("menu-panel"), ItemsDelPanel()));
+            Al("menu-panel", () => AbrirMenu(raiz.Q("menu-panel"), ItemsDelPanel().Concat(ItemsDeMantenimiento()).ToList()));
             Al("menu-ronda", () => AbrirMenu(raiz.Q("menu-ronda"), ItemsDeLaRonda()));
-            Al("menu-angosta", () => AbrirMenu(raiz.Q("menu-angosta"), ItemsDelPanel().Concat(ItemsDeLaRonda()).ToList()));
+            Al("menu-angosta", () => AbrirMenu(raiz.Q("menu-angosta"), ItemsDelPanel().Concat(ItemsDeMantenimiento()).Concat(ItemsDeLaRonda()).ToList()));
             Al("ver-todos", () => AbrirMenu(raiz.Q("ver-todos"), ItemsDePaneles()));
             Al("anterior", () => Mover(-1));
             Al("siguiente", () => Mover(1));
@@ -167,23 +167,19 @@ namespace ChatCouncil.Interfaz
 
             var lista = raiz.Q<ScrollView>("lista");
             lista.Clear();
-            lista.Add(Titulo($"Operadores ({Operadores.Count})"));
-            foreach (var id in Operadores)
-            {
-                var fila = Fila(id, "");
-                fila.RegisterCallback<ClickEvent>(_ => Seleccionar(id));
-                lista.Add(fila);
-            }
-            lista.Add(Titulo("Roles (aparecen en su etapa)"));
+            lista.Add(Titulo($"Proveedores ({Operadores.Count})"));
+            foreach (var id in Operadores) lista.Add(Fila(id, "", () => Seleccionar(id)));
+            var tituloRoles = Titulo("Roles");
+            tituloRoles.name = "titulo-roles";
+            lista.Add(tituloRoles);
             funcion.Clear();
             funcion[roles.Integrador] = roles.Redactor == roles.Integrador ? "Integra y redacta" : "Integra";
             funcion[roles.Verificador] = "Verifica";
             funcion[roles.Redactor] = roles.Redactor == roles.Integrador ? funcion[roles.Integrador] : "Redacta";
             foreach (var id in RolesDeLaRonda)
             {
-                var fila = Fila(id, funcion[id]);
+                var fila = Fila(id, funcion[id], () => { _ = MostrarRol(id, true); });
                 // Tocar un rol lo muestra y lo pone a la vista (historia 59), aunque no sea su etapa.
-                fila.RegisterCallback<ClickEvent>(evento => { _ = MostrarRol(id, true); });
                 lista.Add(fila);
             }
             Refrescar();
@@ -249,10 +245,13 @@ namespace ChatCouncil.Interfaz
             return l;
         }
 
-        static VisualElement Fila(string id, string texto)
+        static VisualElement Fila(string id, string texto, Action alActivar)
         {
-            var fila = new VisualElement { name = "fila-" + id };
+            // Enfocable y con Enter, como un botón: la lista también se usa con el teclado (WCAG 2.1.1).
+            var fila = new VisualElement { name = "fila-" + id, focusable = true };
             fila.AddToClassList("fila-panel");
+            fila.RegisterCallback<ClickEvent>(e => alActivar());
+            fila.RegisterCallback<NavigationSubmitEvent>(e => alActivar());
             var nombre = new Label(Dominio.NombreProveedor(id));
             nombre.AddToClassList("fila-nombre");
             nombre.AddToClassList("semibold");
@@ -417,7 +416,10 @@ namespace ChatCouncil.Interfaz
                 fila.Q<IconoEstado>().Estado = icono;
                 fila.Q<Label>(className: "fila-estado").text = rolesMostrados.Contains(id) ? $"{funcion[id]} · {palabra}" : funcion[id];
                 fila.EnableInClassList("fila-panel--actual", id == visible);
+                // Los roles en la lista solo mientras están en el recorrido (D42): fuera de su etapa no le quitan alto a los paneles.
+                fila.style.display = rolesMostrados.Contains(id) ? DisplayStyle.Flex : DisplayStyle.None;
             }
+            raiz.Q("titulo-roles").style.display = rolesMostrados.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
 
             if (visible != null)
             {
@@ -472,7 +474,7 @@ namespace ChatCouncil.Interfaz
             Refrescar();
         }
 
-        void Mover(int paso)
+        public void Mover(int paso)
         {
             var enLaVista = EnLaVista;
             if (enLaVista.Count == 0) return;
@@ -515,7 +517,7 @@ namespace ChatCouncil.Interfaz
 
         // ---------------------------------------------------------------- acciones
 
-        void Paso()
+        public void Paso()
         {
             var paso = Puerta.PasoSiguiente();
             switch (paso.Accion)
@@ -1042,6 +1044,91 @@ namespace ChatCouncil.Interfaz
                 panelPdf.Rect(0, 0, 0, 0);
             }
             return panelPdf;
+        }
+
+        // ---------------------------------------------------------------- mantenimiento del panel (T23)
+
+        internal static string NombreDeEtapa(string etapa) => NombresEtapa[Array.IndexOf(Etapas, etapa)];
+
+        /// <summary>F6 (D49): el foco del teclado dentro de la página visible. false si no hay página a la vista.</summary>
+        public bool FocoEnPagina()
+        {
+            if (!seccionVisible || capaAbierta || visible == null || !paneles.TryGetValue(visible, out var p)) return false;
+            p.Foco();
+            return true;
+        }
+
+        /// <summary>Recargar, el diagnóstico y cerrar la sesión (historias 12 y 72 a 74): de emergencia, en cualquier etapa (D6).</summary>
+        List<Item> ItemsDeMantenimiento()
+        {
+            if (visible == null) return new List<Item>();
+            var grupo = "Este panel: " + Dominio.NombreProveedor(visible);
+            var sinPagina = paneles.ContainsKey(visible) ? null : "El panel no tiene su página abierta.";
+            return new List<Item>
+            {
+                new Item { Grupo = grupo, Texto = "Recargar la página", Accion = () => _ = Recargar(visible), Motivo = sinPagina },
+                new Item { Grupo = grupo, Texto = "Diagnóstico de selectores", Accion = () => _ = Diagnosticar(visible), Motivo = sinPagina },
+                new Item { Grupo = grupo, Texto = "Cerrar la sesión de este panel…", Accion = () => DialogoCerrarSesion(visible), Motivo = sinPagina },
+            };
+        }
+
+        async Task Recargar(string id)
+        {
+            try
+            {
+                await paneles[id].Ejecutar("location.reload(); 'ok'");
+                Resultado($"Se recargó la página de {Dominio.NombreProveedor(id)}.");
+            }
+            catch (Exception e)
+            {
+                Resultado($"No se pudo recargar {Dominio.NombreProveedor(id)}: {e.Message}", true);
+            }
+        }
+
+        /// <summary>
+        /// Lo que el script de página encontró, de solo lectura (historias 72 y 73), en un archivo de la carpeta de datos;
+        /// se abre su carpeta para mandarlo (D18).
+        /// </summary>
+        public async Task<string> Diagnosticar(string id)
+        {
+            var nombre = Dominio.NombreProveedor(id);
+            try
+            {
+                var d = await paneles[id].Correr("diagnostico", specDe(id), esperaMs: 30_000);
+                var dir = Path.Combine(carpetaDatos, "diagnosticos");
+                Directory.CreateDirectory(dir);
+                var ruta = Path.Combine(dir, $"{id}-{DateTime.Now:yyyy-MM-dd-HHmmss}.json");
+                File.WriteAllText(ruta, new JObject { ["proveedor"] = id, ["app"] = Application.version, ["diagnostico"] = d }.ToString(Newtonsoft.Json.Formatting.Indented), new UTF8Encoding(false));
+                Resultado($"Diagnóstico de {nombre} guardado en {ruta}. Mándalo junto con lo que pasó para que se corrijan los selectores.");
+                AbrirCarpeta(dir);
+                return ruta;
+            }
+            catch (Exception e)
+            {
+                Resultado($"No se pudo hacer el diagnóstico de {nombre}: {e.Message}", true);
+                return null;
+            }
+        }
+
+        void DialogoCerrarSesion(string id)
+        {
+            var nombre = Dominio.NombreProveedor(id);
+            AbrirDialogo($"Cerrar la sesión de {nombre}",
+                $"Se borra todo lo que {nombre} guardó en este panel (la sesión, las cookies y sus datos) y su página vuelve a abrirse sin cuenta. " +
+                "Las rondas y los informes no se tocan. Después puedes entrar con otra cuenta.",
+                false, null, "Cerrar la sesión", async (_, __) =>
+                {
+                    try
+                    {
+                        await paneles[id].BorrarDatos();
+                        await paneles[id].Navegar(urlDe(id));
+                        Resultado($"Sesión de {nombre} cerrada. Entra con la cuenta que quieras en su página.");
+                    }
+                    catch (Exception e)
+                    {
+                        Resultado($"No se pudo cerrar la sesión de {nombre}: {e.Message}", true);
+                    }
+                });
         }
 
         // ---------------------------------------------------------------- menús (D6, D7)

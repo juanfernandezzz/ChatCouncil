@@ -692,8 +692,10 @@ namespace ChatCouncil.Interfaz
                     "pegar el verificador", $"«{Resultado}»; a la vista {Ronda.Visible}, {Ronda.EnLaVista.Count} en el recorrido");
                 await Enviar("glm");
                 var b = $"http://127.0.0.1:{servidor.Puerto}";
+                // Las del servidor local no se piden (T24): las formas raras de 127.0.0.1 prueban el System.Uri de IL2CPP.
                 await ResponderEnParrafos("glm", "Reviso las fuentes.", $"CONFIRMA|OFICIAL|H1|{b}/ok|\"cita\"", "CONTRADICE|SECUNDARIA|H2|https://x.invalid/p|\"otra\"",
-                    $"CONFIRMA|PRIMARIA|H1|{b}/404|\"no está\"", $"CONFIRMA|OFICIAL|H2|{b}/sin-head|\"sin HEAD\"");
+                    $"CONFIRMA|PRIMARIA|H1|{b}/404|\"no está\"", $"CONFIRMA|OFICIAL|H2|http://0x7f.0.0.1:{servidor.Puerto}/hex|\"hex\"",
+                    $"CONFIRMA|OFICIAL|H1|http://2130706433:{servidor.Puerto}/entero|\"entero\"");
                 await Esperar(() => Paso == "Capturar la verificación" && Habilitado);
                 await Pulsar("paso-ancha");
                 await Esperar(() => Titulo == "Redacción · 6 de 7", 60);
@@ -720,15 +722,16 @@ namespace ChatCouncil.Interfaz
                 Anotar(redaccion != null && redaccion.MarcaUltima?.StartsWith("[[CC-MARCA-FIN-", StringComparison.Ordinal) == true && Paso == "Armar el informe" && Habilitado,
                     "capturar el redactor", $"marcas {redaccion?.MarcaPrimera} … {redaccion?.MarcaUltima}; «{Paso}»");
 
-                // El informe: las URLs sin cookies, la carpeta con .md y PDF, y la carpeta que se abre.
+                // El informe: las URLs locales sin pedir, la carpeta con .md y PDF, y la carpeta que se abre.
                 string abierta = null;
                 Ronda.AbrirCarpeta = r => abierta = r;
                 await Pulsar("paso-ancha");
                 await Esperar(() => Resultado.StartsWith("Carpeta del informe", StringComparison.Ordinal) || Resultado.StartsWith("No se pudo", StringComparison.Ordinal), 300);
-                var urls = Hechos.OfType<UrlComprobada>().Where(u => u.RondaId == ronda).OrderBy(u => u.Url).Select(u => $"{u.Url.Replace(b, "")} {u.Codigo?.ToString() ?? "sin código"}").ToList();
-                Anotar(urls.SequenceEqual(new[] { "/404 404", "/ok 200", "/sin-head 200", "https://x.invalid/p sin código" }), "comprobar las URLs", string.Join("; ", urls));
-                var pedidos = servidor.Pedidos.OrderBy(x => x).ToList();
-                Anotar(pedidos.SequenceEqual(new[] { "GET /404", "GET /sin-head", "HEAD /404", "HEAD /ok", "HEAD /sin-head" }), "HEAD y después GET, sin cookies", string.Join("; ", pedidos));
+                var comprobadas = Hechos.OfType<UrlComprobada>().Where(u => u.RondaId == ronda).ToList();
+                const string local = "es una dirección local o de la red privada: no se comprueba";
+                var urls = comprobadas.Select(u => $"{u.Url} {u.Codigo?.ToString() ?? "sin código"} ({u.Detalle})").ToList();
+                Anotar(comprobadas.Count == 5 && comprobadas.All(u => u.Codigo == null) && comprobadas.Count(u => u.Detalle == local) == 4 && servidor.Pedidos.Count == 0,
+                    "las URLs locales no se piden", $"{string.Join("; ", urls)}; pedidos al servidor: {servidor.Pedidos.Count}");
                 var carpeta = Directory.Exists(Path.Combine(app.CarpetaDatos, "informes")) ? Directory.GetDirectories(Path.Combine(app.CarpetaDatos, "informes")).SingleOrDefault() : null;
                 var nombre = carpeta == null ? "-" : Path.GetFileName(carpeta);
                 var md = carpeta == null ? "" : File.ReadAllText(Path.Combine(carpeta, nombre + ".md"));
@@ -744,8 +747,18 @@ namespace ChatCouncil.Interfaz
                 var mds = Directory.Exists(respuestas) ? Directory.GetFiles(respuestas, "*.md").Length : 0;
                 var pdfs = Directory.Exists(respuestas) ? Directory.GetFiles(respuestas, "*.pdf").Count(f => new FileInfo(f).Length > 1000) : 0;
                 Anotar(mds == 7 && pdfs == 7, "respuestas de los investigadores", $"{mds} .md y {pdfs} PDF");
-                Anotar(abierta == carpeta && Resultado.EndsWith("URLs del verificador: responden 2 de 4.", StringComparison.Ordinal) && !Raiz.Q("resultado-ancha").ClassListContains("problema"),
+                Anotar(abierta == carpeta && Resultado.EndsWith("URLs del verificador: responden 0 de 5.", StringComparison.Ordinal) && !Raiz.Q("resultado-ancha").ClassListContains("problema"),
                     "la carpeta se abre al terminar", $"abierta «{abierta}»; «{Resultado}»");
+
+                // El adaptador real, directo contra el servidor local: el código de cada método, sin cookies.
+                var adaptador = new HttpSinCookies();
+                var codigos = new List<string>();
+                foreach (var (ruta, metodo) in new[] { ("/ok", "HEAD"), ("/sin-head", "HEAD"), ("/sin-head", "GET"), ("/404", "GET") })
+                    codigos.Add($"{metodo} {ruta} {await adaptador.Pedir(b + ruta, metodo, System.Threading.CancellationToken.None)}");
+                var pedidos = servidor.Pedidos.OrderBy(x => x, StringComparer.Ordinal).ToList();
+                Anotar(codigos.SequenceEqual(new[] { "HEAD /ok 200", "HEAD /sin-head 405", "GET /sin-head 200", "GET /404 404" })
+                       && pedidos.SequenceEqual(new[] { "GET /404", "GET /sin-head", "HEAD /ok", "HEAD /sin-head" }),
+                    "el adaptador HTTP, sin cookies", $"{string.Join("; ", codigos)}; el servidor vio {string.Join("; ", pedidos)}");
                 Copiar(Path.Combine(app.CarpetaDatos, "informes"), salida + ".informe");
                 // Para las capturas de la etapa Informe.
                 Copiar(app.CarpetaDatos, salida + ".roles");

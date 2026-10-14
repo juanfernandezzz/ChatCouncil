@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -820,6 +822,8 @@ namespace ChatCouncil.Motor
         /// </summary>
         public static async Task<(int? Codigo, string Detalle)> ComprobarUrl(string url, IHttp http, TimeSpan tiempo)
         {
+            var motivo = MotivoParaNoPedir(url);
+            if (motivo != null) return (null, motivo);
             using (var cancelar = new CancellationTokenSource(tiempo))
             {
                 var sinRespuesta = ((int?)null, $"sin respuesta en {tiempo.TotalSeconds.ToString(CultureInfo.InvariantCulture)} s");
@@ -849,6 +853,33 @@ namespace ChatCouncil.Motor
                     return (null, e.Message);
                 }
             }
+        }
+
+        /// <summary>
+        /// Por qué una URL no se pide, o null. Las escribe el verificador, que es un modelo: nada de lo que escriba
+        /// llega a esta máquina ni a la red local. shortcut: un nombre público que resuelve a una IP privada (DNS
+        /// rebinding) o que redirige a una pasa; cerrarlo exige ver la IP al conectar, y el HttpClient de Unity no la da.
+        /// </summary>
+        static string MotivoParaNoPedir(string url)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                return "solo se comprueban direcciones http y https";
+            var host = uri.DnsSafeHost.ToLowerInvariant();
+            var local = IPAddress.TryParse(host, out var ip)
+                ? EsLocal(ip)
+                : !host.Contains('.') || host.EndsWith(".localhost", StringComparison.Ordinal) || host.EndsWith(".local", StringComparison.Ordinal);
+            return local ? "es una dirección local o de la red privada: no se comprueba" : null;
+        }
+
+        // Bucle local, sin especificar, privadas (RFC 1918 y 4193), de enlace local y la compartida del operador (100.64/10).
+        static bool EsLocal(IPAddress ip)
+        {
+            if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
+            if (ip.AddressFamily == AddressFamily.InterNetworkV6)
+                return IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.IPv6Any) || ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || (ip.GetAddressBytes()[0] & 0xFE) == 0xFC;
+            var b = ip.GetAddressBytes();
+            return b[0] == 0 || b[0] == 10 || b[0] == 127 || (b[0] == 172 && b[1] >= 16 && b[1] <= 31) || (b[0] == 192 && b[1] == 168)
+                || (b[0] == 169 && b[1] == 254) || (b[0] == 100 && b[1] >= 64 && b[1] <= 127);
         }
 
         /// <summary>

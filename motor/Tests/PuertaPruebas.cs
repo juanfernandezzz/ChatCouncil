@@ -206,6 +206,30 @@ namespace ChatCouncil.Motor.Pruebas
             Assert.That(await Puerta.ComprobarUrl("https://lenta.org", new HttpMudo(), TimeSpan.FromMilliseconds(50)), Is.EqualTo(((int?)null, "sin respuesta en 0.05 s")));
         }
 
+        // T24: las URLs las escribe el verificador, que es un modelo. Pedirlas a la máquina o a la red local las expone
+        // a lo que el modelo escriba; tampoco se sigue un esquema que no sea http o https. Ninguna sale a la red.
+        [Test]
+        public async Task LasUrlsLocalesOConOtroEsquemaNoSePiden()
+        {
+            const string local = "es una dirección local o de la red privada: no se comprueba";
+            const string esquema = "solo se comprueban direcciones http y https";
+            var http = new HttpFalso();
+            foreach (var url in new[]
+            {
+                "http://localhost:8080/x", "http://sub.localhost/", "http://127.0.0.1/", "http://127.8.9.10/", "http://0.0.0.0/",
+                "http://10.1.2.3/", "http://172.16.0.1/", "http://172.31.255.255/", "http://192.168.1.1/", "http://169.254.169.254/latest/meta-data",
+                "http://100.64.0.1/", "http://[::1]/", "http://[::]/", "http://[fe80::1]/", "http://[fc00::1]/", "http://[fd12:3456::1]/",
+                "http://[::ffff:127.0.0.1]/", "http://[::ffff:192.168.0.1]/", "http://0x7f.0.0.1/", "http://2130706433/", "http://017700000001/",
+                "http://intranet/", "http://impresora.local/", "HTTP://LOCALHOST/",
+            })
+                Assert.That(await Puerta.ComprobarUrl(url, http, TimeSpan.FromSeconds(10)), Is.EqualTo(((int?)null, local)), url);
+            foreach (var url in new[] { "file:///C:/Windows/win.ini", "ftp://a.org/x", "javascript:alert(1)", "data:text/plain,hola", "a.org/sin-esquema", "" })
+                Assert.That(await Puerta.ComprobarUrl(url, http, TimeSpan.FromSeconds(10)), Is.EqualTo(((int?)null, esquema)), url);
+            Assert.That(http.Pedidos, Is.EqualTo(0));
+            foreach (var url in new[] { "https://a.org", "http://172.32.0.1/", "http://11.0.0.1/", "http://[2606:4700::1111]/", "HTTPS://A.ORG/x" })
+                Assert.That(await Puerta.ComprobarUrl(url, http, TimeSpan.FromSeconds(10)), Is.EqualTo(((int?)200, (string)null)), url);
+        }
+
         // Una respuesta que no llega a PDF tiene que quedar nombrada en la carpeta: si no, se lee como que ese proveedor no participó.
         [Test]
         public async Task SiFallaElPdfDeUnaRespuestaLasDemasSeEscribenYFaltanLaNombra()

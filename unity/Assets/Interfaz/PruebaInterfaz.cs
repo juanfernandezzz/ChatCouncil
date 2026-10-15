@@ -182,7 +182,11 @@ namespace ChatCouncil.Interfaz
 
             await Pulsar(Config, "empezar");
             await Cuadros(5);
-            Anotar(Visible(Raiz.Q("seccion-ronda")) && !Raiz.ClassListContains("primer-arranque") && Visible(Riel), "fin de la guía", "la Ronda queda a la vista, con el riel");
+            // En la clase compacta (el teléfono) no hay riel: se navega con el botón Menú, que abre el cajón (D3).
+            var compacta = Raiz.ClassListContains("compacta");
+            var navegacion = compacta ? Visible(Raiz.Q<Button>("menu")) : Visible(Riel);
+            Anotar(Visible(Raiz.Q("seccion-ronda")) && !Raiz.ClassListContains("primer-arranque") && navegacion, "fin de la guía",
+                $"la Ronda queda a la vista, con {(compacta ? "el botón del cajón" : "el riel")}");
             ComprobarRonda("ronda con el consejo recién guardado", OperadoresEsperados);
             // Para la fase 2: unas preferencias con un tamaño que no es un número (T24: la app no arrancaba).
             File.WriteAllText(Path.Combine(app.CarpetaDatos, "apariencia.json"), "{\"tema\":\"oscuro\",\"texto\":\"abc\"}");

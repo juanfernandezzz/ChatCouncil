@@ -1,0 +1,10 @@
+Prueba de la interfaz (T19), fase 2, 2026-10-14 23:17:10, WindowsPlayer, 0.1.0
+OK reabrir: con archivo de selección arranca en la Ronda, sin la guía
+OK un tamaño ilegible: el del sistema, y el tema se conserva: tema «Oscuro», texto «El del sistema»
+OK el consejo guardado se aplica al reabrir: filas [chatgpt,gemini,glm,kimi,qwen,deepseek,claude,grok], Claude: "Integra y redacta"
+OK ronda activa restaurada: "Investigación · 2 de 7", "Capturar los que terminaron (0)"
+OK ajustes con lo guardado: [chatgpt,gemini,claude,grok,glm,kimi,qwen,deepseek] Claude/Grok/Claude
+OK carpeta de datos: C:\cc-ev\simple-t
+OK cambio guardado: Guardado. Se aplica la próxima vez que abras ChatCouncil.
+OK el cambio no se aplica antes de reabrir: filas [chatgpt,gemini,glm,kimi,qwen,deepseek,claude,grok], Claude: "Integra y redacta"
+Resultado: 8/8

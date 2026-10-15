@@ -478,13 +478,19 @@ informe y push. Hecho el 2026-10-14: `docs/evidencia/fase6/etapa5-informe.md`.
 
 ### Etapa 6 — Pruebas y revisión
 
-- [ ] **T24. Revisión y simplificación.**
+- [x] **T24. Revisión y simplificación.**
   Acepta: revisión de código con `agent-skills:review` y
   `mattpocock-skills:code-review`, simplificación con
   `agent-skills:code-simplify`, y cada hallazgo corregido o explicado.
   Verifica: todas las pruebas y autopruebas otra vez en verde, con
   `superpowers:verification-before-completion`.
   Depende de: T23. Tamaño: M.
+
+  **Hecha el 2026-10-15** (`docs/evidencia/fase6/T24-resultados.md`): los siete hallazgos del handoff
+  y los de la revisión de dos ejes, corregidos o explicados; D49 rehecha para un teclado de una mano
+  (F1 a F5); la simplificación sin tocar pruebas; Android compilado otra vez y medido en el emulador.
+  Abiertos: la página trabada en un script (matar el renderer) y, en Android, el paso de F1 a F5,
+  `uiMode` oscuro y TalkBack sin medir.
 
 ### Entrega
 

@@ -1,0 +1,141 @@
+# T25: compila la app de Unity para Windows (instalador) y Android (.apk firmado con la llave fija) y los publica en
+# el Release chatcouncil-unity-v1. Licencia Personal por UNITY_EMAIL y UNITY_PASSWORD (Unity 6 ya no da el .ulf).
+name: unity
+
+on:
+  push:
+    branches: [main]
+    paths: ['unity/**', 'panel/**', 'motor/**', 'instalador/**', '.github/workflows/unity.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: unity
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      # La DLL del panel no se versiona: se compila con MSVC y el SDK de WebView2 fijado por SHA-256.
+      - name: Plugin nativo (WebView2)
+        shell: cmd
+        run: panel\windows\compilar.cmd
+
+      - uses: RageAgainstThePixel/unity-setup@v2
+        with:
+          version-file: unity/ProjectSettings/ProjectVersion.txt
+          build-targets: StandaloneWindows64
+          modules: windows-il2cpp
+
+      - uses: RageAgainstThePixel/activate-unity-license@v2
+        with:
+          license: personal
+          username: ${{ secrets.UNITY_EMAIL }}
+          password: ${{ secrets.UNITY_PASSWORD }}
+
+      # Unity.exe es una app de ventana: Start-Process -Wait espera a que termine y da su código de salida.
+      - name: Compilar (IL2CPP)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build | Out-Null
+          $p = Start-Process -FilePath $env:UNITY_EDITOR_PATH -Wait -PassThru -NoNewWindow -ArgumentList @(
+            '-batchmode', '-quit', '-buildTarget', 'Win64', '-projectPath', 'unity', '-logFile', "$pwd\build\unity.log",
+            '-executeMethod', 'ChatCouncil.Construccion.Construir.Windows', '-salida', "$pwd\build\windows\ChatCouncil.exe")
+          Get-Content build\unity.log -Tail 80
+          if ($p.ExitCode -ne 0 -or -not (Test-Path build\windows\ChatCouncil.exe)) { exit 1 }
+
+      - name: Instalador
+        shell: pwsh
+        run: |
+          # Lo que Unity deja junto al build y no se distribuye.
+          Get-ChildItem build\windows -Directory | Where-Object { $_.Name -like '*DoNotShip' -or $_.Name -like '*ButDontShipItWithYourGame' } | Remove-Item -Recurse -Force
+          $version = (Select-String -Path unity\ProjectSettings\ProjectSettings.asset -Pattern 'bundleVersion: (.+)').Matches[0].Groups[1].Value.Trim()
+          choco install innosetup -y --no-progress
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DVersion=$version" instalador\ChatCouncil.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: salida/ChatCouncil-instalador.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: windows-log
+          path: build/unity.log
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: RageAgainstThePixel/unity-setup@v2
+        with:
+          version-file: unity/ProjectSettings/ProjectVersion.txt
+          build-targets: Android
+
+      - uses: RageAgainstThePixel/activate-unity-license@v2
+        with:
+          license: personal
+          username: ${{ secrets.UNITY_EMAIL }}
+          password: ${{ secrets.UNITY_PASSWORD }}
+
+      - name: Compilar (IL2CPP, firmado)
+        env:
+          LLAVE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+        run: |
+          mkdir -p build
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/chatcouncil.keystore"
+          printf '%s' "$LLAVE" | base64 -d > "$ANDROID_KEYSTORE_PATH"
+          status=0
+          "$UNITY_EDITOR_PATH" -batchmode -quit -nographics -buildTarget Android -projectPath unity -logFile "$PWD/build/unity.log" \
+            -executeMethod ChatCouncil.Construccion.Construir.Android -salida "$PWD/build/ChatCouncil.apk" || status=$?
+          rm -f "$ANDROID_KEYSTORE_PATH"
+          tail -n 80 build/unity.log
+          [ "$status" -eq 0 ] && [ -f build/ChatCouncil.apk ]
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: build/ChatCouncil.apk
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: android-log
+          path: build/unity.log
+
+  release:
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: salida
+          merge-multiple: true
+
+      # shortcut: la etiqueta queda en el commit de la primera publicación y cada corrida reemplaza los archivos;
+      # si hace falta saber de qué commit es cada binario, publicar un Release por versión.
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: chatcouncil-unity-v1
+          name: ChatCouncil (Unity) v1
+          target_commitish: ${{ github.sha }}
+          body: |
+            ChatCouncil para Windows y Android, compilado desde ${{ github.sha }}.
+            - Windows: descarga ChatCouncil-instalador.exe y ábrelo.
+            - Android: descarga ChatCouncil.apk en el teléfono y ábrelo.
+          files: |
+            salida/ChatCouncil-instalador.exe
+            salida/ChatCouncil.apk

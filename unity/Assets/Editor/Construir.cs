@@ -27,6 +27,18 @@ namespace ChatCouncil.Construccion
             // Solo ARM64: en 6000.3, x86_64 quedó para Magic Leap y aborta la compilación. El emulador x86_64 (Android 11+) traduce ARM64.
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.chatcouncil.app");
+            // En el CI firma la llave fija (secretos ANDROID_KEYSTORE_*): un .apk firmado con otra no actualiza la app instalada.
+            // Sin ellas, la llave de depuración de Unity, como al compilar a mano.
+            var llave = Environment.GetEnvironmentVariable("ANDROID_KEYSTORE_PATH");
+            if (!string.IsNullOrEmpty(llave))
+            {
+                var clave = Environment.GetEnvironmentVariable("ANDROID_KEYSTORE_PASS");
+                PlayerSettings.Android.useCustomKeystore = true;
+                PlayerSettings.Android.keystoreName = llave;
+                PlayerSettings.Android.keystorePass = clave;
+                PlayerSettings.Android.keyaliasName = "chatcouncil";
+                PlayerSettings.Android.keyaliasPass = clave;
+            }
             Compilar(BuildTarget.Android);
         }
 

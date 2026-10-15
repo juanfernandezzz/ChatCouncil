@@ -121,8 +121,9 @@ Primera compilación desde T17. `Construir.Android` (IL2CPP, ARM64) desde `subst
 - Dos tropiezos del entorno, no de la app: recién arrancado, el emulador remontó el almacenamiento y
   `vold` mató la primera autoprueba; y Unity mata el servidor de adb al compilar, así que una
   instalación falló con "device offline" hasta `adb reconnect offline`.
-- **Sin medir en Android:** el paso de F1 a F5 desde la página a la app (compila; la prueba con teclas
-  reales usa `SendInput`, que es de Windows), `foco()`, el tema del sistema por `uiMode` en modo oscuro
+- **Fuera del alcance:** el paso de F1 a F5 en Android (decisión de Juan del 2026-10-15; queda cableado y
+  compila, sin medir).
+- **Sin medir en Android:** `foco()`, el tema del sistema por `uiMode` en modo oscuro
   y TalkBack. La ronda completa (`-pruebaronda`) tampoco corre en Android por lo mismo.
 
 ## Lo que queda abierto

@@ -489,8 +489,8 @@ informe y push. Hecho el 2026-10-14: `docs/evidencia/fase6/etapa5-informe.md`.
   **Hecha el 2026-10-15** (`docs/evidencia/fase6/T24-resultados.md`): los siete hallazgos del handoff
   y los de la revisión de dos ejes, corregidos o explicados; D49 rehecha para un teclado de una mano
   (F1 a F5); la simplificación sin tocar pruebas; Android compilado otra vez y medido en el emulador.
-  Abiertos: la página trabada en un script (matar el renderer) y, en Android, el paso de F1 a F5,
-  `uiMode` oscuro y TalkBack sin medir.
+  Abiertos: la página trabada en un script (matar el renderer) y, en Android, `uiMode` oscuro y
+  TalkBack sin medir. F1 a F5 en Android queda fuera del alcance (decisión de Juan del 2026-10-15).
 
 ### Entrega
 

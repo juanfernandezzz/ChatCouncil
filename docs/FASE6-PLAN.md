@@ -494,7 +494,7 @@ informe y push. Hecho el 2026-10-14: `docs/evidencia/fase6/etapa5-informe.md`.
 
 ### Entrega
 
-- [ ] **T25. Compilación en la nube y Release.**
+- [x] **T25. Compilación en la nube y Release.**
   Acepta: el flujo de GitHub Actions compila Windows y Android, arma el
   instalador, firma el `.apk` con la llave fija y publica
   `chatcouncil-unity-v1`. La llave tiene su respaldo fuera del repositorio.
@@ -505,6 +505,22 @@ informe y push. Hecho el 2026-10-14: `docs/evidencia/fase6/etapa5-informe.md`.
   del Release.
   Depende de: T24. Tamaño: M. **Necesita a Juan**: cargar los tres secretos
   de Unity y el de la llave, con instrucciones paso a paso.
+
+  **Hecha el 2026-10-15** (`.github/workflows/unity.yml`, corrida 38804213383 en verde): Windows y
+  Android se compilan en `windows-latest` y el Release `chatcouncil-unity-v1` tiene
+  `ChatCouncil-instalador.exe` (31,1 MB) y `ChatCouncil.apk` (39,9 MB), los dos descargables.
+  - Licencia Personal por `UNITY_EMAIL` y `UNITY_PASSWORD` (`activate-unity-license`): Unity 6 ya no
+    da el `.ulf`, y `UNITY_LICENSE` quedó sin uso.
+  - La llave fija vive en `Documentos\ChatCouncil-llave` de Juan, con su respaldo fuera del equipo, y
+    entra como `ANDROID_KEYSTORE_BASE64` y `ANDROID_KEYSTORE_PASS`.
+  - Android salió de `ubuntu-latest` porque ahí la Hub no se instaló.
+  - El flujo no commitea nada, así que `UniversalRenderPipelineGlobalSettings.asset` no viaja.
+  - Corridas fallidas antes del verde:
+    - el hash del SDK de WebView2 iba sin comillas en `compilar.cmd`; nunca había corrido esa línea;
+    - la ruta del editor no llegaba al entorno;
+    - el secreto de la llave se había pegado con otro contenido.
+  - Sin probar: el instalador instalado en otro equipo, y el `.apk` instalado sobre uno firmado con la
+    misma llave. Se prueban en T26.
 
 - [ ] **T26. Instrucciones y registro.**
   Acepta: las instrucciones para Juan (descargar, instalar y abrir cada uno,

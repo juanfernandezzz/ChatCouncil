@@ -21,7 +21,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # La DLL del panel no se versiona: se compila con MSVC y el SDK de WebView2 fijado por SHA-256.
       - name: Plugin nativo (WebView2)
@@ -74,7 +74,7 @@ jobs:
           Get-Content instalador.log
           if ($codigo -ne 0) { Write-Host ("::error title=Inno Setup::" + ((Get-Content instalador.log -Tail 30) -join '%0A')); exit 1 }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: salida/ChatCouncil-instalador.exe
@@ -85,7 +85,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: RageAgainstThePixel/unity-setup@v2
         id: unity
@@ -121,7 +121,7 @@ jobs:
             exit 1
           }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android
           path: build/ChatCouncil.apk
@@ -131,7 +131,7 @@ jobs:
     needs: [windows, android]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: salida
           merge-multiple: true

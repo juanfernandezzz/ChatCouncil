@@ -9,7 +9,7 @@ mkdir obj 2>nul
 if exist sdk\webview2\build\native\include\WebView2.h goto sdk_listo
 mkdir sdk 2>nul
 curl -sSL -o sdk\webview2.zip https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/%VERSION%/microsoft.web.webview2.%VERSION%.nupkg || goto fallo
-powershell -NoProfile -Command "if ((Get-FileHash sdk\webview2.zip -Algorithm SHA256).Hash -ne %HASH%) { exit 1 }; Expand-Archive -Force sdk\webview2.zip sdk\webview2" || goto fallo
+powershell -NoProfile -Command "if ((Get-FileHash sdk\webview2.zip -Algorithm SHA256).Hash -ne '%HASH%') { exit 1 }; Expand-Archive -Force sdk\webview2.zip sdk\webview2" || goto fallo
 :sdk_listo
 rem La ruta de vswhere tiene "(x86)": dentro de un for /f cerraria el parentesis, por eso va a un archivo.
 "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath > obj\vs.txt || goto fallo

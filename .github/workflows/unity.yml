@@ -33,6 +33,7 @@ jobs:
           if ($codigo -ne 0) { Write-Host ("::error title=compilar.cmd::" + ((Get-Content plugin.log -Tail 30) -join '%0A')); exit 1 }
 
       - uses: RageAgainstThePixel/unity-setup@v2
+        id: unity
         with:
           version-file: unity/ProjectSettings/ProjectVersion.txt
           build-targets: StandaloneWindows64
@@ -47,9 +48,12 @@ jobs:
       # Unity.exe es una app de ventana: Start-Process -Wait espera a que termine y da su código de salida.
       - name: Compilar (IL2CPP)
         shell: pwsh
+        env:
+          EDITOR: ${{ steps.unity.outputs.unity-editor-path }}
         run: |
+          trap { Write-Host "::error title=Compilar::$_"; exit 1 }
           New-Item -ItemType Directory -Force build | Out-Null
-          $p = Start-Process -FilePath $env:UNITY_EDITOR_PATH -Wait -PassThru -NoNewWindow -ArgumentList @(
+          $p = Start-Process -FilePath $env:EDITOR -Wait -PassThru -NoNewWindow -ArgumentList @(
             '-batchmode', '-quit', '-buildTarget', 'Win64', '-projectPath', 'unity', '-logFile', "$pwd\build\unity.log",
             '-executeMethod', 'ChatCouncil.Construccion.Construir.Windows', '-salida', "$pwd\build\windows\ChatCouncil.exe")
           Get-Content build\unity.log -Tail 80
@@ -84,6 +88,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: RageAgainstThePixel/unity-setup@v2
+        id: unity
         with:
           version-file: unity/ProjectSettings/ProjectVersion.txt
           build-targets: Android
@@ -98,13 +103,15 @@ jobs:
       - name: Compilar (IL2CPP, firmado)
         shell: pwsh
         env:
+          EDITOR: ${{ steps.unity.outputs.unity-editor-path }}
           LLAVE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
         run: |
+          trap { Write-Host "::error title=Compilar::$_"; exit 1 }
           New-Item -ItemType Directory -Force build | Out-Null
           $env:ANDROID_KEYSTORE_PATH = Join-Path $env:RUNNER_TEMP 'chatcouncil.keystore'
           [IO.File]::WriteAllBytes($env:ANDROID_KEYSTORE_PATH, [Convert]::FromBase64String($env:LLAVE))
-          $p = Start-Process -FilePath $env:UNITY_EDITOR_PATH -Wait -PassThru -NoNewWindow -ArgumentList @(
+          $p = Start-Process -FilePath $env:EDITOR -Wait -PassThru -NoNewWindow -ArgumentList @(
             '-batchmode', '-quit', '-buildTarget', 'Android', '-projectPath', 'unity', '-logFile', "$pwd\build\unity.log",
             '-executeMethod', 'ChatCouncil.Construccion.Construir.Android', '-salida', "$pwd\build\ChatCouncil.apk")
           Remove-Item $env:ANDROID_KEYSTORE_PATH -Force

@@ -1064,8 +1064,8 @@ namespace ChatCouncil.Motor
             // el nombre, y la nota de faltantes; se reservan " (999)" y "AAAA-MM-DD HHMM - ".
             // shortcut: con la carpeta "informes" en más de ~168 caracteres no entra ningún título y va el de reserva, que puede
             // dejar la nota de faltantes fuera del límite; mover la carpeta de datos más arriba si alguien la tiene tan honda.
-            var nombreMax = Math.Min((259 - Path.GetFullPath(dir).Length - 6) / 2,
-                259 - Path.GetFullPath(dir).Length - 3 - InformeFinal.SubcarpetaRespuestas.Length - NombreFaltantes.Length) - 6;
+            var libre = 259 - Path.GetFullPath(dir).Length;
+            var nombreMax = Math.Min((libre - 6) / 2, libre - 3 - InformeFinal.SubcarpetaRespuestas.Length - NombreFaltantes.Length) - 6;
             var nombre = TituloInforme.NombreLibreDeInforme(TituloInforme.NombreBaseDeInforme(titulo, pregunta, reloj().DateTime, nombreMax - 18),
                 n => Directory.Exists(Path.Combine(dir, n)) || File.Exists(Path.Combine(dir, n + ".md")) || File.Exists(Path.Combine(dir, n + ".pdf")));
             // Las respuestas de los INVESTIGADORES a la pregunta, en el orden del pool; nunca las salidas de operador.
@@ -1262,7 +1262,7 @@ namespace ChatCouncil.Motor
             }
             else
             {
-                var rolDeLaEtapa = etapa == "integracion" ? roles.Integrador : etapa == "verificacion" ? roles.Verificador : roles.Redactor;
+                var rolDeLaEtapa = roles.DeLaEtapa(etapa);
                 // T22: quien no es el rol de esta etapa ya terminó lo suyo (un operador o un rol anterior): capturado si dejó su hecho.
                 capturado = proveedorId != rolDeLaEtapa
                     ? hechos.OfType<SalidaOperador>().Any(s => s.RondaId == rondaId && s.OperadorId == proveedorId)

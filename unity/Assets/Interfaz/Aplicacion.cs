@@ -35,7 +35,7 @@ namespace ChatCouncil.Interfaz
 
         string[] args;
         RenderTexture textura;
-        PanelSettings ajustes;
+        PanelSettings ajustesDelPanel;
         VisualElement raiz, seccionRonda;
         Task navegador;
 
@@ -65,26 +65,26 @@ namespace ChatCouncil.Interfaz
         {
             CarpetaDatos = Arg("-datos") ?? Application.persistentDataPath;
 
-            ajustes = ScriptableObject.CreateInstance<PanelSettings>();
+            ajustesDelPanel = ScriptableObject.CreateInstance<PanelSettings>();
             // El tema importa Tokens.uss e Interfaz.uss: así alcanzan también a los menús desplegables, que cuelgan de la raíz del panel.
-            ajustes.themeStyleSheet = Resources.Load<ThemeStyleSheet>("Interfaz/Tema");
+            ajustesDelPanel.themeStyleSheet = Resources.Load<ThemeStyleSheet>("Interfaz/Tema");
             // 1 px de USS = 1 dp en Android (160 dpi) y 1 píxel efectivo en Windows (96 dpi a escala 100 %).
-            ajustes.scaleMode = PanelScaleMode.ConstantPhysicalSize;
-            ajustes.referenceDpi = ajustes.fallbackDpi = Application.platform == RuntimePlatform.Android ? 160 : 96;
+            ajustesDelPanel.scaleMode = PanelScaleMode.ConstantPhysicalSize;
+            ajustesDelPanel.referenceDpi = ajustesDelPanel.fallbackDpi = Application.platform == RuntimePlatform.Android ? 160 : 96;
 
             // Captura a un tamaño exacto en dp, sin depender del monitor (la ventana no puede ser más alta que la pantalla).
             var ruta = Arg("-captura");
             if (ruta != null)
             {
                 textura = new RenderTexture(int.Parse(Arg("-ancho") ?? "1366"), int.Parse(Arg("-alto") ?? "768"), 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
-                ajustes.targetTexture = textura;
-                ajustes.scaleMode = PanelScaleMode.ConstantPixelSize;
-                ajustes.scale = 1;
-                ajustes.clearColor = true;
+                ajustesDelPanel.targetTexture = textura;
+                ajustesDelPanel.scaleMode = PanelScaleMode.ConstantPixelSize;
+                ajustesDelPanel.scale = 1;
+                ajustesDelPanel.clearColor = true;
             }
 
             var doc = gameObject.AddComponent<UIDocument>();
-            doc.panelSettings = ajustes;
+            doc.panelSettings = ajustesDelPanel;
             doc.visualTreeAsset = Resources.Load<VisualTreeAsset>("Interfaz/Ronda");
 
             var arbol = doc.rootVisualElement;
@@ -303,7 +303,7 @@ namespace ChatCouncil.Interfaz
         {
             raiz.panel.visualTree.EnableInClassList("tema-oscuro", tema == "oscuro" || tema == "sistema" && SistemaOscuro());
             // Todo crece junto (como el zoom de un navegador) y la ronda pasa sola a la clase angosta cuando no entra (WCAG 1.4.10).
-            ajustes.scale = texto == 0 ? Mathf.Clamp(UnityEngine.Accessibility.AccessibilitySettings.fontScale, 1, 2) : texto / 100f;
+            ajustesDelPanel.scale = texto == 0 ? Mathf.Clamp(UnityEngine.Accessibility.AccessibilitySettings.fontScale, 1, 2) : texto / 100f;
         }
 
         static bool SistemaOscuro()

@@ -17,6 +17,11 @@ namespace ChatCouncil.Motor
         public string Integrador { get; }
         public string Verificador { get; }
         public string Redactor { get; }
+
+        /// <summary>El proveedor que trabaja en esa etapa de rol (el redactor también en el informe); null en las de los operadores.</summary>
+        public string DeLaEtapa(string etapa) =>
+            etapa == "integracion" ? Integrador : etapa == "verificacion" ? Verificador
+            : etapa == "redaccion" || etapa == "informe" ? Redactor : null;
     }
 
     /// <summary>

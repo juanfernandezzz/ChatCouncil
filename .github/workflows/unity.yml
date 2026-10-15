@@ -1,5 +1,6 @@
 # T25: compila la app de Unity para Windows (instalador) y Android (.apk firmado con la llave fija) y los publica en
 # el Release chatcouncil-unity-v1. Licencia Personal por UNITY_EMAIL y UNITY_PASSWORD (Unity 6 ya no da el .ulf).
+# Si un paso falla, sus últimas líneas van como anotación (::error), que se lee sin entrar al log.
 name: unity
 
 on:
@@ -24,8 +25,12 @@ jobs:
 
       # La DLL del panel no se versiona: se compila con MSVC y el SDK de WebView2 fijado por SHA-256.
       - name: Plugin nativo (WebView2)
-        shell: cmd
-        run: panel\windows\compilar.cmd
+        shell: pwsh
+        run: |
+          cmd /c panel\windows\compilar.cmd *> plugin.log
+          $codigo = $LASTEXITCODE
+          Get-Content plugin.log
+          if ($codigo -ne 0) { Write-Host ("::error title=compilar.cmd::" + ((Get-Content plugin.log -Tail 30) -join '%0A')); exit 1 }
 
       - uses: RageAgainstThePixel/unity-setup@v2
         with:
@@ -48,7 +53,10 @@ jobs:
             '-batchmode', '-quit', '-buildTarget', 'Win64', '-projectPath', 'unity', '-logFile', "$pwd\build\unity.log",
             '-executeMethod', 'ChatCouncil.Construccion.Construir.Windows', '-salida', "$pwd\build\windows\ChatCouncil.exe")
           Get-Content build\unity.log -Tail 80
-          if ($p.ExitCode -ne 0 -or -not (Test-Path build\windows\ChatCouncil.exe)) { exit 1 }
+          if ($p.ExitCode -ne 0 -or -not (Test-Path build\windows\ChatCouncil.exe)) {
+            Write-Host ("::error title=Unity Windows::" + ((Select-String -Path build\unity.log -Pattern 'error|failed' | Select-Object -Last 30 | ForEach-Object Line) -join '%0A'))
+            exit 1
+          }
 
       - name: Instalador
         shell: pwsh
@@ -57,8 +65,10 @@ jobs:
           Get-ChildItem build\windows -Directory | Where-Object { $_.Name -like '*DoNotShip' -or $_.Name -like '*ButDontShipItWithYourGame' } | Remove-Item -Recurse -Force
           $version = (Select-String -Path unity\ProjectSettings\ProjectSettings.asset -Pattern 'bundleVersion: (.+)').Matches[0].Groups[1].Value.Trim()
           choco install innosetup -y --no-progress
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DVersion=$version" instalador\ChatCouncil.iss
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DVersion=$version" instalador\ChatCouncil.iss *> instalador.log
+          $codigo = $LASTEXITCODE
+          Get-Content instalador.log
+          if ($codigo -ne 0) { Write-Host ("::error title=Inno Setup::" + ((Get-Content instalador.log -Tail 30) -join '%0A')); exit 1 }
 
       - uses: actions/upload-artifact@v4
         with:
@@ -66,14 +76,9 @@ jobs:
           path: salida/ChatCouncil-instalador.exe
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: windows-log
-          path: build/unity.log
-
+  # Android también en Windows, como se compila a mano: la Hub no se instaló en ubuntu-latest (/opt/unityhub).
   android:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
@@ -89,32 +94,31 @@ jobs:
           username: ${{ secrets.UNITY_EMAIL }}
           password: ${{ secrets.UNITY_PASSWORD }}
 
+      # La llave se escribe en RUNNER_TEMP solo para compilar y se borra al terminar.
       - name: Compilar (IL2CPP, firmado)
+        shell: pwsh
         env:
           LLAVE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
         run: |
-          mkdir -p build
-          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/chatcouncil.keystore"
-          printf '%s' "$LLAVE" | base64 -d > "$ANDROID_KEYSTORE_PATH"
-          status=0
-          "$UNITY_EDITOR_PATH" -batchmode -quit -nographics -buildTarget Android -projectPath unity -logFile "$PWD/build/unity.log" \
-            -executeMethod ChatCouncil.Construccion.Construir.Android -salida "$PWD/build/ChatCouncil.apk" || status=$?
-          rm -f "$ANDROID_KEYSTORE_PATH"
-          tail -n 80 build/unity.log
-          [ "$status" -eq 0 ] && [ -f build/ChatCouncil.apk ]
+          New-Item -ItemType Directory -Force build | Out-Null
+          $env:ANDROID_KEYSTORE_PATH = Join-Path $env:RUNNER_TEMP 'chatcouncil.keystore'
+          [IO.File]::WriteAllBytes($env:ANDROID_KEYSTORE_PATH, [Convert]::FromBase64String($env:LLAVE))
+          $p = Start-Process -FilePath $env:UNITY_EDITOR_PATH -Wait -PassThru -NoNewWindow -ArgumentList @(
+            '-batchmode', '-quit', '-buildTarget', 'Android', '-projectPath', 'unity', '-logFile', "$pwd\build\unity.log",
+            '-executeMethod', 'ChatCouncil.Construccion.Construir.Android', '-salida', "$pwd\build\ChatCouncil.apk")
+          Remove-Item $env:ANDROID_KEYSTORE_PATH -Force
+          Get-Content build\unity.log -Tail 80
+          if ($p.ExitCode -ne 0 -or -not (Test-Path build\ChatCouncil.apk)) {
+            Write-Host ("::error title=Unity Android::" + ((Select-String -Path build\unity.log -Pattern 'error|failed|FAILURE' | Select-Object -Last 30 | ForEach-Object Line) -join '%0A'))
+            exit 1
+          }
 
       - uses: actions/upload-artifact@v4
         with:
           name: android
           path: build/ChatCouncil.apk
           if-no-files-found: error
-
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: android-log
-          path: build/unity.log
 
   release:
     needs: [windows, android]

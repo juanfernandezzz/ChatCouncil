@@ -23,6 +23,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # pagina.js es una salida de compilación (pagina/src con tsc, en .gitignore): sin él los paneles no funcionan.
+      - name: Script de página (pagina.ts)
+        shell: pwsh
+        run: |
+          npx --yes -p typescript@7.0.2 tsc -p pagina
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path unity/Assets/StreamingAssets/pagina.js)) { Write-Host "::error title=pagina.js::tsc no generó pagina.js"; exit 1 }
+
       # La DLL del panel no se versiona: se compila con MSVC y el SDK de WebView2 fijado por SHA-256.
       - name: Plugin nativo (WebView2)
         shell: pwsh
@@ -86,6 +93,13 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v7
+
+      # pagina.js es una salida de compilación (pagina/src con tsc, en .gitignore): sin él los paneles no funcionan.
+      - name: Script de página (pagina.ts)
+        shell: pwsh
+        run: |
+          npx --yes -p typescript@7.0.2 tsc -p pagina
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path unity/Assets/StreamingAssets/pagina.js)) { Write-Host "::error title=pagina.js::tsc no generó pagina.js"; exit 1 }
 
       - uses: RageAgainstThePixel/unity-setup@v2
         id: unity

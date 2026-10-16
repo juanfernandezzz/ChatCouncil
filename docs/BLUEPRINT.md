@@ -2932,6 +2932,53 @@ MoveFocusRequested y AcceleratorKeyPressed, y MoveFocus.
   botones con el proveedor y su estado [WCAG 2.1.1, 4.1.2]; la etapa actual se
   dice con palabras, no solo con la barra [WCAG 1.3.1].
 
+Decisiones de T25 (compilación en la nube y Release):
+
+· D55, 2026-10-15, la licencia Personal de Unity se activa en el CI con el correo
+  y la contraseña de la cuenta (RageAgainstThePixel/activate-unity-license), no
+  con un archivo de licencia. Motivo: Unity 6 ya no genera el .ulf para Personal
+  (la Hub solo deja UnityEntitlementLicense.xml) y la activación manual de
+  Personal ya no existe; la documentación de GameCI sigue pidiendo el .ulf.
+  Medido: la activación pasó en windows-latest. El secreto UNITY_LICENSE quedó
+  sin uso. Fuentes: game.ci/docs/github/activation, issue 469 de
+  game-ci/documentation, discussions.unity.com (manual activation of Personal).
+· D56, 2026-10-15, Windows y Android se compilan en windows-latest, con Unity
+  corrido directo (-executeMethod Construir.*, como en local) y no con el
+  builder de GameCI. Motivo: es el mismo camino medido en esta máquina, y en
+  ubuntu-latest la instalación de la Hub falló (falta /opt/unityhub/unityhub,
+  corrida 38771509375).
+· D57, 2026-10-15, el CI genera lo que no se versiona: la DLL del panel
+  (compilar.cmd, con el SDK de WebView2 fijado por SHA-256) y pagina.js (tsc con
+  typescript@7.0.2, la versión del repo). Motivo, medido al recorrer el Release
+  para T26: sin pagina.js la autoprueba del .apk publicado dio 10/15
+  (FileNotFoundException), es decir, los paneles no funcionaban.
+· D58, 2026-10-15, un solo Release, chatcouncil-unity-v1, cuyos archivos
+  reemplaza cada compilación de main (pedido Q5). El .apk va firmado con la
+  llave fija (CN=ChatCouncil), cuyo respaldo guarda Juan fuera del repositorio;
+  un .apk firmado con otra llave no actualiza la app instalada (medido en el
+  emulador: INSTALL_FAILED_UPDATE_INCOMPATIBLE). Límite anotado: la etiqueta no
+  dice de qué commit es cada binario (lo dice el texto del Release).
+
+Estado al cierre de las tareas de la Fase 6 (2026-10-15):
+
+· Hecho: el motor portado con sus pruebas (84), la app de Unity para Windows y
+  Android con el flujo completo de una ronda, la interfaz decidida por evidencia
+  (D1 a D54), la revisión y simplificación (T24), y el Release con instalador y
+  .apk (T25). Instrucciones para Juan: docs/INSTALAR.md.
+· Abierto, por orden de impacto:
+  - El recorrido real con las cuentas de Juan, que mide lo que ninguna prueba
+    puede: los selectores en los sitios reales (también en sus versiones
+    móviles), los límites de D30 y D36, y la ruta con tilde en "abrir la carpeta".
+  - Una página trabada en un script no se recupera con "Recargar la página"
+    (medido en Windows y Android); haría falta matar el renderer.
+  - En Android, sin medir: el tema oscuro del sistema (uiMode), TalkBack y los
+    paneles de atrás. F1 a F5 en Android quedó fuera por decisión de Juan.
+  - Los lectores de pantalla con personas, WCAG 3.1.1 (Unity no declara el
+    idioma) y el orden del Tab tecla por tecla.
+  - Los textos de licencia de Newtonsoft.Json y demás terceros no viajan con la
+    app (marked sí); el texto del informe sigue sin tildes por la paridad con
+    TypeScript.
+
 ---
 
 ## 6. Criterios de aceptación

@@ -66,6 +66,8 @@ jobs:
         id: unity
         with:
           version-file: unity/ProjectSettings/ProjectVersion.txt
+          # Instalar Unity tomaba 14 a 18 min por corrida.
+          cache-installation: true
           build-targets: StandaloneWindows64
           modules: windows-il2cpp
 
@@ -79,19 +81,18 @@ jobs:
         shell: pwsh
         run: scripts/unity/compilar-app.ps1 -Plataforma Windows -Salida "$pwd\build\windows\ChatCouncil.exe" -Editor "${{ steps.unity.outputs.unity-editor-path }}"
 
-      # Medido, no exigido todavía: si WebView2 corre en el runner, pasa a frenar el Release.
+      # Frena el Release: un build que no abre paneles no se publica (medido en el runner: 37/37, corrida 38842540960).
       - name: Autoprueba del build
         shell: pwsh
-        continue-on-error: true
         run: |
           $salida = "$pwd\build\autoprueba.txt"
           $p = Start-Process -FilePath build\windows\ChatCouncil.exe -PassThru -ArgumentList @('-autoprueba', "`"$salida`"")
-          if (-not $p.WaitForExit(600000)) { $p.Kill(); Write-Host '::warning title=Autoprueba::no terminó en 10 min'; exit 1 }
-          if (-not (Test-Path $salida)) { Write-Host '::warning title=Autoprueba::no dejó informe'; exit 1 }
+          if (-not $p.WaitForExit(600000)) { $p.Kill(); Write-Host '::error title=Autoprueba::no terminó en 10 min'; exit 1 }
+          if (-not (Test-Path $salida)) { Write-Host '::error title=Autoprueba::no dejó informe'; exit 1 }
           Get-Content $salida
           $ok = @(Select-String -Path $salida -Pattern '^OK').Count
           $fallas = @(Select-String -Path $salida -Pattern '^FALLA' | ForEach-Object Line)
-          if ($fallas) { Write-Host ("::warning title=Autoprueba $ok OK, $($fallas.Count) FALLA::" + ($fallas -join '%0A')); exit 1 }
+          if ($fallas) { Write-Host ("::error title=Autoprueba $ok OK, $($fallas.Count) FALLA::" + ($fallas -join '%0A')); exit 1 }
           Write-Host "::notice title=Autoprueba::$ok OK, 0 FALLA"
 
       - name: Instalador
@@ -131,6 +132,8 @@ jobs:
         id: unity
         with:
           version-file: unity/ProjectSettings/ProjectVersion.txt
+          # Instalar Unity tomaba 14 a 18 min por corrida.
+          cache-installation: true
           build-targets: Android
 
       - uses: RageAgainstThePixel/activate-unity-license@v2

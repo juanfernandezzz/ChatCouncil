@@ -23,6 +23,9 @@ jobs:
         run: pnpm guard:sellado
       - name: Guard - las specs cumplen el contrato que el preload espera
         run: pnpm guard:specs
+      # Unity lee Datos.g.cs, no specs.json: si quedo viejo, la app usa el selector anterior sin avisar.
+      - name: Guard - Datos.g.cs y Referencias.g.cs estan al dia con specs.json
+        run: node motor/Dotnet~/referencias.mjs && git diff --exit-code -- motor/Runtime/Datos.g.cs motor/Tests/Referencias.g.cs
       # El typecheck no mira dentro de una cadena: la fuente que el sondeo
       # inyecta en la pagina del proveedor se verifica aparte.
       - name: Guard - la fuente inyectada parsea, no envia y no toca credenciales

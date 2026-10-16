@@ -1,12 +1,12 @@
 # T25: compila la app de Unity para Windows (instalador) y Android (.apk firmado con la llave fija) y los publica en
-# el Release chatcouncil-unity-v1. Licencia Personal por UNITY_EMAIL y UNITY_PASSWORD (Unity 6 ya no da el .ulf).
-# Si un paso falla, sus últimas líneas van como anotación (::error), que se lee sin entrar al log.
+# el Release chatcouncil-unity-v1 (D55 a D58). La compilación es scripts/unity/compilar-app.ps1, el mismo script que en
+# local. Si un paso falla, sus últimas líneas van como anotación (::error), que se lee sin entrar al log.
 name: unity
 
 on:
   push:
     branches: [main]
-    paths: ['unity/**', 'panel/**', 'motor/**', 'instalador/**', '.github/workflows/unity.yml']
+    paths: ['unity/**', 'panel/**', 'motor/**', 'pagina/**', 'instalador/**', 'scripts/unity/**', '.github/workflows/unity.yml']
   workflow_dispatch:
 
 permissions:
@@ -17,27 +17,50 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Lo barato primero (1 a 2 min): lo que no se versiona y los secretos. Antes, cada uno de estos fallos se veía
+  # recién después de instalar Unity.
+  comprobar:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: pagina.js y la DLL del panel
+        shell: pwsh
+        run: scripts/unity/compilar-app.ps1 -SoloPreparar
+
+      - name: Secretos
+        shell: pwsh
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          LLAVE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+        run: |
+          function Fallar($m) { Write-Host "::error title=Secretos::$m"; exit 1 }
+          $faltan = 'UNITY_EMAIL', 'UNITY_PASSWORD', 'LLAVE', 'ANDROID_KEYSTORE_PASS' | Where-Object { -not [Environment]::GetEnvironmentVariable($_) }
+          if ($faltan) { Fallar ("faltan: " + ($faltan -join ', ') + " (LLAVE es ANDROID_KEYSTORE_BASE64)") }
+          $f = Join-Path $env:RUNNER_TEMP 'llave.p12'
+          try { [IO.File]::WriteAllBytes($f, [Convert]::FromBase64String($env:LLAVE)) } catch { Fallar 'ANDROID_KEYSTORE_BASE64 no es base64: vuelve a pegarlo con llave.ps1' }
+          & (Join-Path $env:JAVA_HOME 'bin\keytool.exe') -list -keystore $f -storetype PKCS12 -storepass $env:ANDROID_KEYSTORE_PASS -alias chatcouncil *> $null
+          $codigo = $LASTEXITCODE
+          Remove-Item $f -Force
+          if ($codigo -ne 0) { Fallar 'la llave no abre con ANDROID_KEYSTORE_PASS o no tiene el alias chatcouncil' }
+          Write-Host 'Secretos: los cuatro están y la llave abre.'
+
   windows:
+    needs: comprobar
     runs-on: windows-latest
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v7
 
-      # pagina.js es una salida de compilación (pagina/src con tsc, en .gitignore): sin él los paneles no funcionan.
-      - name: Script de página (pagina.ts)
-        shell: pwsh
-        run: |
-          npx --yes -p typescript@7.0.2 tsc -p pagina
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path unity/Assets/StreamingAssets/pagina.js)) { Write-Host "::error title=pagina.js::tsc no generó pagina.js"; exit 1 }
-
-      # La DLL del panel no se versiona: se compila con MSVC y el SDK de WebView2 fijado por SHA-256.
-      - name: Plugin nativo (WebView2)
-        shell: pwsh
-        run: |
-          cmd /c panel\windows\compilar.cmd *> plugin.log
-          $codigo = $LASTEXITCODE
-          Get-Content plugin.log
-          if ($codigo -ne 0) { Write-Host ("::error title=compilar.cmd::" + ((Get-Content plugin.log -Tail 30) -join '%0A')); exit 1 }
+      # Library guarda lo ya importado y lo ya compilado por IL2CPP: con ella, la compilación es incremental.
+      - uses: actions/cache@v6
+        with:
+          path: unity/Library
+          key: library-windows-${{ hashFiles('unity/Packages/packages-lock.json', 'unity/ProjectSettings/ProjectVersion.txt') }}-${{ github.run_id }}
+          restore-keys: library-windows-${{ hashFiles('unity/Packages/packages-lock.json', 'unity/ProjectSettings/ProjectVersion.txt') }}-
 
       - uses: RageAgainstThePixel/unity-setup@v2
         id: unity
@@ -52,28 +75,31 @@ jobs:
           username: ${{ secrets.UNITY_EMAIL }}
           password: ${{ secrets.UNITY_PASSWORD }}
 
-      # Unity.exe es una app de ventana: Start-Process -Wait espera a que termine y da su código de salida.
       - name: Compilar (IL2CPP)
         shell: pwsh
-        env:
-          EDITOR: ${{ steps.unity.outputs.unity-editor-path }}
+        run: scripts/unity/compilar-app.ps1 -Plataforma Windows -Salida "$pwd\build\windows\ChatCouncil.exe" -Editor "${{ steps.unity.outputs.unity-editor-path }}"
+
+      # Medido, no exigido todavía: si WebView2 corre en el runner, pasa a frenar el Release.
+      - name: Autoprueba del build
+        shell: pwsh
+        continue-on-error: true
         run: |
-          trap { Write-Host "::error title=Compilar::$_"; exit 1 }
-          New-Item -ItemType Directory -Force build | Out-Null
-          $p = Start-Process -FilePath $env:EDITOR -Wait -PassThru -NoNewWindow -ArgumentList @(
-            '-batchmode', '-quit', '-buildTarget', 'Win64', '-projectPath', 'unity', '-logFile', "$pwd\build\unity.log",
-            '-executeMethod', 'ChatCouncil.Construccion.Construir.Windows', '-salida', "$pwd\build\windows\ChatCouncil.exe")
-          Get-Content build\unity.log -Tail 80
-          if ($p.ExitCode -ne 0 -or -not (Test-Path build\windows\ChatCouncil.exe)) {
-            Write-Host ("::error title=Unity Windows::" + ((Select-String -Path build\unity.log -Pattern 'error|failed' | Select-Object -Last 30 | ForEach-Object Line) -join '%0A'))
-            exit 1
-          }
+          $salida = "$pwd\build\autoprueba.txt"
+          $p = Start-Process -FilePath build\windows\ChatCouncil.exe -PassThru -ArgumentList @('-autoprueba', "`"$salida`"")
+          if (-not $p.WaitForExit(600000)) { $p.Kill(); Write-Host '::warning title=Autoprueba::no terminó en 10 min'; exit 1 }
+          if (-not (Test-Path $salida)) { Write-Host '::warning title=Autoprueba::no dejó informe'; exit 1 }
+          Get-Content $salida
+          $ok = @(Select-String -Path $salida -Pattern '^OK').Count
+          $fallas = @(Select-String -Path $salida -Pattern '^FALLA' | ForEach-Object Line)
+          if ($fallas) { Write-Host ("::warning title=Autoprueba $ok OK, $($fallas.Count) FALLA::" + ($fallas -join '%0A')); exit 1 }
+          Write-Host "::notice title=Autoprueba::$ok OK, 0 FALLA"
 
       - name: Instalador
         shell: pwsh
         run: |
           # Lo que Unity deja junto al build y no se distribuye.
           Get-ChildItem build\windows -Directory | Where-Object { $_.Name -like '*DoNotShip' -or $_.Name -like '*ButDontShipItWithYourGame' } | Remove-Item -Recurse -Force
+          Remove-Item build\windows\ChatCouncil.exe.log -ErrorAction SilentlyContinue
           $version = (Select-String -Path unity\ProjectSettings\ProjectSettings.asset -Pattern 'bundleVersion: (.+)').Matches[0].Groups[1].Value.Trim()
           choco install innosetup -y --no-progress
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DVersion=$version" instalador\ChatCouncil.iss *> instalador.log
@@ -87,19 +113,19 @@ jobs:
           path: salida/ChatCouncil-instalador.exe
           if-no-files-found: error
 
-  # Android también en Windows, como se compila a mano: la Hub no se instaló en ubuntu-latest (/opt/unityhub).
+  # Android también en Windows, como se compila a mano: la Hub no se instaló en ubuntu-latest (D56).
   android:
+    needs: comprobar
     runs-on: windows-latest
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v7
 
-      # pagina.js es una salida de compilación (pagina/src con tsc, en .gitignore): sin él los paneles no funcionan.
-      - name: Script de página (pagina.ts)
-        shell: pwsh
-        run: |
-          npx --yes -p typescript@7.0.2 tsc -p pagina
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path unity/Assets/StreamingAssets/pagina.js)) { Write-Host "::error title=pagina.js::tsc no generó pagina.js"; exit 1 }
+      - uses: actions/cache@v6
+        with:
+          path: unity/Library
+          key: library-android-${{ hashFiles('unity/Packages/packages-lock.json', 'unity/ProjectSettings/ProjectVersion.txt') }}-${{ github.run_id }}
+          restore-keys: library-android-${{ hashFiles('unity/Packages/packages-lock.json', 'unity/ProjectSettings/ProjectVersion.txt') }}-
 
       - uses: RageAgainstThePixel/unity-setup@v2
         id: unity
@@ -117,23 +143,13 @@ jobs:
       - name: Compilar (IL2CPP, firmado)
         shell: pwsh
         env:
-          EDITOR: ${{ steps.unity.outputs.unity-editor-path }}
           LLAVE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
         run: |
-          trap { Write-Host "::error title=Compilar::$_"; exit 1 }
-          New-Item -ItemType Directory -Force build | Out-Null
           $env:ANDROID_KEYSTORE_PATH = Join-Path $env:RUNNER_TEMP 'chatcouncil.keystore'
           [IO.File]::WriteAllBytes($env:ANDROID_KEYSTORE_PATH, [Convert]::FromBase64String($env:LLAVE))
-          $p = Start-Process -FilePath $env:EDITOR -Wait -PassThru -NoNewWindow -ArgumentList @(
-            '-batchmode', '-quit', '-buildTarget', 'Android', '-projectPath', 'unity', '-logFile', "$pwd\build\unity.log",
-            '-executeMethod', 'ChatCouncil.Construccion.Construir.Android', '-salida', "$pwd\build\ChatCouncil.apk")
-          Remove-Item $env:ANDROID_KEYSTORE_PATH -Force
-          Get-Content build\unity.log -Tail 80
-          if ($p.ExitCode -ne 0 -or -not (Test-Path build\ChatCouncil.apk)) {
-            Write-Host ("::error title=Unity Android::" + ((Select-String -Path build\unity.log -Pattern 'error|failed|FAILURE' | Select-Object -Last 30 | ForEach-Object Line) -join '%0A'))
-            exit 1
-          }
+          try { scripts/unity/compilar-app.ps1 -Plataforma Android -Salida "$pwd\build\ChatCouncil.apk" -Editor "${{ steps.unity.outputs.unity-editor-path }}" }
+          finally { Remove-Item $env:ANDROID_KEYSTORE_PATH -Force }
 
       - uses: actions/upload-artifact@v7
         with:

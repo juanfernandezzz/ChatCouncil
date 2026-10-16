@@ -522,12 +522,26 @@ informe y push. Hecho el 2026-10-14: `docs/evidencia/fase6/etapa5-informe.md`.
   - Sin probar: el instalador instalado en otro equipo, y el `.apk` instalado sobre uno firmado con la
     misma llave. Se prueban en T26.
 
-- [ ] **T26. Instrucciones y registro.**
+- [x] **T26. Instrucciones y registro.**
   Acepta: las instrucciones para Juan (descargar, instalar y abrir cada uno,
   sin terminal ni git) y la sección de la Fase 6 en `docs/BLUEPRINT.md`, con
   las decisiones y lo que quedó abierto.
   Verifica: las instrucciones siguen paso a paso el Release real.
   Depende de: T25. Tamaño: S.
+
+  **Hecha el 2026-10-16** (`docs/INSTALAR.md`; BLUEPRINT, D55 a D58 y el estado al cierre de la Fase 6).
+  Recorrido del Release real:
+  - Windows: el instalador del Release, en modo silencioso, instaló la app, creó los accesos directos del
+    menú Inicio y del escritorio, y la app instalada pasó la autoprueba (37/37). La desinstalación quitó la
+    app y los accesos, y dejó la carpeta de datos.
+  - Android: el `.apk` está firmado con la llave fija (CN=ChatCouncil); sobre una versión de depuración,
+    Android rechaza la actualización (INSTALL_FAILED_UPDATE_INCOMPATIBLE), y por eso INSTALAR.md lo
+    explica. Instalado en el emulador, pasó la autoprueba (36/36).
+  - El recorrido encontró que el Release no traía `pagina.js` (D57); se arregló y se verificó.
+
+  Sin ver todavía: las pantallas interactivas que las instrucciones describen y que la instalación
+  silenciosa no muestra (SmartScreen, el asistente, Play Protect, "Permitir de esta fuente"). Las
+  confirma Juan al seguir INSTALAR.md en su equipo y en su teléfono.
 
 ### Etapa 7 — Handoff
 

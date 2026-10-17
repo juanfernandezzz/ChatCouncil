@@ -11,6 +11,14 @@
         </ui:VisualElement>
 
         <ui:VisualElement name="secciones" class="trabajo">
+        <!-- Actualización disponible (Actualizador.cs): oculto hasta que el Release tiene una versión mayor. -->
+        <ui:VisualElement name="aviso-version" class="aviso">
+            <ui:VisualElement class="aviso-cuerpo">
+                <ui:Label name="aviso-texto" class="envolver" />
+                <ui:VisualElement name="aviso-barra" class="aviso-barra"><ui:VisualElement name="aviso-relleno" class="aviso-relleno" /></ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Button name="aviso-boton" class="boton boton-primario" />
+        </ui:VisualElement>
         <ui:VisualElement name="seccion-ronda" class="trabajo">
 
             <!-- ===== Ancha (D4) ===== -->
@@ -162,7 +170,7 @@
                     <ui:VisualElement class="bloque">
                         <ui:Label text="Acerca de ChatCouncil" class="titulo-bloque semibold" />
                         <ui:Label name="version" class="envolver separado" />
-                        <ui:Label class="envolver separado" text="La app no busca versiones nuevas por su cuenta. Las versiones publicadas están en la página del proyecto." />
+                        <ui:Label class="envolver separado" text="Al abrirse, la app busca una versión nueva y te la ofrece arriba. Las versiones publicadas están en la página del proyecto." />
                         <ui:Button name="ver-versiones" text="Ver las versiones publicadas" class="boton boton-solo" />
                         <ui:Label text="Licencias de terceros" class="subtitulo semibold" />
                         <ui:Label class="envolver separado" text="Atkinson Hyperlegible Next, del Braille Institute: SIL Open Font License 1.1. marked: licencia MIT. Newtonsoft.Json: licencia MIT. Microsoft Edge WebView2: licencia del SDK de Microsoft. AndroidX WebKit: licencia Apache 2.0. Hecha con Unity: términos de Unity." />

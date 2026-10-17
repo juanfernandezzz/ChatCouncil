@@ -77,6 +77,10 @@ jobs:
           username: ${{ secrets.UNITY_EMAIL }}
           password: ${{ secrets.UNITY_PASSWORD }}
 
+      - name: Versión de la compilación
+        shell: pwsh
+        run: scripts/unity/fijar-version.ps1 -Corrida ${{ github.run_number }}
+
       - name: Compilar (IL2CPP)
         shell: pwsh
         run: scripts/unity/compilar-app.ps1 -Plataforma Windows -Salida "$pwd\build\windows\ChatCouncil.exe" -Editor "${{ steps.unity.outputs.unity-editor-path }}"
@@ -142,6 +146,10 @@ jobs:
           username: ${{ secrets.UNITY_EMAIL }}
           password: ${{ secrets.UNITY_PASSWORD }}
 
+      - name: Versión de la compilación
+        shell: pwsh
+        run: scripts/unity/fijar-version.ps1 -Corrida ${{ github.run_number }}
+
       # La llave se escribe en RUNNER_TEMP solo para compilar y se borra al terminar.
       - name: Compilar (IL2CPP, firmado)
         shell: pwsh
@@ -169,6 +177,9 @@ jobs:
           path: salida
           merge-multiple: true
 
+      # La app compara este número con el suyo (Actualizacion.EsNueva) para ofrecer la actualización.
+      - run: printf '0.1.%s' '${{ github.run_number }}' > salida/version.txt
+
       # shortcut: la etiqueta queda en el commit de la primera publicación y cada corrida reemplaza los archivos;
       # si hace falta saber de qué commit es cada binario, publicar un Release por versión.
       - uses: softprops/action-gh-release@v2
@@ -183,3 +194,4 @@ jobs:
           files: |
             salida/ChatCouncil-instalador.exe
             salida/ChatCouncil.apk
+            salida/version.txt

@@ -141,6 +141,7 @@ namespace ChatCouncil.Interfaz
                 if (Arg("-frase") == "plegada") Ronda.PlegarFrase();
                 StartCoroutine(Capturar(ruta));
             }
+            if (ruta == null && !prueba) _ = new Actualizador(raiz).Buscar();
             if (Arg("-pruebainterfaz") != null) gameObject.AddComponent<PruebaInterfaz>().Iniciar(this, Arg("-pruebainterfaz"), int.Parse(Arg("-fase") ?? "1"));
             if (pruebaRonda != null) gameObject.AddComponent<PruebaRonda>().Iniciar(this, pruebaRonda);
         }

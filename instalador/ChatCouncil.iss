@@ -23,6 +23,8 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 WizardStyle=modern
+; La actualización desde la app corre /SILENT: cierra la app si sigue abierta y la reabre el [Run] de abajo, no el reinicio de Inno.
+RestartApplications=no
 
 [Languages]
 Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
@@ -39,6 +41,7 @@ Name: "{autodesktop}\ChatCouncil"; Filename: "{app}\ChatCouncil.exe"; Tasks: esc
 
 [Run]
 Filename: "{app}\ChatCouncil.exe"; Description: "Abrir ChatCouncil"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\ChatCouncil.exe"; Flags: nowait; Check: WizardSilent
 
 [Code]
 const

@@ -72,6 +72,21 @@
 .riel-item--actual { background-color: var(--color-superficie); color: var(--color-texto); }
 
 .trabajo { flex-grow: 1; }
+
+/* Aviso de versión nueva: arriba de todas las secciones, con la barra de descarga al estilo de las etapas. */
+.aviso {
+    display: none;
+    flex-direction: row;
+    align-items: center;
+    padding: var(--esp-2) var(--esp-4);
+    background-color: var(--color-superficie-2);
+    border-bottom-width: 1px;
+    border-color: var(--color-borde);
+}
+.aviso-cuerpo { flex-grow: 1; flex-shrink: 1; flex-basis: 0; min-width: 0; }
+.aviso-barra { display: none; height: 6px; margin-top: var(--esp-1); border-radius: 3px; background-color: var(--color-borde); }
+.aviso-relleno { width: 0; height: 100%; border-radius: 3px; background-color: var(--color-primario); }
+.aviso .boton { flex-shrink: 0; margin-left: var(--esp-3); }
 .ancha .solo-angosta { display: none; }
 .angosta .solo-ancha { display: none; }
 

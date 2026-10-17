@@ -10,8 +10,8 @@ En "Assets" hay dos archivos:
 | `ChatCouncil-instalador.exe` | Windows 10 u 11, de 64 bits |
 | `ChatCouncil.apk` | Android 7.1 o más nuevo |
 
-Cada vez que se mejora la app, esos dos archivos se reemplazan por la versión nueva. Para actualizar, se
-repite la instalación: tus rondas e informes se conservan.
+Cada vez que se mejora la app, esos dos archivos se reemplazan por la versión nueva. La app lo detecta sola
+(ver **Actualizar** en cada sistema): tus rondas e informes se conservan.
 
 ## En Windows
 
@@ -29,7 +29,9 @@ ChatCouncil queda en el menú Inicio y en el escritorio.
 Pulsa **Sí**: se abre la página de Microsoft. Descarga el **Evergreen Bootstrapper**, instálalo y abre
 ChatCouncil de nuevo. En Windows 10 y 11 actualizados casi siempre ya está instalado.
 
-**Actualizar:** descarga el instalador nuevo y vuelve a instalar encima.
+**Actualizar:** al abrirse, la app busca una versión nueva y muestra un aviso arriba con el botón **Actualizar**.
+Al pulsarlo descarga el instalador con una barra de avance, lo corre sin preguntas y se vuelve a abrir sola. No
+hay que desinstalar. (Las versiones anteriores a esta función no lo hacen: instala encima una última vez.)
 
 **Desinstalar:** Configuración → Aplicaciones → ChatCouncil → Desinstalar. Tus rondas e informes no se
 borran: quedan en la carpeta de datos que la app muestra en **Ajustes**.
@@ -48,7 +50,8 @@ borran: quedan en la carpeta de datos que la app muestra en **Ajustes**.
 **Si la app dice que el teléfono no admite perfiles separados:** actualiza **Android System WebView** desde
 Google Play y ábrela de nuevo. ChatCouncil lo necesita para que cada servicio tenga su propia sesión.
 
-**Actualizar:** descarga el `.apk` nuevo e instálalo encima. Tus rondas se conservan.
+**Actualizar:** la app muestra el aviso con el botón **Actualizar**, que abre la descarga del `.apk`. Android no
+deja instalar sin que lo confirmes: ábrelo e instala encima. Tus rondas se conservan.
 
 **Si al actualizar dice "No se instaló la app":** la versión que tienes se firmó con otra llave; solo pasa
 con una versión de prueba anterior a este Release. Desinstala ChatCouncil y vuelve a instalar. Eso borra los

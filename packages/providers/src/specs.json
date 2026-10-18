@@ -5,7 +5,7 @@
       "newConversationUrl": "https://chatgpt.com/",
       "escritura": "insertText",
       "composer": {
-        "selector": "#prompt-textarea",
+        "selector": "#prompt-textarea, div.ProseMirror[contenteditable=\"true\"]",
         "kind": "contenteditable"
       },
       "submit": {

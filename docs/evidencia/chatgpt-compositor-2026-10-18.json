@@ -1,0 +1,46 @@
+{
+ "ruta": "/",
+ "listo": "complete",
+ "selectores": {
+  "composer": 0,
+  "submit": 0,
+  "responseRoot": 1,
+  "assistant": 0,
+  "stop": 0
+ },
+ "editables": [
+  {
+   "tag": "DIV",
+   "contenteditable": "true",
+   "role": "textbox",
+   "class": "ProseMirror",
+   "data-composer-markdown": "",
+   "aria-label": "Preguntar a ChatGPT",
+   "data-virtualkeyboard": "true"
+  }
+ ],
+ "botonesCerca": [
+  {
+   "type": "button",
+   "class": "no-drag cursor-interaction items-center select-none disabled:cursor-default aria",
+   "aria-label": "Agregar archivos y más",
+   "data-composer-navigation-target": "add-context",
+   "data-state": "closed"
+  },
+  {
+   "type": "button",
+   "class": "no-drag cursor-interaction items-center select-none disabled:cursor-default aria"
+  },
+  {
+   "type": "button",
+   "class": "no-drag cursor-interaction items-center select-none disabled:cursor-default aria",
+   "aria-label": "Dictar"
+  },
+  {
+   "type": "button",
+   "class": "cursor-interaction size-token-button-composer flex items-center justify-center r",
+   "aria-label": "Iniciar Voz",
+   "data-state": "closed"
+  }
+ ]
+}

@@ -107,7 +107,16 @@ namespace ChatCouncil.Interfaz
                 return;
             }
             texto.text = "Instalando… la app se reinicia sola.";
-            Process.Start(new ProcessStartInfo(instalador, "/SILENT") { UseShellExecute = true });
+            try
+            {
+                // Sin shell: en IL2CPP, UseShellExecute tira Win32Exception ("Success", medido en 0.1.8). Inno pide admin solo si hace falta.
+                Process.Start(new ProcessStartInfo(instalador, "/SILENT") { UseShellExecute = false });
+            }
+            catch (Exception e)
+            {
+                Mostrar($"No se pudo abrir el instalador ({e.Message}). Está en {instalador}: puedes abrirlo tú.", "Reintentar");
+                return;
+            }
             Application.Quit();
         }
     }

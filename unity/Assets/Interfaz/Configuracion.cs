@@ -214,7 +214,7 @@ namespace ChatCouncil.Interfaz
 
         // ---------------------------------------------------------------- cuentas (D10)
 
-        static string Spec(string id) => JObject.Parse(Datos.Specs)["specs"][id].ToString(Formatting.None);
+        static string Spec(string id) => JObject.Parse(Aplicacion.Specs)["specs"][id].ToString(Formatting.None);
 
         /// <summary>Muestra la página del proveedor para entrar a la cuenta, y comprueba la sesión.</summary>
         public async Task Entrar(string id)
@@ -230,7 +230,7 @@ namespace ChatCouncil.Interfaz
                 {
                     navegador ??= iniciarNavegador();
                     await navegador;
-                    paneles[id] = await Paneles.Crear(id, urlDe(id));
+                    paneles[id] = await Paneles.Crear(Paneles.PerfilProveedores, urlDe(id));
                 }
             }
             catch (Exception e)

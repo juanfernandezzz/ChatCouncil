@@ -2958,6 +2958,22 @@ Decisiones de T25 (compilación en la nube y Release):
   un .apk firmado con otra llave no actualiza la app instalada (medido en el
   emulador: INSTALL_FAILED_UPDATE_INCOMPATIBLE). Límite anotado: la etiqueta no
   dice de qué commit es cada binario (lo dice el texto del Release).
+· D59, 2026-10-18, la app se actualiza desde el Release: busca version.txt al
+  abrir y ofrece "Actualizar" (pedido de Juan). Windows descarga el instalador
+  con barra de avance y lo corre con /SILENT; Android abre la descarga del .apk.
+  El CI numera cada compilación 0.1.<corrida>; una compilación local (0.1.0) no
+  ofrece nada.
+· D60, 2026-10-18, un solo perfil de navegador para los nueve proveedores
+  (pedido de Juan): el login de Google sirve en todos, como en un navegador.
+  Revierte "una partición por proveedor" (§4) sin perder su motivo: las cookies
+  siguen siendo de cada sitio, así que cada proveedor puede tener otra cuenta.
+  "Cerrar la sesión de este panel" (D52) borra solo el sitio de ese proveedor
+  (Storage.clearDataForOrigin en Windows; almacenamiento y cookies del origen en
+  Android), no Google ni los demás. El panel del PDF conserva su perfil propio.
+· D61, 2026-10-18, specs en caliente: un specs.json válido en la carpeta de
+  datos reemplaza al compilado, y Ayuda lo dice junto a la versión. Sirve para
+  probar un selector sin compilar; el arreglo se confirma después en
+  packages/providers/src/specs.json y se borra el archivo de la carpeta.
 
 Estado al cierre de las tareas de la Fase 6 (2026-10-15):
 

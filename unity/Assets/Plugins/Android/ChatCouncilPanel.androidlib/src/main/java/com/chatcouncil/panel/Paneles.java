@@ -435,6 +435,32 @@ public final class Paneles {
         return t;
     }
 
+    /**
+     * Borra solo lo que guardó un origen en el perfil del panel: su almacenamiento y sus cookies. Android no lista las
+     * cookies con su dominio: se leen los nombres de las que el origen recibe y se vencen como cookie del host y del dominio.
+     */
+    public static int borrarSitio(int id, String origen) {
+        Panel p = buscar(id);
+        if (p == null) return fallar("el panel no existe");
+        int t = nuevoTicket();
+        ui.post(() -> {
+            Profile perfil = ProfileStore.getInstance().getProfile(p.perfil);
+            perfil.getWebStorage().deleteOrigin(origen);
+            android.webkit.CookieManager cookies = perfil.getCookieManager();
+            String host = Uri.parse(origen).getHost();
+            String todas = cookies.getCookie(origen);
+            if (todas != null)
+                for (String par : todas.split(";")) {
+                    String nombre = par.split("=", 2)[0].trim();
+                    cookies.setCookie(origen, nombre + "=; Max-Age=0; Path=/");
+                    cookies.setCookie(origen, nombre + "=; Max-Age=0; Path=/; Domain=" + host);
+                }
+            cookies.flush();
+            guardar(t, "true");
+        });
+        return t;
+    }
+
     public static int prepararAdjunto(int id, String ruta) {
         Panel p = buscar(id);
         if (p == null) return fallar("el panel no existe");

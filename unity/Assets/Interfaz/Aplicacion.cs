@@ -40,6 +40,8 @@ namespace ChatCouncil.Interfaz
         Task navegador;
 
         public string CarpetaDatos { get; private set; }
+        /// <summary>Las specs en uso: las compiladas, o un specs.json válido en la carpeta de datos (se prueba un selector sin compilar).</summary>
+        public static string Specs { get; private set; } = Datos.Specs;
         public PantallaRonda Ronda { get; private set; }
         public Puerta Puerta => Ronda.Puerta;
         public Configuracion Configuracion { get; private set; }
@@ -64,6 +66,18 @@ namespace ChatCouncil.Interfaz
         void Start()
         {
             CarpetaDatos = Arg("-datos") ?? Application.persistentDataPath;
+            var vivas = Path.Combine(CarpetaDatos, "specs.json");
+            if (File.Exists(vivas))
+                try
+                {
+                    var texto = File.ReadAllText(vivas);
+                    JObject.Parse(texto);
+                    Specs = texto;
+                }
+                catch (Exception e) when (e is JsonReaderException || e is IOException)
+                {
+                    Debug.LogWarning("specs.json de la carpeta de datos no se pudo usar; van las compiladas: " + e.Message);
+                }
 
             ajustesDelPanel = ScriptableObject.CreateInstance<PanelSettings>();
             // El tema importa Tokens.uss e Interfaz.uss: así alcanzan también a los menús desplegables, que cuelgan de la raíz del panel.
@@ -152,9 +166,9 @@ namespace ChatCouncil.Interfaz
                 ? PruebaInterfaz.IniciarNavegador(CarpetaDatos)
                 : Paneles.Iniciar(Path.Combine(CarpetaDatos, "navegador"));
 
-        static string SpecDe(string id) => JObject.Parse(Datos.Specs)["specs"][id].ToString(Formatting.None);
+        static string SpecDe(string id) => JObject.Parse(Specs)["specs"][id].ToString(Formatting.None);
 
-        static string UrlDeSpec(string id) => (string)JObject.Parse(Datos.Specs)["specs"][id]["newConversationUrl"];
+        static string UrlDeSpec(string id) => (string)JObject.Parse(Specs)["specs"][id]["newConversationUrl"];
 
         /// <summary>Las capturas de la interfaz no abren páginas: dibujan en una textura.</summary>
         void ArmarRonda(bool conPaginas)
@@ -188,7 +202,7 @@ namespace ChatCouncil.Interfaz
                 cajon.AddToClassList("cajon--abierto");
             };
             raiz.Query<Button>(className: "abre-cajon").ForEach(b => b.clicked += () => cajon.AddToClassList("cajon--abierto"));
-            raiz.Q<Label>("version").text = $"ChatCouncil, versión {Application.version}.";
+            raiz.Q<Label>("version").text = $"ChatCouncil, versión {Application.version}." + (Specs != Datos.Specs ? " Usa el specs.json de la carpeta de datos (pruebas)." : "");
             raiz.Q<Button>("ver-versiones").clicked += () => Application.OpenURL(PaginaDeVersiones);
         }
 

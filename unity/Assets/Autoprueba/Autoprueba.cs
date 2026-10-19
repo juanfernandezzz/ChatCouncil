@@ -372,6 +372,17 @@ namespace ChatCouncil.Autoprueba
             Anotar(otra == null, "aislamiento entre dos perfiles", $"prueba-b ve la marca de prueba-a: {otra ?? "null"}");
             b.Cerrar();
 
+            // Cerrar la sesión de un proveedor en el perfil compartido: se borra solo su sitio; otro host del perfil sigue.
+            const string MarcaYGalleta = "(localStorage.getItem('cc-marca') || '') + '|' + document.cookie";
+            await a.Ejecutar("document.cookie = 'cc-galleta=a; max-age=3600; path=/'; 'ok'");
+            await a.Navegar("https://" + OtroHost + "/textarea.html");
+            await a.Ejecutar("localStorage.setItem('cc-marca', 'otro'); document.cookie = 'cc-galleta=b; max-age=3600; path=/'; 'ok'");
+            await a.BorrarSitio(Origen + "textarea.html");
+            var delOtro = (string)JToken.Parse(await a.Ejecutar(MarcaYGalleta));
+            await a.Navegar(Origen + "textarea.html");
+            var delPropio = (string)JToken.Parse(await a.Ejecutar(MarcaYGalleta));
+            Anotar(delPropio == "|" && delOtro == "otro|cc-galleta=b", "borrado de un solo sitio", $"propio \"{delPropio}\", el otro \"{delOtro}\"");
+
             // Borrado de los datos del perfil.
             await a.BorrarDatos();
             await a.Navegar(Origen + "textarea.html");

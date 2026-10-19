@@ -202,7 +202,7 @@ namespace ChatCouncil.Interfaz
             {
                 try
                 {
-                    paneles[id] = await Paneles.Crear(id, urlDe(id));
+                    paneles[id] = await Paneles.Crear(Paneles.PerfilProveedores, urlDe(id));
                 }
                 catch (Exception e)
                 {
@@ -918,7 +918,7 @@ namespace ChatCouncil.Interfaz
             {
                 try
                 {
-                    paneles[id] = await Paneles.Crear(id, urlDe(id));
+                    paneles[id] = await Paneles.Crear(Paneles.PerfilProveedores, urlDe(id));
                     fallaAlAbrir.Remove(id);
                 }
                 catch (Exception e)
@@ -1112,13 +1112,13 @@ namespace ChatCouncil.Interfaz
         {
             var nombre = Dominio.NombreProveedor(id);
             AbrirDialogo($"Cerrar la sesión de {nombre}",
-                $"Se borra todo lo que {nombre} guardó en este panel (la sesión, las cookies y sus datos) y su página vuelve a abrirse sin cuenta. " +
-                "Las rondas y los informes no se tocan. Después puedes entrar con otra cuenta.",
+                $"Se borra todo lo que el sitio de {nombre} guardó (la sesión, las cookies y sus datos) y su página vuelve a abrirse sin cuenta. " +
+                "Tu sesión de Google, la de los demás proveedores, las rondas y los informes no se tocan. Después puedes entrar con otra cuenta.",
                 false, null, "Cerrar la sesión", async (_, __) =>
                 {
                     try
                     {
-                        await paneles[id].BorrarDatos();
+                        await paneles[id].BorrarSitio(urlDe(id));
                         await paneles[id].Navegar(urlDe(id));
                         Resultado($"Sesión de {nombre} cerrada. Entra con la cuenta que quieras en su página.");
                     }

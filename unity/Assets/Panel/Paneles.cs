@@ -24,7 +24,7 @@ namespace ChatCouncil.Panel
         internal const int EsperaMs = 30_000;
 
         /// <summary>
-        /// Inicia WebView2 con una carpeta de datos (un perfil por proveedor adentro). Si se pasan hosts
+        /// Inicia WebView2 con una carpeta de datos (con el perfil compartido de los proveedores adentro). Si se pasan hosts
         /// (separados por ';'), cada uno sirve la carpeta en https://host/.
         /// </summary>
         public static async Task Iniciar(string carpetaDatos, string hosts = null, string carpetaHost = null)
@@ -33,6 +33,9 @@ namespace ChatCouncil.Panel
             Nativo.Comprobar(Nativo.CC_Iniciar(carpetaDatos, Argumentos, hosts, carpetaHost), "iniciar WebView2");
             await Esperar(() => Nativo.CC_EstadoEntorno(), "iniciar WebView2", 0);
         }
+
+        /// <summary>Un solo perfil para los nueve: el login de Google sirve en todos, como en un navegador (las cookies siguen siendo de cada sitio).</summary>
+        public const string PerfilProveedores = "proveedores";
 
         public static string VersionDelNavegador => Nativo.Texto(Nativo.TextoVersion, 0);
 
@@ -188,6 +191,20 @@ namespace ChatCouncil.Panel
         public Task BorrarDatos() => Esperar(Nativo.CC_Borrar(id), "borrar los datos del perfil", TechoMs);
 
         /// <summary>
+        /// Borra solo lo que guardó el sitio de esa URL (cookies, almacenamiento, caché): en el perfil compartido, la sesión de
+        /// un proveedor sin tocar la de Google ni la de los demás.
+        /// </summary>
+        public Task BorrarSitio(string url)
+        {
+            var origen = new Uri(url).GetLeftPart(UriPartial.Authority);
+#if UNITY_ANDROID && !UNITY_EDITOR
+            return Esperar(Nativo.CC_BorrarSitio(id, origen), "borrar los datos de " + origen, TechoMs);
+#else
+            return DevTools("Storage.clearDataForOrigin", new JObject { ["origin"] = origen, ["storageTypes"] = "all" }.ToString(Formatting.None));
+#endif
+        }
+
+        /// <summary>
         /// Lee el informe del documento y de sus iframes accesibles: el último elemento con el selector que tenga texto.
         /// El resultado sale por JSON.stringify en la página, como en pagina.js: escapa los surrogates sueltos en ASCII.
         /// </summary>
@@ -316,6 +333,7 @@ namespace ChatCouncil.Panel
         internal static int CC_DevTools(int id, string metodo, string parametrosJson) => J.CallStatic<int>("fallar", "Android WebView no tiene el protocolo de DevTools");
         internal static int CC_Pdf(int id, string ruta) => J.CallStatic<int>("pdf", id, ruta);
         internal static int CC_Borrar(int id) => J.CallStatic<int>("borrar", id);
+        internal static int CC_BorrarSitio(int id, string origen) => J.CallStatic<int>("borrarSitio", id, origen);
         internal static int CC_PrepararAdjunto(int id, string ruta) => J.CallStatic<int>("prepararAdjunto", id, ruta);
         internal static int CC_Tocar(int id, int x, int y) => J.CallStatic<int>("tocar", id, x, y);
         internal static void CC_Olvidar(int ticket) => J.CallStatic("olvidar", ticket);

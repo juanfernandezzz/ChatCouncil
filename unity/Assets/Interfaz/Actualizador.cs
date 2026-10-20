@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Threading;
@@ -107,17 +106,18 @@ namespace ChatCouncil.Interfaz
                 return;
             }
             texto.text = "Instalando… la app se reinicia sola.";
-            try
+            // Process.Start no sirve en IL2CPP, con shell ni sin él (Win32Exception "Success", medido en 0.1.8 y 0.1.10).
+            var codigo = (long)ShellExecuteW(IntPtr.Zero, "open", instalador, "/SILENT", null, 1);
+            if (codigo <= 32)
             {
-                // Sin shell: en IL2CPP, UseShellExecute tira Win32Exception ("Success", medido en 0.1.8). Inno pide admin solo si hace falta.
-                Process.Start(new ProcessStartInfo(instalador, "/SILENT") { UseShellExecute = false });
-            }
-            catch (Exception e)
-            {
-                Mostrar($"No se pudo abrir el instalador ({e.Message}). Está en {instalador}: puedes abrirlo tú.", "Reintentar");
+                Mostrar($"No se pudo abrir el instalador (error {codigo}).", "Reintentar");
                 return;
             }
             Application.Quit();
         }
+
+        // Devuelve más de 32 si lanzó el programa (documentación de ShellExecuteW).
+        [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        static extern IntPtr ShellExecuteW(IntPtr ventana, string verbo, string archivo, string parametros, string carpeta, int mostrar);
     }
 }

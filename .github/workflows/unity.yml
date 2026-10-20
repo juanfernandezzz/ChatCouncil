@@ -105,7 +105,7 @@ jobs:
           # Lo que Unity deja junto al build y no se distribuye.
           Get-ChildItem build\windows -Directory | Where-Object { $_.Name -like '*DoNotShip' -or $_.Name -like '*ButDontShipItWithYourGame' } | Remove-Item -Recurse -Force
           Remove-Item build\windows\ChatCouncil.exe.log -ErrorAction SilentlyContinue
-          $version = (Select-String -Path unity\ProjectSettings\ProjectSettings.asset -Pattern 'bundleVersion: (.+)').Matches[0].Groups[1].Value.Trim()
+          $version = (Select-String -CaseSensitive -Path unity\ProjectSettings\ProjectSettings.asset -Pattern '^  bundleVersion: (.+)').Matches[0].Groups[1].Value.Trim()
           choco install innosetup -y --no-progress
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DVersion=$version" instalador\ChatCouncil.iss *> instalador.log
           $codigo = $LASTEXITCODE

@@ -164,7 +164,7 @@
       "newConversationUrl": "https://grok.com/",
       "escritura": "lineaParrafo",
       "composer": {
-        "selector": "div[aria-label=\"Ask Grok anything\"]",
+        "selector": "div[aria-label=\"Ask Grok anything\"], div.ProseMirror[contenteditable=\"true\"]",
         "kind": "contenteditable"
       },
       "submit": {

@@ -1,0 +1,16 @@
+{
+ "ruta": "/",
+ "viejo": 0,
+ "editables": [
+  {
+   "tag": "DIV",
+   "contenteditable": "true",
+   "role": "combobox",
+   "aria-label": "Pregunta lo que quieras a Grok",
+   "class": "tiptap ProseMirror w-full px-2 bg-transparent focus:outline-none text-fg-primary"
+  },
+  {
+   "tag": "TEXTAREA"
+  }
+ ]
+}

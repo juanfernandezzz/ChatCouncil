@@ -143,7 +143,12 @@ namespace ChatCouncil.Interfaz
             // -lector: la jerarquía aunque no haya un lector encendido, para medirla por UI Automation.
             if (Array.IndexOf(args, "-lector") >= 0) UnityEngine.Accessibility.AssistiveSupport.screenReaderStatusOverride = UnityEngine.Accessibility.AssistiveSupport.ScreenReaderStatusOverride.ForceEnabled;
             AplicarSemibold(raiz);
-            raiz.panel.visualTree.Query<TextField>(className: "campo-pregunta").ForEach(t => t.verticalScrollerVisibility = ScrollerVisibility.Auto);
+            raiz.panel.visualTree.Query<TextField>(className: "campo-pregunta").ForEach(t =>
+            {
+                t.verticalScrollerVisibility = ScrollerVisibility.Auto;
+                PegarConClicDerecho(t);
+                if (t.name != "dialogo-campo") Asa(t);
+            });
             // En el primer arranque, la guía es la única salida: sin riel ni cajón hasta terminarla.
             raiz.EnableInClassList("primer-arranque", primerArranque);
             if (!primerArranque) ArmarRonda(ruta == null);
@@ -176,6 +181,45 @@ namespace ChatCouncil.Interfaz
         {
             Ronda.Armar();
             if (conPaginas) _ = Ronda.Conectar();
+        }
+
+        /// <summary>Los campos de Unity no traen menú contextual en la app: el clic derecho pega donde está el cursor (o al final).</summary>
+        static void PegarConClicDerecho(TextField t) => t.RegisterCallback<PointerUpEvent>(e =>
+        {
+            if (e.button != 1 || string.IsNullOrEmpty(GUIUtility.systemCopyBuffer)) return;
+            var foco = t.focusController?.focusedElement as VisualElement;
+            var enfocado = foco != null && (foco == t || t.Contains(foco));
+            var a = enfocado ? Math.Min(t.cursorIndex, t.selectIndex) : t.value.Length;
+            var b = enfocado ? Math.Max(t.cursorIndex, t.selectIndex) : t.value.Length;
+            var pegado = GUIUtility.systemCopyBuffer;
+            t.value = t.value.Substring(0, a) + pegado + t.value.Substring(b);
+            t.Focus();
+            t.cursorIndex = t.selectIndex = a + pegado.Length;
+            e.StopPropagation();
+        });
+
+        /// <summary>Un asa bajo el campo para fijar su alto arrastrando: la página del proveedor se reacomoda sola (GeometryChanged).</summary>
+        static void Asa(TextField t)
+        {
+            var entrada = t.Q(className: "unity-base-field__input");
+            var asa = new VisualElement { tooltip = "Arrastra para cambiar el alto del campo" };
+            asa.AddToClassList("asa");
+            asa.Add(new VisualElement { pickingMode = PickingMode.Ignore });
+            t.Add(asa);
+            float y0 = 0, alto0 = 0;
+            asa.RegisterCallback<PointerDownEvent>(e =>
+            {
+                y0 = e.position.y;
+                alto0 = entrada.resolvedStyle.height;
+                asa.CapturePointer(e.pointerId);
+            });
+            asa.RegisterCallback<PointerMoveEvent>(e =>
+            {
+                if (!asa.HasPointerCapture(e.pointerId)) return;
+                var alto = Mathf.Clamp(alto0 + e.position.y - y0, 48, 600);
+                entrada.style.height = entrada.style.minHeight = entrada.style.maxHeight = alto;
+            });
+            asa.RegisterCallback<PointerUpEvent>(e => asa.ReleasePointer(e.pointerId));
         }
 
         // ---------------------------------------------------------------- secciones (D2, D3)

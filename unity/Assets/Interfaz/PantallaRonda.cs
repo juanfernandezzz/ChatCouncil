@@ -293,7 +293,7 @@ namespace ChatCouncil.Interfaz
         (string Problema, string Corto, string Accion) Situacion(string id, string etapa)
         {
             if (fallaAlAbrir.TryGetValue(id, out var f))
-                return ($"La página no se pudo abrir: {f}. Cierra y vuelve a abrir la app.", "La página no se abrió: cierra y abre la app.", null);
+                return ($"La página no se pudo abrir: {f} Prueba Más… → Recargar la página.", "La página no se abrió: Más… → Recargar.", null);
             var rol = roles.DeLaEtapa(etapa);
             // Un rol fuera de su etapa está para mirarlo (historia 59): no recibe la pregunta ni la operación.
             if (!Operadores.Contains(id) && id != rol) return (null, null, null);
@@ -1066,7 +1066,7 @@ namespace ChatCouncil.Interfaz
             var sinPagina = paneles.ContainsKey(visible) ? null : "El panel no tiene su página abierta.";
             return new List<Item>
             {
-                new Item { Grupo = grupo, Texto = "Recargar la página", Accion = () => _ = Recargar(visible), Motivo = sinPagina },
+                new Item { Grupo = grupo, Texto = "Recargar la página", Accion = () => _ = Recargar(visible) },
                 new Item { Grupo = grupo, Texto = "Diagnóstico de selectores", Accion = () => _ = Diagnosticar(visible), Motivo = sinPagina },
                 new Item { Grupo = grupo, Texto = "Cerrar la sesión de este panel…", Accion = () => DialogoCerrarSesion(visible), Motivo = sinPagina },
             };
@@ -1076,7 +1076,15 @@ namespace ChatCouncil.Interfaz
         {
             try
             {
-                await paneles[id].Recargar();
+                if (paneles.ContainsKey(id)) await paneles[id].Recargar();
+                else
+                {
+                    // La primera carga no respondió a tiempo: se vuelve a abrir sin reiniciar la app.
+                    paneles[id] = await Paneles.Crear(Paneles.PerfilProveedores, urlDe(id));
+                    fallaAlAbrir.Remove(id);
+                    Ubicar();
+                    Refrescar();
+                }
                 Resultado($"Se recargó la página de {Dominio.NombreProveedor(id)}.");
             }
             catch (Exception e)

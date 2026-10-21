@@ -314,6 +314,9 @@
 /* Un prompt largo no empuja la interfaz fuera de la pantalla: el campo tiene techo y se desplaza adentro (Aplicacion.cs activa la barra). */
 .campo-pregunta > .unity-base-field__input { max-height: 240px; }
 .compacta .campo-pregunta > .unity-base-field__input { max-height: 144px; }
+/* El asa ocupa 16 px de alto para que se pueda tomar; la marca visible es una barra corta centrada. */
+.asa { height: 16px; align-items: center; justify-content: center; }
+.asa > VisualElement { width: 48px; height: 4px; border-radius: 2px; background-color: var(--color-borde-control); }
 .abajo .campo-pregunta { margin-bottom: var(--esp-2); }
 .resultado { margin-top: var(--esp-1); }
 .resultado.problema { color: var(--color-estado-problema); }
@@ -350,6 +353,9 @@
     background-color: var(--color-velo);
 }
 .capa-fondo:hover { background-color: var(--color-velo); }
+/* El tema de Unity pinta los botones con su gris en reglas con :enabled, más específicas: el velo tapaba la app entera. */
+.capa-fondo:enabled, .capa-fondo:hover:enabled, .capa-fondo:active:enabled,
+.cajon-fondo:enabled, .cajon-fondo:hover:enabled, .cajon-fondo:active:enabled { background-color: var(--color-velo); }
 
 .menu-flotante {
     position: absolute;

@@ -34,9 +34,12 @@ Name: "escritorio"; Description: "Crear un acceso directo en el escritorio"
 
 [Files]
 Source: "..\build\windows\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+; Herramienta de depuración: abre la app con el puerto local de WebView2 para inspeccionar los paneles.
+Source: "..\abrir-depurando.bat"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\ChatCouncil"; Filename: "{app}\ChatCouncil.exe"
+Name: "{group}\ChatCouncil (depuración)"; Filename: "{app}\abrir-depurando.bat"; IconFilename: "{app}\ChatCouncil.exe"
 Name: "{autodesktop}\ChatCouncil"; Filename: "{app}\ChatCouncil.exe"; Tasks: escritorio
 
 [Run]

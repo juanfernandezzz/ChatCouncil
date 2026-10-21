@@ -143,6 +143,7 @@ namespace ChatCouncil.Interfaz
             // -lector: la jerarquía aunque no haya un lector encendido, para medirla por UI Automation.
             if (Array.IndexOf(args, "-lector") >= 0) UnityEngine.Accessibility.AssistiveSupport.screenReaderStatusOverride = UnityEngine.Accessibility.AssistiveSupport.ScreenReaderStatusOverride.ForceEnabled;
             AplicarSemibold(raiz);
+            raiz.panel.visualTree.Query<TextField>(className: "campo-pregunta").ForEach(t => t.verticalScrollerVisibility = ScrollerVisibility.Auto);
             // En el primer arranque, la guía es la única salida: sin riel ni cajón hasta terminarla.
             raiz.EnableInClassList("primer-arranque", primerArranque);
             if (!primerArranque) ArmarRonda(ruta == null);
@@ -239,7 +240,8 @@ namespace ChatCouncil.Interfaz
                 texto.AddToClassList("cabecera-texto");
                 var fecha = DateTime.TryParse(r.EnviadaEn, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var utc)
                     ? utc.ToLocalTime().ToString("d 'de' MMMM 'de' yyyy, HH:mm", new CultureInfo("es")) : r.EnviadaEn;
-                var pregunta = new Label(r.Pregunta == Puerta.PromptSinRonda ? "(capturada sin pegar la pregunta, y sin declararla)" : r.Pregunta);
+                var pregunta = new Label(r.Pregunta == Puerta.PromptSinRonda ? "(capturada sin pegar la pregunta, y sin declararla)"
+                    : r.Pregunta.Length > 240 ? r.Pregunta.Substring(0, 240).TrimEnd() + "…" : r.Pregunta); // una pregunta larga no ocupa toda la lista
                 pregunta.AddToClassList("envolver");
                 pregunta.AddToClassList("semibold");
                 // En Android la carpeta no se abre (D41): se dice dónde está.

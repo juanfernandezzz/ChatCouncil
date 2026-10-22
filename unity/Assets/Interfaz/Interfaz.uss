@@ -72,6 +72,10 @@
 .riel-item--actual { background-color: var(--color-superficie); color: var(--color-texto); }
 
 .trabajo { flex-grow: 1; }
+/* Ampliado (por defecto): la página del proveedor manda, como en un navegador. La guía queda en una franja con el
+   paso siguiente y el resultado; las etapas y los textos de guía vuelven con "Reducir". Ubicar la sigue (GeometryChanged). */
+.pagina-ampliada .etapas, .pagina-ampliada #frase-ancha, .pagina-ampliada #contadores-ancha { display: none; }
+.pagina-ampliada .guia .paso { margin-top: 0; }
 
 /* Aviso de versión nueva: arriba de todas las secciones, con la barra de descarga al estilo de las etapas. */
 .aviso {
@@ -103,12 +107,12 @@
 /* ---------- guía de la ronda ---------- */
 
 .guia {
-    padding: var(--esp-3) var(--esp-4);
+    padding: var(--esp-2) var(--esp-4);
     background-color: var(--color-superficie);
     border-bottom-width: 1px;
     border-color: var(--color-borde);
 }
-.paso { flex-direction: row; align-items: center; margin-top: var(--esp-3); }
+.paso { flex-direction: row; align-items: center; margin-top: var(--esp-2); }
 .paso-texto { flex-grow: 1; flex-shrink: 1; margin: 0 var(--esp-4); }
 .paso .boton { margin-left: var(--esp-2); }
 .paso .boton-primario { margin-left: 0; }
@@ -117,7 +121,7 @@
 
 .cuerpo { flex-grow: 1; flex-direction: row; }
 .lista {
-    width: 280px;
+    width: 220px;
     padding: var(--esp-2);
     background-color: var(--color-superficie);
     border-right-width: 1px;
@@ -309,7 +313,9 @@
 /* La pregunta se escribe en la guía, solo en su etapa (D32). */
 .solo-etapa-pregunta { display: none; }
 .etapa-pregunta .solo-etapa-pregunta { display: flex; }
-.guia .campo-pregunta { margin: var(--esp-3) 0 0 0; max-width: none; }
+.guia .campo-pregunta { margin: var(--esp-2) 0 0 0; max-width: none; }
+/* En la guía arranca bajo: la página del proveedor es lo que se usa (el asa lo agranda si hace falta). */
+.guia .campo-pregunta > .unity-base-field__input { min-height: 64px; }
 .campo-pregunta > .unity-base-field__input { min-height: 96px; padding: var(--esp-2) var(--esp-3); -unity-text-align: upper-left; white-space: normal; }
 /* Un prompt largo no empuja la interfaz fuera de la pantalla: el campo tiene techo y se desplaza adentro (Aplicacion.cs activa la barra). */
 .campo-pregunta > .unity-base-field__input { max-height: 240px; }
@@ -372,6 +378,7 @@
 .dialogo {
     width: 560px;
     max-width: 90%;
+    max-height: 90%;
     padding: var(--esp-5);
     border-width: 1px;
     border-radius: var(--radio);
@@ -379,7 +386,9 @@
     background-color: var(--color-superficie);
 }
 .dialogo .campo-pregunta { margin-bottom: var(--esp-3); max-width: none; }
-.dialogo-botones { margin: var(--esp-3) 0 0 0; }
+.dialogo-botones { margin: var(--esp-3) 0 0 0; flex-shrink: 0; }
+/* Un texto largo se desplaza adentro: los botones del diálogo siempre quedan a la vista. */
+.dialogo-cuerpo { flex-shrink: 1; }
 .marca-ancha { width: auto; }
 /* En la clase compacta, el diálogo ocupa la pantalla (§3.4) y el menú es una hoja abajo (PantallaRonda.AbrirMenu). */
 .compacta .dialogo { width: 100%; max-width: none; height: 100%; border-radius: 0; border-width: 0; }

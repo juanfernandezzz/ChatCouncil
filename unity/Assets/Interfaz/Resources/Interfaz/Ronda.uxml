@@ -1,6 +1,6 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:cc="ChatCouncil.Interfaz">
     <!-- La app: riel de secciones y pantalla de Ronda (T18). PantallaRonda.cs la conecta; Aplicacion.cs agrega Configuracion.uxml. Arquitectura: docs/FASE6-INTERFAZ.md. -->
-    <ui:VisualElement name="raiz" class="raiz">
+    <ui:VisualElement name="raiz" class="raiz pagina-ampliada">
 
         <!-- Riel de secciones (D2, D3, D48): desde 600 dp; debajo, el botón Menú de la barra abre el cajón. -->
         <ui:VisualElement class="riel region">
@@ -56,6 +56,8 @@
                                 <ui:Label name="cabecera-problema" class="problema pequeno" />
                             </ui:VisualElement>
                             <ui:Button name="accion-panel" class="boton" />
+                            <!-- Ampliado por defecto (la página manda); "Reducir" muestra la guía completa: etapas, qué hacer y contadores. -->
+                            <ui:Button name="ampliar" text="Reducir" class="boton" />
                             <ui:Button name="menu-panel" text="Más…" class="boton" />
                         </ui:VisualElement>
                         <ui:VisualElement name="pagina-ancha" class="pagina region">
@@ -194,10 +196,10 @@
         <!-- Menús y diálogos. Las páginas nativas van encima de todo lo de Unity: se apartan mientras la capa está abierta. -->
         <ui:VisualElement name="capa" class="capa">
             <ui:Button name="capa-fondo" class="capa-fondo" />
-            <ui:VisualElement name="menu-flotante" class="menu-flotante" />
+            <ui:ScrollView name="menu-flotante" class="menu-flotante" />
             <ui:VisualElement name="dialogo" class="dialogo">
                 <ui:Label name="dialogo-titulo" class="titulo-bloque semibold" />
-                <ui:Label name="dialogo-texto" class="envolver separado" />
+                <ui:ScrollView class="dialogo-cuerpo"><ui:Label name="dialogo-texto" class="envolver separado" /></ui:ScrollView>
                 <ui:TextField name="dialogo-campo" multiline="true" class="campo campo-pregunta" />
                 <ui:Toggle name="dialogo-casilla" class="marca marca-ancha" />
                 <ui:VisualElement class="fila-botones dialogo-botones">

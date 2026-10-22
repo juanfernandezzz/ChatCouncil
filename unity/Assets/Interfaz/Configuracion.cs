@@ -302,7 +302,12 @@ namespace ChatCouncil.Interfaz
         /// <summary>Las páginas nativas no son parte del árbol: al salir de la vista se esconden.</summary>
         public void Ocultar()
         {
-            foreach (var p in paneles.Values) p.Rect(0, 0, 0, 0);
+            // Fuera de la ventana con su tamaño, no a 0×0: así una SPA sigue montando (como en Electron; ver PantallaRonda.Ubicar).
+            foreach (var p in paneles.Values)
+            {
+                var r = p.RectReal;
+                if (r.x >= 0) p.Rect(-(r.ancho > 0 ? r.ancho : 1000) - 100, 0, r.ancho > 0 ? r.ancho : 1000, r.alto > 0 ? r.alto : 700);
+            }
         }
     }
 }

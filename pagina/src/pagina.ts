@@ -92,8 +92,10 @@ function leerTexto(el: Element, tipo: Tipo): string {
   if (tipo === "textarea") return (el as HTMLTextAreaElement).value ?? "";
   const hijos = Array.from(el.children) as HTMLElement[];
   const esBloque = (h: HTMLElement): boolean => /^(P|DIV|H[1-6]|LI|PRE|BLOCKQUOTE)$/.test(h.tagName);
-  if (hijos.length > 0 && hijos.every(esBloque)) return hijos.map((h) => (h.innerText ?? "").replace(/\n$/, "")).join("\n");
-  return (el as HTMLElement).innerText ?? "";
+  let t = hijos.length > 0 && hijos.every(esBloque) ? hijos.map((h) => (h.innerText ?? "").replace(/\n$/, "")).join("\n") : (el as HTMLElement).innerText ?? "";
+  // Una skill elegida en el sitio es una píldora no editable dentro del compositor (ChatGPT, Mistral): no es texto de nadie.
+  for (const pildora of Array.from(el.querySelectorAll<HTMLElement>('[contenteditable="false"]'))) t = t.replace(pildora.innerText ?? "", "");
+  return t;
 }
 
 /** Tramos de hasta `max` caracteres cortados en saltos de línea; concatenados, reconstruyen el texto exacto. */
@@ -135,17 +137,22 @@ async function escribirEnCompositor(el: Element, tipo: Tipo, texto: string, escr
   const host = el as HTMLElement;
   const seleccion = window.getSelection();
   const rango = document.createRange();
-  rango.selectNodeContents(host);
+  // Con una skill elegida (píldora no editable) se escribe a continuación, sin borrarla; si no, se reemplaza todo.
+  const pildora = host.querySelector('[contenteditable="false"]');
+  rango.selectNodeContents(pildora ? (host.lastElementChild ?? host) : host);
+  if (pildora) rango.collapse(false);
   seleccion?.removeAllRanges();
   seleccion?.addRange(rango);
   if (escritura === "pegado") {
     // El borrado nativo deja un solo párrafo vacío y el pegado arranca al principio de ese párrafo.
-    document.execCommand("delete", false);
-    const inicio = document.createRange();
-    inicio.setStart(host.firstElementChild ?? host, 0);
-    inicio.collapse(true);
-    seleccion?.removeAllRanges();
-    seleccion?.addRange(inicio);
+    if (!pildora) {
+      document.execCommand("delete", false);
+      const inicio = document.createRange();
+      inicio.setStart(host.firstElementChild ?? host, 0);
+      inicio.collapse(true);
+      seleccion?.removeAllRanges();
+      seleccion?.addRange(inicio);
+    }
     for (const tramo of tramosDePegado(texto, 1_000)) {
       const datos = new DataTransfer();
       datos.setData("text/plain", tramo);

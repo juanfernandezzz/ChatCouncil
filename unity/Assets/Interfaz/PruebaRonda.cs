@@ -45,6 +45,7 @@ namespace ChatCouncil.Interfaz
         {
             this.app = app;
             this.salida = salida;
+            app.Raiz.RemoveFromClassList("pagina-ampliada"); // la prueba mide la guía completa (etapas, frase, contadores)
             _ = Correr();
         }
 
@@ -153,7 +154,7 @@ namespace ChatCouncil.Interfaz
             Ronda.Pregunta = LaPregunta;
             await Pulsar("paso-ancha");
             var capa = Raiz.Q("capa").ClassListContains("capa--abierta") && Raiz.Q<Label>("dialogo-titulo").text == "Antes de pegar la pregunta";
-            var apartada = Ronda.PanelDe(Ronda.Visible).RectReal.ancho == 0;
+            var apartada = Ronda.PanelDe(Ronda.Visible).RectReal.x < 0;
             Anotar(capa && apartada, "aviso de capacidades", $"diálogo abierto: {capa}; la página se aparta: {apartada}");
             Raiz.Q<Toggle>("dialogo-casilla").value = true;
             await Pulsar("dialogo-aceptar");
@@ -822,7 +823,7 @@ namespace ChatCouncil.Interfaz
                 // Ocultar y mostrar los roles (historia 59).
                 await Pulsar("menu-ronda");
                 await Pulsar("item-Ocultar los paneles de los roles");
-                var oculto = Ronda.EnLaVista.SequenceEqual(Pool) && Pool.Contains(Ronda.Visible) && Ronda.PanelDe("glm").RectReal.ancho == 0 && EstadoEnLaLista("glm") == "Verifica";
+                var oculto = Ronda.EnLaVista.SequenceEqual(Pool) && Pool.Contains(Ronda.Visible) && Ronda.PanelDe("glm").RectReal.x < 0 && EstadoEnLaLista("glm") == "Verifica";
                 await Pulsar("menu-ronda");
                 await Pulsar("item-Mostrar los paneles de los roles");
                 await Esperar(() => Ronda.EnLaVista.Count == 9);

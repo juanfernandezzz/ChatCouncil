@@ -116,7 +116,15 @@ namespace ChatCouncil.Panel
         public async Task EsperarCarga()
         {
             await Paneles.Esperar(() => Nativo.CC_EstadoPanel(id), "crear el panel", id);
-            await Paneles.Esperar(() => Nativo.CC_Contador(id, 2) >= 1 ? 1 : 0, "cargar la primera página", id);
+            try
+            {
+                await Paneles.Esperar(() => Nativo.CC_Contador(id, 2) >= 1 ? 1 : 0, "cargar la primera página", id);
+            }
+            catch (TimeoutException)
+            {
+                // Con siete páginas abriendo a la vez, Gemini pasaba los 30 s: el panel se queda y la página termina sola,
+                // en vez de descartarlo (quedaba un WebView huérfano y "Recargar" abría otro).
+            }
         }
 
         /// <summary>Navega y espera a que la navegación termine.</summary>

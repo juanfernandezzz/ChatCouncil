@@ -56,6 +56,8 @@ namespace ChatCouncil.Interfaz
         readonly Func<string, string> urlDe, specDe;
         readonly Dictionary<string, Panel> paneles = new Dictionary<string, Panel>();
         readonly Dictionary<string, string> fallaAlAbrir = new Dictionary<string, string>();
+        /// <summary>El último tamaño del área de la página, en píxeles: los paneles apartados lo conservan.</summary>
+        (int ancho, int alto) tamano = (1000, 700);
         readonly Dictionary<string, (bool? Generando, string Fin)> pagina = new Dictionary<string, (bool?, string)>();
         readonly Dictionary<string, int> navegacionesAlCapturar = new Dictionary<string, int>();
         RolesElegidos roles;
@@ -106,6 +108,11 @@ namespace ChatCouncil.Interfaz
             Al("paso-ancha", Paso);
             Al("paso-angosta", Paso);
             Al("accion-panel", AccionDelPanel);
+            Al("ampliar", () =>
+            {
+                raiz.ToggleInClassList("pagina-ampliada");
+                raiz.Q<Button>("ampliar").text = raiz.ClassListContains("pagina-ampliada") ? "Reducir" : "Ampliar";
+            });
             Al("menu-panel", () => AbrirMenu(raiz.Q("menu-panel"), ItemsDelPanel().Concat(ItemsDeMantenimiento()).ToList()));
             Al("menu-ronda", () => AbrirMenu(raiz.Q("menu-ronda"), ItemsDeLaRonda()));
             Al("menu-angosta", () => AbrirMenu(raiz.Q("menu-angosta"), ItemsDelPanel().Concat(ItemsDeMantenimiento()).Concat(ItemsDeLaRonda()).ToList()));
@@ -501,11 +508,13 @@ namespace ChatCouncil.Interfaz
             var k = Screen.width / raiz.panel.visualTree.worldBound.width;
             var mostrar = seccionVisible && !capaAbierta && visible != null && paneles.ContainsKey(visible) && area.width > 0;
             var enLaVista = EnLaVista;
+            if (area.width > 0) tamano = (Mathf.RoundToInt(area.width * k), Mathf.RoundToInt(area.height * k));
             foreach (var (id, p) in paneles.Select(x => (x.Key, x.Value)))
             {
-                // Un rol oculto se aparta: detrás de la página visible seguiría ocupando el área.
-                if (mostrar && enLaVista.Contains(id)) p.Rect(Mathf.RoundToInt(area.x * k), Mathf.RoundToInt(area.y * k), Mathf.RoundToInt(area.width * k), Mathf.RoundToInt(area.height * k));
-                else p.Rect(0, 0, 0, 0);
+                // Un rol oculto se aparta: detrás de la página visible seguiría ocupando el área. Se aparta FUERA de la
+                // ventana con su tamaño, como en Electron: a 0×0 una SPA no termina de montar (Gemini no cargaba).
+                if (mostrar && enLaVista.Contains(id)) p.Rect(Mathf.RoundToInt(area.x * k), Mathf.RoundToInt(area.y * k), tamano.ancho, tamano.alto);
+                else p.Rect(-tamano.ancho - 100, 0, tamano.ancho, tamano.alto);
             }
             if (mostrar) paneles[visible].Frente();
         }
@@ -1180,8 +1189,9 @@ namespace ChatCouncil.Interfaz
             {
                 new Item { Grupo = grupo, Texto = PegarAqui, Accion = () => _ = PegarEnEste(),
                     Motivo = accion == PegarAqui ? null : "Solo cuando el panel está por pegar o el pegado falló." },
+                // Con un pegado fallido la app puede no haber visto terminar la página (se pegó a mano): capturar queda en manos de Juan.
                 new Item { Grupo = grupo, Texto = CapturarEste, Accion = () => _ = Capturar(new List<string> { visible }),
-                    Motivo = accion == CapturarEste ? null : "Solo cuando el panel parece terminado o su captura falló." },
+                    Motivo = accion == CapturarEste || visible != null && EstadoDe(visible) == "con-problema" ? null : "Solo cuando el panel parece terminado o su captura falló." },
             };
         }
 
@@ -1254,8 +1264,13 @@ namespace ChatCouncil.Interfaz
             var ancho = raiz.panel.visualTree.worldBound.width;
             var hoja = raiz.ClassListContains("compacta");
             menu.style.left = hoja ? 0 : Mathf.Max(8, Mathf.Min(r.x, ancho - 348));
-            menu.style.top = hoja ? new StyleLength(StyleKeyword.Auto) : new StyleLength(r.yMax + 4);
-            menu.style.bottom = hoja ? new StyleLength(0f) : new StyleLength(StyleKeyword.Auto);
+            // Nunca fuera de la vista: se desplaza adentro con el espacio que haya, y se abre hacia arriba si abajo falta.
+            var alto = raiz.panel.visualTree.worldBound.height;
+            float abajo = alto - r.yMax - 12, arriba = r.y - 12;
+            var haciaArriba = !hoja && abajo < 240 && arriba > abajo;
+            menu.style.top = hoja || haciaArriba ? new StyleLength(StyleKeyword.Auto) : new StyleLength(r.yMax + 4);
+            menu.style.bottom = hoja ? new StyleLength(0f) : haciaArriba ? new StyleLength(alto - r.y + 4) : new StyleLength(StyleKeyword.Auto);
+            menu.style.maxHeight = hoja ? alto * 0.8f : haciaArriba ? arriba : abajo;
             menu.style.width = hoja ? new StyleLength(Length.Percent(100)) : new StyleLength(StyleKeyword.Null);
             AbrirCapa(menu);
         }

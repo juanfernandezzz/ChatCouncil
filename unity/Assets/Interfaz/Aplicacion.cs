@@ -146,7 +146,7 @@ namespace ChatCouncil.Interfaz
             raiz.panel.visualTree.Query<TextField>(className: "campo-pregunta").ForEach(t =>
             {
                 t.verticalScrollerVisibility = ScrollerVisibility.Auto;
-                PegarConClicDerecho(t);
+                MenuContextual(t);
                 if (t.name != "dialogo-campo") Asa(t);
             });
             // En el primer arranque, la guía es la única salida: sin riel ni cajón hasta terminarla.
@@ -183,20 +183,61 @@ namespace ChatCouncil.Interfaz
             if (conPaginas) _ = Ronda.Conectar();
         }
 
-        /// <summary>Los campos de Unity no traen menú contextual en la app: el clic derecho pega donde está el cursor (o al final).</summary>
-        static void PegarConClicDerecho(TextField t) => t.RegisterCallback<PointerUpEvent>(e =>
+        /// <summary>
+        /// Los campos de Unity no traen menú contextual en la app: el clic derecho abre el de edición de Windows (menú nativo).
+        /// Deshacer es de un nivel, como en ese menú: usarlo otra vez rehace. Android usa su propia selección del sistema.
+        /// </summary>
+        static void MenuContextual(TextField t)
         {
-            if (e.button != 1 || string.IsNullOrEmpty(GUIUtility.systemCopyBuffer)) return;
-            var foco = t.focusController?.focusedElement as VisualElement;
-            var enfocado = foco != null && (foco == t || t.Contains(foco));
-            var a = enfocado ? Math.Min(t.cursorIndex, t.selectIndex) : t.value.Length;
-            var b = enfocado ? Math.Max(t.cursorIndex, t.selectIndex) : t.value.Length;
-            var pegado = GUIUtility.systemCopyBuffer;
-            t.value = t.value.Substring(0, a) + pegado + t.value.Substring(b);
-            t.Focus();
-            t.cursorIndex = t.selectIndex = a + pegado.Length;
-            e.StopPropagation();
-        });
+#if !UNITY_ANDROID || UNITY_EDITOR
+            string anterior = null;
+            t.RegisterValueChangedCallback(e => anterior = e.previousValue);
+            t.RegisterCallback<PointerUpEvent>(e =>
+            {
+                if (e.button != 1) return;
+                e.StopPropagation();
+                t.Focus();
+                int a = Math.Min(t.cursorIndex, t.selectIndex), b = Math.Max(t.cursorIndex, t.selectIndex);
+                var portapapeles = GUIUtility.systemCopyBuffer;
+                var menu = CreatePopupMenu();
+                void Item(int id, string texto, bool activo) => AppendMenuW(menu, activo ? 0u : 1u, (UIntPtr)id, texto); // 1 = MF_GRAYED
+                Item(1, "&Deshacer", anterior != null);
+                AppendMenuW(menu, 0x800, UIntPtr.Zero, null); // MF_SEPARATOR
+                Item(2, "Cor&tar", b > a);
+                Item(3, "&Copiar", b > a);
+                Item(4, "&Pegar", !string.IsNullOrEmpty(portapapeles));
+                Item(5, "&Eliminar", b > a);
+                AppendMenuW(menu, 0x800, UIntPtr.Zero, null);
+                Item(6, "Seleccionar &todo", t.value.Length > 0);
+                GetCursorPos(out var punto);
+                var elegido = TrackPopupMenuEx(menu, 0x100 | 0x2, punto.X, punto.Y, GetActiveWindow(), IntPtr.Zero); // TPM_RETURNCMD | TPM_RIGHTBUTTON
+                DestroyMenu(menu);
+                void Reemplazar(string s)
+                {
+                    t.value = t.value.Substring(0, a) + s + t.value.Substring(b);
+                    t.cursorIndex = t.selectIndex = a + s.Length;
+                }
+                switch (elegido)
+                {
+                    case 1: t.value = anterior; break;
+                    case 2: GUIUtility.systemCopyBuffer = t.value.Substring(a, b - a); Reemplazar(""); break;
+                    case 3: GUIUtility.systemCopyBuffer = t.value.Substring(a, b - a); break;
+                    case 4: Reemplazar(portapapeles); break;
+                    case 5: Reemplazar(""); break;
+                    case 6: t.SelectAll(); break;
+                }
+                t.Focus();
+            });
+#endif
+        }
+
+        struct Punto { public int X, Y; }
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern IntPtr CreatePopupMenu();
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] static extern bool AppendMenuW(IntPtr menu, uint banderas, UIntPtr id, string texto);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern int TrackPopupMenuEx(IntPtr menu, uint banderas, int x, int y, IntPtr ventana, IntPtr parametros);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool DestroyMenu(IntPtr menu);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool GetCursorPos(out Punto punto);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern IntPtr GetActiveWindow();
 
         /// <summary>Un asa bajo el campo para fijar su alto arrastrando: la página del proveedor se reacomoda sola (GeometryChanged).</summary>
         static void Asa(TextField t)

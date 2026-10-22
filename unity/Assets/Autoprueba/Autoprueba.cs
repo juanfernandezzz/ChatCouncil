@@ -235,6 +235,17 @@ namespace ChatCouncil.Autoprueba
             Anotar((bool?)e["ok"] == true && leido == texto, "escritura por párrafos (spec mistral)", leido == texto ? $"{texto.Length} caracteres, idénticos" : "leyó: " + leido);
             m.Cerrar();
 
+            // Una skill elegida en el sitio es una píldora no editable en el compositor (ChatGPT, Mistral): no es un borrador y se conserva.
+            var s = await Paneles.Crear("prueba-e2b", Origen + "mistral.html");
+            await s.Ejecutar("document.querySelector(" + JsonConvert.ToString((string)JObject.Parse(spec)["composer"]["selector"]) +
+                             ").innerHTML = '<p><span contenteditable=\"false\">deep-research</span> </p>'; 'ok'");
+            e = await s.Correr("escribir", spec, texto);
+            leido = (string)await s.Correr("leerCompositor", spec);
+            var pildora = (bool)JToken.Parse(await s.Ejecutar("!!document.querySelector('[contenteditable=\"false\"]')"));
+            Anotar((bool?)e["ok"] == true && leido?.Trim() == texto && pildora, "escritura junto a una skill elegida (píldora no editable)",
+                $"ok {e["ok"]}, píldora conservada {pildora}, leyó: {leido}");
+            s.Cerrar();
+
             // kimi: editor que procesa el pegado él mismo. 180.000 caracteres con las marcas del motor.
             var k = await Paneles.Crear("prueba-e3", Origen + "kimi.html");
             spec = Spec("kimi");

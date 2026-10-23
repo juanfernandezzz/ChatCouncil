@@ -304,11 +304,12 @@ namespace ChatCouncil.Autoprueba
                 "archivos de kimi", $"leídos {l["archivos"]["leidos"]}/{l["archivos"]["total"]}");
             k.Cerrar();
 
-            // mistral: el texto del canvas reemplaza al aviso, el html guarda los dos, el canvas queda cerrado y la etiqueta de modelo.
+            // mistral: se lee todo, el mensaje y después el canvas; el html guarda los dos, el canvas queda cerrado y la etiqueta de modelo.
             var m = await Paneles.Crear("prueba-l3", Origen + "mistral.html");
             l = await m.Correr("leer", Spec("mistral"));
             var cerrado = (string)JToken.Parse(await m.Ejecutar("document.getElementById('chat-side-panel').innerHTML"));
-            Anotar(((string)l["text"]).StartsWith("TEXTO DEL CANVAS") && ((string)l["html"]).Contains("Aviso: la respuesta") && ((string)l["html"]).Contains("TEXTO DEL CANVAS") && cerrado == "" && (string)l["modelLabel"] == "Rápido",
+            var textoM = (string)l["text"];
+            Anotar(textoM.StartsWith("Aviso: la respuesta") && textoM.IndexOf("TEXTO DEL CANVAS", StringComparison.Ordinal) > 0 && ((string)l["html"]).Contains("Aviso: la respuesta") && ((string)l["html"]).Contains("TEXTO DEL CANVAS") && cerrado == "" && (string)l["modelLabel"] == "Rápido",
                 "canvas de mistral", $"texto \"{l["text"]}\", canvas cerrado después: {cerrado == ""}, modelLabel {l["modelLabel"]}");
             m.Cerrar();
         }

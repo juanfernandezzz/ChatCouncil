@@ -43,6 +43,8 @@ namespace ChatCouncil.Interfaz
 
         const string PegarAqui = "Pegar la pregunta aquí";
         const string CapturarEste = "Capturar este panel";
+        /// <summary>"Capturar este panel (Investigación)": la captura dice en qué fase se registra, con el nombre de la guía.</summary>
+        string ConFase(string accion) => accion == CapturarEste ? $"{CapturarEste} ({NombreDeEtapa(EtapaDelRegistro())})" : accion;
         const string PegarOperacionAqui = "Pegar la operación aquí";
         const string PegarOperacionTexto = "Pegar la operación aquí como texto";
         const string UsarAnterior = "Usar su operación anterior";
@@ -435,7 +437,7 @@ namespace ChatCouncil.Interfaz
                     raiz.Q(nombre).style.display = linea == null ? DisplayStyle.None : DisplayStyle.Flex;
                 }
                 var b = raiz.Q<Button>("accion-panel");
-                b.text = accion ?? "";
+                b.text = ConFase(accion) ?? "";
                 b.style.display = accion == null ? DisplayStyle.None : DisplayStyle.Flex;
                 b.SetEnabled(!ocupado);
             }
@@ -556,7 +558,7 @@ namespace ChatCouncil.Interfaz
         {
             var accion = raiz.Q<Button>("accion-panel").text;
             if (accion == PegarAqui) _ = PegarEnEste();
-            else if (accion == CapturarEste) _ = Capturar(new List<string> { visible });
+            else if (accion.StartsWith(CapturarEste, StringComparison.Ordinal)) _ = Capturar(new List<string> { visible });
             else if (accion == PegarOperacionAqui) ConAvisoDeOperacion(new List<string> { visible }, null);
             else if (accion == PegarPromptAqui) _ = PegarRol();
         }
@@ -661,12 +663,12 @@ namespace ChatCouncil.Interfaz
                     Html = (string)j["html"],
                 };
                 if ((bool?)j["informeEnIframe"] != true) return l;
-                // completarInformeEnIframe de Electron: el informe reemplaza al aviso y el html guarda los dos.
+                // Se captura todo: el mensaje y a continuación el informe del iframe; el html guarda los dos.
                 var informe = await p.LeerInformeEnIframe(spec);
                 var texto = (string)informe?["texto"];
                 if (!string.IsNullOrWhiteSpace(texto))
                 {
-                    l.Text = texto;
+                    l.Text = string.IsNullOrWhiteSpace(l.Text) ? texto : l.Text + "\n\n" + texto;
                     l.Html = (l.Html ?? "") + "\n" + (string)informe["html"];
                     return l;
                 }
@@ -1168,7 +1170,7 @@ namespace ChatCouncil.Interfaz
                 {
                     new Item { Grupo = grupo, Texto = PegarPromptAqui, Accion = () => _ = PegarRol(),
                         Motivo = accion == PegarPromptAqui ? null : "Solo en su etapa, cuando el panel está por pegar o el pegado falló." },
-                    new Item { Grupo = grupo, Texto = CapturarEste, Accion = () => _ = Capturar(new List<string> { visible }),
+                    new Item { Grupo = grupo, Texto = ConFase(CapturarEste), Accion = () => _ = Capturar(new List<string> { visible }),
                         Motivo = suEtapa ? null : "Solo en su etapa: fuera de ella, usa «Recapturar» del menú Ronda." },
                 };
             }
@@ -1181,17 +1183,17 @@ namespace ChatCouncil.Interfaz
                     new Item { Grupo = grupo, Texto = PegarOperacionTexto, Accion = () => ConAvisoDeOperacion(new List<string> { visible }, true), Motivo = pegable },
                     new Item { Grupo = grupo, Texto = UsarAnterior, Accion = UsarOperacionAnterior,
                         Motivo = pegable == null ? null : "Solo cuando el panel todavía no operó en esta ronda." },
-                    new Item { Grupo = grupo, Texto = CapturarEste, Accion = () => _ = Capturar(new List<string> { visible }),
-                        Motivo = accion == CapturarEste ? null : "Solo cuando el panel parece terminado." },
+                    // Capturar cuando Juan quiera: la página puede haber terminado sin que la app lo viera (pegado a mano, otra pestaña).
+                    new Item { Grupo = grupo, Texto = ConFase(CapturarEste), Accion = () => _ = Capturar(new List<string> { visible }), Motivo = paneles.ContainsKey(visible) ? null : "El panel no tiene su página abierta." },
                 };
             }
             return new List<Item>
             {
                 new Item { Grupo = grupo, Texto = PegarAqui, Accion = () => _ = PegarEnEste(),
                     Motivo = accion == PegarAqui ? null : "Solo cuando el panel está por pegar o el pegado falló." },
-                // Con un pegado fallido la app puede no haber visto terminar la página (se pegó a mano): capturar queda en manos de Juan.
-                new Item { Grupo = grupo, Texto = CapturarEste, Accion = () => _ = Capturar(new List<string> { visible }),
-                    Motivo = accion == CapturarEste || visible != null && EstadoDe(visible) == "con-problema" ? null : "Solo cuando el panel parece terminado o su captura falló." },
+                // Capturar cuando Juan quiera, sin pegado previo: la app puede no haber visto terminar la página (se pegó a mano).
+                new Item { Grupo = grupo, Texto = ConFase(CapturarEste), Accion = () => _ = Capturar(new List<string> { visible }),
+                    Motivo = visible != null && paneles.ContainsKey(visible) ? null : "El panel no tiene su página abierta." },
             };
         }
 

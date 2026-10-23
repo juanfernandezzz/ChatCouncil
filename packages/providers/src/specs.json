@@ -16,18 +16,18 @@
         "selector": "main"
       },
       "assistantMessage": {
-        "selector": "[data-message-author-role=\"assistant\"]",
+        "selector": "[data-message-author-role=\"assistant\"], [data-conversation-role=\"assistant\"]",
         "pick": "last"
       },
       "informeEnIframe": {
-        "turno": "section[data-testid^=\"conversation-turn-\"]",
-        "iframe": "iframe[title=\"internal://deep-research\"]",
-        "frameUrl": "connector-openai-deep-research.web-sandbox.oaiusercontent.com",
+        "turno": "section[data-testid^=\"conversation-turn-\"], body",
+        "iframe": "iframe[title=\"internal://deep-research\"], iframe[src*=\"web-sandbox.oaiusercontent.com\"]",
+        "frameUrl": "web-sandbox.oaiusercontent.com",
         "contenido": "[class*=\"_reportPage_\"]"
       },
-      "_notaInforme": "Medido el 2026-09-30 sobre la conversacion de investigacion de Juan (Deep Research): la burbuja del asistente trae solo el aviso de inicio (347 caracteres); el informe vive en un iframe de otro origen (connector-openai-deep-research.web-sandbox.oaiusercontent.com, title 'internal://deep-research'), en el mismo conversation-turn que ese mensaje, y dentro de el en un iframe#root about:blank con div._reportPage_<hash> (21.017 caracteres). Ya montado sin abrir nada. _reportPage_ lleva un hash de modulo CSS: por eso [class*=].",
+      "_notaInforme": "Medido el 2026-09-30 sobre la conversacion de investigacion de Juan (Deep Research): la burbuja del asistente trae solo el aviso de inicio (347 caracteres); el informe vive en un iframe de otro origen (connector-openai-deep-research.web-sandbox.oaiusercontent.com, title 'internal://deep-research'), en el mismo conversation-turn que ese mensaje, y dentro de el en un iframe#root about:blank con div._reportPage_<hash> (21.017 caracteres). Ya montado sin abrir nada. _reportPage_ lleva un hash de modulo CSS: por eso [class*=]. Remedido 2026-10-23 (interfaz nueva): el mensaje es [data-conversation-role=assistant] (13 caracteres); el informe va en un iframe de mcp-app-<hash>.web-sandbox.oaiusercontent.com (title 'Investigacion profunda') que cuelga de body, fuera de la conversacion: el turno comun es body. Dentro, el mismo _reportPage_ (21.474 caracteres).",
       "userMessage": {
-        "selector": "[data-message-author-role=\"user\"]",
+        "selector": "[data-message-author-role=\"user\"], [data-user-message-bubble=\"true\"]",
         "pick": "first"
       },
       "completion": {
@@ -218,8 +218,8 @@
       "canvas": {
         "mensaje": "[data-message-author-role=\"assistant\"]",
         "abrir": "div.rounded-t-xl.border-b > button.cursor-pointer, button[aria-label=\"Abrir Canvas\"]",
-        "contenido": "#chat-side-panel .tiptap.ProseMirror",
-        "cerrar": "#chat-side-panel button[aria-label=\"Cerrar\"]"
+        "contenido": "#chat-side-panel .tiptap.ProseMirror, .tiptap.ProseMirror.markdown-editor",
+        "cerrar": "#chat-side-panel button[aria-label=\"Cerrar\"], .bg-subtle:has(.markdown-editor) > .shrink-0 button[aria-label=\"Cerrar\"]"
       },
       "_notaCanvas": "Medido el 2026-09-25 sobre la conversacion de la ronda de cierre de Juan: el texto del canvas no existe en el DOM hasta abrir la tarjeta del mensaje; se monta en #chat-side-panel del mismo documento (sin iframe). 'Abrir Canvas' y 'Cerrar' son aria-label en espanol. La tarjeta cerrada es el boton del titulo en la cabecera de la tarjeta; con otro canvas abierto, la tarjeta minimizada lleva aria-label 'Abrir Canvas'.",
       "completion": {

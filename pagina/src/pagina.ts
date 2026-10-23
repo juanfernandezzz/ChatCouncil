@@ -341,13 +341,15 @@ function leerEtiquetaModelo(spec: Spec): string | null {
 /**
  * La lectura de la respuesta. El html crudo del subárbol, sin exclude, es el
  * dato canónico: cualquier regla nueva se re-deriva de él sin volver a pedir
- * nada. Con canvas, su texto reemplaza al aviso; los archivos se agregan.
+ * nada. Se lee todo: el mensaje, y a continuación el canvas y los archivos si los hay
+ * (no siempre el mensaje es solo un aviso: puede traer conclusiones que el canvas no repite).
  */
 async function leer(spec: Spec) {
   const nodo = ultimoNodoAsistente(spec);
   const canvas = await leerCanvas(spec, nodo);
   const archivos = await leerArchivos(spec, nodo);
-  const base = canvas ? canvas.texto : textoDelAsistente(spec, nodo);
+  const mensaje = textoDelAsistente(spec, nodo);
+  const base = canvas ? `${mensaje}\n\n${canvas.texto}` : mensaje;
   return {
     text: archivos ? `${base}\n\n${archivos.texto}` : base,
     archivos: archivos ? { leidos: archivos.leidos, total: archivos.total } : null,

@@ -221,7 +221,7 @@ namespace ChatCouncil.Interfaz
 
             // Grok respondió después de pegar aquí: se captura solo.
             Ronda.Seleccionar("grok");
-            await Esperar(() => Raiz.Q<Button>("accion-panel").text == "Capturar este panel");
+            await Esperar(() => Raiz.Q<Button>("accion-panel").text.StartsWith("Capturar este panel", StringComparison.Ordinal));
             await Pulsar("accion-panel");
             await Esperar(() => Hechos.OfType<Respuesta>().Any(r => r.ProveedorId == "grok"), 60);
             Anotar(Hechos.OfType<Respuesta>().Count(r => r.ProveedorId == "grok") == 1 && Hechos.OfType<Respuesta>().Count() == 6, "capturar este panel",

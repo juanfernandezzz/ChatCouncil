@@ -309,9 +309,9 @@ namespace ChatCouncil.Panel
             var actividad = new AndroidJavaClass("com.unity3d.player.UnityPlayer").GetStatic<AndroidJavaObject>("currentActivity");
             var origenes = JObject.Parse(Datos.Specs)["specs"].Children<JProperty>()
                 .Select(s => (string)s.Value["informeEnIframe"]?["frameUrl"])
-                .Concat((hosts ?? "").Split(';'))
                 .Where(h => !string.IsNullOrEmpty(h))
-                .Select(h => "https://" + h);
+                .Select(h => "https://*." + h) // frameUrl es un sufijo: ChatGPT sirve el informe desde mcp-app-<hash>.web-sandbox...
+                .Concat((hosts ?? "").Split(';').Where(h => !string.IsNullOrEmpty(h)).Select(h => "https://" + h));
             // Corre en cada iframe de esos orígenes: avisa que existe y lee cuando el plugin le manda "ticket:selector".
             var script = "(() => { if (window === window.top || typeof ccIframe === 'undefined') return; const leer = " + Panel.LectorInforme + "; " +
                          "ccIframe.onmessage = (e) => { const i = e.data.indexOf(':'); let r = 'null'; try { r = JSON.stringify(leer(e.data.slice(i + 1))); } catch (x) {} " +

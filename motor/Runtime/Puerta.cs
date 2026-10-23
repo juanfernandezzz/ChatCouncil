@@ -1208,7 +1208,8 @@ namespace ChatCouncil.Motor
             {
                 case "investigacion":
                 {
-                    var capturados = new HashSet<string>(hechos.OfType<Respuesta>().Where(r => r.RondaId == rondaId).Select(r => r.ProveedorId));
+                    // Solo una respuesta válida completa al operador: una captura con error (0 caracteres) no cuenta.
+                    var capturados = new HashSet<string>(hechos.OfType<Respuesta>().Where(r => r.RondaId == rondaId && string.IsNullOrEmpty(r.Error)).Select(r => r.ProveedorId));
                     if (!poolOperadores.All(capturados.Contains)) return NuevoPaso("investigacion", "capturar", "Capturar los que terminaron");
                     var ronda = hechos.OfType<Ronda>().First(r => r.Id == rondaId);
                     if (Dominio.PreguntaEfectivaDeRonda(hechos, ronda) == null) return NuevoPaso("investigacion", "declarar-pregunta", "Declarar la pregunta de esta ronda");

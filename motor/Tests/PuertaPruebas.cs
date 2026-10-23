@@ -68,6 +68,28 @@ namespace ChatCouncil.Motor.Pruebas
             }
         }
 
+        // Medido en la ronda real de Juan (2026-10-22): seis capturas de chatgpt en 0 caracteres quedaron como
+        // respuestas con error y la investigación se cerró con 6 de 7. Una captura inválida no completa a nadie.
+        [Test]
+        public void UnaCapturaConErrorNoCierraLaInvestigacion()
+        {
+            var puerta = NuevaPuerta();
+            var lotes = (JObject)JsonEstricto.Leer(Referencias.LotesOperacion);
+            var lecturas = lotes["investigacion"].ToObject<List<Lectura>>();
+            var vacia = lecturas.First(l => l.Id == "chatgpt");
+            var original = vacia.Text;
+            vacia.Text = "";
+            puerta.AbrirRonda(Referencias.PreguntaOperacion);
+            puerta.RegistrarCapturas(lecturas, Confirmada);
+            Assert.That(puerta.PasoSiguiente().Etapa, Is.EqualTo("investigacion"));
+            Assert.That(puerta.PasoSiguiente().Accion, Is.EqualTo("capturar"));
+            Assert.That(puerta.EstadoDePanel("chatgpt", null, null), Is.EqualTo("con-problema"));
+
+            vacia.Text = original;
+            puerta.RegistrarCapturas(new List<Lectura> { vacia }, Confirmada);
+            Assert.That(puerta.PasoSiguiente().Etapa, Is.EqualTo("operacion"), "con la recaptura válida, la investigación sí se cierra");
+        }
+
         [Test]
         public async Task UnaRondaEnteraDejaLosMismosHechosQueElTypeScript()
         {
@@ -405,9 +427,12 @@ namespace ChatCouncil.Motor.Pruebas
             puerta.RegistrarCapturas(lecturas.Where(l => l.Id == "chatgpt" || l.Id == "claude").ToList(), Contexto);
             Assert.That(puerta.EstadoDePanel("chatgpt", false, "observado"), Is.EqualTo("capturado"));
             Assert.That(puerta.EstadoDePanel("claude", false, "observado"), Is.EqualTo("con-problema"));
-            // Con las del pool capturadas el paso ya es la operación: por pegar (T21).
+            // El resto del pool capturado, pero claude sigue con su captura fallida: la investigación no se cierra
+            // (todos los investigadores, no casi todos; antes pasaba a la operación con 6 de 7).
             puerta.RegistrarCapturas(lecturas.Where(l => l.Id != "chatgpt" && l.Id != "claude").ToList(), Contexto);
-            Assert.That(puerta.EstadoDePanel("chatgpt", false, "observado"), Is.EqualTo("por-pegar"));
+            Assert.That(puerta.PasoSiguiente().Etapa, Is.EqualTo("investigacion"));
+            Assert.That(puerta.EstadoDePanel("chatgpt", false, "observado"), Is.EqualTo("capturado"));
+            Assert.That(puerta.EstadoDePanel("claude", false, "observado"), Is.EqualTo("con-problema"));
         }
 
         // T21: con la investigación completa el paso siguiente ya es la operación, aunque el registro no tenga

@@ -154,10 +154,11 @@ namespace ChatCouncil.Motor.Pruebas
         public static readonly (string texto, string[] fugas)[] Fugas = {
             ("sin urls", new string[] {  }),
             ("ver https://platform.claude.com/docs/claude-prompting y HTTPS://CHATGPT.COM/share/x", new string[] { "HTTPS://CHATGPT.COM/share/x" }),
-            ("https://x.org/?ref=Kimi https://chat.z.ai/c/1 http://sub.claude.ai/ https://notclaude.ai/ https://claude.ai.evil.org/ https://kimi.ai", new string[] { "https://x.org/?ref=Kimi", "https://chat.z.ai/c/1", "http://sub.claude.ai/", "https://kimi.ai" }),
+            ("https://x.org/?ref=Kimi https://chat.z.ai/c/1 http://sub.claude.ai/ https://notclaude.ai/ https://claude.ai.evil.org/ https://kimi.ai", new string[] { "https://x.org/?ref=Kimi", "https://chat.z.ai/c/1", "https://kimi.ai" }),
             ("https://ejemplo.org/?q=kimİ https://claude.aİ/ https://x.org/?a=Kimi", new string[] { "https://ejemplo.org/?q=kimİ", "https://x.org/?a=Kimi" }),
             ("http:// suelto, https://a.org/x y https://b.org/?q=glm\u2028https://c.org/?deepseek﻿https://d.org/?x=qwen\u0085fin", new string[] { "https://b.org/?q=glm", "https://c.org/?deepseek", "https://d.org/?x=qwen\u0085fin" }),
-            ("httpſ://claude.ai/ y httpS://grok.com y http://https://gemini.google.com", new string[] { "httpS://grok.com" })
+            ("httpſ://claude.ai/ y httpS://grok.com y http://https://gemini.google.com", new string[] { "httpS://grok.com" }),
+            ("https://learn.chatgpt.com/guides/best-practices, https://platform.kimi.ai/docs/x https://www.kimi.ai/blog/ https://KIMI.AI/Blog#a https://www.kimi.ai/blogs https://www.kimi.ai/chat/d1 https://www.chatgpt.com/c/1", new string[] { "https://www.kimi.ai/blogs", "https://www.kimi.ai/chat/d1", "https://www.chatgpt.com/c/1" })
         };
 
         /// <summary>armarCuerpoConFuentes: el cuerpo, o el mensaje con que tira.</summary>

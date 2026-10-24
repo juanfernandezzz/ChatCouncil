@@ -757,10 +757,10 @@ namespace ChatCouncil.Interfaz
                 return;
             }
             AbrirDialogo("Antes de pegar la operación",
-                "La app abre una conversación nueva en cada panel y comprueba que quedó vacía antes de pegar: si el operador " +
-                "siguiera el hilo anterior, leería su propia respuesta y la evaluación dejaría de ser ciega. Deja activados el " +
-                "razonamiento avanzado y la búsqueda si el proveedor los tiene. Nada se envía: revisa y envía tú; si va con " +
-                "archivo, comprueba que quedó adjunto.",
+                "En cada panel, antes de pegar: abre una conversación nueva (si siguiera el hilo anterior, el operador leería su " +
+                "propia respuesta y la evaluación dejaría de ser ciega) y activa el razonamiento avanzado y la búsqueda si el " +
+                "proveedor los tiene. La app comprueba que cada conversación esté vacía, pega solo el prompt y adjunta el archivo " +
+                "de ese proveedor. Nada se envía: revisa que el archivo quedó adjunto y envía tú.",
                 false, "Pegarla como texto, sin archivo", "Entendido, pegar",
                 (campo, marcada) =>
                 {
@@ -799,13 +799,22 @@ namespace ChatCouncil.Interfaz
         }
 
         /// <summary>
-        /// Conversación nueva, comprobada vacía (historia 41); la operación por la vía elegida; lo escrito, verificado
+        /// La conversación que abrió Juan, comprobada vacía (historia 41); la operación por la vía elegida; lo escrito, verificado
         /// contra lo armado (Cuerpos.VerificarEscritura); y con archivo, el adjunto. El error, o null si quedó pegada.
         /// </summary>
         async Task<string> PegarOperacion(string id, bool porTexto)
         {
-            var error = await AbrirChatNuevo(id);
-            if (error != null) return error;
+            // La conversación nueva la abre Juan, como en la investigación (pedido del 2026-10-23); la app solo comprueba que esté vacía.
+            if (!paneles.TryGetValue(id, out var p)) return "el panel no está abierto";
+            try
+            {
+                if ((bool?)await p.Correr("chatVacio", specDe(id), esperaMs: 5_000) != true)
+                    return "este panel sigue en una conversación con mensajes: abre una conversación nueva y vuelve a pegar, porque el modelo leería su propia respuesta";
+            }
+            catch (Exception e)
+            {
+                return e.Message;
+            }
             Operacion op;
             try
             {
@@ -815,7 +824,7 @@ namespace ChatCouncil.Interfaz
             {
                 return e.Message;
             }
-            error = await EscribirYAdjuntar(id, op.Texto, Cuerpos.VerificarEscritura, op.CuerpoArchivo,
+            var error = await EscribirYAdjuntar(id, op.Texto, Cuerpos.VerificarEscritura, op.CuerpoArchivo,
                 porTexto ? null : Path.Combine(carpetaDatos, "operaciones", op.NombreArchivo), " o pega la operación como texto");
             if (error != null) return error;
             Puerta.OperacionPegada(op);

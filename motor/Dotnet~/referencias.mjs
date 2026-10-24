@@ -130,6 +130,8 @@ const FUGAS = [
   `https://ejemplo.org/?q=kim${c(0x130)} https://claude.a${c(0x130)}/ https://x.org/?a=${c(0x212a)}imi`,
   `http:// suelto, https://a.org/x${NBSP}y https://b.org/?q=glm${LS}https://c.org/?deepseek${c(0xfeff)}https://d.org/?x=qwen${c(0x85)}fin`,
   `http${c(0x17f)}://claude.ai/ y httpS://grok.com y http://https://gemini.google.com`,
+  // Ronda real del 2026-10-23: docs y blog de un proveedor son fuentes; su interfaz no.
+  "https://learn.chatgpt.com/guides/best-practices, https://platform.kimi.ai/docs/x https://www.kimi.ai/blog/ https://KIMI.AI/Blog#a https://www.kimi.ai/blogs https://www.kimi.ai/chat/d1 https://www.chatgpt.com/c/1",
 ].map((t) => [t, analisis.fugasDeProveedorEnUrls(t)]);
 const ARMADOS = [
   ["texto de respuesta sin nada raro", ["https://arxiv.org/abs/2212.10001"]],

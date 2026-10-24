@@ -168,9 +168,9 @@ namespace ChatCouncil.Panel
         /// </summary>
         public async Task Adjuntar(string specJson, string ruta)
         {
+#if UNITY_ANDROID && !UNITY_EDITOR
             var input = await Correr("inputArchivo", specJson);
             if ((bool?)input["encontrado"] != true) throw new InvalidOperationException("No hay un <input type=file> en la página: no se puede adjuntar.");
-#if UNITY_ANDROID && !UNITY_EDITOR
             var entregados = Nativo.CC_Contador(id, 4);
             Nativo.Comprobar(Nativo.CC_PrepararAdjunto(id, Path.GetFullPath(ruta)), "preparar el adjunto");
             // El selector solo se abre con activación del usuario: un click() desde un script no lo abre (medido en T17).
@@ -181,10 +181,20 @@ namespace ChatCouncil.Panel
             Nativo.Comprobar(Nativo.CC_Tocar(id, (int)punto["x"], (int)punto["y"]), "tocar el input de archivo");
             await Paneles.Esperar(() => Nativo.CC_Contador(id, 4) > entregados ? 1 : 0, "adjuntar por el selector del sistema", id, 10_000);
 #else
-            var raiz = JObject.Parse(await DevTools("DOM.getDocument", "{\"depth\":0}"));
-            var nodo = JObject.Parse(await DevTools("DOM.querySelector", new JObject { ["nodeId"] = raiz["root"]["nodeId"], ["selector"] = input["selector"] }.ToString(Formatting.None)));
-            if ((int)nodo["nodeId"] == 0) throw new InvalidOperationException("DevTools no encontró el input que marcó pagina.js.");
-            await DevTools("DOM.setFileInputFiles", new JObject { ["nodeId"] = nodo["nodeId"], ["files"] = new JArray(Path.GetFullPath(ruta)) }.ToString(Formatting.None));
+            // Se suelta sobre el compositor, como un arrastre del mouse: Gemini y Mistral no tienen <input type=file> hasta abrir
+            // su menú y Qwen ignora el suyo; así adjuntan los siete (medido en vivo el 2026-10-24).
+            var selector = (string)JObject.Parse(specJson)["composer"]["selector"];
+            var punto = JsonEstricto.Leer((string)JsonEstricto.Leer(await Ejecutar(
+                "JSON.stringify((() => { const el = document.querySelector(" + JsonConvert.ToString(selector) + "); if (!el) return null; " +
+                "const r = el.getBoundingClientRect(); const arriba = Math.max(r.top, 0), abajo = Math.min(r.bottom, innerHeight); " +
+                "return { x: Math.round(r.left + r.width / 2), y: Math.round((arriba + abajo) / 2) }; })())")));
+            if (punto.Type == JTokenType.Null) throw new InvalidOperationException("No está el compositor: no hay dónde soltar el archivo.");
+            var datos = new JObject { ["items"] = new JArray(), ["files"] = new JArray(Path.GetFullPath(ruta)), ["dragOperationsMask"] = 1 };
+            foreach (var tipo in new[] { "dragEnter", "dragOver", "drop" })
+            {
+                await DevTools("Input.dispatchDragEvent", new JObject { ["type"] = tipo, ["x"] = punto["x"], ["y"] = punto["y"], ["data"] = datos }.ToString(Formatting.None));
+                await Task.Delay(150);
+            }
 #endif
         }
 

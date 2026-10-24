@@ -219,12 +219,12 @@ namespace ChatCouncil.Autoprueba
         {
             var texto = "Línea uno, con ñ: áéíóú ü\nLínea dos\n\nLínea cuatro, tras una vacía\n  sangría de dos espacios";
 
-            // chatgpt: contenteditable con insertText (una línea por vez, con salto suave).
+            // chatgpt: ProseMirror, un párrafo por línea (su editor cambia el salto suave por un espacio, medido 2026-10-23).
             var c = await Paneles.Crear("prueba-e1", Origen + "chatgpt.html");
             var spec = Spec("chatgpt");
             var e = await c.Correr("escribir", spec, texto);
             var leido = (string)await c.Correr("leerCompositor", spec);
-            Anotar((bool?)e["ok"] == true && leido == texto, "escritura insertText en contenteditable (spec chatgpt)", leido == texto ? $"{texto.Length} caracteres, idénticos" : "leyó: " + leido);
+            Anotar((bool?)e["ok"] == true && leido == texto, "escritura por párrafos en contenteditable (spec chatgpt)", leido == texto ? $"{texto.Length} caracteres, idénticos" : "leyó: " + leido);
             c.Cerrar();
 
             // mistral: ProseMirror, un párrafo por línea.
@@ -234,6 +234,21 @@ namespace ChatCouncil.Autoprueba
             leido = (string)await m.Correr("leerCompositor", spec);
             Anotar((bool?)e["ok"] == true && leido == texto, "escritura por párrafos (spec mistral)", leido == texto ? $"{texto.Length} caracteres, idénticos" : "leyó: " + leido);
             m.Cerrar();
+
+            // Saltos de Windows (\r\n), como una pregunta pegada desde el portapapeles: cada \r no puede volverse otro salto.
+            // Ronda real del 2026-10-23: la operación quedaba con líneas de más en cinco proveedores y la verificación la rechazaba.
+            var conCrlf = texto.Replace("\n", "\r\n") + "\r\n\r\nFinal tras una línea vacía";
+            foreach (var proveedor in new[] { "chatgpt", "mistral" })
+            {
+                var w = await Paneles.Crear("prueba-crlf-" + proveedor, Origen + proveedor + ".html");
+                var specCrlf = Spec(proveedor);
+                var eCrlf = await w.Correr("escribir", specCrlf, conCrlf);
+                var leidoCrlf = (string)await w.Correr("leerCompositor", specCrlf);
+                var verificado = Cuerpos.VerificarIgualdad(conCrlf, leidoCrlf ?? "");
+                Anotar((bool?)eCrlf["ok"] == true && verificado == null && leidoCrlf?.Contains('\r') == false,
+                    $"saltos \\r\\n sin líneas de más (spec {proveedor})", verificado ?? $"{leidoCrlf.Length} caracteres, igual al texto con \\n");
+                w.Cerrar();
+            }
 
             // Una skill elegida en el sitio es una píldora no editable en el compositor (ChatGPT, Mistral): no es un borrador y se conserva.
             var s = await Paneles.Crear("prueba-e2b", Origen + "mistral.html");
@@ -336,7 +351,7 @@ namespace ChatCouncil.Autoprueba
             await c.Adjuntar(Spec("chatgpt"), ruta);
             var visto = (string)JToken.Parse(await c.Ejecutar("document.getElementById('archivo').textContent"));
             var esperado = Path.GetFileName(ruta) + "|" + new FileInfo(ruta).Length;
-            Anotar(visto == esperado, EsAndroid ? "adjunto por el selector del sistema" : "adjunto sin selector (DevTools)", $"el input recibió \"{visto}\", se esperaba \"{esperado}\"");
+            Anotar(visto == esperado, EsAndroid ? "adjunto por el selector del sistema" : "adjunto soltado sobre el compositor (DevTools)", $"la página recibió \"{visto}\", se esperaba \"{esperado}\"");
             File.Delete(ruta);
             c.Cerrar();
         }

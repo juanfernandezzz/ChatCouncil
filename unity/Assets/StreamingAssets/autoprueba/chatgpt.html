@@ -13,7 +13,8 @@
   <button data-testid="stop-button">Detener</button>
   <form>
     <!-- ProseMirror exige white-space: pre-wrap (prosemirror-view/style/prosemirror.css): sin eso el navegador cambia la sangría por U+00A0. -->
-    <div id="prompt-textarea" contenteditable="true" style="white-space: pre-wrap"></div>
+    <!-- Vacío, el ProseMirror real de ChatGPT tiene un párrafo (medido 2026-10-23): se escribe un párrafo por línea. -->
+    <div id="prompt-textarea" contenteditable="true" style="white-space: pre-wrap"><p><br></p></div>
     <input type="file" id="adjunto">
     <output id="archivo"></output>
   </form>
@@ -21,6 +22,13 @@
     // Lo que el input recibió, para que la autoprueba lo compare con el archivo que adjuntó.
     document.getElementById("adjunto").addEventListener("change", (e) => {
       const f = e.target.files[0];
+      document.getElementById("archivo").textContent = f ? f.name + "|" + f.size : "";
+    });
+    // Lo que se soltó encima, como un arrastre del mouse: así adjunta la app en Windows (Paneles.Adjuntar).
+    document.addEventListener("dragover", (e) => e.preventDefault());
+    document.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const f = e.dataTransfer.files[0];
       document.getElementById("archivo").textContent = f ? f.name + "|" + f.size : "";
     });
   </script>

@@ -3,7 +3,7 @@
   "specs": {
     "chatgpt": {
       "newConversationUrl": "https://chatgpt.com/",
-      "escritura": "insertText",
+      "escritura": "lineaParrafo",
       "composer": {
         "selector": "#prompt-textarea, div.ProseMirror[contenteditable=\"true\"]",
         "kind": "contenteditable"

@@ -30,6 +30,41 @@ namespace ChatCouncil.Motor.Pruebas
             Assert.Throws<InvalidOperationException>(() => Cuerpos.ArmarCuerpoConFuentes("texto de respuesta", new[] { "https://chatgpt.com/share/abc123" }));
         }
 
+        // Ronda real d4fc7e58 (2026-10-23): estas fuentes de docs y blog frenaban la operación en los 7 operadores.
+        // Solo un enlace a la INTERFAZ del proveedor delata (decisión de Juan del 2026-10-23, BLUEPRINT T3, regla 1).
+        [TestCase("https://learn.chatgpt.com/guides/best-practices,")]
+        [TestCase("https://platform.kimi.ai/docs/guide/use-thinking-models")]
+        [TestCase("https://www.kimi.ai/blog/")]
+        [TestCase("https://www.kimi.ai/blog/kimi-k2-6#:~:text=open")]
+        [TestCase("https://kimi.ai/blog")]
+        [TestCase("https://platform.claude.com/docs/claude-prompting")]
+        [TestCase("http://sub.claude.ai/")]
+        [TestCase("https://ai.google.dev/gemini-api/docs")]
+        [TestCase("https://www.kimi.ai/blogs-de-otro")] // no es /blog: sigue siendo la interfaz
+        public void UnaFuenteDeDocsOBlogDeUnProveedorNoEsFuga(string url)
+        {
+            var esperado = url.EndsWith("blogs-de-otro", StringComparison.Ordinal) ? new List<string> { url } : new List<string>();
+            Assert.That(Cuerpos.FugasDeProveedorEnUrls($"ver {url} y sigue"), Is.EqualTo(esperado), url);
+        }
+
+        [TestCase("https://chatgpt.com/share/abc123")]
+        [TestCase("https://chatgpt.com/c/6812")]
+        [TestCase("https://www.chatgpt.com/c/6812")]
+        [TestCase("https://CLAUDE.AI/chat/1")]
+        [TestCase("https://chat.z.ai/c/1")]
+        [TestCase("https://gemini.google.com/app/abc")]
+        [TestCase("https://grok.com/share/x")]
+        [TestCase("https://chat.mistral.ai/chat/1")]
+        [TestCase("https://chat.qwen.ai/c/1")]
+        [TestCase("https://www.kimi.ai/chat/d1")]
+        [TestCase("https://kimi.ai")]
+        [TestCase("https://chat.deepseek.com/a/chat/s/1")]
+        public void UnEnlaceALaInterfazDelProveedorSigueSiendoFuga(string url)
+        {
+            Assert.That(Cuerpos.FugasDeProveedorEnUrls($"ver {url} y sigue"), Is.EqualTo(new List<string> { url }), url);
+            Assert.Throws<InvalidOperationException>(() => Cuerpos.ArmarCuerpoConFuentes("texto", new[] { url }));
+        }
+
         [Test]
         public void ElCuerpoConFuentesEsElMismoQueEnTypeScript()
         {

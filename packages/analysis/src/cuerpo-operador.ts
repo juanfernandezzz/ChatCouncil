@@ -44,7 +44,10 @@ import type { RespuestaEtiquetada } from "./prompt-operacion";
  *     por eso la búsqueda de texto libre tampoco lo habría cubierto),
  *     etc. es casi con certeza un link de "compartir esta conversación"
  *     hacia la INTERFAZ del proveedor — eso sí delata, siempre, y no hay
- *     forma legítima de que sea otra cosa.
+ *     forma legítima de que sea otra cosa. Sólo el host de la app o su
+ *     `www.`: un subdominio de docs (`learn.chatgpt.com`,
+ *     `platform.kimi.ai`) y el `/blog` de `kimi.ai` son fuentes como
+ *     cualquier otra (ronda real del 2026-10-23: frenaban la operación).
  *  2. QUERY, y sólo la query — nunca dominio ni ruta. Un parámetro de
  *     tracking (`utm_source=chatgpt.com`) delata porque lo puso el
  *     PROVEEDOR EMISOR sobre un link de salida; el mismo texto en la RUTA
@@ -128,8 +131,12 @@ function hostDe(url: string): string {
   return (fin === -1 ? sinEsquema : sinEsquema.slice(0, fin)).toLowerCase();
 }
 
-function esHostPropio(host: string): boolean {
-  return OWN_DOMAINS.some((dominio) => host === dominio || host.endsWith("." + dominio));
+// La interfaz es el host de la app o su www.: un subdominio de docs (learn., platform.) es una fuente más.
+function esInterfazPropia(url: string): boolean {
+  const host = hostDe(url);
+  if (!OWN_DOMAINS.some((dominio) => host === dominio || host === "www." + dominio)) return false;
+  // shortcut: solo /blog medido como contenido público en un host de interfaz (www.kimi.ai, 2026-10-23); sumar rutas si aparecen otras.
+  return !/^\/blog($|[/?#])/.test(url.toLowerCase().slice(url.indexOf("//") + 2 + host.length));
 }
 
 /** Sólo la porción de query de la URL — nunca dominio ni ruta (ver cabecera del archivo). */
@@ -151,7 +158,7 @@ export function fugasDeProveedorEnUrls(texto: string): string[] {
   const re = /https?:\/\/\S+/gi;
   for (const m of texto.matchAll(re)) {
     const url = m[0];
-    if (esHostPropio(hostDe(url))) {
+    if (esInterfazPropia(url)) {
       hallazgos.push(url);
       continue;
     }
@@ -464,9 +471,14 @@ export function armarCuerposPorOperador(
   // de Juan del 2026-09-25: con 454 citas, contar sólo el texto crudo dejaba
   // el cuerpo de gemini 4 marcas por encima de lo esperado (111 contra ~107)
   // y la comprobación de abajo bloqueaba "Pegar operación en todos" con un
-  // cuerpo correcto.
+  // cuerpo correcto. Y el texto ya anonimizado, que es el que entra: con el
+  // crudo, la ronda real del 2026-10-23 dejaba el cuerpo de chatgpt 4 marcas
+  // por debajo (279 contra ~283) y bloqueaba la operación en los siete.
   const textoLenPorProveedor = new Map(
-    respuestas.map((r) => [r.proveedorId, armarCuerpoConFuentes(r.texto, r.urlsCitadas).length]),
+    labeled.map((l, i) => {
+      const proveedor = seal[i]!.panelSourceId;
+      return [proveedor, armarCuerpoConFuentes(l.text, urlsPor.get(proveedor) ?? []).length];
+    }),
   );
   // Suma de TODOS los tamaños del pool — independiente de a quién
   // termine incluyendo cada cuerpo, a propósito: es la referencia contra la

@@ -599,13 +599,46 @@ namespace ChatCouncil.Interfaz
 
         // ---------------------------------------------------------------- la operación (T21)
 
+        /// <summary>
+        /// Lo que hace Juan antes de pegar la operación: abrir una conversación nueva en esos paneles. Espera a que las
+        /// páginas limpias carguen vacías; las de Sucios cargan con mensajes y no se esperan.
+        /// </summary>
+        async Task AbrirConversacionNueva(params string[] ids)
+        {
+            foreach (var id in ids) await Ronda.PanelDe(id).Navegar(Url(id));
+            foreach (var id in ids.Where(id => !Sucios.Contains(id)))
+            {
+                var limite = DateTime.UtcNow.AddSeconds(20);
+                for (;;)
+                {
+                    try
+                    {
+                        if ((bool?)await Ronda.PanelDe(id).Correr("chatVacio", Spec, esperaMs: 2_000) == true
+                            && (string)await Ronda.PanelDe(id).Correr("leerCompositor", Spec, esperaMs: 2_000) == "") break;
+                    }
+                    catch (Exception)
+                    {
+                        // la página todavía está cargando
+                    }
+                    if (DateTime.UtcNow > limite)
+                    {
+                        Anotar(false, $"conversación nueva de {id}", "no quedó vacía en 20 s");
+                        break;
+                    }
+                    await Task.Delay(200);
+                }
+            }
+        }
+
         async Task RecorridoDeOperacion()
         {
             var ronda = Ronda.Puerta.RondaActual;
+            // Juan abre la conversación nueva en cada panel (pedido del 2026-10-23); la de Mistral queda con mensajes.
+            Sucios.Add("mistral");
+            await AbrirConversacionNueva(Pool.ToArray());
             var navAntes = Pool.ToDictionary(id => id, id => Ronda.PanelDe(id).Navegaciones);
 
-            // Pegar en los siete, con la conversación de Mistral sin vaciar.
-            Sucios.Add("mistral");
+            // Pegar en los siete: la app ya no navega, solo comprueba que cada conversación esté vacía.
             await Pulsar("paso-ancha");
             var aviso = Raiz.Q("capa").ClassListContains("capa--abierta") && Raiz.Q<Label>("dialogo-titulo").text == "Antes de pegar la operación"
                         && Raiz.Q<Toggle>("dialogo-casilla").text == "Pegarla como texto, sin archivo";
@@ -615,7 +648,7 @@ namespace ChatCouncil.Interfaz
             Anotar(Resultado == "Operación pegada en 6 de 7. No se pegó en: Mistral; cada uno dice qué pasó. Comprueba que el archivo quedó adjunto, revísala y envíala.",
                 "resultado de la operación", Resultado);
 
-            // Conversación nueva (una navegación), vacía, el texto idéntico al armado y el archivo adjunto (historia 41).
+            // Sin navegación de la app, la conversación vacía, el texto idéntico al armado y el archivo adjunto (historia 41).
             var bien = new List<string>();
             foreach (var id in Pool.Where(id => id != "mistral"))
             {
@@ -624,25 +657,29 @@ namespace ChatCouncil.Interfaz
                 var vacio = (bool?)await Ronda.PanelDe(id).Correr("chatVacio", Spec) == true;
                 var adjunto = (string)JsonEstricto.Leer(await En(id, "document.getElementById('archivo').textContent"));
                 var ruta = Path.Combine(app.CarpetaDatos, "operaciones", op?.NombreArchivo ?? "-");
-                if (op?.CuerpoArchivo != null && navegaciones == 1 && vacio && await Compositor(id) == op.Texto && File.Exists(ruta)
+                if (op?.CuerpoArchivo != null && navegaciones == 0 && vacio && await Compositor(id) == op.Texto && File.Exists(ruta)
                     && adjunto == $"{op.NombreArchivo}|{new FileInfo(ruta).Length}" && File.ReadAllText(ruta) == op.CuerpoArchivo)
                     bien.Add(id);
             }
-            Anotar(bien.Count == 6, "chat nuevo, texto y archivo", $"{bien.Count} de 6: [{string.Join(",", bien)}]");
+            Anotar(bien.Count == 6, "sin navegar, texto y archivo", $"{bien.Count} de 6: [{string.Join(",", bien)}]");
             Anotar(Hechos.OfType<Sello>().Count(s => s.RondaId == ronda) == 7, "sello de la ronda", $"{Hechos.OfType<Sello>().Count(s => s.RondaId == ronda)} etiquetas");
 
             Ronda.Seleccionar("mistral");
             var problema = Raiz.Q<Label>("cabecera-problema").text;
-            Anotar(EstadoEnLaLista("mistral") == "Con problema" && problema.StartsWith("La operación no se pegó: la conversación nueva no quedó vacía", StringComparison.Ordinal)
-                   && await Compositor("mistral") == "" && Ronda.OperacionDe("mistral") == null,
-                "conversación nueva que no quedó vacía", $"«{EstadoEnLaLista("mistral")}»; {problema}");
+            Anotar(EstadoEnLaLista("mistral") == "Con problema" && problema.StartsWith("La operación no se pegó: este panel sigue en una conversación con mensajes", StringComparison.Ordinal)
+                   && await Compositor("mistral") == "" && Ronda.OperacionDe("mistral") == null && Ronda.PanelDe("mistral").Navegaciones == navAntes["mistral"],
+                "conversación con mensajes: no se pega ni se navega", $"«{EstadoEnLaLista("mistral")}»; {problema}");
 
-            // Mistral otra vez, por la vía del texto: el aviso ya se dio en esta ronda.
+            // Mistral otra vez, en una conversación nueva y por la vía del texto: el aviso ya se dio en esta ronda.
             Sucios.Remove("mistral");
+            await AbrirConversacionNueva("mistral");
             await Pulsar("menu-panel");
             await Pulsar("item-Pegar la operación aquí como texto");
             var sinAviso = !Raiz.Q("capa").ClassListContains("capa--abierta");
             await Esperar(() => Resultado.StartsWith("Operación pegada en 1 de 1", StringComparison.Ordinal), 60);
+            // El sondeo recorre los paneles de a uno: hasta su próxima vuelta por Mistral, la lista conserva lo que leyó de la
+            // página sucia (un mensaje, «Parece terminado»). Antes la app navegaba y esperaba ahí; ahora la página la abre Juan.
+            await Esperar(() => EstadoEnLaLista("mistral") == "Pegado, falta que envíes", 15);
             var opMistral = Ronda.OperacionDe("mistral");
             Anotar(sinAviso && opMistral?.CuerpoArchivo == null && opMistral.Texto.Contains("[[CC-MARCA-") && await Compositor("mistral") == opMistral.Texto
                    && EstadoEnLaLista("mistral") == "Pegado, falta que envíes",
@@ -675,6 +712,7 @@ namespace ChatCouncil.Interfaz
             Anotar(Ronda.EnLaVista.SequenceEqual(Pool) && Pool.Contains(Ronda.Visible), "los roles salen del recorrido en la ronda nueva",
                 $"en la vista [{string.Join(",", Ronda.EnLaVista)}], visible {Ronda.Visible}");
             // Reutilizar necesita el sello de la ronda nueva: primero se pega la operación en un panel, y el aviso vuelve.
+            await AbrirConversacionNueva("gemini");
             Ronda.Seleccionar("gemini");
             await Esperar(() => Raiz.Q<Button>("accion-panel").text == "Pegar la operación aquí");
             await Pulsar("accion-panel");

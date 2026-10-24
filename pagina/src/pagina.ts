@@ -181,6 +181,8 @@ async function escribirEnCompositor(el: Element, tipo: Tipo, texto: string, escr
  * posteriores), con techo de 45 s. Nunca escribe encima de un borrador y nunca envía.
  */
 async function escribir(spec: Spec, texto: string) {
+  // Una pregunta pegada desde Windows trae \r\n: los editores ricos toman el \r como otro salto (ronda real del 2026-10-23).
+  texto = texto.replace(/\r\n?/g, "\n");
   const compositor = await esperarElemento(spec.composer.selector, spec.timeouts?.composerMs ?? 15_000);
   if (!compositor) return { ok: false, error: "compositor no encontrado: no se escribió nada", ms: 0, textoFinal: "", caracteresEscritos: texto.length, caracteresPresentes: 0 };
   const leer = (): string => leerTexto(compositor, spec.composer.kind);
@@ -472,12 +474,14 @@ function inputArchivo(spec: Spec) {
   document.querySelectorAll("[data-cc-adjunto]").forEach((el) => el.removeAttribute("data-cc-adjunto"));
   let zona: Element | null = buscar(spec.composer.selector);
   let input: HTMLInputElement | null = null;
+  // El archivo es .txt: ChatGPT tiene junto al compositor un input solo de imágenes que lo descarta (medido 2026-10-23).
+  const aceptaTexto = (i: HTMLInputElement): boolean => !i.accept || /text|\.txt|\*\/\*/.test(i.accept);
   for (let nivel = 0; zona && !input && nivel <= 6; nivel++) {
-    input = zona.querySelector('input[type="file"]');
+    input = Array.from(zona.querySelectorAll<HTMLInputElement>('input[type="file"]')).find(aceptaTexto) ?? null;
     zona = zona.parentElement;
   }
-  const todos = buscarTodos('input[type="file"]');
-  input = input ?? (todos[0] as HTMLInputElement | undefined) ?? null;
+  const todos = buscarTodos('input[type="file"]') as HTMLInputElement[];
+  input = input ?? todos.find(aceptaTexto) ?? null;
   if (!input) return { encontrado: false, cantidad: 0 };
   input.setAttribute("data-cc-adjunto", "1");
   return { encontrado: true, cantidad: todos.length, selector: '[data-cc-adjunto="1"]', accept: input.accept, multiple: input.multiple, ...describir(input) };

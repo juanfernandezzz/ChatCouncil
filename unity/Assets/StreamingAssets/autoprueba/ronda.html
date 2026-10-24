@@ -20,6 +20,13 @@
       const f = e.target.files[0];
       document.getElementById("archivo").textContent = f ? f.name + "|" + f.size : "";
     });
+    // Lo que se soltó encima, como un arrastre del mouse: así adjunta la app en Windows (Paneles.Adjuntar).
+    document.addEventListener("dragover", (e) => e.preventDefault());
+    document.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const f = e.dataTransfer.files[0];
+      document.getElementById("archivo").textContent = f ? f.name + "|" + f.size : "";
+    });
   </script>
 </body>
 </html>

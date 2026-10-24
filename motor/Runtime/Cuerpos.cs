@@ -90,7 +90,7 @@ namespace ChatCouncil.Motor
                 if (fin == i + prefijo) continue;
                 var url = texto.Substring(i, fin - i);
                 var query = QueryDe(url);
-                if (EsHostPropio(HostDe(url)) || (query.Length > 0 && Roles.Conocidos.Any(id => query.Contains(id)))) fugas.Add(url);
+                if (EsInterfazPropia(url) ||(query.Length > 0 && Roles.Conocidos.Any(id => query.Contains(id)))) fugas.Add(url);
                 i = fin - 1;
             }
             return fugas;
@@ -114,8 +114,15 @@ namespace ChatCouncil.Motor
             return fin == -1 ? u : u.Substring(0, fin);
         }
 
-        static bool EsHostPropio(string host) =>
-            DominiosPropios.Any(d => host == d || host.EndsWith("." + d, StringComparison.Ordinal));
+        // La interfaz es el host de la app o su www.: un subdominio de docs (learn., platform.) es una fuente más.
+        static bool EsInterfazPropia(string url)
+        {
+            var host = HostDe(url);
+            if (!DominiosPropios.Any(d => host == d || host == "www." + d)) return false;
+            // shortcut: solo /blog medido como contenido público en un host de interfaz (www.kimi.ai, 2026-10-23); sumar rutas si aparecen otras.
+            var ruta = Js.ToLowerCase(url).Substring(url.IndexOf("//", StringComparison.Ordinal) + 2 + host.Length);
+            return !(ruta == "/blog" || ruta.StartsWith("/blog/", StringComparison.Ordinal) || ruta.StartsWith("/blog?", StringComparison.Ordinal) || ruta.StartsWith("/blog#", StringComparison.Ordinal));
+        }
 
         static string QueryDe(string url)
         {
@@ -272,9 +279,10 @@ namespace ChatCouncil.Motor
             var anonimizado = Anonimizacion.AnonimizarRespuestas(respuestas.Select(r => (r.ProveedorId, r.ReplyId, r.AttemptId, r.Texto)).ToList(), semilla);
             var urlsPor = new Dictionary<string, IReadOnlyList<string>>();
             foreach (var r in respuestas) urlsPor[r.ProveedorId] = r.UrlsCitadas;
-            // Cada respuesta tal como entra al cuerpo: texto MÁS la lista de fuentes.
+            // Cada respuesta tal como entra al cuerpo: texto ya anonimizado MÁS la lista de fuentes.
             var largoPor = new Dictionary<string, int>();
-            foreach (var r in respuestas) largoPor[r.ProveedorId] = ArmarCuerpoConFuentes(r.Texto, r.UrlsCitadas).Length;
+            for (int i = 0; i < anonimizado.Etiquetadas.Count; i++)
+                largoPor[anonimizado.Sello[i].PanelSourceId] = ArmarCuerpoConFuentes(anonimizado.Etiquetadas[i].Texto, urlsPor[anonimizado.Sello[i].PanelSourceId]).Length;
             int sumaTotalPool = largoPor.Values.Sum();
             var codigos = Anonimizacion.CodigosEstables(poolOrden);
             string CodigoDe(string id) => codigos.TryGetValue(id, out var c) ? c : "";

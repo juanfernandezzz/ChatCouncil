@@ -61,6 +61,7 @@ namespace ChatCouncil.Interfaz
         /// <summary>El último tamaño del área de la página, en píxeles: los paneles apartados lo conservan.</summary>
         (int ancho, int alto) tamano = (1000, 700);
         readonly Dictionary<string, (bool? Generando, string Fin)> pagina = new Dictionary<string, (bool?, string)>();
+        readonly Dictionary<string, int> zoom = new Dictionary<string, int>();
         readonly Dictionary<string, int> navegacionesAlCapturar = new Dictionary<string, int>();
         RolesElegidos roles;
         List<string> activos, pool;
@@ -235,6 +236,7 @@ namespace ChatCouncil.Interfaz
                     {
                         var e = await p.Correr("estado", specDe(id), esperaMs: 5_000);
                         pagina[id] = ((bool?)e["generando"], (string)e["fin"]);
+                        zoom[id] = (int?)e["zoom"] ?? 100;
                     }
                     catch (Exception)
                     {
@@ -429,7 +431,9 @@ namespace ChatCouncil.Interfaz
                 var (problema, corto, accion) = Situacion(visible, etapa);
                 var enLaVista = EnLaVista;
                 raiz.Q<IconoEstado>("icono-cabecera").Estado = raiz.Q<IconoEstado>("icono-selector").Estado = icono;
-                raiz.Q<Label>("cabecera-titulo").text = $"{Dominio.NombreProveedor(visible)} · {palabra}";
+                // Como los navegadores, el zoom (Ctrl + rueda del mouse) solo se muestra cuando no es el 100 %.
+                var conZoom = zoom.TryGetValue(visible, out var z) && z != 100 ? $" · Zoom {z} %" : "";
+                raiz.Q<Label>("cabecera-titulo").text = $"{Dominio.NombreProveedor(visible)} · {palabra}{conZoom}";
                 raiz.Q<Label>("selector-texto").text = $"{Dominio.NombreProveedor(visible)} · {palabra} · {enLaVista.IndexOf(visible) + 1} de {enLaVista.Count}";
                 foreach (var (nombre, linea) in new[] { ("cabecera-problema", problema), ("selector-problema", corto) })
                 {

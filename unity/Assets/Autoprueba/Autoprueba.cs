@@ -109,6 +109,7 @@ namespace ChatCouncil.Autoprueba
             await Grupo("lectura", Lectura);
             await Grupo("iframe de otro origen", IframeDeOtroOrigen);
             await Grupo("adjunto", Adjunto);
+            await Grupo("compositor recortado", CompositorRecortado);
             await Grupo("pdf", Pdf);
             await Grupo("perfiles", () => Perfiles(a));
             await Grupo("techo externo", () => TechoExterno(a));
@@ -340,6 +341,24 @@ namespace ChatCouncil.Autoprueba
             var informe = await c.LeerInformeEnIframe(spec.ToString(Formatting.None));
             Anotar(informe != null && ((string)informe["texto"]).StartsWith("INFORME DE PRUEBA") && ((string)informe["html"]).Contains("_reportPage_"),
                 "script en un iframe de otro origen", informe == null ? "no se encontró el informe" : $"texto \"{informe["texto"]}\"");
+            c.Cerrar();
+        }
+
+        // Gemini con un prompt largo y un adjunto (2026-10-25): el contenedor del compositor recortaba el botón de enviar.
+        async Task CompositorRecortado()
+        {
+            var c = await Paneles.Crear("prueba-r", Origen + "recorte.html");
+            c.Rect(0, 0, 800, 600);
+            var spec = Spec("chatgpt"); // #prompt-textarea, como la página
+            JToken estado = null;
+            for (var i = 0; i < 3; i++) estado = await c.Correr("estado", spec); // uno por llamada: la tercera ya no cambia nada
+            var overflow = (string)JToken.Parse(await c.Ejecutar(
+                "JSON.stringify([getComputedStyle(document.getElementById('contenedor')).overflowY, getComputedStyle(document.getElementById('afuera')).overflowY])"));
+            var alcanzable = (bool)JToken.Parse(await c.Ejecutar(
+                "(() => { const c = document.getElementById('contenedor'); c.scrollTop = c.scrollHeight; const b = document.getElementById('enviar').getBoundingClientRect(); return b.bottom <= c.getBoundingClientRect().bottom; })()"));
+            Anotar(overflow == "[\"auto\",\"hidden\"]" && alcanzable, "el contenedor que recorta el compositor gana scroll; el que no recorta, no",
+                $"overflow-y (contenedor, afuera) {overflow}, botón alcanzable {alcanzable}");
+            Anotar((int?)estado?["zoom"] == 100, "el estado informa el zoom del panel", $"zoom {estado?["zoom"]}");
             c.Cerrar();
         }
 

@@ -16,9 +16,13 @@
         "selector": "main"
       },
       "assistantMessage": {
-        "selector": "[data-message-author-role=\"assistant\"], [data-conversation-role=\"assistant\"]",
-        "pick": "last"
+        "selector": "[data-message-author-role=\"assistant\"], :has(> [data-conversation-role=\"assistant\"])",
+        "pick": "last",
+        "exclude": [
+          "[data-conversation-role=\"assistant\"]"
+        ]
       },
+      "_notaAsistente": "Medido el 2026-10-25: data-conversation-role=assistant es un H4 de encabezado (13 caracteres) y la respuesta es su contenedor; por eso se elige el que lo tiene como hijo (:has) y se excluye el encabezado. Con el selector plano, el ultimo nodo era el H4.",
       "informeEnIframe": {
         "turno": "section[data-testid^=\"conversation-turn-\"], body",
         "iframe": "iframe[title=\"internal://deep-research\"], iframe[src*=\"web-sandbox.oaiusercontent.com\"]",
@@ -94,15 +98,22 @@
         "selector": "main"
       },
       "assistantMessage": {
-        "selector": "div.font-claude-response",
+        "selector": "[data-testid=\"assistant-message\"], div.font-claude-response",
         "pick": "last",
         "exclude": [
-          "[data-testid=\"TurnStatus\"]"
+          "[data-testid=\"TurnStatus\"]",
+          "[data-testid=\"message-actions\"]",
+          "[data-testid=\"paper-finch-chip\"]"
         ]
       },
+      "userMessage": {
+        "selector": "[data-testid=\"user-message\"]",
+        "pick": "first"
+      },
       "completion": {
-        "kind": "quiescence",
-        "quiescenceMs": 20000
+        "kind": "element-gone",
+        "selector": "[data-is-streaming=\"true\"]",
+        "quiescenceMs": 1500
       },
       "timeouts": {
         "submitReadyMs": 8000,
@@ -113,7 +124,7 @@
         "selector": "button[data-testid=\"model-selector-dropdown\"]"
       },
       "_notaIdioma": "el boton de envio de Claude cambia de aria-label segun su propio estado, no solo por idioma de cuenta: 'Send message' (ingles) mientras esta deshabilitado, 'Enviar mensaje' (espanol, cuenta de Juan) una vez habilitado. El selector combina ambas variantes con una lista separada por comas. model-selector-dropdown es data-testid, no localizado.",
-      "_notaFin": "claude: sin indicador de generacion conocido en su DOM. El fin se INFIERE de que el texto dejo de crecer durante quiescenceMs. Los 20000 ms son un PISO PROVISIONAL, no un valor medido: se eligio porque 7 s ya alcanzaban para truncar en la pagina de prueba, y porque el Pensamiento Extendido de Claude pausa bastante mas que eso. Queda por validar en la Fase 2 con un prompt largo. Si aparece un indicador observable, migrar a element-gone."
+      "_notaFin": "claude, interfaz nueva medida el 2026-10-25: el mensaje del asistente es [data-testid=assistant-message] y lleva data-is-streaming (true mientras escribe, false al terminar). Antes el selector div.font-claude-response ya no encontraba nada: la respuesta nunca terminaba ni se capturaba. Se conserva como alternativa."
     },
     "gemini": {
       "newConversationUrl": "https://gemini.google.com/app",

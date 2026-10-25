@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Autoprueba: compositor recortado</title></head>
+<body style="margin: 0">
+  <!-- Imita a Gemini con un prompt largo y un adjunto (medido 2026-10-25): el contenedor del compositor tiene
+       overflow: hidden y su contenido es más alto que él, así que el botón de enviar queda fuera de alcance.
+       El de afuera también recorta, pero su contenido entra: no se debe tocar. -->
+  <div id="afuera" style="height: 400px; overflow: hidden">
+    <div id="contenedor" style="height: 300px; overflow: hidden">
+      <div style="height: 250px">Saludo de la página</div>
+      <div id="prompt-textarea" contenteditable="true" style="white-space: pre-wrap; height: 120px"><p><br></p></div>
+      <button id="enviar" aria-label="Enviar">Enviar</button>
+    </div>
+  </div>
+</body>
+</html>

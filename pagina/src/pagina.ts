@@ -389,7 +389,24 @@ function estadoDeGeneracion(spec: Spec) {
     : spec.completion.kind === "element-gone" ? "observado"
     : quietoMs >= spec.completion.quiescenceMs ? "deducido"
     : null;
-  return { generando, largo, quietoMs, fin };
+  desbloquearScroll(spec);
+  // El zoom del panel (Ctrl + / −) cambia los píxeles CSS de la página, no el ancho de la ventana.
+  return { generando, largo, quietoMs, fin, zoom: outerWidth > 0 && innerWidth > 0 ? Math.round((outerWidth / innerWidth) * 100) : null };
+}
+
+/**
+ * Un contenedor del compositor que recorta lo que se sale deja el botón de enviar fuera de alcance (Gemini con un prompt
+ * largo y un adjunto, medido 2026-10-25): se le da scroll en ese eje, como Kimi. Uno por llamada; el sondeo sigue subiendo.
+ */
+function desbloquearScroll(spec: Spec): void {
+  for (let e = buscar(spec.composer.selector)?.parentElement; e && e !== document.documentElement; e = e.parentElement) {
+    const s = getComputedStyle(e);
+    const y = s.overflowY === "hidden" && e.scrollHeight > e.clientHeight + 1;
+    const x = s.overflowX === "hidden" && e.scrollWidth > e.clientWidth + 1;
+    if (y) (e as HTMLElement).style.overflowY = "auto";
+    if (x) (e as HTMLElement).style.overflowX = "auto";
+    if (x || y) return;
+  }
 }
 
 // Atributos estructurales: identifican un nodo sin leer lo que la persona escribió.

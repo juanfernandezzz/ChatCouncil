@@ -91,7 +91,8 @@ namespace ChatCouncil.Interfaz
         /// <summary>Al terminar el informe. Android no abre carpetas con file:// (FileUriExposedException): ahí solo se dice dónde está.</summary>
         public Action<string> AbrirCarpeta { get; set; } = ruta =>
         {
-            if (Application.platform != RuntimePlatform.Android) Application.OpenURL(new Uri(ruta).AbsoluteUri);
+            // La ruta tal cual: el file:// escapado (%C3%A1 de "Fernández") Windows no lo encuentra.
+            if (Application.platform != RuntimePlatform.Android) Application.OpenURL(ruta);
         };
         public Panel PanelDe(string id) => paneles.TryGetValue(id, out var p) ? p : null;
         public Operacion OperacionDe(string id) => operaciones.TryGetValue(id, out var o) ? o : null;
@@ -554,6 +555,9 @@ namespace ChatCouncil.Interfaz
                     break;
                 case "armar-informe":
                     _ = ArmarInforme();
+                    break;
+                case "abrir-carpeta":
+                    AbrirCarpeta(Puerta.CarpetaInformeArmado);
                     break;
             }
         }

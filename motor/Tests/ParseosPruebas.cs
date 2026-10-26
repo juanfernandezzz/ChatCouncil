@@ -20,6 +20,35 @@ namespace ChatCouncil.Motor.Pruebas
             Assert.That(TextoDeHtml.TextoDeHtmlEnBloques("<ol start=\"5\"><li><p>QUE CONVIENE RESCATAR</p></li></ol>"), Is.EqualTo("5. QUE CONVIENE RESCATAR"));
         }
 
+        // Ronda real del 2026-10-25: "text", Copiar y Descargar del bloque de código de DeepSeek entraron al informe, y sus títulos y su tabla quedaron planos.
+        [Test]
+        public void ElCuerpoDelRedactorEnMarkdownSinLosControlesDeLaPagina()
+        {
+            const string html = "<h2>Fichas</h2><p>x</p><div class=\"md-code-block\"><div class=\"md-code-block-banner-wrap\"><div><span>text</span></div>"
+                + "<div><div role=\"button\"><span>Copiar</span></div><button>Descargar</button></div></div><pre><span>linea 1</span>\n<span>linea 2</span></pre></div>"
+                + "<table><thead><tr><th>Modelo</th><th>D1</th></tr></thead><tbody><tr><td>A|B</td><td>DROP</td></tr></tbody></table>";
+            Assert.That(TextoDeHtml.TextoDeHtmlEnBloques(html, markdown: true),
+                Is.EqualTo("#### Fichas\n\nx\n\n```\nlinea 1\nlinea 2\n```\n\n| Modelo | D1 |\n| --- | --- |\n| A\\|B | DROP |"));
+            Assert.That(TextoDeHtml.TextoDeHtmlEnBloques(html), Is.EqualTo("Fichas\nx\nlinea 1\nlinea 2\nModelo | D1 |\nA|B | DROP |"));
+        }
+
+        // Ronda real del 2026-10-25: DeepSeek enlaza solo "Z.ai" y el control decía que el redactor había salido a la red.
+        [Test]
+        public void UnDominioDelMaterialEnlazadoSoloNoCuentaComoFueraDelMaterial()
+        {
+            const string html = "<p>ARCHIVO: x</p><p><a href=\"https://z.ai/\">Z.ai</a> y <a href=\"https://otro.org/\">otro.org</a></p>";
+            var c = InformeFinal.ControlesRedaccion("", html, null, null, new string[0], new[] { "https://z.ai/blog/glm-5.3" });
+            Assert.That((c.EnlacesExternos, c.EnlacesFueraDelMaterial), Is.EqualTo(((int?)2, (int?)1)));
+        }
+
+        // Ronda real del 2026-10-25: GLM dejó &#39; como texto y la cita "…" - fuente perdía solo su comilla de apertura.
+        [Test]
+        public void LaCitaDelVerificadorSinEntidadesYConSusComillas()
+        {
+            var r = Parseos.ParsearVerificacion("CONFIRMA|OFICIAL|H1|https://a.org|&quot;We&#39;re here\" - Anthropic, 2026\nCONFIRMA|OFICIAL|H2|https://b.org|\"solo la cita\"", new[] { "H1", "H2" });
+            Assert.That(r.Correspondencias.Select(x => x.Texto), Is.EqualTo(new[] { "\"We're here\" - Anthropic, 2026", "solo la cita" }));
+        }
+
         [Test]
         public void UnPuntoDeCodigoFueraDeRangoTiraComoEnTypeScript()
         {

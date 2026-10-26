@@ -161,11 +161,14 @@ namespace ChatCouncil.Motor.Pruebas
             }
             // El motor no abre nada (D41): la carpeta la abre la interfaz.
             Assert.That(informe.Mensaje, Is.EqualTo($"Carpeta del informe: {carpetaInforme}. El informe está en .md y en PDF. 7 respuestas de investigador, cada una en .md y en PDF."));
+            // Armado el informe, el paso es abrir su carpeta, no armar otro.
+            Paso();
+            Assert.That(puerta.CarpetaInformeArmado, Is.EqualTo(carpetaInforme));
 
             Assert.That(pasos, Is.EqualTo(new[]
             {
                 "pegar-pregunta", "capturar", "pegar-operacion", "capturar", "capturar", "pegar-integrador", "capturar",
-                "pegar-verificacion", "capturar", "pegar-redactor", "capturar", "armar-informe",
+                "pegar-verificacion", "capturar", "pegar-redactor", "capturar", "armar-informe", "abrir-carpeta",
             }));
             puerta.RondaNuevaConRespuestasCopiadas();
             puerta.RegistrarCapturas(Lote("kimiNueva"), Confirmada);

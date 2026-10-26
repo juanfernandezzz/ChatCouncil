@@ -152,6 +152,11 @@ namespace ChatCouncil.Motor
         readonly Dictionary<string, string> promptOperador = new Dictionary<string, string>();
         string promptIntegrador, promptVerificador, promptRedactor;
         (string Primera, string Ultima)? marcasRedactor;
+        // El informe armado en este proceso: el paso pasa a abrir su carpeta en vez de armar otro.
+        (string RondaId, string Carpeta)? informeArmado;
+
+        /// <summary>La carpeta del informe de la ronda actual, si se armó en este proceso.</summary>
+        public string CarpetaInformeArmado => informeArmado?.RondaId == RondaActual ? informeArmado?.Carpeta : null;
 
         /// <param name="ahora">La hora con su zona: el registro usa el instante en UTC; los nombres de archivo, la hora local.</param>
         public Puerta(string carpetaDatos, Func<string> nuevoId, Func<DateTimeOffset> ahora, IReadOnlyList<string> activos, RolesElegidos roles, IReadOnlyList<string> poolOperadores)
@@ -1081,7 +1086,9 @@ namespace ChatCouncil.Motor
                         FuentesCitadas = citas.Count(c => c.RespuestaId == r.Id), FuentesHref = r.FuentesHref, FinDe = r.Procedencia?.FinDe,
                     })));
             }
-            return await EntregarCarpeta(dir, nombre, texto, respuestas, pdf);
+            var entrega = await EntregarCarpeta(dir, nombre, texto, respuestas, pdf);
+            informeArmado = (ronda.Id, Path.Combine(dir, nombre));
+            return entrega;
         }
 
         static void EscribirNuevo(string ruta, string texto)
@@ -1226,7 +1233,8 @@ namespace ChatCouncil.Motor
                 case "verificacion":
                     return promptVerificador == null ? NuevoPaso("verificacion", "pegar-verificacion", "Pegar el prompt del verificador") : NuevoPaso("verificacion", "capturar", "Capturar la verificación");
                 default:
-                    if (hechos.OfType<RespuestaRedactor>().Any(r => r.RondaId == rondaId)) return NuevoPaso("informe", "armar-informe", "Armar el informe");
+                    if (hechos.OfType<RespuestaRedactor>().Any(r => r.RondaId == rondaId))
+                        return CarpetaInformeArmado != null ? NuevoPaso("informe", "abrir-carpeta", "Abrir carpeta") : NuevoPaso("informe", "armar-informe", "Armar el informe");
                     return promptRedactor == null ? NuevoPaso("redaccion", "pegar-redactor", "Pegar el prompt y el archivo del redactor") : NuevoPaso("redaccion", "capturar", "Capturar la respuesta del redactor");
             }
         }

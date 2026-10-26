@@ -384,6 +384,7 @@ namespace ChatCouncil.Motor
         static readonly Regex Enlace = new Regex($"<[aA]{Js.Borde}[^>]*{Js.Ci("href")}[{B}]*=[{B}]*\"({Js.Ci("http")}[sS]?:[^\"]*)\"");
         static readonly Regex InicioDeUrl = new Regex("^[a-zA-Z]+://[^/]*");
         static readonly Regex BarrasFinales = new Regex("/+\\z");
+        static readonly Regex SoloOrigen = new Regex("^[a-z]+://[^/]*\\z");
 
         // Origen y ruta sin query ni fragmento, con esquema y host en minúsculas:
         // los dos lados de la comparación pasan por acá.
@@ -399,6 +400,9 @@ namespace ChatCouncil.Motor
             IReadOnlyList<string> idsValidos, IReadOnlyList<string> urlsDelMaterial)
         {
             var texto = string.IsNullOrEmpty(html) ? textoCrudo : TextoDeHtml.TextoDeHtmlEnBloques(html);
+            // El cuerpo va al informe tal cual: en Markdown, para que sus títulos, tablas y bloques de código se vean.
+            var md = string.IsNullOrEmpty(html) ? textoCrudo : TextoDeHtml.TextoDeHtmlEnBloques(html, markdown: true);
+            var lineasMd = md.Split('\n');
             var lineas = texto.Split('\n');
             int i = Array.FindIndex(lineas, l => Js.Trim(l).Length > 0);
             var primera = i < 0 ? "" : Js.Trim(lineas[i]);
@@ -415,6 +419,8 @@ namespace ChatCouncil.Motor
 
             var hrefs = string.IsNullOrEmpty(html) ? null : Enlace.Matches(html).Cast<Match>().Select(m => m.Groups[1].Value).ToList();
             var delMaterial = new HashSet<string>(urlsDelMaterial.Select(ClaveDeUrl));
+            // Un dominio sin ruta ("Z.ai" que DeepSeek enlaza solo) está en el material si el material trae páginas de ese sitio.
+            bool EnMaterial(string k) => delMaterial.Contains(k) || (SoloOrigen.IsMatch(k) && delMaterial.Any(d => d.StartsWith(k + "/", StringComparison.Ordinal)));
             var validos = new HashSet<string>(idsValidos);
             var inexistentes = new List<string>();
             foreach (Match grupo in Corchetes.Matches(texto))
@@ -425,9 +431,9 @@ namespace ChatCouncil.Motor
             {
                 LecturaArchivo = lectura,
                 EnlacesExternos = hrefs?.Count,
-                EnlacesFueraDelMaterial = hrefs == null || urlsDelMaterial.Count == 0 ? (int?)null : hrefs.Count(h => !delMaterial.Contains(ClaveDeUrl(h))),
+                EnlacesFueraDelMaterial = hrefs == null || urlsDelMaterial.Count == 0 ? (int?)null : hrefs.Count(h => !EnMaterial(ClaveDeUrl(h))),
                 HallazgosInexistentes = inexistentes,
-                Cuerpo = lectura == "sin-linea" ? texto : Js.Trim(string.Join("\n", lineas.Skip(i + 1))),
+                Cuerpo = lectura == "sin-linea" ? md : Js.Trim(string.Join("\n", lineasMd.Skip(Array.FindIndex(lineasMd, l => Js.Trim(l).Length > 0) + 1))),
             };
         }
 

@@ -68,14 +68,19 @@ export function controlesRedaccion(
   const hrefs = r.html ? [...r.html.matchAll(/<a\b[^>]*href\s*=\s*"(https?:[^"]*)"/gi)].map((m) => m[1] as string) : null;
   const enlacesExternos = hrefs === null ? null : hrefs.length;
   const delMaterial = new Set(urlsDelMaterial.map(claveDeUrl));
+  // Un dominio sin ruta ("Z.ai" que DeepSeek enlaza solo) está en el material si el material trae páginas de ese sitio.
+  const enMaterial = (k: string) => delMaterial.has(k) || (/^[a-z]+:\/\/[^/]*$/.test(k) && [...delMaterial].some((d) => d.startsWith(k + "/")));
   const enlacesFueraDelMaterial =
-    hrefs === null || urlsDelMaterial.length === 0 ? null : hrefs.filter((h) => !delMaterial.has(claveDeUrl(h))).length;
+    hrefs === null || urlsDelMaterial.length === 0 ? null : hrefs.filter((h) => !enMaterial(claveDeUrl(h))).length;
 
   const validos = new Set(idsValidos);
   const citados = [...texto.matchAll(/\[[^\]\n]*\]/g)].flatMap((m) => m[0].match(/\bH\d+\b/g) ?? []);
   const hallazgosInexistentes = [...new Set(citados.filter((id) => !validos.has(id)))];
 
-  const cuerpo = lecturaArchivo === "sin-linea" ? texto : lineas.slice(i + 1).join("\n").trim();
+  // El cuerpo va al informe tal cual: en Markdown, para que sus títulos, tablas y bloques de código se vean.
+  const md = r.html ? textoDeHtmlEnBloques(r.html, true) : r.textoCrudo;
+  const lineasMd = md.split("\n");
+  const cuerpo = lecturaArchivo === "sin-linea" ? md : lineasMd.slice(lineasMd.findIndex((l) => l.trim().length > 0) + 1).join("\n").trim();
   return { lecturaArchivo, enlacesExternos, enlacesFueraDelMaterial, hallazgosInexistentes, cuerpo };
 }
 

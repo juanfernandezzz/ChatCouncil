@@ -26,28 +26,83 @@ function decodificar(texto: string): string {
     .replace(/&amp;/g, "&");
 }
 
-/** Texto del html con un salto por bloque y el número de cada ítem de `<ol>` (respetando `start`). */
-export function textoDeHtmlEnBloques(html: string): string {
+// Controles de la página, no la respuesta: botones y la barra del bloque de código de DeepSeek ("text", Copiar, Descargar).
+const CONTROL = /\brole\s*=\s*"button"|\bclass\s*=\s*"[^"]*code-block-banner/i;
+const VACIA = /^(img|input|br|hr|wbr|area|col|embed|source|track|meta|link|param)$/;
+
+/**
+ * Texto del html con un salto por bloque y el número de cada ítem de `<ol>` (respetando `start`).
+ * Con `markdown` (el cuerpo del redactor, que va al informe tal cual) también los títulos, dos niveles
+ * por debajo de los del informe, las tablas con su fila separadora y los bloques de código.
+ */
+export function textoDeHtmlEnBloques(html: string, markdown = false): string {
   const limpio = html.replace(/<!--[\s\S]*?-->/g, "").replace(/<(style|script)\b[\s\S]*?<\/\1>/gi, "");
   const listas: { ordenada: boolean; n: number }[] = [];
   let salida = "";
   // Justo después de "5. " (o "- ") el `<p>` del ítem no corta la línea.
   let trasPrefijo = false;
+  let saltar: { tag: string; n: number } | null = null;
+  let enCelda = false;
+  let encabezados = 0;
   for (const m of limpio.matchAll(/<(\/?)([a-z0-9]+)([^>]*)>|([^<]+)/gi)) {
     if (m[4] !== undefined) {
-      salida += decodificar(m[4]);
+      if (saltar) continue;
+      const t = decodificar(m[4]);
+      salida += markdown && enCelda ? t.replace(/\|/g, "\\|") : t;
       trasPrefijo = false;
       continue;
     }
     const cierre = m[1] === "/";
     const tag = m[2]!.toLowerCase();
+    if (saltar) {
+      if (tag === saltar.tag) {
+        saltar.n += cierre ? -1 : 1;
+        if (saltar.n === 0) saltar = null;
+      }
+      continue;
+    }
+    if (!cierre && (tag === "button" || CONTROL.test(m[3] ?? ""))) {
+      if (!VACIA.test(tag) && !(m[3] ?? "").endsWith("/")) saltar = { tag, n: 1 };
+      continue;
+    }
     if (tag === "br") {
       salida += "\n";
       continue;
     }
     if (cierre && (tag === "td" || tag === "th")) {
       salida += " | ";
+      enCelda = false;
       continue;
+    }
+    if (markdown) {
+      if (tag === "td" || tag === "th") {
+        enCelda = true;
+        if (tag === "th") encabezados++;
+        continue;
+      }
+      if (enCelda) continue;
+      const titulo = /^h([1-6])$/.exec(tag);
+      if (titulo) {
+        salida += cierre ? "\n\n" : `\n\n${"#".repeat(Math.min(Number(titulo[1]) + 2, 6))} `;
+        continue;
+      }
+      if (tag === "pre") {
+        salida += cierre ? "\n```\n\n" : "\n\n```\n";
+        continue;
+      }
+      if (tag === "table") {
+        salida += "\n\n";
+        continue;
+      }
+      if (tag === "tr") {
+        // Cada fila abre su línea; una línea en blanco entre filas partiría la tabla.
+        if (!cierre) salida += "\n| ";
+        else {
+          if (encabezados > 0) salida += "\n|" + " --- |".repeat(encabezados);
+          encabezados = 0;
+        }
+        continue;
+      }
     }
     if (!BLOQUES.test(tag)) continue;
     if (trasPrefijo && !cierre) continue;

@@ -163,7 +163,8 @@ namespace ChatCouncil.Motor
 
         static readonly Regex PrimeraUrlRe = new Regex($"{Js.Ci("http")}[sS]?://[^{B}<>\"'`|]+");
         static readonly Regex PuntuacionFinal = new Regex(@"[).,;\]]+\z");
-        static readonly Regex ComillasDeAfuera = new Regex("^\"+|\"+\\z");
+        // Solo las comillas que envuelven la cita entera: en "cita" - fuente quitar una sola la dejaba suelta.
+        static readonly Regex ComillasDeAfuera = new Regex("^\"+([^\"]*)\"+\\z");
         static readonly Regex Diacriticos = new Regex(@"[\u0300-\u036F]");
         static readonly Regex SeparadorDeTipos = new Regex($"[{B}]*(?:,|/|;|\\+|[{B}]+{Js.Ci("y")}[{B}]+)[{B}]*");
         static readonly Regex SoloGuiones = new Regex("^[—–-]+\\z");
@@ -176,7 +177,7 @@ namespace ChatCouncil.Motor
             return m.Success ? PuntuacionFinal.Replace(m.Value, "") : null;
         }
 
-        static string SinComillas(string t) => Js.Trim(ComillasDeAfuera.Replace(Js.Trim(t), ""));
+        static string SinComillas(string t) => Js.Trim(ComillasDeAfuera.Replace(Js.Trim(t), "$1"));
 
         /// <summary>"OFICIAL,PRIMARIA", "Académica", "oficial y primaria", "—": lo reconocido y lo que no.</summary>
         static (List<string> Reconocidos, List<string> NoReconocidos) LeerTipos(string campo)
@@ -223,8 +224,8 @@ namespace ChatCouncil.Motor
         static List<(string Linea, bool HayPrevio)> Segmentos(string salida)
         {
             var segmentos = new List<(string, bool)>();
-            // Espacio duro a espacio, y &quot; (GLM lo escribe como texto) y las comillas tipográficas a rectas.
-            var limpia = Comillas.Replace(salida.Replace((char)0xA0, ' ').Replace("&quot;", "\""), "\"");
+            // Espacio duro a espacio, &quot; y &#39; (GLM los escribe como texto) y las comillas tipográficas a rectas.
+            var limpia = Comillas.Replace(salida.Replace((char)0xA0, ' ').Replace("&quot;", "\"").Replace("&#39;", "'"), "\"");
             foreach (var cruda in limpia.Split('\n'))
             {
                 var l = Vineta.Replace(cruda, "", 1);

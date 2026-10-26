@@ -844,6 +844,11 @@ namespace ChatCouncil.Interfaz
                 Anotar(mds == 7 && pdfs == 7, "respuestas de los investigadores", $"{mds} .md y {pdfs} PDF");
                 Anotar(abierta == carpeta && Resultado.EndsWith("URLs del verificador: responden 0 de 5.", StringComparison.Ordinal) && !Raiz.Q("resultado-ancha").ClassListContains("problema"),
                     "la carpeta se abre al terminar", $"abierta «{abierta}»; «{Resultado}»");
+                abierta = null;
+                bool abrirListo = Paso == "Abrir carpeta" && Habilitado;
+                await Pulsar("paso-ancha");
+                Anotar(abrirListo && abierta == carpeta && Directory.GetDirectories(Path.Combine(app.CarpetaDatos, "informes")).Length == 1,
+                    "el botón pasa a abrir la carpeta, sin armar otro informe", $"«{Paso}»; abierta «{abierta}»");
 
                 // El adaptador real, directo contra el servidor local: el código de cada método, sin cookies.
                 var adaptador = new HttpSinCookies();

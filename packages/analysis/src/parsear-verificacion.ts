@@ -79,8 +79,9 @@ function primeraUrl(campo: string): string | null {
   return m === null ? null : m[0].replace(/[).,;\]]+$/, "");
 }
 
+// Solo las comillas que envuelven la cita entera: en `"cita" - fuente` quitar una sola la dejaba suelta.
 function sinComillas(t: string): string {
-  return t.trim().replace(/^"+|"+$/g, "").trim();
+  return t.trim().replace(/^"+([^"]*)"+$/, "$1").trim();
 }
 
 /** "OFICIAL,PRIMARIA", "Académica", "oficial y primaria", "—": lo reconocido y lo que no. */
@@ -119,9 +120,9 @@ function idsDelCampo(campo: string): string[] {
 /** Parte la salida en segmentos que arrancan en una palabra clave; lo que va antes de la primera se descarta. */
 function segmentos(salida: string): { linea: string; hayPrevio: boolean }[] {
   const out: { linea: string; hayPrevio: boolean }[] = [];
-  // Espacio duro a espacio, y `&quot;` (GLM lo escribe como texto) y las
+  // Espacio duro a espacio, y `&quot;` y `&#39;` (GLM los escribe como texto) y las
   // comillas tipográficas a comillas rectas, antes de cortar.
-  const limpia = salida.replace(/ /g, " ").replace(/&quot;/g, '"').replace(/[“”«»]/g, '"');
+  const limpia = salida.replace(/ /g, " ").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/[“”«»]/g, '"');
   for (const cruda of limpia.split("\n")) {
     const l = cruda.replace(VINETA, "");
     const inicios = [...l.matchAll(CLAVE)].map((m) => m.index!);

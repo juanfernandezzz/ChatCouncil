@@ -205,7 +205,8 @@ namespace ChatCouncil.Interfaz
             abrir.clicked += () =>
             {
                 Directory.CreateDirectory(carpetaDatos);
-                Application.OpenURL(new Uri(carpetaDatos).AbsoluteUri);
+                // La ruta tal cual: el file:// escapado (%C3%A1 de "Fernández") Windows no lo encuentra.
+                Application.OpenURL(carpetaDatos);
             };
             raiz.Q<Label>("como-copiar").text = android
                 ? "Para hacer una copia, conecta el teléfono a una computadora por USB y copia la carpeta entera."

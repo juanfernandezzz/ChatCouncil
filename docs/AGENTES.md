@@ -186,6 +186,8 @@ hace cada cosa**. Nada de "abre X" sin decir cómo se abre X.
 - En texto en español de la interfaz, la palabra "council" no aparece: se dice
   **"consejo"**. "ChatCouncil" queda como marca sin traducir.
 - Los mensajes de commit explican **por qué**, no sólo qué.
+- **Los handoff van en la conversación, en un solo bloque de código** (para copiarlos con un clic), nunca como
+  archivo en el repo ni en `docs/`. Pedido de Juan, repetido el 2026-10-25.
 
 ## Entorno
 

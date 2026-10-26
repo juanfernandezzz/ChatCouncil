@@ -238,7 +238,26 @@ function textoDelAsistente(spec: Spec, nodo: Element | null): string {
       // un selector inválido se ignora; no rompe la lectura
     }
   }
-  return copia.textContent ?? "";
+  return textoEnBloques(copia);
+}
+
+const BLOQUES_DE_TEXTO = "p, li, h1, h2, h3, h4, h5, h6, pre, blockquote, tr, div, section, article, table, ul, ol, br, hr";
+
+/**
+ * El textContent pega los bloques donde la página no deja un "\n" entre ellos (ronda del 2026-10-25: Gemini con
+ * 89.854 caracteres y 3 saltos, y los hallazgos de Kimi, un <li> cada uno, en una sola línea que no se pudo
+ * parsear). Se pone el salto tras cada bloque al que le sigue algo sin él; donde ya estaba, el texto queda igual.
+ */
+function textoEnBloques(raiz: Element): string {
+  // De adentro hacia afuera: el salto de un hijo cuenta para decidir el del padre.
+  for (const el of Array.from(raiz.querySelectorAll(BLOQUES_DE_TEXTO)).reverse()) {
+    const siguiente = el.nextSibling;
+    if (!siguiente || (siguiente.nodeType === Node.TEXT_NODE && /^[ \t]*\n/.test(siguiente.textContent ?? ""))) continue;
+    const propio = el.textContent ?? "";
+    if (el.tagName !== "BR" && (propio.trim() === "" || /\n[ \t]*$/.test(propio))) continue;
+    el.after("\n");
+  }
+  return raiz.textContent ?? "";
 }
 
 /**
@@ -279,7 +298,7 @@ async function leerCanvas(spec: Spec, nodo: Element | null): Promise<{ texto: st
     if (!el) return null;
     const copia = el.cloneNode(true) as Element;
     copia.querySelectorAll("style, script").forEach((n) => n.remove());
-    return { texto: copia.textContent ?? "", html: el.outerHTML };
+    return { texto: textoEnBloques(copia), html: el.outerHTML };
   } finally {
     if (!yaAbierto) (buscar(c.cerrar) as HTMLElement | null)?.click();
   }
@@ -336,8 +355,22 @@ function leerMensajeUsuario(spec: Spec): string | null {
 }
 
 function leerEtiquetaModelo(spec: Spec): string | null {
-  const t = spec.modelLabel ? buscar(spec.modelLabel.selector)?.textContent?.trim() : undefined;
+  const el = spec.modelLabel ? buscar(spec.modelLabel.selector) : null;
+  const t = el ? textoConEspacios(el) : undefined;
   return t && t.length > 0 && t.length < 120 ? t : null;
+}
+
+/** Gemini arma la etiqueta con piezas en elementos distintos ("Argon" y "Alto"): el textContent las pegaba en "ArgonAlto". */
+function textoConEspacios(el: Element): string {
+  let t = "";
+  let padre: Node | null = null;
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let n = w.nextNode(); n; n = w.nextNode()) {
+    // Los nodos de un mismo elemento van juntos: React parte a veces un texto en varios.
+    t += (padre && n.parentNode !== padre ? " " : "") + (n.textContent ?? "");
+    padre = n.parentNode;
+  }
+  return t.replace(/\s+/g, " ").trim();
 }
 
 /**

@@ -31,6 +31,10 @@ namespace ChatCouncil.Motor
         static readonly Regex Hexadecimal = new Regex("&#[xX]([0-9a-fA-F]+);");
         static readonly Regex BlancoFinal = new Regex("[ \t]+\\z");
         static readonly Regex TresSaltos = new Regex("\n{3,}");
+        // Controles de la página, no la respuesta: botones y la barra del bloque de código de DeepSeek ("text", Copiar, Descargar).
+        static readonly Regex Control = new Regex($"{Js.Borde}{Js.Ci("role")}[{Js.Blancos}]*=[{Js.Blancos}]*\"{Js.Ci("button")}\"|{Js.Borde}{Js.Ci("class")}[{Js.Blancos}]*=[{Js.Blancos}]*\"[^\"]*code-block-banner");
+        static readonly Regex Vacia = new Regex("^(img|input|br|hr|wbr|area|col|embed|source|track|meta|link|param)$");
+        static readonly Regex Titulo = new Regex("^h([1-6])$");
 
         static string Decodificar(string texto)
         {
@@ -50,24 +54,47 @@ namespace ChatCouncil.Motor
             return punto < 0x10000 ? ((char)punto).ToString() : char.ConvertFromUtf32(punto);
         }
 
-        /// <summary>Texto del html con un salto por bloque y el número de cada ítem de &lt;ol&gt; (respetando start).</summary>
-        public static string TextoDeHtmlEnBloques(string html)
+        /// <summary>
+        /// Texto del html con un salto por bloque y el número de cada ítem de &lt;ol&gt; (respetando start).
+        /// Con markdown (el cuerpo del redactor, que va al informe tal cual) también los títulos, dos niveles
+        /// por debajo de los del informe, las tablas con su fila separadora y los bloques de código.
+        /// </summary>
+        public static string TextoDeHtmlEnBloques(string html, bool markdown = false)
         {
             var limpio = EstiloOScript.Replace(Comentario.Replace(html, ""), "");
             var listas = new List<(bool Ordenada, long N)>();
             var salida = new StringBuilder();
             // Justo después de "5. " (o "- ") el <p> del ítem no corta la línea.
             bool trasPrefijo = false;
+            (string Tag, int N)? saltar = null;
+            bool enCelda = false;
+            int encabezados = 0;
             foreach (Match m in Token.Matches(limpio))
             {
                 if (m.Groups[4].Success)
                 {
-                    salida.Append(Decodificar(m.Groups[4].Value));
+                    if (saltar != null) continue;
+                    var t = Decodificar(m.Groups[4].Value);
+                    salida.Append(markdown && enCelda ? t.Replace("|", "\\|") : t);
                     trasPrefijo = false;
                     continue;
                 }
                 bool cierre = m.Groups[1].Value == "/";
                 var tag = m.Groups[2].Value.ToLowerInvariant();
+                if (saltar != null)
+                {
+                    if (tag == saltar.Value.Tag)
+                    {
+                        int n = saltar.Value.N + (cierre ? -1 : 1);
+                        saltar = n == 0 ? ((string, int)?)null : (tag, n);
+                    }
+                    continue;
+                }
+                if (!cierre && (tag == "button" || Control.IsMatch(m.Groups[3].Value)))
+                {
+                    if (!Vacia.IsMatch(tag) && !m.Groups[3].Value.EndsWith("/", StringComparison.Ordinal)) saltar = (tag, 1);
+                    continue;
+                }
                 if (tag == "br")
                 {
                     salida.Append('\n');
@@ -76,7 +103,45 @@ namespace ChatCouncil.Motor
                 if (cierre && (tag == "td" || tag == "th"))
                 {
                     salida.Append(" | ");
+                    enCelda = false;
                     continue;
+                }
+                if (markdown)
+                {
+                    if (tag == "td" || tag == "th")
+                    {
+                        enCelda = true;
+                        if (tag == "th") encabezados++;
+                        continue;
+                    }
+                    if (enCelda) continue;
+                    var titulo = Titulo.Match(tag);
+                    if (titulo.Success)
+                    {
+                        salida.Append(cierre ? "\n\n" : "\n\n" + new string('#', Math.Min(int.Parse(titulo.Groups[1].Value, CultureInfo.InvariantCulture) + 2, 6)) + " ");
+                        continue;
+                    }
+                    if (tag == "pre")
+                    {
+                        salida.Append(cierre ? "\n```\n\n" : "\n\n```\n");
+                        continue;
+                    }
+                    if (tag == "table")
+                    {
+                        salida.Append("\n\n");
+                        continue;
+                    }
+                    if (tag == "tr")
+                    {
+                        // Cada fila abre su línea; una línea en blanco entre filas partiría la tabla.
+                        if (!cierre) salida.Append("\n| ");
+                        else
+                        {
+                            if (encabezados > 0) salida.Append("\n|").Append(string.Concat(Enumerable.Repeat(" --- |", encabezados)));
+                            encabezados = 0;
+                        }
+                        continue;
+                    }
                 }
                 if (!Bloques.Contains(tag)) continue;
                 if (trasPrefijo && !cierre) continue;
@@ -117,6 +182,5 @@ namespace ChatCouncil.Motor
 
         /// <summary>Igual para la salida del verificador: GLM deja cada párrafo en un &lt;p&gt; y el textContent los pega.</summary>
         public static string TextoDeLaSalidaVerificador(string salidaCruda, string html) =>
-            string.IsNullOrEmpty(html) ? salidaCruda : TextoDeHtmlEnBloques(html);
-    }
+            string.IsNullOrEmpty(html) ? salidaCruda : TextoDeHtmlEnBloques(html);    }
 }

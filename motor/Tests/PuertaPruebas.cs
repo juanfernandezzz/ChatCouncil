@@ -150,7 +150,10 @@ namespace ChatCouncil.Motor.Pruebas
                 ("https://b.org/404", 404, null), ("https://c.org/sin-head", 200, null),
                 ("https://a.org", 200, null), ("https://d.org/otra", 200, null),
             }));
-            Assert.That(redactor.CuerpoArchivo, Does.Contain("Reviso.").And.Not.Contain("Verifico por mi cuenta."), "el redactor recibe solo la verificación del verificador 1");
+            // D62 (revisada): las dos verificaciones, sin nombre, como A y B; la clave queda con la respuesta del redactor.
+            Assert.That(redactor.CuerpoArchivo, Does.Contain("Reviso.").And.Contain("Verifico por mi cuenta.")
+                .And.Contain("===== VERIFICACION A =====").And.Contain("===== VERIFICACION B ====="), "el redactor recibe las dos verificaciones");
+            Assert.That(redactor.SelloVerificaciones.Select(s => s.VerificadorId), Is.EquivalentTo(new[] { "glm", "qwen" }));
             Assert.That(urls.Urls, Has.Count.EqualTo(Referencias.UrlsComprobadas));
             Assert.That(segunda.YaComprobadas, Is.EqualTo(Referencias.SegundaComprobacionSinRed));
             Assert.That(http.Pedidos, Is.EqualTo(pedidos), "la segunda comprobación y el informe no salen a la red");

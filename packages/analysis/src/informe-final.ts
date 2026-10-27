@@ -114,7 +114,13 @@ export interface InformeFinalInput {
    * Redactor (2026-10-02): su respuesta va PRIMERO, antes del mapa. `null` o
    * ausente = no hubo redacción en la ronda y el informe queda como antes.
    */
-  redaccion?: { redactorId: string; controles: readonly string[]; cuerpo: string } | null;
+  redaccion?: {
+    redactorId: string;
+    controles: readonly string[];
+    cuerpo: string;
+    /** D62: la clave de las verificaciones A y B que recibió; ausente o vacía = sin clave. */
+    selloVerificaciones?: readonly { etiqueta: string; verificadorId: string }[] | null;
+  } | null;
 }
 
 const ENCABEZADO_REDACCION = "## Respuesta a la pregunta (aporte del redactor)";
@@ -365,6 +371,12 @@ export function armarInformeFinal(input: InformeFinalInput): string {
           "",
           `Aporte de un solo modelo (${nombreProveedor(input.redaccion.redactorId)}), basado en el análisis que sigue. No es un resultado del consejo.`,
           "",
+          ...((input.redaccion.selloVerificaciones ?? []).length > 0
+            ? [
+                `Clave de las verificaciones que cita: ${input.redaccion.selloVerificaciones!.map((s) => `${s.etiqueta} = ${nombreProveedor(s.verificadorId)}`).join(", ")}.`,
+                "",
+              ]
+            : []),
           ...input.redaccion.controles,
           "",
           marcarReferencias(input.redaccion.cuerpo, codigosExistentes),

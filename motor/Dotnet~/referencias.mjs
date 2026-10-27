@@ -233,8 +233,26 @@ const PROMPTS = PREGUNTAS.map((p) => {
     analisis.armarPromptRedactor(p),
   ];
 });
-const MATERIAL = { informe: "INFORME {{PREGUNTA}}", verificacion: "CONFIRMA|OFICIAL|H1|https://a.org|\"c\"", tabla: analisis.tablaDe(H_INTEGRADOR), respuestas: ETIQUETADAS };
-const ARCHIVOS_REDACTOR = [MATERIAL, { ...MATERIAL, verificacion: null }].map((m) => [JSON.stringify(m), analisis.armarArchivoRedactor(m)]);
+const MATERIAL = {
+  informe: "INFORME {{PREGUNTA}}",
+  verificaciones: [{ etiqueta: "A", texto: "CONFIRMA|OFICIAL|H1|https://a.org|\"c\"" }, { etiqueta: "B", texto: "CONTRADICE|PRIMARIA|H1|https://b.org|\"d\"" }],
+  tabla: analisis.tablaDe(H_INTEGRADOR),
+  respuestas: ETIQUETADAS,
+};
+const ARCHIVOS_REDACTOR = [MATERIAL, { ...MATERIAL, verificaciones: MATERIAL.verificaciones.slice(0, 1) }, { ...MATERIAL, verificaciones: [] }].map((m) => [
+  JSON.stringify(m),
+  analisis.armarArchivoRedactor(m),
+]);
+// D62 revisada: las verificaciones al redactor, sin nombres y barajadas con la semilla de la ronda.
+const SALIDAS_ANONIMAS = [
+  { verificadorId: "glm", texto: "Soy GLM y reviso. CONFIRMA|OFICIAL|H1|https://a.org|\"c\"" },
+  { verificadorId: "qwen", texto: `Qwen ve otra cosa: Claude y ${TEXTO_RARO}` },
+];
+const VERIFICACIONES_ANONIMAS = [
+  ...["", "abc", "semilla-1", "0f8fad5b-d9cb-469f-a165-70867728950e", "ñandú 😀"].map((semilla) => [SALIDAS_ANONIMAS, semilla]),
+  [SALIDAS_ANONIMAS.slice(1), "abc"],
+  [[], "abc"],
+].map(([salidas, semilla]) => [JSON.stringify(salidas), semilla, JSON.stringify(analisis.anonimizarVerificaciones(salidas, semilla))]);
 const ROLES = [seleccion.INTEGRADOR_POR_DEFECTO, seleccion.VERIFICADOR_1_POR_DEFECTO, seleccion.VERIFICADOR_2_POR_DEFECTO, seleccion.REDACTOR_POR_DEFECTO];
 
 // ---------------------------------------------------------------- parseos y texto desde html
@@ -525,7 +543,12 @@ const ENTRADAS_INFORME = [
       { proveedorId: "claude", etiquetaModelo: null, caracteresRespuesta: 10, fuentesCitadas: 0, codigoEstable: "P3" },
       { proveedorId: "mistral", etiquetaModelo: null, caracteresRespuesta: 10, fuentesCitadas: 0, codigoEstable: null },
     ],
-    redaccion: { redactorId: "deepseek", controles: ["- control"], cuerpo: "Firme [CONFIRMA H1] y tambien [H2], segun P3 y P5. Inventado [CONFIRMA H999] y [H888]." },
+    redaccion: {
+      redactorId: "deepseek",
+      controles: ["- control"],
+      cuerpo: "Firme [CONFIRMA H1] y tambien [H2], segun P3 y P5. Inventado [CONFIRMA H999] y [H888]. [A y B CONFIRMAN H1] [B CONTRADICE H2] [EN DISPUTA H2]",
+      selloVerificaciones: [{ etiqueta: "A", verificadorId: "qwen" }, { etiqueta: "B", verificadorId: "glm" }],
+    },
   },
   { ...BASE_INFORME, informeIntegradorCrudo: null, referenciasEnOrden: [], hallazgos: HALLAZGOS_INFORME },
   { ...BASE_INFORME, informeIntegradorCrudo: "TITULO: t\nTexto [H1].", referenciasEnOrden: [{ codigo: "H1", existe: false }], hallazgos: [] },
@@ -720,7 +743,7 @@ const CORRIDA_OP = await (async () => {
   siguienteId = 0;
   const d = mkdtempSync(join(tmpdir(), "cc-operacion-"));
   const POOL = POOL_PUERTA;
-  const memoria = { operador: new Map(), integrador: null, verificador: null, redactor: null, marcasRedactor: null };
+  const memoria = { operador: new Map(), integrador: null, verificador: null, redactor: null, marcasRedactor: null, selloVerificaciones: null };
   let conv = null, ronda = null, indice = 0;
   const leer = () => registro.leerRegistroDeArchivo(d, conv).hechos;
   const abrirRonda = (prompt) => {
@@ -761,7 +784,8 @@ const CORRIDA_OP = await (async () => {
     if (etapa === "redaccion") rol(c.lecturaRedactor, "respuesta-redactor", ROLES_OP.redactor, (l) => {
       const previo = integrador.ultimaRedaccion(hechos, ronda);
       const marcas = memoria.marcasRedactor ?? (previo?.marcaPrimera && previo.marcaUltima ? { primera: previo.marcaPrimera, ultima: previo.marcaUltima } : null);
-      registro.escribirRespuestaRedactor(d, conv, ronda, l.id, memoria.redactor ?? previo?.promptCompleto ?? NO_DISPONIBLE, l.text, l.html ?? null, marcas);
+      registro.escribirRespuestaRedactor(d, conv, ronda, l.id, memoria.redactor ?? previo?.promptCompleto ?? NO_DISPONIBLE, l.text, l.html ?? null, marcas,
+        memoria.selloVerificaciones ?? previo?.selloVerificaciones ?? null);
     });
     return etapa;
   };
@@ -812,16 +836,18 @@ const CORRIDA_OP = await (async () => {
   {
     const t = tablaRonda();
     const inf = integrador.ultimoDeRol(t.hechos, ronda, "integrador");
-    const ver = integrador.verificacionesVigentes(t.hechos, ronda, VERIFICADORES_OP)[0] ?? null;
     const p = prepararRonda();
+    const salidas = integrador.verificacionesVigentes(t.hechos, ronda, VERIFICADORES_OP).map((v) => ({ verificadorId: v.verificadorId, texto: analisis.textoDeLaSalidaVerificador(v) }));
+    const anonimas = analisis.anonimizarVerificaciones(salidas, p.r.semilla ?? "");
     const respuestas = operador.armarCuerposDeRonda(p.r, p.respuestas, p.citas, POOL).respuestasTodas;
-    const material = { informe: analisis.textoDelInformeIntegrador(inf), verificacion: ver === null ? null : analisis.textoDeLaSalidaVerificador(ver), tabla: analisis.tablaDe(t.tabla.paraPrompt), respuestas };
+    const material = { informe: analisis.textoDelInformeIntegrador(inf), verificaciones: anonimas.verificaciones, tabla: analisis.tablaDe(t.tabla.paraPrompt), respuestas };
+    memoria.selloVerificaciones = anonimas.sello;
     const a = operador.armarArchivoRedactorConMarcas(material, AHORA_LOCAL, crypto.randomUUID());
     memoria.redactor = `${analisis.armarPromptRedactor(t.pregunta)}\n\n=== ARCHIVO ADJUNTO: ${a.nombreArchivo} ===\n${a.cuerpoArchivo}`;
     memoria.marcasRedactor = a.marcas;
     archivoRedactor = a.nombreArchivo;
   }
-  const lecturaRedactor = { id: "deepseek", text: `ARCHIVO: primera marca = ${memoria.marcasRedactor.primera}, ultima marca = ${memoria.marcasRedactor.ultima}\n\nRespuesta [H1].`, generating: false, html: null };
+  const lecturaRedactor = { id: "deepseek", text: `ARCHIVO: primera marca = ${memoria.marcasRedactor.primera}, ultima marca = ${memoria.marcasRedactor.ultima}\n\nRespuesta [H1] [A y B CONFIRMAN H1] [EN DISPUTA H3].`, generating: false, html: null };
   capturar([lecturaRedactor]);
 
   // T11: las URLs de cada verificación (una sola vez por verificación, D62: el
@@ -896,7 +922,7 @@ const CORRIDA_OP = await (async () => {
     abrirRonda(pregunta);
     registro.copiarRespuestas(d, conv, ronda, [...ultimas.values()]);
     memoria.operador.clear();
-    memoria.integrador = memoria.verificador = memoria.redactor = memoria.marcasRedactor = null;
+    memoria.integrador = memoria.verificador = memoria.redactor = memoria.marcasRedactor = memoria.selloVerificaciones = null;
   }
   capturar(LOTES.kimiNueva);
   operar("chatgpt", false);
@@ -977,7 +1003,7 @@ registro.escribirSalidaVerificador(dir, conv, ronda, "glm", "prompt", 'CONFIRMA|
 registro.escribirRespuestaRedactor(dir, conv, ronda, "deepseek", "prompt", "ARCHIVO: x", null, {
   primera: "[[CC-MARCA-0000-t]]",
   ultima: "[[CC-MARCA-FIN-t]]",
-});
+}, [{ etiqueta: "A", verificadorId: "qwen" }, { etiqueta: "B", verificadorId: "glm" }]);
 registro.escribirRespuestaRedactor(dir, conv, ronda, "deepseek", "prompt", "texto", "<p>t</p>", null);
 registro.escribirUrlComprobada(dir, conv, { rondaId: ronda, salidaVerificadorId: "v", url: "https://a.org", codigo: 200, detalle: null, comprobadaEn: FECHA });
 registro.escribirUrlComprobada(dir, conv, { rondaId: ronda, salidaVerificadorId: "v", url: "https://b.invalid", codigo: null, detalle: "ENOTFOUND", comprobadaEn: FECHA });
@@ -1125,6 +1151,11 @@ namespace ChatCouncil.Motor.Pruebas
 
         public static readonly (string material, string archivo)[] ArchivosRedactor = {
             ${ARCHIVOS_REDACTOR.map(([m, t]) => `(${cs(m)}, ${cs(t)})`).join(",\n            ")}
+        };
+
+        /// <summary>anonimizarVerificaciones(salidas, semilla) como JSON: las verificaciones A y B y su sello.</summary>
+        public static readonly (string salidas, string semilla, string esperado)[] VerificacionesAnonimas = {
+            ${VERIFICACIONES_ANONIMAS.map(([v, sem, e]) => `(${cs(v)}, ${cs(sem)}, ${cs(e)})`).join(",\n            ")}
         };
 
         /// <summary>Integrador, verificador y redactor por defecto de seleccion-proveedores.ts.</summary>

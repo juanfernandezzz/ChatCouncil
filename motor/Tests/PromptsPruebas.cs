@@ -55,11 +55,28 @@ namespace ChatCouncil.Motor.Pruebas
                 var obtenido = Prompts.ArmarArchivoRedactor(new MaterialRedactor
                 {
                     Informe = (string)m["informe"],
-                    Verificacion = (string)m["verificacion"],
+                    Verificaciones = Etiquetadas(m["verificaciones"]),
                     Tabla = (string)m["tabla"],
                     Respuestas = Etiquetadas(m["respuestas"]),
                 });
                 Assert.That(obtenido, Is.EqualTo(archivo));
+            }
+        }
+
+        // D62 (revisada): las verificaciones al redactor sin nombres, barajadas con la semilla de la ronda, A y B.
+        [Test]
+        public void LasVerificacionesSeAnonimizanComoEnTypeScript()
+        {
+            foreach (var (salidas, semilla, esperado) in Referencias.VerificacionesAnonimas)
+            {
+                var entrada = JsonEstricto.Leer(salidas).Select(s => ((string)s["verificadorId"], (string)s["texto"])).ToList();
+                var (verificaciones, sello) = Anonimizacion.AnonimizarVerificaciones(entrada, semilla);
+                var obtenido = Registro.AJson(new
+                {
+                    verificaciones = verificaciones.Select(v => new { etiqueta = v.Etiqueta, texto = v.Texto }),
+                    sello = sello.Select(s => new { etiqueta = s.Etiqueta, verificadorId = s.VerificadorId }),
+                });
+                Assert.That(obtenido, Is.EqualTo(esperado), $"{salidas} con semilla «{semilla}»");
             }
         }
 

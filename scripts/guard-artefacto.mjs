@@ -67,7 +67,9 @@ const EXIGIDO = {
     "NO_ENCONTRADA|NO_VERIFICADO|VERIFICADO|CONFIRMA|CONTRADICE|CONTRADICHO|PUNTO_CIEGO|PREGUNTA",
     "tipo no reconocido: ",
     "tipo de fuente no registrado (formato anterior)",
-    "[CONFIRMA H12]",
+    // D62 (revisada): la cita de cada verificacion en el prompt del redactor y la clave A/B del informe.
+    "[A CONFIRMA H12]",
+    "Clave de las verificaciones que cita: ",
     // Menu Ventana: recapturar el integrador sin mirar la etapa (2026-09-30).
     "Recapturar integrador",
     "cc:recapturar",

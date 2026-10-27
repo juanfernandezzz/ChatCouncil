@@ -335,6 +335,8 @@ export interface RespuestaRedactor {
   html: string | null;
   marcaPrimera: string | null;
   marcaUltima: string | null;
+  /** D62: qué verificador es cada etiqueta (A, B) del archivo que recibió; null = sin verificaciones o anterior a D62. */
+  selloVerificaciones?: { etiqueta: string; verificadorId: string }[] | null;
   recibidaEn: string;
 }
 

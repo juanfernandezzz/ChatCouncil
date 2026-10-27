@@ -185,7 +185,16 @@ namespace ChatCouncil.Motor
         public string Html { get; set; }
         public string MarcaPrimera { get; set; }
         public string MarcaUltima { get; set; }
+        /// <summary>D62: qué verificador es cada etiqueta (A, B) del archivo que recibió; null sin verificaciones o antes de D62.</summary>
+        public List<EtiquetaVerificador> SelloVerificaciones { get; set; }
         public string RecibidaEn { get; set; }
+    }
+
+    /// <summary>Una entrada del sello de las verificaciones: la etiqueta que vio el redactor y su verificador.</summary>
+    public sealed class EtiquetaVerificador
+    {
+        public string Etiqueta { get; set; }
+        public string VerificadorId { get; set; }
     }
 
     public sealed class UrlComprobada : Hecho

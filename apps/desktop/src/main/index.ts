@@ -50,6 +50,7 @@ import {
   extraerTituloDelInforme,
   textoDelInformeIntegrador,
   textoDeLaSalidaVerificador,
+  anonimizarVerificaciones,
   markdownDeRespuestaInvestigador,
   nombreArchivoRespuesta,
   nombreProveedor,
@@ -815,6 +816,8 @@ let ultimoPromptVerificador: string | null = null;
 /** Redactor: el prompt + archivo que se pegó, y la primera y última marca del archivo, para la captura. */
 let ultimoPromptRedactor: string | null = null;
 let ultimasMarcasRedactor: { primera: string; ultima: string } | null = null;
+/** D62: qué verificador es A y cuál B en el archivo que se pegó en este proceso. */
+let ultimoSelloVerificaciones: { etiqueta: string; verificadorId: string }[] | null = null;
 const PROMPT_NO_DISPONIBLE = "(prompt no disponible: no se registró en este proceso — probablemente se reinició la app entre el envío y la captura)";
 
 /**
@@ -4001,8 +4004,11 @@ async function enviarPromptARedactor(): Promise<ResultadoIntegrador & { ruta?: s
   if ("error" in d) return sinEscribir(d.error);
   const informe = ultimoDeRol(d.hechos, d.ronda.id, "integrador");
   if (!informe) return sinEscribir("la ronda todavía no tiene un informe del integrador capturado", d.etapa);
-  // D62: el redactor recibe la verificación del verificador 1, para no tocar su prompt literal.
-  const verificacion = verificacionesVigentes(d.hechos, d.ronda.id, VERIFICADOR_IDS)[0] ?? null;
+  // D62 (revisada): las dos verificaciones, anonimizadas y barajadas con la semilla de la ronda (A y B).
+  const anonimas = anonimizarVerificaciones(
+    verificacionesVigentes(d.hechos, d.ronda.id, VERIFICADOR_IDS).map((s) => ({ verificadorId: s.verificadorId, texto: textoDeLaSalidaVerificador(s) })),
+    d.ronda.semilla ?? "",
+  );
   const prep = prepararRondaParaOperar();
   if (!prep.ok) return sinEscribir(prep.error, d.etapa);
   let respuestas;
@@ -4012,7 +4018,7 @@ async function enviarPromptARedactor(): Promise<ResultadoIntegrador & { ruta?: s
     return sinEscribir(e instanceof Error ? e.message : String(e), d.etapa);
   }
   const { cuerpoArchivo, marcas, nombreArchivo } = armarArchivoRedactorConMarcas(
-    { informe: textoDelInformeIntegrador(informe), verificacion: verificacion === null ? null : textoDeLaSalidaVerificador(verificacion), tabla: tablaDe(d.tabla.paraPrompt), respuestas },
+    { informe: textoDelInformeIntegrador(informe), verificaciones: anonimas.verificaciones, tabla: tablaDe(d.tabla.paraPrompt), respuestas },
     new Date(),
   );
   const prompt = armarPromptRedactor(d.pregunta);
@@ -4038,11 +4044,12 @@ async function enviarPromptARedactor(): Promise<ResultadoIntegrador & { ruta?: s
   }
   ultimoPromptRedactor = `${prompt}\n\n=== ARCHIVO ADJUNTO: ${nombreArchivo} ===\n${cuerpoArchivo}`;
   ultimasMarcasRedactor = marcas;
+  ultimoSelloVerificaciones = anonimas.sello;
   decirPorSalida(`\n[cc] archivo del redactor: ${ruta} (${cuerpoArchivo.length} caracteres)\n`);
   return {
     ...r,
     ruta,
-    ...(verificacion ? {} : { aviso: "No hay verificación capturada en esta ronda: el archivo lo dice y el redactor trabaja sin ella." }),
+    ...(anonimas.sello.length > 0 ? {} : { aviso: "No hay verificación capturada en esta ronda: el archivo lo dice y el redactor trabaja sin ella." }),
   };
 }
 
@@ -4063,7 +4070,8 @@ function registrarRedaccion(
     ultimasMarcasRedactor ??
     (previo?.marcaPrimera && previo.marcaUltima ? { primera: previo.marcaPrimera, ultima: previo.marcaUltima } : null);
   const hecho = escribirRespuestaRedactor(userData, conv, rondaId, lectura.id,
-    ultimoPromptRedactor ?? previo?.promptCompleto ?? PROMPT_NO_DISPONIBLE, lectura.text, lectura.html ?? null, marcas);
+    ultimoPromptRedactor ?? previo?.promptCompleto ?? PROMPT_NO_DISPONIBLE, lectura.text, lectura.html ?? null, marcas,
+    ultimoSelloVerificaciones ?? previo?.selloVerificaciones ?? null);
   const d = tablaDeRondaActiva("redactor");
   const ids = "error" in d ? [] : d.tabla.paraPrompt.map((h) => h.id);
   const controles = lineasDeControl(controlesRedaccion(hecho, ids));
@@ -4114,6 +4122,7 @@ async function rondaNuevaConRespuestasDeLaAnterior(): Promise<string> {
   ultimoPromptVerificador = null;
   ultimoPromptRedactor = null;
   ultimasMarcasRedactor = null;
+  ultimoSelloVerificaciones = null;
   decirPorSalida(`\n[cc] ronda nueva ${rondaNueva} con ${ultimas.size} respuestas copiadas de ${anterior.id}\n`);
   return `Ronda nueva abierta (${rondaNueva.slice(0, 8)}) con ${ultimas.size} respuestas copiadas de la ronda ${anterior.id.slice(0, 8)}. Recaptura con "Capturar este panel" lo que quieras corregir.`;
 }

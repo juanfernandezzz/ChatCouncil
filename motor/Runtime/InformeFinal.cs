@@ -42,6 +42,8 @@ namespace ChatCouncil.Motor
         public string RedactorId { get; set; }
         public List<string> Controles { get; set; }
         public string Cuerpo { get; set; }
+        /// <summary>D62: la clave de las verificaciones A y B que recibió; null o vacía = sin clave.</summary>
+        public List<EtiquetaVerificador> SelloVerificaciones { get; set; }
     }
 
     public sealed class ItemVerificacion
@@ -261,6 +263,9 @@ namespace ChatCouncil.Motor
                     EncabezadoRedaccion, "",
                     $"Aporte de un solo modelo ({Dominio.NombreProveedor(input.Redaccion.RedactorId)}), basado en el análisis que sigue. No es un resultado del consejo.", "",
                 });
+                var clave = input.Redaccion.SelloVerificaciones ?? new List<EtiquetaVerificador>();
+                if (clave.Count > 0)
+                    partes.AddRange(new[] { $"Clave de las verificaciones que cita: {string.Join(", ", clave.Select(s => $"{s.Etiqueta} = {Dominio.NombreProveedor(s.VerificadorId)}"))}.", "" });
                 partes.AddRange(input.Redaccion.Controles);
                 partes.AddRange(new[] { "", MarcarReferencias(input.Redaccion.Cuerpo, existentes), "" });
             }

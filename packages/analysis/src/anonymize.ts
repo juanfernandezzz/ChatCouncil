@@ -126,6 +126,27 @@ export function seededShuffle<T>(items: readonly T[], seed: number): T[] {
   return out;
 }
 
+/**
+ * D62 (revisada) — las verificaciones para el redactor: los mismos términos
+ * tapados que las respuestas y el orden barajado con una semilla derivada de
+ * la ronda, etiquetadas A, B. El sello dice qué verificador es cada etiqueta.
+ */
+export function anonimizarVerificaciones(
+  salidas: readonly { verificadorId: string; texto: string }[],
+  semillaRonda: string,
+): { verificaciones: { etiqueta: string; texto: string }[]; sello: { etiqueta: string; verificadorId: string }[] } {
+  const { labeled, seal } = anonymizeReplies(
+    salidas.map((s) => ({ panelSourceId: s.verificadorId, replyId: "", attemptId: "", displayName: "", text: s.texto })),
+    true,
+    hashSemilla(`${semillaRonda}|verificaciones`),
+  );
+  const etiqueta = (label: string): string => label.slice("Modelo ".length);
+  return {
+    verificaciones: labeled.map((l) => ({ etiqueta: etiqueta(l.label), texto: l.text })),
+    sello: seal.map((s) => ({ etiqueta: etiqueta(s.label), verificadorId: s.panelSourceId })),
+  };
+}
+
 export function anonymizeReplies(
   replies: AnalyzableReply[],
   anonymized: boolean,

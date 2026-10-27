@@ -452,9 +452,9 @@ export function redaccionParaInforme(
   r: RespuestaRedactor,
   idsValidos: readonly string[],
   urlsDelMaterial: readonly string[] = [],
-): { redactorId: string; controles: string[]; cuerpo: string } {
+): { redactorId: string; controles: string[]; cuerpo: string; selloVerificaciones: { etiqueta: string; verificadorId: string }[] | null } {
   const c = controlesRedaccion(r, idsValidos, urlsDelMaterial);
-  return { redactorId: r.redactorId, controles: lineasDeControl(c), cuerpo: c.cuerpo };
+  return { redactorId: r.redactorId, controles: lineasDeControl(c), cuerpo: c.cuerpo, selloVerificaciones: r.selloVerificaciones ?? null };
 }
 
 /** La respuesta VIGENTE del redactor en la ronda: la última capturada. */

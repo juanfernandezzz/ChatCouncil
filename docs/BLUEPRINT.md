@@ -2974,22 +2974,24 @@ Decisiones de T25 (compilación en la nube y Release):
   datos reemplaza al compilado, y Ayuda lo dice junto a la versión. Sirve para
   probar un selector sin compilar; el arreglo se confirma después en
   packages/providers/src/specs.json y se borra el archivo de la carpeta.
-· D62, 2026-10-27, dos verificadores comparables. El consejo usa dos
-  verificadores en la misma ronda (por defecto glm y qwen), que verifican de
-  forma independiente los mismos hallazgos del integrador; el informe muestra
-  sus verificaciones en secciones separadas, cada una con el nombre de su
-  proveedor, para compararlas. El redactor sigue recibiendo la verificación del
-  primer verificador (glm), para no tocar su prompt literal. Criterio: la
-  verificación de fuentes es el juicio de un solo modelo con búsqueda; dos
-  juicios independientes sobre el mismo material permiten medir su acuerdo, que
-  es dato de investigación (confiabilidad entre evaluadores). Fuente: acuerdo
-  entre jueces o codificadores en análisis de contenido. Qwen deja de ser
-  investigador porque su interfaz web no permite activar pensamiento ni
-  búsqueda ("skills"), que un investigador aprovecha y un verificador de
-  correspondencia con la fuente no necesita; Perplexity entra como
-  investigador en su lugar. Así el pool de respuestas sigue en siete (10
-  proveedores menos 3 roles distintos: deepseek como integrador y redactor, glm
-  y qwen como verificadores) y ningún prompt que dice "siete" cambia.
+· D62 (revisada), 2026-10-27, dos verificadores con el mismo peso. El consejo
+  usa dos verificadores en la misma ronda (por defecto glm y qwen), que
+  verifican de forma independiente los mismos hallazgos del integrador. Las dos
+  verificaciones llegan al redactor (deepseek) anonimizadas y en orden
+  aleatorio con semilla de la ronda, como VERIFICACION A y B, igual que las
+  respuestas de los investigadores llegan al integrador: ningun verificador
+  pesa mas que el otro ni por identidad ni por posicion. El redactor compara
+  las dos: donde coinciden, la verificacion es firme; donde difieren, la marca
+  en disputa y no resuelve. Asi el acuerdo o desacuerdo entre verificadores es
+  en si una verificacion (confiabilidad entre evaluadores), dato de
+  investigacion. El informe que lee la persona muestra las dos verificaciones
+  en secciones separadas CON el nombre del proveedor; la ceguera es solo para
+  el redactor. Fuente: acuerdo entre jueces o codificadores en analisis de
+  contenido. Qwen deja de ser investigador (su web no permite activar
+  pensamiento ni busqueda, que un verificador de correspondencia no necesita);
+  Perplexity entra como investigador. El pool sigue en siete (10 proveedores
+  menos 3 roles distintos: deepseek integrador y redactor, glm y qwen
+  verificadores).
 
 Estado al cierre de las tareas de la Fase 6 (2026-10-15):
 

@@ -109,6 +109,8 @@ namespace ChatCouncil.Motor
         public string NombreArchivo { get; set; }
         public string MarcaPrimera { get; set; }
         public string MarcaUltima { get; set; }
+        /// <summary>D62: qué verificador es A y cuál B en este archivo.</summary>
+        public List<EtiquetaVerificador> SelloVerificaciones { get; set; }
         /// <summary>Sin verificación capturada se arma igual y se avisa; null si no hay nada que avisar.</summary>
         public string Aviso { get; set; }
         public string PromptCompleto { get; set; }
@@ -151,6 +153,7 @@ namespace ChatCouncil.Motor
         readonly Dictionary<string, string> promptOperador = new Dictionary<string, string>();
         string promptIntegrador, promptVerificador, promptRedactor;
         (string Primera, string Ultima)? marcasRedactor;
+        List<EtiquetaVerificador> selloVerificaciones;
         // El informe armado en este proceso: el paso pasa a abrir su carpeta en vez de armar otro.
         (string RondaId, string Carpeta)? informeArmado;
 
@@ -290,6 +293,7 @@ namespace ChatCouncil.Motor
             promptOperador.Clear();
             promptIntegrador = promptVerificador = promptRedactor = null;
             marcasRedactor = null;
+            selloVerificaciones = null;
         }
 
         void AsegurarConversacion()
@@ -395,6 +399,7 @@ namespace ChatCouncil.Motor
                         Html = l.Html,
                         MarcaPrimera = marcas?.Item1,
                         MarcaUltima = marcas?.Item2,
+                        SelloVerificaciones = selloVerificaciones ?? previo?.SelloVerificaciones,
                         RecibidaEn = Ahora(),
                     });
                 });
@@ -636,13 +641,14 @@ namespace ChatCouncil.Motor
         {
             var d = TablaDeRonda("redactor");
             var informe = Dominio.UltimoInformeIntegrador(d.Hechos, d.Ronda.Id) ?? throw new InvalidOperationException("la ronda todavía no tiene un informe del integrador capturado");
-            // D62: el redactor recibe la verificación del verificador 1, para no tocar su prompt literal.
-            var verificacion = Dominio.VerificacionesVigentes(d.Hechos, d.Ronda.Id, roles.Verificadores).FirstOrDefault();
+            // D62 (revisada): las dos verificaciones, anonimizadas y barajadas con la semilla de la ronda (A y B).
+            var (verificaciones, sello) = Anonimizacion.AnonimizarVerificaciones(Dominio.VerificacionesVigentes(d.Hechos, d.Ronda.Id, roles.Verificadores)
+                .Select(s => (s.VerificadorId, TextoDeHtml.TextoDeLaSalidaVerificador(s.SalidaCruda, s.Html))).ToList(), d.Ronda.Semilla ?? "");
             var p = PrepararRonda();
             var material = new MaterialRedactor
             {
                 Informe = TextoDeHtml.TextoDelInformeIntegrador(informe.InformeCrudo, informe.Html),
-                Verificacion = verificacion == null ? null : TextoDeHtml.TextoDeLaSalidaVerificador(verificacion.SalidaCruda, verificacion.Html),
+                Verificaciones = verificaciones,
                 Tabla = Prompts.TablaDe(d.Tabla.ParaPrompt),
                 Respuestas = ArmarCuerposDeRonda(p.Ronda, p.Respuestas, p.Citas).RespuestasTodas,
             };
@@ -655,8 +661,8 @@ namespace ChatCouncil.Motor
             return new ArchivoRedactor
             {
                 Prompt = prompt, CuerpoArchivo = archivo, NombreArchivo = nombre,
-                MarcaPrimera = marcas.Count > 0 ? marcas[0] : marcaFin, MarcaUltima = marcaFin,
-                Aviso = verificacion == null ? "No hay verificación capturada en esta ronda: el archivo lo dice y el redactor trabaja sin ella." : null,
+                MarcaPrimera = marcas.Count > 0 ? marcas[0] : marcaFin, MarcaUltima = marcaFin, SelloVerificaciones = sello,
+                Aviso = sello.Count == 0 ? "No hay verificación capturada en esta ronda: el archivo lo dice y el redactor trabaja sin ella." : null,
                 PromptCompleto = $"{prompt}\n\n=== ARCHIVO ADJUNTO: {nombre} ===\n{archivo}",
             };
         }
@@ -665,6 +671,7 @@ namespace ChatCouncil.Motor
         {
             promptRedactor = archivo.PromptCompleto;
             marcasRedactor = (archivo.MarcaPrimera, archivo.MarcaUltima);
+            selloVerificaciones = archivo.SelloVerificaciones;
         }
 
         /// <summary>
@@ -740,6 +747,7 @@ namespace ChatCouncil.Motor
             promptOperador.Clear();
             promptIntegrador = promptVerificador = promptRedactor = null;
             marcasRedactor = null;
+            selloVerificaciones = null;
             return $"Ronda nueva abierta ({Corto(nueva)}) con {ultimas.Count} respuestas copiadas de la ronda {Corto(anterior.Id)}. Recaptura con \"Capturar este panel\" lo que quieras corregir.";
         }
 
@@ -1046,7 +1054,11 @@ namespace ChatCouncil.Motor
             if (redaccion != null)
             {
                 var controles = InformeFinal.ControlesRedaccion(redaccion.TextoCrudo, redaccion.Html, redaccion.MarcaPrimera, redaccion.MarcaUltima, idsValidos, citas.Select(c => c.Url).ToList());
-                redaccionParaInforme = new RedaccionParaInforme { RedactorId = redaccion.RedactorId, Controles = InformeFinal.LineasDeControl(controles), Cuerpo = controles.Cuerpo };
+                redaccionParaInforme = new RedaccionParaInforme
+                {
+                    RedactorId = redaccion.RedactorId, Controles = InformeFinal.LineasDeControl(controles), Cuerpo = controles.Cuerpo,
+                    SelloVerificaciones = redaccion.SelloVerificaciones,
+                };
             }
             var texto = InformeFinal.Armar(new InformeFinalInput
             {

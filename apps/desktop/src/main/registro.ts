@@ -476,6 +476,7 @@ export function escribirRespuestaRedactor(
   textoCrudo: string,
   html: string | null,
   marcas: { primera: string; ultima: string } | null,
+  selloVerificaciones: { etiqueta: string; verificadorId: string }[] | null = null,
 ): RespuestaRedactor {
   const hecho: RespuestaRedactor = {
     tipo: "respuesta-redactor",
@@ -488,6 +489,7 @@ export function escribirRespuestaRedactor(
     html,
     marcaPrimera: marcas?.primera ?? null,
     marcaUltima: marcas?.ultima ?? null,
+    selloVerificaciones,
     recibidaEn: new Date().toISOString(),
   };
   escribir(userData, conversacionId, hecho);

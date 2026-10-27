@@ -79,6 +79,19 @@ namespace ChatCouncil.Motor
         }
 
         /// <summary>
+        /// anonimizarVerificaciones (D62): las verificaciones para el redactor, con los
+        /// términos tapados y barajadas con una semilla derivada de la ronda, A y B.
+        /// </summary>
+        public static (List<(string Etiqueta, string Texto)> Verificaciones, List<EtiquetaVerificador> Sello) AnonimizarVerificaciones(
+            IReadOnlyList<(string VerificadorId, string Texto)> salidas, string semillaRonda)
+        {
+            var a = AnonimizarRespuestas(salidas.Select(s => (s.VerificadorId, "", "", s.Texto)).ToList(), HashSemilla(semillaRonda + "|verificaciones"));
+            string Etiqueta(string label) => label.Substring("Modelo ".Length);
+            return (a.Etiquetadas.Select(e => (Etiqueta(e.Label), e.Texto)).ToList(),
+                a.Sello.Select(s => new EtiquetaVerificador { Etiqueta = Etiqueta(s.Label), VerificadorId = s.PanelSourceId }).ToList());
+        }
+
+        /// <summary>
         /// anonymizeReplies(respuestas, true, semilla): baraja, etiqueta "Modelo A".."Z"
         /// en el orden barajado y tapa los términos de la lista contando cuántos.
         /// </summary>

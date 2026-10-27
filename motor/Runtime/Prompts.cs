@@ -62,8 +62,8 @@ namespace ChatCouncil.Motor
     {
         /// <summary>El informe del integrador, re-derivado del html.</summary>
         public string Informe { get; set; }
-        /// <summary>La salida cruda del verificador; null si no se capturó.</summary>
-        public string Verificacion { get; set; }
+        /// <summary>D62: las verificaciones ya anonimizadas y barajadas (A, B); vacía si no se capturó ninguna.</summary>
+        public IReadOnlyList<(string Etiqueta, string Texto)> Verificaciones { get; set; }
         /// <summary>La tabla H## tal como la vio el integrador.</summary>
         public string Tabla { get; set; }
         /// <summary>Las siete respuestas, con la misma etiqueta P# que usa la tabla.</summary>
@@ -155,15 +155,10 @@ namespace ChatCouncil.Motor
 
         /// <summary>El archivo del redactor, en el orden que describe su prompt. Las marcas las intercala quien llama.</summary>
         public static string ArmarArchivoRedactor(MaterialRedactor m) =>
-            string.Join("\n\n",
-                "===== INFORME =====",
-                m.Informe,
-                "===== VERIFICACION =====",
-                m.Verificacion ?? "(sin verificacion capturada en esta ronda)",
-                "===== HALLAZGOS =====",
-                "H##|CATEGORIA|EJE|RESPUESTAS|DESCRIPCION|OPERADOR",
-                m.Tabla,
-                "===== RESPUESTAS =====",
-                CuerpoDe(m.Respuestas));
+            string.Join("\n\n", new[] { "===== INFORME =====", m.Informe }
+                .Concat(m.Verificaciones.Count == 0
+                    ? new[] { "===== VERIFICACION =====", "(sin verificacion capturada en esta ronda)" }
+                    : m.Verificaciones.SelectMany(v => new[] { $"===== VERIFICACION {v.Etiqueta} =====", v.Texto }))
+                .Concat(new[] { "===== HALLAZGOS =====", "H##|CATEGORIA|EJE|RESPUESTAS|DESCRIPCION|OPERADOR", m.Tabla, "===== RESPUESTAS =====", CuerpoDe(m.Respuestas) }));
     }
 }

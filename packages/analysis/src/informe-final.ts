@@ -104,8 +104,12 @@ export interface InformeFinalInput {
   proveedoresCargadosIncompletos?: readonly string[] | null;
   /** Proveedor real que integró esta ronda (2026-09-24): el integrador es una preferencia y puede cambiar entre rondas. */
   integrador?: string | null;
-  /** 7-1-1: `null` o ausente = no hubo verificación en la ronda, y sus dos secciones no aparecen. */
-  verificacion?: VerificacionParaInforme | null;
+  /**
+   * 7-1-1: vacío o ausente = no hubo verificación en la ronda, y sus dos
+   * secciones no aparecen. D62: una por verificador, el 1 primero; con más de
+   * una, cada encabezado nombra a su proveedor para compararlas.
+   */
+  verificaciones?: readonly VerificacionParaInforme[] | null;
   /**
    * Redactor (2026-10-02): su respuesta va PRIMERO, antes del mapa. `null` o
    * ausente = no hubo redacción en la ronda y el informe queda como antes.
@@ -129,7 +133,9 @@ interface TiposParaInforme {
  * campos separados.
  */
 export interface VerificacionParaInforme {
-  items: readonly (TiposParaInforme & {
+  /** El proveedor que verificó: su nombre va en los encabezados cuando hay dos. */
+  verificadorId: string;
+  items:readonly (TiposParaInforme & {
     /** CONFIRMA, CONTRADICE o NO_ENCONTRADA. */
     correspondencia: string;
     hallazgoId: string;
@@ -170,7 +176,8 @@ function tiposLegibles(t: TiposParaInforme, sinFuente: string): string {
   return partes.length > 0 ? partes.join("; ") : sinFuente;
 }
 
-function seccionesVerificacion(v: VerificacionParaInforme): string[] {
+/** `nombre` null = un solo verificador: los encabezados de siempre. */
+function seccionesVerificacion(v: VerificacionParaInforme, nombre: string | null): string[] {
   const items = v.items.map((i) => {
     const tipos = i.formatoAnterior
       ? "tipo de fuente no registrado (formato anterior)"
@@ -190,12 +197,14 @@ function seccionesVerificacion(v: VerificacionParaInforme): string[] {
     ...v.preguntas.map((q) => `- Pregunta derivada: ${q}`),
   ];
   return [
-    ENCABEZADO_VERIFICACION,
+    nombre === null
+      ? ENCABEZADO_VERIFICACION
+      : `## Verificación de fuentes — ${nombre} (aporte de un modelo con búsqueda, no verificado por el consejo)`,
     "",
     ...(v.avisoSinComprobar ? [v.avisoSinComprobar, ""] : []),
     items.length > 0 ? items.join("\n\n") : "El verificador no registro lineas de correspondencia con la fuente.",
     "",
-    ENCABEZADO_PUNTOS_CIEGOS,
+    nombre === null ? ENCABEZADO_PUNTOS_CIEGOS : `## Puntos ciegos y preguntas derivadas — ${nombre} (aporte del verificador)`,
     "",
     aportes.length > 0 ? aportes.join("\n") : "El verificador no registro puntos ciegos ni preguntas derivadas.",
     "",
@@ -363,7 +372,9 @@ export function armarInformeFinal(input: InformeFinalInput): string {
         ]
       : []),
     ...(rescate === null ? [] : [ENCABEZADO_RESCATE, "", rescate, ""]),
-    ...(input.verificacion ? seccionesVerificacion(input.verificacion) : []),
+    ...(input.verificaciones ?? []).flatMap((v, _, todas) =>
+      seccionesVerificacion(v, todas.length > 1 ? nombreProveedor(v.verificadorId) : null),
+    ),
     `**Pregunta:** ${input.pregunta}`,
     `**Fecha:** ${input.fecha}`,
     "**Eje de registro:** los tres (HECHOS, FUENTES, CONCLUSIONES)",

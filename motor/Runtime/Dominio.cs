@@ -147,6 +147,17 @@ namespace ChatCouncil.Motor
             hechos.OfType<SalidaVerificador>().LastOrDefault(h => h.RondaId == rondaId);
 
         /// <summary>
+        /// D62: la última verificación de cada verificador de la ronda, en el orden de
+        /// verificadorIds (el 1 primero); la de un proveedor que ya no es verificador va
+        /// al final, en el orden de su primera captura. La primera es la que recibe el redactor.
+        /// </summary>
+        public static List<SalidaVerificador> VerificacionesVigentes(IEnumerable<Hecho> hechos, string rondaId, IReadOnlyList<string> verificadorIds) =>
+            hechos.OfType<SalidaVerificador>().Where(h => h.RondaId == rondaId)
+                .GroupBy(h => h.VerificadorId).Select(g => g.Last())
+                .OrderBy(s => verificadorIds.Contains(s.VerificadorId) ? verificadorIds.ToList().IndexOf(s.VerificadorId) : verificadorIds.Count)
+                .ToList();
+
+        /// <summary>
         /// Los P# válidos para UN operador: el código estable de cada proveedor del
         /// pool menos el suyo (exclusión de autoevaluación). Sale del Sello
         /// persistido, así sobrevive a un reinicio de la app.
@@ -167,7 +178,7 @@ namespace ChatCouncil.Motor
         /// el rol que tiene algo nuevo (en investigación, todas son respuestas).
         /// </summary>
         public static ClasificacionLecturas<T> ClasificarLecturasPorEtapa<T>(IReadOnlyList<T> lecturas, Func<T, string> idDe, string etapa,
-            IReadOnlyList<string> poolOperadores, string integradorId, string verificadorId, string redactorId = null)
+            IReadOnlyList<string> poolOperadores, string integradorId, IReadOnlyList<string> verificadorIds, string redactorId = null)
         {
             T Buscar(string id) => lecturas.FirstOrDefault(l => idDe(l) == id);
             var c = new ClasificacionLecturas<T>();
@@ -185,7 +196,7 @@ namespace ChatCouncil.Motor
                     c.ComoRespuesta.AddRange(lecturas.Where(l => !poolOperadores.Contains(idDe(l))));
                     break;
                 case "verificacion":
-                    c.Verificador = Buscar(verificadorId);
+                    c.Verificadores.AddRange(verificadorIds.Select(Buscar));
                     break;
                 default:
                     c.Integrador = Buscar(integradorId);
@@ -206,7 +217,8 @@ namespace ChatCouncil.Motor
     {
         public List<T> Operacion { get; set; } = new List<T>();
         public T Integrador { get; set; }
-        public T Verificador { get; set; }
+        /// <summary>Una por verificador, en el orden de los ids; default si ese panel no vino en el lote.</summary>
+        public List<T> Verificadores { get; set; } = new List<T>();
         public T Redactor { get; set; }
         public List<T> ComoRespuesta { get; set; } = new List<T>();
     }

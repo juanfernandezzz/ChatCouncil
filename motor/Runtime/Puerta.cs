@@ -59,9 +59,8 @@ namespace ChatCouncil.Motor
     {
         public bool Ok { get; set; }
         public string Error { get; set; }
-        public string SalidaVerificadorId { get; set; }
         public List<UrlComprobada> Urls { get; set; }
-        /// <summary>Ya se habían comprobado para esa verificación: no se salió a la red.</summary>
+        /// <summary>Ya se habían comprobado para cada verificación: no se salió a la red.</summary>
         public bool YaComprobadas { get; set; }
     }
 
@@ -341,7 +340,7 @@ namespace ChatCouncil.Motor
             var hechos = LeerRegistro().Hechos;
             var etapa = Dominio.EtapaDeRonda(hechos, rondaId, poolOperadores.Count);
             var sello = hechos.OfType<Sello>().Where(s => s.RondaId == rondaId).ToList();
-            var c = Dominio.ClasificarLecturasPorEtapa(lecturas, l => l.Id, etapa, poolOperadores, roles.Integrador, roles.Verificador, roles.Redactor);
+            var c = Dominio.ClasificarLecturasPorEtapa(lecturas, l => l.Id, etapa, poolOperadores, roles.Integrador, roles.Verificadores, roles.Redactor);
 
             if (c.ComoRespuesta.Count > 0) EscribirRespuestas(rondaId, c.ComoRespuesta, contexto);
             if (etapa == "investigacion")
@@ -375,7 +374,8 @@ namespace ChatCouncil.Motor
             if (etapa == "integracion")
                 Rol(c.Integrador, "informe-integrador", "integrador", roles.Integrador, l => EscribirInformeIntegrador(rondaId, l.Id, promptIntegrador ?? PromptNoDisponible, l.Text, l.Html));
             if (etapa == "verificacion")
-                Rol(c.Verificador, "salida-verificador", "verificador", roles.Verificador, l => EscribirSalidaVerificador(rondaId, l.Id, promptVerificador ?? PromptNoDisponible, l.Text, l.Html));
+                for (int i = 0; i < roles.Verificadores.Count; i++)
+                    Rol(c.Verificadores[i], "salida-verificador", "verificador", roles.Verificadores[i], l => EscribirSalidaVerificador(rondaId, l.Id, promptVerificador ?? PromptNoDisponible, l.Text, l.Html));
             if (etapa == "redaccion")
             {
                 // Las marcas y el prompt pegados en este proceso, o los de la redacción anterior si la app se reinició.
@@ -636,7 +636,8 @@ namespace ChatCouncil.Motor
         {
             var d = TablaDeRonda("redactor");
             var informe = Dominio.UltimoInformeIntegrador(d.Hechos, d.Ronda.Id) ?? throw new InvalidOperationException("la ronda todavía no tiene un informe del integrador capturado");
-            var verificacion = Dominio.UltimaSalidaVerificador(d.Hechos, d.Ronda.Id);
+            // D62: el redactor recibe la verificación del verificador 1, para no tocar su prompt literal.
+            var verificacion = Dominio.VerificacionesVigentes(d.Hechos, d.Ronda.Id, roles.Verificadores).FirstOrDefault();
             var p = PrepararRonda();
             var material = new MaterialRedactor
             {
@@ -903,19 +904,32 @@ namespace ChatCouncil.Motor
         }
 
         /// <summary>
-        /// Comprueba las URLs de la sección 1 de la última verificación de la
-        /// ronda, una sola vez por verificación: si ya se comprobaron, devuelve
-        /// esas y no sale a la red.
+        /// Comprueba las URLs de la sección 1 de la última verificación de cada
+        /// verificador de la ronda (D62: el 1 primero), una sola vez por
+        /// verificación: las ya comprobadas se devuelven sin salir a la red.
         /// </summary>
         public async Task<ResultadoUrls> ComprobarUrls(IHttp http)
         {
             if (ConversacionActual == null || RondaActual == null) return new ResultadoUrls { Ok = false, Error = "no hay una ronda activa" };
             var rondaId = RondaActual;
             var hechos = LeerRegistro().Hechos;
-            var salida = Dominio.UltimaSalidaVerificador(hechos, rondaId);
-            if (salida == null) return new ResultadoUrls { Ok = false, Error = $"la ronda {rondaId} no tiene verificacion capturada" };
+            var salidas = Dominio.VerificacionesVigentes(hechos, rondaId, roles.Verificadores);
+            if (salidas.Count == 0) return new ResultadoUrls { Ok = false, Error = $"la ronda {rondaId} no tiene verificacion capturada" };
+            var todas = new ResultadoUrls { Ok = true, Urls = new List<UrlComprobada>(), YaComprobadas = true };
+            foreach (var salida in salidas)
+            {
+                var (urls, ya) = await ComprobarUrlsDe(salida, hechos, http);
+                todas.Urls.AddRange(urls);
+                todas.YaComprobadas &= ya;
+            }
+            return todas;
+        }
+
+        async Task<(List<UrlComprobada> Urls, bool YaComprobadas)> ComprobarUrlsDe(SalidaVerificador salida, List<Hecho> hechos, IHttp http)
+        {
+            var rondaId = salida.RondaId;
             var previas = hechos.OfType<UrlComprobada>().Where(u => u.SalidaVerificadorId == salida.Id).ToList();
-            if (previas.Count > 0) return new ResultadoUrls { Ok = true, SalidaVerificadorId = salida.Id, Urls = previas, YaComprobadas = true };
+            if (previas.Count > 0) return (previas, true);
 
             var urls = new List<string>();
             foreach (var v in Parseos.ParsearVerificacion(TextoDeHtml.TextoDeLaSalidaVerificador(salida.SalidaCruda, salida.Html), new string[0]).Correspondencias)
@@ -932,7 +946,7 @@ namespace ChatCouncil.Motor
                 Escribir(u);
                 escritas.Add(u);
             }
-            return new ResultadoUrls { Ok = true, SalidaVerificadorId = salida.Id, Urls = escritas, YaComprobadas = false };
+            return (escritas, false);
         }
 
         /// <summary>La última respuesta de cada proveedor, en el orden de su primera captura.</summary>
@@ -1007,8 +1021,8 @@ namespace ChatCouncil.Motor
 
             var informeIntegrador = Dominio.UltimoInformeIntegrador(hechos, ronda.Id);
             var pregunta = Dominio.PreguntaEfectivaDeRonda(hechos, ronda) ?? ronda.Prompt;
-            var salidaVerificador = Dominio.UltimaSalidaVerificador(hechos, ronda.Id);
-            var urls = salidaVerificador == null ? new List<UrlComprobada>() : (await ComprobarUrls(http)).Urls ?? new List<UrlComprobada>();
+            var salidasVerificador = Dominio.VerificacionesVigentes(hechos, ronda.Id, roles.Verificadores);
+            var urls = salidasVerificador.Count == 0 ? new List<UrlComprobada>() : (await ComprobarUrls(http)).Urls ?? new List<UrlComprobada>();
 
             // Desanonimizar: P# → proveedor con el sello, O# → operador con la tabla.
             var cargados = Dominio.ProveedoresCargadosDeRonda(hechos, ronda.Id);
@@ -1055,7 +1069,7 @@ namespace ChatCouncil.Motor
                 Semilla = semilla,
                 ProveedoresCargadosIncompletos = cargados != null && poolOperadores.Any(id => !cargados.Contains(id)) ? cargados.ToList() : null,
                 Integrador = informeIntegrador?.OperadorId ?? Dominio.IntegradorDeRonda(hechos, ronda.Id),
-                Verificacion = salidaVerificador == null ? null : InformeFinal.VerificacionParaInforme(salidaVerificador, urls, hallazgos, TechoUrlsPorRonda),
+                Verificaciones = salidasVerificador.Select(s => InformeFinal.VerificacionParaInforme(s, urls, hallazgos, TechoUrlsPorRonda)).ToList(),
                 Redaccion = redaccionParaInforme,
             });
 
@@ -1197,7 +1211,7 @@ namespace ChatCouncil.Motor
             ["investigacion"] = "En cada panel, activa la búsqueda web, revisa y envía tú. Antes de capturar, abre el panel de fuentes.",
             ["operacion"] = "En cada panel, revisa la operación y envíala tú. Si va con archivo, comprueba que quedó adjunto.",
             ["integracion"] = "Revisa el prompt en el panel del integrador y envíalo tú.",
-            ["verificacion"] = "En el panel del verificador, activa la búsqueda web, revisa y envía tú.",
+            ["verificacion"] = "En el panel de cada verificador, activa la búsqueda web, revisa y envía tú.",
             ["redaccion"] = "En el panel del redactor, comprueba que el archivo quedó adjunto y envía tú.",
             ["informe"] = "La carpeta del informe se abre al terminar.",
         };
@@ -1271,15 +1285,15 @@ namespace ChatCouncil.Motor
             }
             else
             {
-                var rolDeLaEtapa = roles.DeLaEtapa(etapa);
+                var esDeLaEtapa = roles.DeLaEtapa(etapa).Contains(proveedorId);
                 // T22: quien no es el rol de esta etapa ya terminó lo suyo (un operador o un rol anterior): capturado si dejó su hecho.
-                capturado = proveedorId != rolDeLaEtapa
+                capturado = !esDeLaEtapa
                     ? hechos.OfType<SalidaOperador>().Any(s => s.RondaId == rondaId && s.OperadorId == proveedorId)
                       || hechos.OfType<InformeIntegrador>().Any(h => h.RondaId == rondaId && h.OperadorId == proveedorId)
                       || hechos.OfType<SalidaVerificador>().Any(h => h.RondaId == rondaId && h.VerificadorId == proveedorId)
                     : etapa == "redaccion" && hechos.OfType<RespuestaRedactor>().Any(r => r.RondaId == rondaId && r.RedactorId == proveedorId);
                 problema = hechos.OfType<ErrorCaptura>().Any(e => e.RondaId == rondaId && e.ProveedorId == proveedorId && e.EtapaEsperada == etapa);
-                pegado = proveedorId == rolDeLaEtapa && (etapa == "integracion" ? promptIntegrador != null
+                pegado = esDeLaEtapa && (etapa == "integracion" ? promptIntegrador != null
                     : etapa == "verificacion" ? promptVerificador != null
                     : promptRedactor != null);
             }

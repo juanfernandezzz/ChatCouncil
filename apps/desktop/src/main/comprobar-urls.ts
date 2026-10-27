@@ -58,7 +58,7 @@ export async function comprobarUrl(url: string, pedir: Fetch = fetch, timeoutMs 
 
 /**
  * Comprueba las URLs de la sección 1 de la ÚLTIMA verificación capturada de la
- * ronda y las registra como `UrlComprobada`. Si esa verificación ya se
+ * ronda (D62: la de `verificadorId`, si se da) y las registra como `UrlComprobada`. Si esa verificación ya se
  * comprobó, devuelve lo registrado sin volver a salir a la red.
  */
 export async function comprobarUrlsDeRonda(
@@ -66,9 +66,10 @@ export async function comprobarUrlsDeRonda(
   conversacionId: string,
   rondaId: string,
   pedir: Fetch = fetch,
+  verificadorId?: string,
 ): Promise<{ ok: true; salidaVerificadorId: string; urls: UrlComprobada[]; yaComprobadas: boolean } | { ok: false; error: string }> {
   const hechos = leerRegistroDeArchivo(userData, conversacionId).hechos;
-  const salidas = hechos.filter((h): h is SalidaVerificador => h.tipo === "salida-verificador" && h.rondaId === rondaId);
+  const salidas = hechos.filter((h): h is SalidaVerificador => h.tipo === "salida-verificador" && h.rondaId === rondaId && (verificadorId === undefined || h.verificadorId === verificadorId));
   const salida = salidas[salidas.length - 1];
   if (!salida) return { ok: false, error: `la ronda ${rondaId} no tiene verificacion capturada` };
   const previas = hechos.filter((h): h is UrlComprobada => h.tipo === "url-comprobada" && h.salidaVerificadorId === salida.id);

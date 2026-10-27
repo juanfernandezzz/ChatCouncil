@@ -362,6 +362,38 @@
       "_notaModelo": "Sin modelLabel. Sondeo con conversacion real (2026-08-23) dio cero candidatos en las tres vias de deteccion: deepseek no expone un selector de etiqueta de modelo visible en esta cuenta.",
       "_notaFin": "deepseek: sin indicador de generacion conocido en su DOM. El fin se INFIERE por quiescencia, mismo piso provisional que el resto.",
       "_notaEnvio": "submit es un div[role=\"button\"] (clase ds-button--primary), NO un <button>: el metodo de clic nativo sobre un HTMLElement funciona igual, y a diferencia de kimi el compositor es un TEXTAREA (kind:\"textarea\"), no un contenteditable rico -la misma categoria que qwen, donde el clic con escritura por DOM ya funciona-. No se le puso envioConfiable:true por eso: el corte medido entre kimi y el resto es el TIPO de compositor (contenteditable vs. textarea), no el proveedor (ver BLUEPRINT, regla de compositor). Sin confirmar todavia con un envio real en esta cuenta -promovido a INVESTIGADORES el 2026-08-23 sin haber gastado un envio de verificacion; se confirma en la primera ronda real."
+    },
+    "perplexity": {
+      "_provisional": "PROVISIONAL (D62, 2026-10-27): estimacion del DOM de perplexity.ai sin medir en vivo. Se confirma con el Diagnostico de selectores de ese panel; hasta entonces cualquier selector puede no matchear.",
+      "newConversationUrl": "https://www.perplexity.ai/",
+      "escritura": "pegado",
+      "composer": {
+        "selector": "#ask-input, textarea#ask-input, div[contenteditable=\"true\"][role=\"textbox\"]",
+        "kind": "contenteditable"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "button[data-testid=\"submit-button\"]"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "div[id^=\"markdown-content-\"]",
+        "pick": "last"
+      },
+      "completion": {
+        "kind": "quiescence",
+        "quiescenceMs": 20000
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 30000,
+        "emptyResponseMs": 90000
+      },
+      "_notaModelo": "SIN etiqueta de version, PROVISIONAL: no se midio si la cabecera o el selector de modelo de perplexity.ai dicen que modelo respondio. La procedencia queda con modelLabel en null hasta el diagnostico en vivo.",
+      "_notaFin": "perplexity: sin indicador de generacion medido. El fin se INFIERE por quiescencia, mismo piso provisional que qwen (20 s), hasta confirmar en vivo si existe un boton de detener con data-testid estable.",
+      "_notaComposer": "Estimado: el compositor de perplexity.ai es un editor contenteditable (Lexical) con id ask-input; por eso escritura pegado, la misma que kimi. Sin confirmar."
     }
   }
 }

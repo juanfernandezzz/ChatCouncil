@@ -85,7 +85,14 @@ namespace ChatCouncil.Interfaz
         public string Visible => visible;
         /// <summary>Los paneles por los que se navega: los operadores y, desde su etapa o a pedido, los roles (D42).</summary>
         public List<string> EnLaVista => Operadores.Concat(RolesDeLaRonda.Where(rolesMostrados.Contains)).ToList();
-        List<string> RolesDeLaRonda => new[] { roles.Integrador, roles.Verificador, roles.Redactor }.Distinct().ToList();
+        List<string> RolesDeLaRonda => new[] { roles.Integrador }.Concat(roles.Verificadores).Append(roles.Redactor).Distinct().ToList();
+
+        /// <summary>Capturar un rol en su etapa captura a todos los de la etapa (D62: los dos verificadores van juntos).</summary>
+        List<string> AlCapturar(string id)
+        {
+            var deLaEtapa = roles.DeLaEtapa(EtapaDelRegistro());
+            return deLaEtapa.Contains(id) ? deLaEtapa.ToList() : new List<string> { id };
+        }
         IHttp Http { get; } = new HttpSinCookies();
         IPdf Pdf { get; }
         /// <summary>Al terminar el informe. Android no abre carpetas con file:// (FileUriExposedException): ahí solo se dice dónde está.</summary>
@@ -185,7 +192,7 @@ namespace ChatCouncil.Interfaz
             lista.Add(tituloRoles);
             funcion.Clear();
             funcion[roles.Integrador] = roles.Redactor == roles.Integrador ? "Integra y redacta" : "Integra";
-            funcion[roles.Verificador] = "Verifica";
+            foreach (var v in roles.Verificadores) funcion[v] = "Verifica";
             funcion[roles.Redactor] = roles.Redactor == roles.Integrador ? funcion[roles.Integrador] : "Redacta";
             foreach (var id in RolesDeLaRonda)
             {
@@ -308,10 +315,10 @@ namespace ChatCouncil.Interfaz
                 return ($"La página no se pudo abrir: {f} Prueba Más… → Recargar la página.", "La página no se abrió: Más… → Recargar.", null);
             var rol = roles.DeLaEtapa(etapa);
             // Un rol fuera de su etapa está para mirarlo (historia 59): no recibe la pregunta ni la operación.
-            if (!Operadores.Contains(id) && id != rol) return (null, null, null);
-            if (rol != null)
+            if (!Operadores.Contains(id) && !rol.Contains(id)) return (null, null, null);
+            if (rol.Count > 0)
             {
-                if (id != rol) return (null, null, null);
+                if (!rol.Contains(id)) return (null, null, null);
                 if (fallaRol.TryGetValue(id, out var fr))
                     return ($"El prompt no se pegó: {fr}.", "No se pegó el prompt: pégalo otra vez desde «Más…».", PegarPromptAqui);
                 var enRol = EstadoDe(id);
@@ -390,7 +397,7 @@ namespace ChatCouncil.Interfaz
             int capturados = deOperadores.Count(e => e == "capturado");
             // Capturar un rol: cuando su página parece terminada o su captura falló (D7: lo imposible, deshabilitado).
             var rolDelPaso = roles.DeLaEtapa(paso.Etapa);
-            var rolListo = rolDelPaso != null && paneles.ContainsKey(rolDelPaso) && (Terminado(estados[rolDelPaso]) || estados[rolDelPaso] == "con-problema");
+            var rolListo = rolDelPaso.Count > 0 && rolDelPaso.All(id => paneles.ContainsKey(id) && (Terminado(estados[id]) || estados[id] == "con-problema"));
 
             var (texto, habilitado) = TextoDelPaso(paso, terminados, rolListo);
             foreach (var nombre in new[] { "paso-ancha", "paso-angosta" })
@@ -551,7 +558,7 @@ namespace ChatCouncil.Interfaz
                     _ = PegarRol();
                     break;
                 case "capturar":
-                    _ = Capturar(new List<string> { roles.DeLaEtapa(paso.Etapa) });
+                    _ = Capturar(roles.DeLaEtapa(paso.Etapa).ToList());
                     break;
                 case "armar-informe":
                     _ = ArmarInforme();
@@ -566,7 +573,7 @@ namespace ChatCouncil.Interfaz
         {
             var accion = raiz.Q<Button>("accion-panel").text;
             if (accion == PegarAqui) _ = PegarEnEste();
-            else if (accion.StartsWith(CapturarEste, StringComparison.Ordinal)) _ = Capturar(new List<string> { visible });
+            else if (accion.StartsWith(CapturarEste, StringComparison.Ordinal)) _ = Capturar(AlCapturar(visible));
             else if (accion == PegarOperacionAqui) ConAvisoDeOperacion(new List<string> { visible }, null);
             else if (accion == PegarPromptAqui) _ = PegarRol();
         }
@@ -990,8 +997,8 @@ namespace ChatCouncil.Interfaz
         async Task PegarRol()
         {
             var etapa = EtapaDelRegistro();
-            var id = roles.DeLaEtapa(etapa);
-            if (id == null) return;
+            var ids = roles.DeLaEtapa(etapa);
+            if (ids.Count == 0) return;
             string texto;
             ArchivoRedactor archivo = null;
             try
@@ -1005,46 +1012,56 @@ namespace ChatCouncil.Interfaz
                 Resultado($"No se armó el prompt: {e.Message}.", true);
                 return;
             }
-            var nombre = Dominio.NombreProveedor(id);
+            // D62: en la verificación, el mismo prompt va a los dos verificadores, uno después del otro.
             ocupado = true;
-            Resultado($"Pegando el prompt en {nombre}…");
-            Refrescar();
-            var error = await MostrarRol(id, true) ? await AbrirChatNuevo(id) : "la página no se pudo abrir";
-            error = error ?? await EscribirYAdjuntar(id, texto, Cuerpos.VerificarIgualdad, archivo?.CuerpoArchivo,
-                archivo == null ? null : Path.Combine(carpetaDatos, "redactor", archivo.NombreArchivo), "");
-            ocupado = false;
-            if (error == null)
+            foreach (var id in ids)
             {
-                fallaRol.Remove(id);
-                if (etapa == "integracion") Puerta.IntegradorPegado(texto);
-                else if (etapa == "verificacion") Puerta.VerificadorPegado(texto);
-                else Puerta.RedactorPegado(archivo);
-                Resultado($"Prompt pegado en {nombre}." + (archivo == null ? " Revísalo y envíalo." : " Comprueba que el archivo quedó adjunto, revísalo y envíalo.")
-                          + (archivo?.Aviso == null ? "" : " " + archivo.Aviso));
-            }
-            else
-            {
+                var nombre = Dominio.NombreProveedor(id);
+                Resultado($"Pegando el prompt en {nombre}…");
+                Refrescar();
+                var error = await MostrarRol(id, true) ? await AbrirChatNuevo(id) : "la página no se pudo abrir";
+                error = error ?? await EscribirYAdjuntar(id, texto, Cuerpos.VerificarIgualdad, archivo?.CuerpoArchivo,
+                    archivo == null ? null : Path.Combine(carpetaDatos, "redactor", archivo.NombreArchivo), "");
+                if (error == null)
+                {
+                    fallaRol.Remove(id);
+                    continue;
+                }
                 fallaRol[id] = error;
+                ocupado = false;
                 Resultado($"No se pegó en {nombre}: {error}.", true);
+                Refrescar();
+                return;
             }
+            ocupado = false;
+            if (etapa == "integracion") Puerta.IntegradorPegado(texto);
+            else if (etapa == "verificacion") Puerta.VerificadorPegado(texto);
+            else Puerta.RedactorPegado(archivo);
+            Resultado($"Prompt pegado en {string.Join(" y ", ids.Select(Dominio.NombreProveedor))}."
+                      + (archivo == null ? " Revísalo y envíalo." : " Comprueba que el archivo quedó adjunto, revísalo y envíalo.")
+                      + (archivo?.Aviso == null ? "" : " " + archivo.Aviso));
             Refrescar();
         }
 
-        /// <summary>Recapturar el integrador o el verificador en cualquier etapa (historia 58): agrega un hecho y gana el último.</summary>
+        /// <summary>Recapturar el integrador o los verificadores en cualquier etapa (historia 58): agrega un hecho y gana el último.</summary>
         async Task Recapturar(string rol)
         {
-            var id = rol == "integrador" ? roles.Integrador : roles.Verificador;
+            var ids = rol == "integrador" ? new[] { roles.Integrador } : roles.Verificadores;
             ocupado = true;
             Resultado($"Recapturando el {rol}…");
             Refrescar();
-            await MostrarRol(id, true);
-            var (ok, mensaje) = Puerta.Recapturar(rol, await Leer(id));
+            var resultados = new List<(bool Ok, string Mensaje)>();
+            foreach (var id in ids)
+            {
+                await MostrarRol(id, true);
+                resultados.Add(Puerta.Recapturar(rol, await Leer(id)));
+            }
             ocupado = false;
-            Resultado(mensaje, !ok);
+            Resultado(string.Join(" ", resultados.Select(x => x.Mensaje)), resultados.Any(x => !x.Ok));
             Refrescar();
         }
 
-        /// <summary>Comprueba las URLs del verificador, arma la carpeta del informe y la abre (D41).</summary>
+        /// <summary>Comprueba las URLs de los verificadores, arma la carpeta del informe y la abre (D41).</summary>
         async Task ArmarInforme()
         {
             ocupado = true;
@@ -1055,7 +1072,7 @@ namespace ChatCouncil.Interfaz
             var urls = ok ? await Puerta.ComprobarUrls(Http) : null;
             ocupado = false;
             var cuenta = urls?.Urls == null || urls.Urls.Count == 0 ? ""
-                : $" URLs del verificador: responden {urls.Urls.Count(u => u.Codigo >= 200 && u.Codigo <= 299)} de {urls.Urls.Count}.";
+                : $" URLs de los verificadores: responden {urls.Urls.Count(u => u.Codigo >= 200 && u.Codigo <= 299)} de {urls.Urls.Count}.";
             // Sin PDF, el motor devuelve el .md: la carpeta es la suya.
             var carpeta = ok ? Directory.Exists(ruta) ? ruta : Path.GetDirectoryName(ruta) : null;
             Resultado(mensaje + cuenta, !completo);
@@ -1182,12 +1199,12 @@ namespace ChatCouncil.Interfaz
             {
                 // Un rol: pegar solo en su etapa; capturar en su etapa siempre (después de reabrir la app no queda el
                 // prompt en memoria y el paso vuelve a "Pegar"), fuera de ella con "Recapturar" del menú Ronda.
-                var suEtapa = roles.DeLaEtapa(etapa) == visible;
+                var suEtapa = roles.DeLaEtapa(etapa).Contains(visible);
                 return new List<Item>
                 {
                     new Item { Grupo = grupo, Texto = PegarPromptAqui, Accion = () => _ = PegarRol(),
                         Motivo = accion == PegarPromptAqui ? null : "Solo en su etapa, cuando el panel está por pegar o el pegado falló." },
-                    new Item { Grupo = grupo, Texto = ConFase(CapturarEste), Accion = () => _ = Capturar(new List<string> { visible }),
+                    new Item { Grupo = grupo, Texto = ConFase(CapturarEste), Accion = () => _ = Capturar(AlCapturar(visible)),
                         Motivo = suEtapa ? null : "Solo en su etapa: fuera de ella, usa «Recapturar» del menú Ronda." },
                 };
             }

@@ -96,33 +96,40 @@ for (const [id, spec] of Object.entries(specs)) {
   }
 }
 
-// Arquitectura 7-1-1 (2026-09-29): el integrador y el verificador declarados
-// por defecto tienen que existir entre las specs y ser distintos. Si fueran el
-// mismo proveedor, el pool quedaria en ocho y un rol sin panel propio.
+// Arquitectura 7-1-1 (2026-09-29), con dos verificadores desde D62 (2026-10-27):
+// los roles declarados por defecto tienen que existir entre las specs. Los dos
+// verificadores son distintos entre si y de los demas roles; el redactor es el
+// integrador. Asi el pool queda en siete y los prompts literales ("siete") cuadran.
 const RUTA_ROLES = "apps/desktop/src/main/seleccion-proveedores.ts";
 const fuenteRoles = readFileSync(join(process.cwd(), RUTA_ROLES), "utf8");
 const rolDeclarado = (nombre) => new RegExp(`export const ${nombre} = "([^"]+)"`).exec(fuenteRoles)?.[1] ?? null;
 const roles = {
   integrador: rolDeclarado("INTEGRADOR_POR_DEFECTO"),
-  verificador: rolDeclarado("VERIFICADOR_POR_DEFECTO"),
+  "verificador 1": rolDeclarado("VERIFICADOR_1_POR_DEFECTO"),
+  "verificador 2": rolDeclarado("VERIFICADOR_2_POR_DEFECTO"),
   redactor: rolDeclarado("REDACTOR_POR_DEFECTO"),
 };
 for (const [rol, id] of Object.entries(roles)) {
   if (id === null) fallos.push(`${RUTA_ROLES}: no declara el ${rol} por defecto.`);
   else if (!(id in specs)) fallos.push(`${RUTA_ROLES}: el ${rol} por defecto "${id}" no existe entre las specs.`);
 }
-if (roles.integrador !== null && roles.integrador === roles.verificador) {
-  fallos.push(`${RUTA_ROLES}: integrador y verificador por defecto son el mismo proveedor ("${roles.integrador}").`);
+const verificadores = [roles["verificador 1"], roles["verificador 2"]];
+if (verificadores[0] !== null && verificadores[0] === verificadores[1]) {
+  fallos.push(`${RUTA_ROLES}: los dos verificadores por defecto son el mismo proveedor ("${verificadores[0]}").`);
 }
-// Redactor (2026-10-02): nunca el verificador. Puede ser el integrador; si es
-// otro, sale del pool y los prompts literales ("siete") dejan de cuadrar.
-if (roles.redactor !== null && roles.redactor === roles.verificador) {
-  fallos.push(`${RUTA_ROLES}: redactor y verificador por defecto son el mismo proveedor ("${roles.redactor}").`);
+for (const rol of ["integrador", "redactor"]) {
+  if (roles[rol] !== null && verificadores.includes(roles[rol])) {
+    fallos.push(`${RUTA_ROLES}: ${rol} y un verificador por defecto son el mismo proveedor ("${roles[rol]}").`);
+  }
 }
 if (roles.redactor !== null && roles.redactor !== roles.integrador) {
   fallos.push(`${RUTA_ROLES}: el redactor por defecto ("${roles.redactor}") no es el integrador: sacaria un proveedor del pool de siete.`);
 }
-resumen.push(`roles por defecto: integrador ${roles.integrador}, verificador ${roles.verificador}, redactor ${roles.redactor}`);
+const pool = Object.keys(specs).filter((id) => !Object.values(roles).includes(id));
+if (pool.length !== 7) {
+  fallos.push(`pool de investigadores con los roles por defecto: ${pool.length} (${pool.join(", ")}); tiene que ser siete, como dicen los prompts literales.`);
+}
+resumen.push(`roles por defecto: integrador ${roles.integrador}, verificadores ${verificadores.join(" y ")}, redactor ${roles.redactor}; pool de ${pool.length}`);
 
 if (fallos.length > 0) {
   console.error("[guard:specs] FALLO:");

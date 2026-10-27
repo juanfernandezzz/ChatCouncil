@@ -177,6 +177,19 @@ export function ultimoDeRol(hechos: readonly Hecho[], rondaId: string, rol: RolR
   return previos[previos.length - 1] ?? null;
 }
 
+/**
+ * D62 — la última verificación de cada verificador de la ronda, en el orden de
+ * `verificadorIds` (el 1 primero); la de un proveedor que ya no es verificador
+ * va al final, en el orden de su primera captura. La primera es la que recibe
+ * el redactor.
+ */
+export function verificacionesVigentes(hechos: readonly Hecho[], rondaId: string, verificadorIds: readonly string[]): SalidaVerificador[] {
+  const ultima = new Map<string, SalidaVerificador>();
+  for (const h of previosDeRol(hechos, rondaId, "verificador") as SalidaVerificador[]) ultima.set(h.verificadorId, h);
+  const orden = (id: string): number => (verificadorIds.includes(id) ? verificadorIds.indexOf(id) : verificadorIds.length);
+  return [...ultima.values()].sort((a, b) => orden(a.verificadorId) - orden(b.verificadorId));
+}
+
 /** El aviso literal si la ronda no tiene todavía nada de ese rol; `null` si se puede recapturar. */
 export function avisoSinPrevio(hechos: readonly Hecho[], rondaId: string, rol: RolRecapturable): string | null {
   return previosDeRol(hechos, rondaId, rol).length === 0 ? SIN_PREVIO[rol] : null;
@@ -360,8 +373,8 @@ export function armarInformeFinalDeRonda(params: {
   pool?: readonly string[];
   /** Integrador real de la ronda: el que escribió el informe, o el registrado al abrirla. */
   integrador?: string | null;
-  /** 7-1-1: la última verificación de la ronda y sus URLs comprobadas; `null`/ausente = no hubo. */
-  salidaVerificador?: SalidaVerificador | null;
+  /** 7-1-1: las verificaciones vigentes (`verificacionesVigentes`) y sus URLs comprobadas; vacío/ausente = no hubo. */
+  salidasVerificador?: readonly SalidaVerificador[];
   urlsComprobadas?: readonly UrlComprobada[];
   /** Redactor (2026-10-02): la última respuesta del redactor; `null`/ausente = no hubo. */
   respuestaRedactor?: RespuestaRedactor | null;
@@ -420,9 +433,9 @@ export function armarInformeFinalDeRonda(params: {
     semilla: params.semilla,
     proveedoresCargadosIncompletos: incompletos,
     integrador: params.informeIntegrador?.operadorId ?? params.integrador ?? null,
-    verificacion: params.salidaVerificador
-      ? verificacionParaInforme(params.salidaVerificador, params.urlsComprobadas ?? [], hallazgosResueltos, TECHO_URLS_POR_RONDA)
-      : null,
+    verificaciones: (params.salidasVerificador ?? []).map((s) =>
+      verificacionParaInforme(s, params.urlsComprobadas ?? [], hallazgosResueltos, TECHO_URLS_POR_RONDA),
+    ),
     redaccion: params.respuestaRedactor
       ? redaccionParaInforme(params.respuestaRedactor, idsValidos, params.citas.map((c) => c.url))
       : null,
@@ -485,6 +498,7 @@ export function verificacionParaInforme(
           : `Se ${comprobada.size === 1 ? "comprobo 1" : `comprobaron ${comprobada.size}`} de las ${unicas} URL distintas de esta seccion; ${otras(faltan)} "sin comprobar" porque el registro no tiene una comprobacion para ${faltan === 1 ? "ella" : "ellas"}.`;
 
   return {
+    verificadorId: salida.verificadorId,
     avisoSinComprobar,
     items: p.correspondencias.map((v) => {
       const u = v.url === null ? undefined : comprobada.get(v.url);
@@ -519,7 +533,8 @@ export function verificacionParaInforme(
 export interface ClasificacionLecturas<T extends { id: string }> {
   lecturasOperacion: T[];
   lecturaIntegrador: T | undefined;
-  lecturaVerificador: T | undefined;
+  /** Una por verificador, en el orden de `verificadorIds`; `undefined` si ese panel no vino en el lote. */
+  lecturasVerificador: (T | undefined)[];
   lecturaRedactor?: T | undefined;
   lecturasComoRespuesta: T[];
 }
@@ -529,10 +544,10 @@ export function clasificarLecturasPorEtapa<T extends { id: string }>(
   etapa: EtapaRonda,
   poolOperadores: readonly string[],
   integradorId: string,
-  verificadorId: string,
+  verificadorIds: readonly string[],
   redactorId: string = integradorId,
 ): ClasificacionLecturas<T> {
-  const nada = { lecturaIntegrador: undefined, lecturaVerificador: undefined };
+  const nada = { lecturaIntegrador: undefined, lecturasVerificador: [] };
   if (etapa === "redaccion") {
     // Ya hay verificación: sólo el redactor tiene algo nuevo.
     return { lecturasOperacion: [], ...nada, lecturaRedactor: lecturas.find((l) => l.id === redactorId), lecturasComoRespuesta: [] };
@@ -557,8 +572,13 @@ export function clasificarLecturasPorEtapa<T extends { id: string }>(
   // re-escribía una `Respuesta` obsoleta en cada captura -- probado en rojo con
   // el ensayo en seco de etapas antes de esta corrección.
   if (etapa === "verificacion") {
-    // 7-1-1: el integrador ya escribió; sólo el verificador tiene algo nuevo.
-    return { lecturasOperacion: [], ...nada, lecturaVerificador: lecturas.find((l) => l.id === verificadorId), lecturasComoRespuesta: [] };
+    // 7-1-1: el integrador ya escribió; sólo los verificadores (D62: dos) tienen algo nuevo.
+    return {
+      lecturasOperacion: [],
+      ...nada,
+      lecturasVerificador: verificadorIds.map((id) => lecturas.find((l) => l.id === id)),
+      lecturasComoRespuesta: [],
+    };
   }
   return {
     lecturasOperacion: [],

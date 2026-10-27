@@ -21,7 +21,8 @@
                     <ui:Label text="Roles" class="subtitulo semibold" />
                     <ui:Label text="Los proveedores sin rol investigan y operan." class="envolver texto-2 separado" />
                     <ui:DropdownField name="integrador" label="Integrador: lee la tabla de hallazgos y escribe el informe" class="campo" />
-                    <ui:DropdownField name="verificador" label="Verificador: revisa las fuentes con búsqueda web" class="campo" />
+                    <ui:DropdownField name="verificador1" label="Verificador 1: revisa las fuentes con búsqueda web" class="campo" />
+                    <ui:DropdownField name="verificador2" label="Verificador 2: revisa las mismas fuentes por separado, para comparar" class="campo" />
                     <ui:DropdownField name="redactor" label="Redactor: escribe la respuesta final; puede ser el integrador" class="campo" />
                     <ui:Label name="aviso-reabrir" text="Los cambios se aplican la próxima vez que abras ChatCouncil." class="envolver texto-2 separado solo-ajustes" />
                     <ui:Button name="guardar" text="Guardar" class="boton boton-primario semibold boton-solo" />

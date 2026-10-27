@@ -45,9 +45,11 @@ const EXIGIDO = {
     // Aviso de una vez por ronda antes de pegar la operación (2026-09-30).
     "cc:aviso-operacion-pendiente",
     "cc:pegar-integrador",
-    // 7-1-1 (2026-09-29): el tercer rol. Sin este literal, un tree-shaking que se
-    // lleve la regla de roles distintos deja guardar integrador = verificador.
-    "El integrador y el verificador tienen que ser proveedores distintos.",
+    // 7-1-1 (2026-09-29): el tercer rol, dos verificadores desde D62. Sin estos
+    // literales, un tree-shaking que se lleve las reglas de roles distintos deja
+    // guardar integrador = verificador, o los dos verificadores iguales.
+    "El integrador y los verificadores tienen que ser proveedores distintos.",
+    "Los dos verificadores tienen que ser proveedores distintos.",
     // "Pegar verificación" y la captura del verificador (7-1-1).
     "cc:pegar-verificacion",
     "salida-verificador",

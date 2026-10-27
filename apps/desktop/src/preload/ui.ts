@@ -85,10 +85,10 @@ contextBridge.exposeInMainWorld("cc", {
     ipcRenderer.on("cc:aviso", (_e, texto: string) => fn(texto));
   },
   /** Ventana "Proveedores al iniciar": lee/guarda el archivo aparte de selección. Se aplica al reiniciar. */
-  seleccionLeer: (): Promise<{ conocidos: string[]; marcados: string[]; integrador: string; verificador: string; redactor: string }> =>
+  seleccionLeer: (): Promise<{ conocidos: string[]; marcados: string[]; integrador: string; verificador1: string; verificador2: string; redactor: string }> =>
     ipcRenderer.invoke("cc:seleccion-leer"),
-  seleccionGuardar: (marcados: string[], integrador: string, verificador: string, redactor: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke("cc:seleccion-guardar", marcados, integrador, verificador, redactor),
+  seleccionGuardar: (marcados: string[], integrador: string, verificador1: string, verificador2: string, redactor: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("cc:seleccion-guardar", marcados, integrador, verificador1, verificador2, redactor),
 });
 
 interface ResultadoConsolidarPanel {

@@ -35,7 +35,7 @@ namespace ChatCouncil.Interfaz
         readonly Dictionary<string, Toggle> marcas = new Dictionary<string, Toggle>();
         readonly Dictionary<string, Label> estadoCuenta = new Dictionary<string, Label>();
         readonly Dictionary<string, Panel> paneles = new Dictionary<string, Panel>();
-        readonly DropdownField integrador, verificador, redactor;
+        readonly DropdownField integrador, verificador1, verificador2, redactor;
         readonly Label mensaje;
         Task navegador;
         string cuentaVisible;
@@ -78,7 +78,8 @@ namespace ChatCouncil.Interfaz
                 return d;
             }
             integrador = Rol("integrador", roles.Integrador);
-            verificador = Rol("verificador", roles.Verificador);
+            verificador1 = Rol("verificador1", roles.Verificador1);
+            verificador2 = Rol("verificador2", roles.Verificador2);
             redactor = Rol("redactor", roles.Redactor);
 
             mensaje = raiz.Q<Label>("mensaje");
@@ -135,7 +136,7 @@ namespace ChatCouncil.Interfaz
         {
             var marcados = Roles.Conocidos.Where(id => marcas[id].value).ToList();
             var ahora = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
-            var (error, contenido) = Roles.Guardar(Roles.Conocidos, marcados, Id(integrador), Id(verificador), Id(redactor), ahora);
+            var (error, contenido) = Roles.Guardar(Roles.Conocidos, marcados, Id(integrador), Id(verificador1), Id(verificador2), Id(redactor), ahora);
             if (error == null)
             {
                 try

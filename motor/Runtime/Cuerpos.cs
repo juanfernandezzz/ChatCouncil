@@ -49,11 +49,11 @@ namespace ChatCouncil.Motor
         public const int IntervaloMarcaChars = 1000;
         const int ToleranciaMarcas = 3;
 
-        /// <summary>newConversationUrl de los nueve en specs.json.</summary>
+        /// <summary>newConversationUrl de los diez en specs.json.</summary>
         static readonly string[] DominiosPropios =
         {
             "chatgpt.com", "chat.z.ai", "claude.ai", "gemini.google.com", "grok.com",
-            "chat.mistral.ai", "chat.qwen.ai", "kimi.ai", "chat.deepseek.com",
+            "chat.mistral.ai", "chat.qwen.ai", "kimi.ai", "chat.deepseek.com", "perplexity.ai",
         };
 
         /// <summary>

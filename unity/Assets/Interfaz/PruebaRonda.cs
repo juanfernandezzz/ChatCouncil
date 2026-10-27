@@ -34,7 +34,8 @@ namespace ChatCouncil.Interfaz
             "\"completion\":{\"kind\":\"element-gone\",\"selector\":\"#detener\",\"quiescenceMs\":500},\"version\":1}";
 
         const string LaPregunta = "Primera línea de la pregunta\nSegunda línea, con ñ y acentos: áéíóú\n\nCuarta, tras una vacía";
-        static readonly string[] Pool = { "chatgpt", "gemini", "claude", "grok", "mistral", "kimi", "qwen" };
+        // D62: qwen verifica y perplexity investiga.
+        static readonly string[] Pool = { "chatgpt", "gemini", "claude", "grok", "mistral", "kimi", "perplexity" };
 
         Aplicacion app;
         string salida;
@@ -137,12 +138,12 @@ namespace ChatCouncil.Interfaz
         {
             await Cuadros(10);
 
-            // El primer arranque, con lo que viene marcado: los nueve y los roles por defecto.
+            // El primer arranque, con lo que viene marcado: los diez y los roles por defecto.
             await Pulsar("guardar");
             await Pulsar("empezar");
             var abiertos = await Esperar(() => Ronda.Operadores.All(id => Ronda.PanelDe(id) != null), 60);
-            Anotar(abiertos && Ronda.Operadores.SequenceEqual(Pool) && Ronda.PanelDe("deepseek") == null && Ronda.PanelDe("glm") == null,
-                "paneles del pool", $"operadores [{string.Join(",", Ronda.Operadores)}]; sin página el integrador y el verificador (historia 26)");
+            Anotar(abiertos && Ronda.Operadores.SequenceEqual(Pool) && Ronda.PanelDe("deepseek") == null && Ronda.PanelDe("glm") == null && Ronda.PanelDe("qwen") == null,
+                "paneles del pool", $"operadores [{string.Join(",", Ronda.Operadores)}]; sin página el integrador y los verificadores (historia 26)");
             Anotar(Paso == "Pegar la pregunta en los paneles" && Raiz.Q<Label>("barra-titulo").text == "Pregunta · 1 de 7" && Visible(Raiz.Q<TextField>("pregunta-ancha")),
                 "etapa Pregunta", $"\"{Paso}\", campo de la pregunta a la vista");
 
@@ -165,7 +166,7 @@ namespace ChatCouncil.Interfaz
             var condicion = hechos.OfType<CondicionProveedoresCargados>().SingleOrDefault();
             var intentos = hechos.OfType<Intento>().ToList();
             var grok = intentos.SingleOrDefault(i => i.ProveedorId == "grok");
-            Anotar(ronda?.Prompt == LaPregunta && condicion?.Proveedores.Count == 9 && condicion.Integrador == "deepseek",
+            Anotar(ronda?.Prompt == LaPregunta && condicion?.Proveedores.Count == 10 && condicion.Integrador == "deepseek",
                 "ronda abierta", $"prompt idéntico: {ronda?.Prompt == LaPregunta}; condición: {condicion?.Proveedores.Count} cargados, integra {condicion?.Integrador}");
             Anotar(intentos.Count == 7 && intentos.Count(i => i.Ok) == 6 && grok != null && !grok.Ok && grok.Error.Contains("borrador"),
                 "un intento por proveedor", $"{intentos.Count} intentos, {intentos.Count(i => i.Ok)} bien; Grok: \"{grok?.Error}\"");
@@ -194,10 +195,10 @@ namespace ChatCouncil.Interfaz
             var respondiendo = await Esperar(() => Pool.Where(id => id != "grok").All(id => EstadoEnLaLista(id) == "Respondiendo"));
             Anotar(respondiendo, "indicador: respondiendo", string.Join(", ", Pool.Select(id => $"{id} {EstadoEnLaLista(id)}")));
 
-            // Responden todos menos Qwen; Kimi, muy corto.
-            foreach (var id in Pool.Where(id => id != "qwen")) await Responder(id, id == "kimi" ? "Respuesta corta de Kimi, de menos de trescientos caracteres." : RespuestaDe(id));
+            // Responden todos menos Perplexity; Kimi, muy corto.
+            foreach (var id in Pool.Where(id => id != "perplexity")) await Responder(id, id == "kimi" ? "Respuesta corta de Kimi, de menos de trescientos caracteres." : RespuestaDe(id));
             var terminados = new[] { "chatgpt", "gemini", "claude", "mistral", "kimi" };
-            var listos = await Esperar(() => terminados.All(id => EstadoEnLaLista(id) == "Parece terminado") && EstadoEnLaLista("qwen") == "Respondiendo");
+            var listos = await Esperar(() => terminados.All(id => EstadoEnLaLista(id) == "Parece terminado") && EstadoEnLaLista("perplexity") == "Respondiendo");
             Anotar(listos && Paso == "Capturar los que terminaron (5)" && Raiz.Q<Button>("paso-ancha").enabledSelf,
                 "indicador: parece terminado", $"\"{Paso}\"; {string.Join(", ", Pool.Select(id => $"{id} {EstadoEnLaLista(id)}"))}");
             Anotar(Raiz.Q<Label>("contadores-ancha").text == "Enviados 6 de 7 · Parecen terminados 5 · Capturados 0", "contadores", Raiz.Q<Label>("contadores-ancha").text);
@@ -227,13 +228,13 @@ namespace ChatCouncil.Interfaz
             Anotar(Hechos.OfType<Respuesta>().Count(r => r.ProveedorId == "grok") == 1 && Hechos.OfType<Respuesta>().Count() == 6, "capturar este panel",
                 $"Grok capturado; respuestas {Hechos.OfType<Respuesta>().Count()}");
 
-            // Qwen termina: la segunda captura confirma la continuidad (no navegó).
-            await Responder("qwen", RespuestaDe("qwen"));
+            // Perplexity termina: la segunda captura confirma la continuidad (no navegó).
+            await Responder("perplexity", RespuestaDe("perplexity"));
             await Esperar(() => Paso == "Capturar los que terminaron (1)");
             await Pulsar("paso-ancha");
-            await Esperar(() => Hechos.OfType<Respuesta>().Any(r => r.ProveedorId == "qwen"), 60);
-            var qwen = Hechos.OfType<Respuesta>().SingleOrDefault(r => r.ProveedorId == "qwen");
-            Anotar(qwen?.Procedencia?.Continuidad == "confirmada", "continuidad confirmada", qwen?.Procedencia?.Continuidad ?? "sin respuesta");
+            await Esperar(() => Hechos.OfType<Respuesta>().Any(r => r.ProveedorId == "perplexity"), 60);
+            var tardia = Hechos.OfType<Respuesta>().SingleOrDefault(r => r.ProveedorId == "perplexity");
+            Anotar(tardia?.Procedencia?.Continuidad == "confirmada", "continuidad confirmada", tardia?.Procedencia?.Continuidad ?? "sin respuesta");
             await Esperar(() => Raiz.Q<Label>("barra-titulo").text == "Operación · 3 de 7");
             Anotar(Raiz.Q<Label>("barra-titulo").text == "Operación · 3 de 7" && Paso == "Pegar la operación en los paneles" && Raiz.Q<Button>("paso-ancha").enabledSelf
                    && Pool.All(id => EstadoEnLaLista(id) == "Por pegar"),
@@ -776,26 +777,33 @@ namespace ChatCouncil.Interfaz
                 Anotar(informes.Count == 2 && informes.Last().Titulo == "Informe recapturado" && Resultado.StartsWith("DeepSeek: integrador recapturado", StringComparison.Ordinal),
                     "recapturar el integrador", $"«{Resultado}»; {informes.Count} informes, el último «{informes.LastOrDefault()?.Titulo}»");
 
-                // Verificación: el prompt cita lo que rescata el último informe.
-                Anotar(Paso == "Pegar el prompt del verificador" && Habilitado && Ronda.PanelDe("glm") == null, "etapa Verificación", $"«{Paso}»");
+                // Verificación (D62: dos verificadores): el mismo prompt, que cita lo que rescata el último informe, en los dos.
+                Anotar(Paso == "Pegar el prompt del verificador" && Habilitado && Ronda.PanelDe("glm") == null && Ronda.PanelDe("qwen") == null, "etapa Verificación", $"«{Paso}»");
                 await Pulsar("paso-ancha");
-                await Esperar(() => Resultado.StartsWith("Prompt pegado", StringComparison.Ordinal) || Resultado.StartsWith("No se", StringComparison.Ordinal), 90);
+                await Esperar(() => Resultado.StartsWith("Prompt pegado", StringComparison.Ordinal) || Resultado.StartsWith("No se", StringComparison.Ordinal), 120);
                 var promptVerificador = Ronda.Puerta.ArmarPromptVerificador();
-                Anotar(Resultado == "Prompt pegado en GLM. Revísalo y envíalo." && await Compositor("glm") == promptVerificador && promptVerificador.Contains("[H2]")
-                       && Ronda.Visible == "glm" && Ronda.EnLaVista.Count == 9,
-                    "pegar el verificador", $"«{Resultado}»; a la vista {Ronda.Visible}, {Ronda.EnLaVista.Count} en el recorrido");
+                Anotar(Resultado == "Prompt pegado en GLM y Qwen. Revísalo y envíalo." && await Compositor("glm") == promptVerificador && await Compositor("qwen") == promptVerificador
+                       && promptVerificador.Contains("[H2]") && Ronda.Visible == "qwen" && Ronda.EnLaVista.Count == 10,
+                    "pegar en los dos verificadores", $"«{Resultado}»; a la vista {Ronda.Visible}, {Ronda.EnLaVista.Count} en el recorrido");
                 await Enviar("glm");
+                await Enviar("qwen");
                 var b = $"http://127.0.0.1:{servidor.Puerto}";
                 // Las del servidor local no se piden (T24): las formas raras de 127.0.0.1 prueban el System.Uri de IL2CPP.
                 await ResponderEnParrafos("glm", "Reviso las fuentes.", $"CONFIRMA|OFICIAL|H1|{b}/ok|\"cita\"", "CONTRADICE|SECUNDARIA|H2|https://x.invalid/p|\"otra\"",
                     $"CONFIRMA|PRIMARIA|H1|{b}/404|\"no está\"", $"CONFIRMA|OFICIAL|H2|http://0x7f.0.0.1:{servidor.Puerto}/hex|\"hex\"",
                     $"CONFIRMA|OFICIAL|H1|http://2130706433:{servidor.Puerto}/entero|\"entero\"");
+                // Con un solo verificador terminado todavía no se captura: los dos van juntos.
+                await Cuadros(10);
+                var esperaAlOtro = !(Paso == "Capturar la verificación" && Habilitado);
+                await ResponderEnParrafos("qwen", "Verifico por mi cuenta.", $"CONFIRMA|OFICIAL|H1|{b}/ok|\"la misma\"");
                 await Esperar(() => Paso == "Capturar la verificación" && Habilitado);
                 await Pulsar("paso-ancha");
                 await Esperar(() => Titulo == "Redacción · 6 de 7", 60);
-                var verificacion = Hechos.OfType<SalidaVerificador>().SingleOrDefault(h => h.RondaId == ronda);
-                Anotar(verificacion?.PromptCompleto == promptVerificador && EstadoEnLaLista("glm") == "Verifica · Capturado",
-                    "capturar la verificación", $"prompt registrado idéntico: {verificacion?.PromptCompleto == promptVerificador}; «{EstadoEnLaLista("glm")}»");
+                var verificaciones = Hechos.OfType<SalidaVerificador>().Where(h => h.RondaId == ronda).ToList();
+                Anotar(esperaAlOtro && verificaciones.Select(v => v.VerificadorId).SequenceEqual(new[] { "glm", "qwen" }) && verificaciones.All(v => v.PromptCompleto == promptVerificador)
+                       && EstadoEnLaLista("glm") == "Verifica · Capturado" && EstadoEnLaLista("qwen") == "Verifica · Capturado",
+                    "capturar las dos verificaciones", $"esperó al segundo: {esperaAlOtro}; [{string.Join(",", verificaciones.Select(v => v.VerificadorId))}]; prompts idénticos: "
+                    + $"{verificaciones.All(v => v.PromptCompleto == promptVerificador)}; «{EstadoEnLaLista("glm")}», «{EstadoEnLaLista("qwen")}»");
 
                 // Redacción: el prompt y el archivo adjunto (historia 56).
                 Anotar(Paso == "Pegar el prompt y el archivo del redactor" && Habilitado, "etapa Redacción", $"«{Paso}»");
@@ -842,7 +850,10 @@ namespace ChatCouncil.Interfaz
                 var mds = Directory.Exists(respuestas) ? Directory.GetFiles(respuestas, "*.md").Length : 0;
                 var pdfs = Directory.Exists(respuestas) ? Directory.GetFiles(respuestas, "*.pdf").Count(f => new FileInfo(f).Length > 1000) : 0;
                 Anotar(mds == 7 && pdfs == 7, "respuestas de los investigadores", $"{mds} .md y {pdfs} PDF");
-                Anotar(abierta == carpeta && Resultado.EndsWith("URLs del verificador: responden 0 de 5.", StringComparison.Ordinal) && !Raiz.Q("resultado-ancha").ClassListContains("problema"),
+                Anotar(md.Contains("## Verificación de fuentes — GLM (") && md.Contains("## Verificación de fuentes — Qwen (")
+                       && md.IndexOf("— GLM (", StringComparison.Ordinal) < md.IndexOf("— Qwen (", StringComparison.Ordinal),
+                    "las dos verificaciones en el informe, con su nombre", $"GLM: {md.Contains("— GLM (")}; Qwen: {md.Contains("— Qwen (")}");
+                Anotar(abierta == carpeta && Resultado.EndsWith("URLs de los verificadores: responden 0 de 6.", StringComparison.Ordinal) && !Raiz.Q("resultado-ancha").ClassListContains("problema"),
                     "la carpeta se abre al terminar", $"abierta «{abierta}»; «{Resultado}»");
                 abierta = null;
                 bool abrirListo = Paso == "Abrir carpeta" && Habilitado;
@@ -866,11 +877,12 @@ namespace ChatCouncil.Interfaz
                 // Ocultar y mostrar los roles (historia 59).
                 await Pulsar("menu-ronda");
                 await Pulsar("item-Ocultar los paneles de los roles");
-                var oculto = Ronda.EnLaVista.SequenceEqual(Pool) && Pool.Contains(Ronda.Visible) && Ronda.PanelDe("glm").RectReal.x < 0 && EstadoEnLaLista("glm") == "Verifica";
+                var oculto = Ronda.EnLaVista.SequenceEqual(Pool) && Pool.Contains(Ronda.Visible) && Ronda.PanelDe("glm").RectReal.x < 0 && Ronda.PanelDe("qwen").RectReal.x < 0
+                             && EstadoEnLaLista("glm") == "Verifica" && EstadoEnLaLista("qwen") == "Verifica";
                 await Pulsar("menu-ronda");
                 await Pulsar("item-Mostrar los paneles de los roles");
-                await Esperar(() => Ronda.EnLaVista.Count == 9);
-                Anotar(oculto && Ronda.EnLaVista.Count == 9 && EstadoEnLaLista("glm") == "Verifica · Capturado", "ocultar y mostrar los roles",
+                await Esperar(() => Ronda.EnLaVista.Count == 10);
+                Anotar(oculto && Ronda.EnLaVista.Count == 10 && EstadoEnLaLista("glm") == "Verifica · Capturado" && EstadoEnLaLista("qwen") == "Verifica · Capturado", "ocultar y mostrar los roles",
                     $"ocultos: {oculto}; mostrados: {Ronda.EnLaVista.Count} en el recorrido");
             }
         }

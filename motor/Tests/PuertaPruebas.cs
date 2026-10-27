@@ -30,7 +30,7 @@ namespace ChatCouncil.Motor.Pruebas
         {
             int n = 0;
             return new Puerta(carpeta, () => $"00000000-0000-4000-8000-{++n:D12}", () => new DateTimeOffset(2026, 10, 6, 9, 0, 0, TimeSpan.FromHours(-3)),
-                Referencias.Conocidos, new RolesElegidos("deepseek", "glm", "deepseek"), Referencias.PoolPuerta);
+                Referencias.Conocidos, new RolesElegidos("deepseek", "glm", "qwen", "deepseek"), Referencias.PoolPuerta);
         }
 
         static (string, string) Confirmada(string _) => ("confirmada", null);
@@ -143,11 +143,14 @@ namespace ChatCouncil.Motor.Pruebas
             var segunda = await puerta.ComprobarUrls(http);
             var pdf = new PdfFalso();
             var informe = await puerta.ArmarInforme(http, pdf);
+            // D62: las de cada verificación, la del verificador 1 (glm) primero; a.org se comprueba en las dos.
             Assert.That(urls.Urls.Select(u => (u.Url, u.Codigo, u.Detalle)), Is.EqualTo(new[]
             {
                 ("https://a.org", (int?)200, (string)null), ("https://x.invalid/p", null, "ENOTFOUND"),
                 ("https://b.org/404", 404, null), ("https://c.org/sin-head", 200, null),
+                ("https://a.org", 200, null), ("https://d.org/otra", 200, null),
             }));
+            Assert.That(redactor.CuerpoArchivo, Does.Contain("Reviso.").And.Not.Contain("Verifico por mi cuenta."), "el redactor recibe solo la verificación del verificador 1");
             Assert.That(urls.Urls, Has.Count.EqualTo(Referencias.UrlsComprobadas));
             Assert.That(segunda.YaComprobadas, Is.EqualTo(Referencias.SegundaComprobacionSinRed));
             Assert.That(http.Pedidos, Is.EqualTo(pedidos), "la segunda comprobación y el informe no salen a la red");

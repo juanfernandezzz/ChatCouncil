@@ -143,7 +143,7 @@
                     <ui:Label text="Ayuda" class="titulo-seccion titulo-repetido semibold" />
                     <ui:VisualElement class="bloque">
                         <ui:Label text="Cómo funciona una ronda" class="titulo-bloque semibold" />
-                        <ui:Label class="envolver separado" text="Haces una pregunta a varios proveedores de IA a la vez, cada uno en su página y con tu cuenta. Después cada proveedor revisa a ciegas lo que respondieron los demás y anota en qué coinciden y en qué no. Un integrador junta esos hallazgos en un informe, un verificador revisa las fuentes en la web y un redactor escribe la respuesta final." />
+                        <ui:Label class="envolver separado" text="Haces una pregunta a varios proveedores de IA a la vez, cada uno en su página y con tu cuenta. Después cada proveedor revisa a ciegas lo que respondieron los demás y anota en qué coinciden y en qué no. Un integrador junta esos hallazgos en un informe, dos verificadores revisan por separado las fuentes en la web y un redactor escribe la respuesta final." />
                         <ui:Label class="envolver separado" text="La app pega, captura y arma el informe. Enviar en cada página lo haces tú: así eliges qué activar en cada proveedor y nada sale sin que lo revises." />
                     </ui:VisualElement>
                     <ui:VisualElement class="bloque">
@@ -152,14 +152,14 @@
                         <ui:Label class="envolver separado" text="2. Investigación: en cada página activas la búsqueda web y envías; cuando terminan, la app captura las respuestas." />
                         <ui:Label class="envolver separado" text="3. Operación: la app abre una conversación nueva en cada página y le pega las respuestas de los demás, sin decir de quién son. Tú envías y la app captura lo que cada uno encontró." />
                         <ui:Label class="envolver separado" text="4. Integración: el integrador recibe la tabla de hallazgos y escribe el informe." />
-                        <ui:Label class="envolver separado" text="5. Verificación: el verificador revisa en la web las fuentes de lo que conviene rescatar." />
+                        <ui:Label class="envolver separado" text="5. Verificación: dos verificadores revisan por separado en la web las fuentes de lo que conviene rescatar; el informe muestra las dos verificaciones para compararlas." />
                         <ui:Label class="envolver separado" text="6. Redacción: el redactor recibe todo el material en un archivo adjunto y escribe la respuesta final." />
-                        <ui:Label class="envolver separado" text="7. Informe: la app comprueba las direcciones web que citó el verificador y arma una carpeta con el informe en Markdown y PDF y las respuestas de cada proveedor." />
+                        <ui:Label class="envolver separado" text="7. Informe: la app comprueba las direcciones web que citaron los verificadores y arma una carpeta con el informe en Markdown y PDF y las respuestas de cada proveedor." />
                     </ui:VisualElement>
                     <ui:VisualElement class="bloque">
                         <ui:Label text="Palabras de la app" class="titulo-bloque semibold" />
                         <ui:Label class="envolver separado" text="Proveedores: los servicios de IA de tu consejo (ChatGPT, Gemini y los demás). Los que no tienen un rol investigan y después evalúan las respuestas de los otros." />
-                        <ui:Label class="envolver separado" text="Roles: integrador, verificador y redactor. Cada uno trabaja en su etapa; el redactor puede ser el mismo integrador." />
+                        <ui:Label class="envolver separado" text="Roles: integrador, dos verificadores y redactor. Cada uno trabaja en su etapa; el redactor puede ser el mismo integrador." />
                     </ui:VisualElement>
                     <ui:VisualElement class="bloque">
                         <ui:Label text="Atajos de teclado" class="titulo-bloque semibold" />

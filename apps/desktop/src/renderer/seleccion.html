@@ -28,16 +28,19 @@ frente y funciona como en uso real.</p>
     <select id="integrador"></select>
     <p class="nota">El integrador no investiga ni opera: lee la tabla de hallazgos y escribe el
 informe. Su panel aparece recién cuando llega su turno.</p>
-    <label for="verificador" class="titulo">Verificador de fuentes</label>
-    <select id="verificador"></select>
-    <p class="nota">El verificador no investiga ni opera con el resto. Después del integrador,
-revisa lo que el integrador marcó, con búsqueda web, y agrega puntos ciegos
-y preguntas derivadas. Su aporte va en una sección aparte, marcada como
-aporte de un solo modelo, no verificado por el consejo.</p>
+    <label for="verificador1" class="titulo">Verificador 1</label>
+    <select id="verificador1"></select>
+    <label for="verificador2" class="titulo">Verificador 2</label>
+    <select id="verificador2"></select>
+    <p class="nota">Los verificadores no investigan ni operan con el resto. Después del integrador,
+cada uno revisa por su lado lo que el integrador marcó, con búsqueda web, y agrega
+puntos ciegos y preguntas derivadas. Cada aporte va en una sección aparte con el
+nombre de su proveedor, marcada como aporte de un solo modelo, no verificado por
+el consejo. El redactor recibe la verificación del verificador 1.</p>
     <label for="redactor" class="titulo">Redactor</label>
     <select id="redactor"></select>
     <p class="nota">El redactor escribe la respuesta a la pregunta con el material de la ronda,
-sin buscar en internet. Va al final, después del verificador. Puede ser el mismo
+sin buscar en internet. Va al final, después de los verificadores. Puede ser el mismo
 que el integrador; si eliges otro proveedor, ese sale del pool de investigadores.</p>
     <div class="acciones">
       <button id="marcar-todos">Marcar todos</button>
@@ -48,14 +51,15 @@ que el integrador; si eliges otro proveedor, ese sale del pool de investigadores
     <script type="module">
       const NOMBRES = {
         chatgpt: "ChatGPT", gemini: "Gemini", claude: "Claude", grok: "Grok", mistral: "Mistral",
-        glm: "GLM", kimi: "Kimi", qwen: "Qwen", deepseek: "DeepSeek",
+        glm: "GLM", kimi: "Kimi", qwen: "Qwen", deepseek: "DeepSeek", perplexity: "Perplexity",
       };
       const cc = window.cc;
       const casillas = document.getElementById("casillas");
       const error = document.getElementById("error");
-      const { conocidos, marcados, integrador, verificador, redactor } = await cc.seleccionLeer();
+      const { conocidos, marcados, integrador, verificador1, verificador2, redactor } = await cc.seleccionLeer();
       const lista = document.getElementById("integrador");
-      const listaVerificador = document.getElementById("verificador");
+      const listaVerificador1 = document.getElementById("verificador1");
+      const listaVerificador2 = document.getElementById("verificador2");
       const listaRedactor = document.getElementById("redactor");
       for (const id of conocidos) {
         const label = document.createElement("label");
@@ -69,16 +73,18 @@ que el integrador; si eliges otro proveedor, ese sale del pool de investigadores
         op.value = id;
         op.textContent = NOMBRES[id] ?? id;
         lista.append(op);
-        listaVerificador.append(op.cloneNode(true));
+        listaVerificador1.append(op.cloneNode(true));
+        listaVerificador2.append(op.cloneNode(true));
         listaRedactor.append(op.cloneNode(true));
       }
       lista.value = integrador;
-      listaVerificador.value = verificador;
+      listaVerificador1.value = verificador1;
+      listaVerificador2.value = verificador2;
       listaRedactor.value = redactor;
       const todas = () => [...casillas.querySelectorAll("input")];
       document.getElementById("marcar-todos").onclick = () => todas().forEach((c) => (c.checked = true));
       document.getElementById("guardar").onclick = async () => {
-        const r = await cc.seleccionGuardar(todas().filter((c) => c.checked).map((c) => c.value), lista.value, listaVerificador.value, listaRedactor.value);
+        const r = await cc.seleccionGuardar(todas().filter((c) => c.checked).map((c) => c.value), lista.value, listaVerificador1.value, listaVerificador2.value, listaRedactor.value);
         error.textContent = r.ok ? "" : r.error;
         if (r.ok) window.close();
       };

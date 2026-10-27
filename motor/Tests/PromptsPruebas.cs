@@ -100,7 +100,7 @@ namespace ChatCouncil.Motor.Pruebas
                 if (!(s["_notaModelo"]?.Type == JTokenType.String && Js.Trim((string)s["_notaModelo"]).Length >= 40)) fallos.Add($"{p.Name}: sin modelLabel ni _notaModelo");
             }
             Assert.That(fallos, Is.Empty);
-            Assert.That(specs.Count, Is.EqualTo(9));
+            Assert.That(specs.Count, Is.EqualTo(10), "D62: perplexity es el décimo");
         }
 
         // spec[campo] == null de JS: ni ausente ni null.
@@ -159,11 +159,13 @@ namespace ChatCouncil.Motor.Pruebas
         [Test]
         public void LosRolesPorDefectoSonLosDeLaVersionElectronYCumplenSusReglas()
         {
-            Assert.That(new[] { Roles.IntegradorPorDefecto, Roles.VerificadorPorDefecto, Roles.RedactorPorDefecto }, Is.EqualTo(Referencias.RolesPorDefecto));
+            Assert.That(new[] { Roles.IntegradorPorDefecto, Roles.Verificador1PorDefecto, Roles.Verificador2PorDefecto, Roles.RedactorPorDefecto },
+                Is.EqualTo(Referencias.RolesPorDefecto));
             var ids = ((JObject)JsonEstricto.Leer(Datos.Specs)["specs"]).Properties().Select(p => p.Name).ToList();
-            Assert.That(ids, Does.Contain(Roles.IntegradorPorDefecto).And.Contain(Roles.VerificadorPorDefecto).And.Contain(Roles.RedactorPorDefecto));
-            Assert.That(Roles.IntegradorPorDefecto, Is.Not.EqualTo(Roles.VerificadorPorDefecto));
-            Assert.That(Roles.RedactorPorDefecto, Is.Not.EqualTo(Roles.VerificadorPorDefecto));
+            Assert.That(ids, Is.EquivalentTo(Roles.Conocidos), "specs.json y los conocidos son los mismos diez");
+            var verificadores = new[] { Roles.Verificador1PorDefecto, Roles.Verificador2PorDefecto };
+            Assert.That(verificadores, Is.Unique);
+            Assert.That(verificadores, Does.Not.Contain(Roles.IntegradorPorDefecto).And.Not.Contain(Roles.RedactorPorDefecto));
             // Si el redactor no fuera el integrador, saldría un proveedor del pool de siete.
             Assert.That(Roles.RedactorPorDefecto, Is.EqualTo(Roles.IntegradorPorDefecto));
         }

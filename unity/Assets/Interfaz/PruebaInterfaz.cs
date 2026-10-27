@@ -34,7 +34,7 @@ namespace ChatCouncil.Interfaz
 
         // El consejo válido de la fase 1: todos menos Mistral, Claude integra y redacta, Grok verifica.
         static readonly string[] Marcados = Roles.Conocidos.Where(id => id != "mistral").ToArray();
-        static readonly string[] OperadoresEsperados = { "chatgpt", "gemini", "glm", "kimi", "qwen", "deepseek" };
+        static readonly string[] OperadoresEsperados = { "chatgpt", "gemini", "glm", "qwen", "deepseek", "perplexity" };
 
         Aplicacion app;
         string salida;
@@ -99,11 +99,12 @@ namespace ChatCouncil.Interfaz
             await Cuadros(3);
         }
 
-        void Poner(IEnumerable<string> marcados, string integrador, string verificador, string redactor)
+        void Poner(IEnumerable<string> marcados, string integrador, string verificador1, string verificador2, string redactor)
         {
             foreach (var id in Roles.Conocidos) Config.Q<Toggle>("marca-" + id).value = marcados.Contains(id);
             Config.Q<DropdownField>("integrador").index = Roles.Conocidos.ToList().IndexOf(integrador);
-            Config.Q<DropdownField>("verificador").index = Roles.Conocidos.ToList().IndexOf(verificador);
+            Config.Q<DropdownField>("verificador1").index = Roles.Conocidos.ToList().IndexOf(verificador1);
+            Config.Q<DropdownField>("verificador2").index = Roles.Conocidos.ToList().IndexOf(verificador2);
             Config.Q<DropdownField>("redactor").index = Roles.Conocidos.ToList().IndexOf(redactor);
         }
 
@@ -142,28 +143,29 @@ namespace ChatCouncil.Interfaz
             await Cuadros(3);
             Anotar(Visible(Config) && !Visible(Raiz.Q("seccion-ayuda")), "F1 en la guía no la deja", $"configuración visible: {Visible(Config)}; ayuda visible: {Visible(Raiz.Q("seccion-ayuda"))}");
 
-            var invalidas = new (string[] Marcados, string I, string V, string R, string Error)[]
+            var invalidas = new (string[] Marcados, string I, string V1, string V2, string R, string Error)[]
             {
-                (new string[0], "deepseek", "glm", "deepseek", Roles.ErrorSeleccionVacia),
-                (new[] { "chatgpt", "glm" }, "glm", "glm", "glm", Roles.ErrorRolesIguales),
-                (new[] { "chatgpt", "glm" }, "deepseek", "glm", "deepseek", Roles.ErrorRolesDesmarcados),
-                (new[] { "chatgpt", "deepseek", "glm" }, "deepseek", "glm", "glm", Roles.ErrorRedactorVerificador),
-                (new[] { "chatgpt", "deepseek", "glm" }, "deepseek", "glm", "kimi", Roles.ErrorRedactorDesmarcado),
+                (new string[0], "deepseek", "glm", "qwen", "deepseek", Roles.ErrorSeleccionVacia),
+                (new[] { "chatgpt", "glm", "qwen" }, "deepseek", "glm", "glm", "deepseek", Roles.ErrorVerificadoresIguales),
+                (new[] { "chatgpt", "glm", "qwen" }, "glm", "glm", "qwen", "glm", Roles.ErrorRolesIguales),
+                (new[] { "chatgpt", "glm", "qwen" }, "deepseek", "glm", "qwen", "deepseek", Roles.ErrorRolesDesmarcados),
+                (new[] { "chatgpt", "deepseek", "glm", "qwen" }, "deepseek", "glm", "qwen", "qwen", Roles.ErrorRedactorVerificador),
+                (new[] { "chatgpt", "deepseek", "glm", "qwen" }, "deepseek", "glm", "qwen", "kimi", Roles.ErrorRedactorDesmarcado),
             };
             foreach (var c in invalidas)
             {
-                Poner(c.Marcados, c.I, c.V, c.R);
+                Poner(c.Marcados, c.I, c.V1, c.V2, c.R);
                 await Pulsar(Config, "guardar");
                 var ok = Mensaje == c.Error && Config.Q("mensaje").ClassListContains("problema") && !File.Exists(Seleccion);
-                Anotar(ok, "combinación inválida", $"[{string.Join(",", c.Marcados)}] {c.I}/{c.V}/{c.R}: \"{Mensaje}\"{(File.Exists(Seleccion) ? " y escribió el archivo" : "")}");
+                Anotar(ok, "combinación inválida", $"[{string.Join(",", c.Marcados)}] {c.I}/{c.V1}/{c.V2}/{c.R}: \"{Mensaje}\"{(File.Exists(Seleccion) ? " y escribió el archivo" : "")}");
             }
 
-            Poner(Marcados, "claude", "grok", "claude");
+            Poner(Marcados, "claude", "grok", "kimi", "claude");
             await Pulsar(Config, "guardar");
             var contenido = File.Exists(Seleccion) ? File.ReadAllText(Seleccion, Encoding.UTF8) : null;
             var leidos = Roles.LeerSeleccion(contenido, Roles.Conocidos);
             var roles = Roles.Leer(contenido, Roles.Conocidos);
-            Anotar(leidos != null && leidos.SequenceEqual(Marcados) && roles.Integrador == "claude" && roles.Verificador == "grok" && roles.Redactor == "claude" && Mensaje == "Guardado.",
+            Anotar(leidos != null && leidos.SequenceEqual(Marcados) && roles.Integrador == "claude" && roles.Verificador1 == "grok" && roles.Verificador2 == "kimi" && roles.Redactor == "claude" && Mensaje == "Guardado.",
                 "combinación válida", $"\"{Mensaje}\"; archivo: {(contenido == null ? "no existe" : contenido.Replace("\n", " "))}");
             Anotar(Visible(Config.Q("bloque-cuentas")) && !Visible(Config.Q("bloque-consejo")), "paso 2", Config.Q<Label>("paso-guia").text);
 
@@ -216,9 +218,11 @@ namespace ChatCouncil.Interfaz
             await Pulsar(Raiz, "ir-ajustes");
             var marcas = Roles.Conocidos.Where(id => Config.Q<Toggle>("marca-" + id).value).ToList();
             var i = Config.Q<DropdownField>("integrador").value;
-            var v = Config.Q<DropdownField>("verificador").value;
+            var v1 = Config.Q<DropdownField>("verificador1").value;
+            var v2 = Config.Q<DropdownField>("verificador2").value;
             var r = Config.Q<DropdownField>("redactor").value;
-            Anotar(Visible(Config) && marcas.SequenceEqual(Marcados) && i == "Claude" && v == "Grok" && r == "Claude", "ajustes con lo guardado", $"[{string.Join(",", marcas)}] {i}/{v}/{r}");
+            Anotar(Visible(Config) && marcas.SequenceEqual(Marcados) && i == "Claude" && v1 == "Grok" && v2 == "Kimi" && r == "Claude", "ajustes con lo guardado",
+                $"[{string.Join(",", marcas)}] {i}/{v1}/{v2}/{r}");
             Anotar(Visible(Config.Q("bloque-datos")) && Config.Q<TextField>("ruta-datos").value == app.CarpetaDatos, "carpeta de datos", Config.Q<TextField>("ruta-datos").value);
 
             Config.Q<Toggle>("marca-qwen").value = false;

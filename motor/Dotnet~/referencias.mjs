@@ -132,6 +132,8 @@ const FUGAS = [
   `http${c(0x17f)}://claude.ai/ y httpS://grok.com y http://https://gemini.google.com`,
   // Ronda real del 2026-10-23: docs y blog de un proveedor son fuentes; su interfaz no.
   "https://learn.chatgpt.com/guides/best-practices, https://platform.kimi.ai/docs/x https://www.kimi.ai/blog/ https://KIMI.AI/Blog#a https://www.kimi.ai/blogs https://www.kimi.ai/chat/d1 https://www.chatgpt.com/c/1",
+  // D62: perplexity es el décimo proveedor.
+  "https://www.perplexity.ai/search/abc https://perplexity.ai/ https://docs.perplexity.ai/guia https://x.org/?src=perplexity",
 ].map((t) => [t, analisis.fugasDeProveedorEnUrls(t)]);
 const ARMADOS = [
   ["texto de respuesta sin nada raro", ["https://arxiv.org/abs/2212.10001"]],
@@ -233,7 +235,7 @@ const PROMPTS = PREGUNTAS.map((p) => {
 });
 const MATERIAL = { informe: "INFORME {{PREGUNTA}}", verificacion: "CONFIRMA|OFICIAL|H1|https://a.org|\"c\"", tabla: analisis.tablaDe(H_INTEGRADOR), respuestas: ETIQUETADAS };
 const ARCHIVOS_REDACTOR = [MATERIAL, { ...MATERIAL, verificacion: null }].map((m) => [JSON.stringify(m), analisis.armarArchivoRedactor(m)]);
-const ROLES = [seleccion.INTEGRADOR_POR_DEFECTO, seleccion.VERIFICADOR_POR_DEFECTO, seleccion.REDACTOR_POR_DEFECTO];
+const ROLES = [seleccion.INTEGRADOR_POR_DEFECTO, seleccion.VERIFICADOR_1_POR_DEFECTO, seleccion.VERIFICADOR_2_POR_DEFECTO, seleccion.REDACTOR_POR_DEFECTO];
 
 // ---------------------------------------------------------------- parseos y texto desde html
 // Bordes de las expresiones de JS sin /u: \s, ".", $, \b, /i sin pliegue fuera de ASCII,
@@ -418,14 +420,15 @@ try {
   errorEtiquetas = e.message;
 }
 
-const LECTURAS_ETAPA = ["chatgpt", "gemini", "deepseek", "glm", "kimi"].map((id) => ({ id }));
+const LECTURAS_ETAPA = ["chatgpt", "gemini", "deepseek", "glm", "kimi", "qwen"].map((id) => ({ id }));
 const CLASIFICACIONES = ["investigacion", "operacion", "integracion", "verificacion", "redaccion"].map((etapa) => {
-  const r = integrador.clasificarLecturasPorEtapa(LECTURAS_ETAPA, etapa, POOL.slice(0, 7), "deepseek", "glm", "kimi");
+  // D62: dos verificadores; "grok" no vino en el lote.
+  const r = integrador.clasificarLecturasPorEtapa(LECTURAS_ETAPA, etapa, POOL.slice(0, 7), "deepseek", ["qwen", "grok", "glm"], "kimi");
   const id = (l) => l?.id ?? null;
-  return [etapa, r.lecturasOperacion.map(id), id(r.lecturaIntegrador), id(r.lecturaVerificador), id(r.lecturaRedactor), r.lecturasComoRespuesta.map(id)];
+  return [etapa, r.lecturasOperacion.map(id), id(r.lecturaIntegrador), r.lecturasVerificador.map(id), id(r.lecturaRedactor), r.lecturasComoRespuesta.map(id)];
 });
 
-const CONOCIDOS = ["chatgpt", "gemini", "claude", "grok", "mistral", "glm", "kimi", "qwen", "deepseek"];
+const CONOCIDOS = ["chatgpt", "gemini", "claude", "grok", "mistral", "glm", "kimi", "qwen", "deepseek", "perplexity"];
 const dirRoles = mkdtempSync(join(tmpdir(), "cc-roles-"));
 const leerCon = (contenido, f) => {
   const ruta = join(dirRoles, seleccion.ARCHIVO_SELECCION);
@@ -444,6 +447,15 @@ const ARCHIVOS_SELECCION = [
   JSON.stringify({ proveedores: ["inventado"], integrador: "inventado", verificador: 3, redactor: "glm" }),
   JSON.stringify({ integrador: "claude", verificador: "grok", redactor: "grok" }),
   JSON.stringify({ integrador: "deepseek", verificador: "glm", redactor: "deepseek" }),
+  // D62: dos verificadores; "verificador" (archivo anterior) es el 1 si no hay "verificador1".
+  JSON.stringify({ integrador: "deepseek", verificador1: "glm", verificador2: "qwen", redactor: "deepseek" }),
+  JSON.stringify({ integrador: "claude", verificador: "kimi", verificador1: "grok", verificador2: "perplexity", redactor: "mistral" }),
+  JSON.stringify({ integrador: "claude", verificador: "kimi", verificador2: "grok" }),
+  JSON.stringify({ integrador: "claude", verificador1: "grok", verificador2: "grok" }),
+  JSON.stringify({ integrador: "qwen", verificador1: "glm" }),
+  JSON.stringify({ integrador: "claude", verificador1: "grok", verificador2: "kimi", redactor: "kimi" }),
+  JSON.stringify({ integrador: "claude", verificador1: "grok", verificador2: "inventado", redactor: "grok" }),
+  JSON.stringify({ integrador: "claude", verificador1: null, verificador2: "qwen" }),
 ];
 const SELECCIONES = ARCHIVOS_SELECCION.map((contenido) => [
   contenido,
@@ -451,18 +463,23 @@ const SELECCIONES = ARCHIVOS_SELECCION.map((contenido) => [
   JSON.stringify(leerCon(contenido, (d) => seleccion.leerRoles(d, CONOCIDOS))),
 ]);
 const GUARDADOS = [
-  [[], "deepseek", "glm", "deepseek"],
-  [["chatgpt", "glm"], "glm", "glm", "glm"],
-  [["chatgpt", "glm"], "deepseek", "glm", "deepseek"],
-  [["chatgpt", "deepseek", "glm"], "deepseek", "glm", "glm"],
-  [["chatgpt", "deepseek", "glm"], "deepseek", "glm", "kimi"],
-  [["chatgpt", "deepseek", "glm", "kimi"], "deepseek", "glm", "kimi"],
-  [["chatgpt", "deepseek", "glm", "inventado"], "deepseek", "glm", "deepseek"],
-].map(([marcados, i, v, r]) => [marcados, i, v, r, JSON.stringify(seleccion.guardarSeleccion(dirRoles, CONOCIDOS, marcados, i, v, r))]);
+  [[], "deepseek", "glm", "qwen", "deepseek"],
+  [["chatgpt", "glm", "qwen"], "deepseek", "glm", "glm", "deepseek"],
+  [["chatgpt", "glm", "qwen"], "glm", "glm", "glm", "glm"],
+  [["chatgpt", "glm", "qwen"], "glm", "glm", "qwen", "glm"],
+  [["chatgpt", "glm", "qwen"], "qwen", "glm", "qwen", "qwen"],
+  [["chatgpt", "glm", "qwen"], "deepseek", "glm", "qwen", "deepseek"],
+  [["chatgpt", "deepseek", "glm"], "deepseek", "glm", "qwen", "deepseek"],
+  [["chatgpt", "deepseek", "glm", "qwen"], "deepseek", "glm", "qwen", "glm"],
+  [["chatgpt", "deepseek", "glm", "qwen"], "deepseek", "glm", "qwen", "qwen"],
+  [["chatgpt", "deepseek", "glm", "qwen"], "deepseek", "glm", "qwen", "kimi"],
+  [["chatgpt", "deepseek", "glm", "kimi", "qwen"], "deepseek", "glm", "qwen", "kimi"],
+  [["chatgpt", "deepseek", "glm", "qwen", "inventado"], "deepseek", "glm", "qwen", "deepseek"],
+].map(([marcados, i, v1, v2, r]) => [marcados, i, v1, v2, r, JSON.stringify(seleccion.guardarSeleccion(dirRoles, CONOCIDOS, marcados, i, v1, v2, r))]);
 rmSync(dirRoles, { recursive: true, force: true });
 const POOLES = [
-  { integrador: "deepseek", verificador: "glm", redactor: "deepseek" },
-  { integrador: "claude", verificador: "grok", redactor: "mistral" },
+  { integrador: "deepseek", verificador1: "glm", verificador2: "qwen", redactor: "deepseek" },
+  { integrador: "claude", verificador1: "grok", verificador2: "kimi", redactor: "mistral" },
 ].map((roles) => [JSON.stringify(roles), seleccion.poolDeInvestigadores(CONOCIDOS, roles)]);
 
 // ---------------------------------------------------------------- informe final y redactor
@@ -483,6 +500,7 @@ const BASE_INFORME = {
   semilla: "s",
 };
 const VERIFICACION_INFORME = {
+  verificadorId: "glm",
   avisoSinComprobar: "Se comprobo 1 de las 3 URL distintas de esta seccion.",
   items: [
     { correspondencia: "CONFIRMA", tiposFuente: ["OFICIAL", "PRIMARIA"], tiposNoReconocidos: [], formatoAnterior: false, hallazgoId: "H1", descripcion: "d1", url: "https://a.org", comprobacion: "responde 200", texto: "cita" },
@@ -531,9 +549,20 @@ const ENTRADAS_INFORME = [
     ],
     proveedoresCargadosIncompletos: ["chatgpt", "glm"],
     integrador: "deepseek",
-    verificacion: VERIFICACION_INFORME,
+    verificaciones: [VERIFICACION_INFORME],
   },
-  { ...BASE_INFORME, informeIntegradorCrudo: "TITULO: t\nTexto [H1].", referenciasEnOrden: [{ codigo: "H1", existe: true }], hallazgos: HALLAZGOS_INFORME, verificacion: { avisoSinComprobar: null, items: [], puntosCiegos: [], preguntas: [] } },
+  // D62: dos verificadores, cada uno en sus secciones con el nombre del proveedor, el 1 primero.
+  {
+    ...BASE_INFORME,
+    informeIntegradorCrudo: "TITULO: t\nTexto [H1].",
+    referenciasEnOrden: [{ codigo: "H1", existe: true }],
+    hallazgos: HALLAZGOS_INFORME,
+    verificaciones: [
+      VERIFICACION_INFORME,
+      { verificadorId: "qwen", avisoSinComprobar: null, items: [VERIFICACION_INFORME.items[2]], puntosCiegos: [], preguntas: ["¿y en adultos?"] },
+    ],
+  },
+  { ...BASE_INFORME, informeIntegradorCrudo: "TITULO: t\nTexto [H1].", referenciasEnOrden: [{ codigo: "H1", existe: true }], hallazgos: HALLAZGOS_INFORME, verificaciones: [{ verificadorId: "glm", avisoSinComprobar: null, items: [], puntosCiegos: [], preguntas: [] }] },
 ];
 const INFORMES_FINALES = ENTRADAS_INFORME.map((e) => [JSON.stringify(e), analisis.armarInformeFinal(e)]);
 
@@ -603,12 +632,12 @@ const LECTURAS_9 = [
   { id: "mistral", text: largo(1200, 2), userText: null, generating: false, html: null },
   { id: "glm", text: largo(800, 3), userText: "Otra pregunta distinta", generating: false, modelLabel: "GLM-4.6", html: "<p>sin enlaces</p>" },
   { id: "kimi", text: largo(700, 4), generating: null, completionKind: "quiescence", quiescenceMs: 20000, html: null },
-  { id: "qwen", text: largo(300, 5), userText: "¿Pregunta de prueba?", generating: false, html: null },
+  { id: "perplexity", text: largo(300, 5), userText: "¿Pregunta de prueba?", generating: false, html: null },
   { id: "deepseek", text: largo(299, 6), userText: "¿Pregunta de prueba?", generating: false, fuentesHref: 0, html: null },
 ];
 const CONTEXTO_9 = Object.fromEntries(LECTURAS_9.map((l, i) => [l.id, { continuidad: ["confirmada", "indeterminada", "refutada"][i % 3], panel: i % 2 === 0 ? "800x600" : null }]));
 const INTENTOS_9 = LECTURAS_9.map((l, i) => (i === 3 ? { id: l.id, ok: false, error: "compositor no encontrado" } : { id: l.id, ok: true }));
-const POOL_PUERTA = ["chatgpt", "gemini", "claude", "grok", "mistral", "kimi", "qwen"];
+const POOL_PUERTA = ["chatgpt", "gemini", "claude", "grok", "mistral", "kimi", "perplexity"];
 const CORRIDA = (() => {
   const idAntes = siguienteId; // los ids de la corrida empiezan en 1; el resto del archivo no cambia
   siguienteId = 0;
@@ -640,7 +669,7 @@ const CORRIDA = (() => {
 // ---------------------------------------------------------------- puerta: operación y roles (T10)
 // Una ronda entera: investigación, la operación de cada panel (kimi por archivo),
 // las salidas en dos lotes, el integrador con una recaptura (dos hechos, gana el
-// último), el verificador, el redactor, y una ronda nueva con las respuestas
+// último), los dos verificadores (D62), el redactor, y una ronda nueva con las respuestas
 // copiadas donde kimi se reutiliza y chatgpt se rechaza. Funciones reales de
 // operador.ts, integrador.ts y registro.ts; el pegamento de index.ts se
 // reconstruye con sus mismas reglas y en el mismo orden.
@@ -648,7 +677,8 @@ const operador = await importar("apps/desktop/src/main/operador.ts");
 const NO_DISPONIBLE = "(prompt no disponible: no se registró en este proceso — probablemente se reinició la app entre el envío y la captura)";
 const PREGUNTA_OP = "¿Qué dice la evidencia sobre la dosis?";
 const AHORA_LOCAL = new Date(2026, 9, 6, 9, 0);
-const ROLES_OP = { integrador: "deepseek", verificador: "glm", redactor: "deepseek" };
+const ROLES_OP = { integrador: "deepseek", verificador1: "glm", verificador2: "qwen", redactor: "deepseek" };
+const VERIFICADORES_OP = seleccion.verificadoresDe(ROLES_OP);
 const salidaDe = (i) => ["Razonamiento previo.", "CONVERGENCIA|HECHOS|P1,P2|coinciden en la fecha", `DIVERGENCIA|FUENTES|P3,P9|citan distinto ${i}`, "LIMITACION:TAREA|—|nada"].join("\n");
 const LOTES = {
   investigacion: [...POOL_PUERTA, "deepseek"].map((id, i) => ({ id, text: largo(1500 + 100 * i, i), userText: PREGUNTA_OP, generating: false,
@@ -668,6 +698,12 @@ const LOTES = {
     'CONFIRMA|OFICIAL|H1|https://c.org/sin-head|"head rechazado"',
     'CONFIRMA|OFICIAL|H1|https://a.org|"repetida"',
     "NO_ENCONTRADA|—|H2|nada",
+  ].join("\n") }, { id: "qwen", generating: false, html: null, text: [
+    "Verifico por mi cuenta.",
+    'CONFIRMA|OFICIAL|H1|https://a.org|"la misma"',
+    'CONTRADICE|PRIMARIA|H3|https://d.org/otra|"otra lectura"',
+    "PUNTO_CIEGO|falta la norma local|https://p.org|OFICIAL",
+    "PREGUNTA|¿y en adultos?",
   ].join("\n") }],
   kimiNueva: [{ id: "kimi", text: largo(2500, 7) + " (archivos corregidos)", userText: PREGUNTA_OP, generating: false, html: null }],
 };
@@ -699,7 +735,7 @@ const CORRIDA_OP = await (async () => {
     const hechos = leer();
     const etapa = dominio.etapaDeRonda(hechos, ronda, POOL.length);
     const sello = hechos.filter((h) => h.tipo === "sello" && h.rondaId === ronda);
-    const c = integrador.clasificarLecturasPorEtapa(lecturas, etapa, POOL, ROLES_OP.integrador, ROLES_OP.verificador, ROLES_OP.redactor);
+    const c = integrador.clasificarLecturasPorEtapa(lecturas, etapa, POOL, ROLES_OP.integrador, VERIFICADORES_OP, ROLES_OP.redactor);
     if (c.lecturasComoRespuesta.length > 0) registro.escribirRespuestas(d, conv, ronda, c.lecturasComoRespuesta, () => ({ continuidad: "confirmada", panel: null }));
     if (etapa === "investigacion") {
       for (const l of c.lecturasComoRespuesta) if (!l.error && l.text.length < 300) error(etapa, "respuesta", "respuesta sospechosamente corta: puede haber quedado fuera de la captura", l.id);
@@ -719,7 +755,9 @@ const CORRIDA_OP = await (async () => {
       else escribir(lectura);
     };
     if (etapa === "integracion") rol(c.lecturaIntegrador, "informe-integrador", ROLES_OP.integrador, (l) => registro.escribirInformeIntegrador(d, conv, ronda, l.id, memoria.integrador ?? NO_DISPONIBLE, l.text, l.html ?? null));
-    if (etapa === "verificacion") rol(c.lecturaVerificador, "salida-verificador", ROLES_OP.verificador, (l) => registro.escribirSalidaVerificador(d, conv, ronda, l.id, memoria.verificador ?? NO_DISPONIBLE, l.text, l.html ?? null));
+    if (etapa === "verificacion") {
+      VERIFICADORES_OP.forEach((id, i) => rol(c.lecturasVerificador[i], "salida-verificador", id, (l) => registro.escribirSalidaVerificador(d, conv, ronda, l.id, memoria.verificador ?? NO_DISPONIBLE, l.text, l.html ?? null)));
+    }
     if (etapa === "redaccion") rol(c.lecturaRedactor, "respuesta-redactor", ROLES_OP.redactor, (l) => {
       const previo = integrador.ultimaRedaccion(hechos, ronda);
       const marcas = memoria.marcasRedactor ?? (previo?.marcaPrimera && previo.marcaUltima ? { primera: previo.marcaPrimera, ultima: previo.marcaUltima } : null);
@@ -774,7 +812,7 @@ const CORRIDA_OP = await (async () => {
   {
     const t = tablaRonda();
     const inf = integrador.ultimoDeRol(t.hechos, ronda, "integrador");
-    const ver = integrador.ultimoDeRol(t.hechos, ronda, "verificador");
+    const ver = integrador.verificacionesVigentes(t.hechos, ronda, VERIFICADORES_OP)[0] ?? null;
     const p = prepararRonda();
     const respuestas = operador.armarCuerposDeRonda(p.r, p.respuestas, p.citas, POOL).respuestasTodas;
     const material = { informe: analisis.textoDelInformeIntegrador(inf), verificacion: ver === null ? null : analisis.textoDeLaSalidaVerificador(ver), tabla: analisis.tablaDe(t.tabla.paraPrompt), respuestas };
@@ -786,9 +824,19 @@ const CORRIDA_OP = await (async () => {
   const lecturaRedactor = { id: "deepseek", text: `ARCHIVO: primera marca = ${memoria.marcasRedactor.primera}, ultima marca = ${memoria.marcasRedactor.ultima}\n\nRespuesta [H1].`, generating: false, html: null };
   capturar([lecturaRedactor]);
 
-  // T11: las URLs de la verificación (una sola vez por verificación) y el informe de la ronda.
-  const comprobacion = await comprobar.comprobarUrlsDeRonda(d, conv, ronda, fetchFalso);
-  const segunda = await comprobar.comprobarUrlsDeRonda(d, conv, ronda, () => {
+  // T11: las URLs de cada verificación (una sola vez por verificación, D62: el
+  // verificador 1 primero) y el informe de la ronda.
+  const comprobarTodas = async (pedir) => {
+    const res = { urls: [], yaComprobadas: true };
+    for (const s of integrador.verificacionesVigentes(leer(), ronda, VERIFICADORES_OP)) {
+      const c = await comprobar.comprobarUrlsDeRonda(d, conv, ronda, pedir, s.verificadorId);
+      res.urls.push(...c.urls);
+      res.yaComprobadas &&= c.yaComprobadas;
+    }
+    return res;
+  };
+  const comprobacion = await comprobarTodas(fetchFalso);
+  const segunda = await comprobarTodas(() => {
     throw new Error("la segunda comprobacion no tenia que salir a la red");
   });
   let informe;
@@ -822,7 +870,7 @@ const CORRIDA_OP = await (async () => {
       pregunta, fecha: FECHA, conversacionId: conv, rondaId: r.id, informeIntegrador, tabla, sello, respuestasDelPool, citas, resultadosOperadores,
       integridadEntrega: "no persistida en el registro (se informa en pantalla al pegar cada panel)",
       semilla, proveedoresCargados: dominio.proveedoresCargadosDeRonda(hechos, r.id), pool: POOL, integrador: dominio.integradorDeRonda(hechos, r.id),
-      salidaVerificador: integrador.ultimoDeRol(hechos, r.id, "verificador"), urlsComprobadas: comprobacion.ok ? comprobacion.urls : [],
+      salidasVerificador: integrador.verificacionesVigentes(hechos, r.id, VERIFICADORES_OP), urlsComprobadas: comprobacion.urls,
       respuestaRedactor: integrador.ultimaRedaccion(hechos, r.id),
     });
     const titulo = informeIntegrador === null ? null
@@ -1150,9 +1198,9 @@ namespace ChatCouncil.Motor.Pruebas
         };
         public static readonly string ErrorEtiquetas = ${cs(errorEtiquetas)};
 
-        /// <summary>clasificarLecturasPorEtapa(chatgpt, gemini, deepseek, glm, kimi; pool de 7; integrador deepseek, verificador glm, redactor kimi).</summary>
-        public static readonly (string etapa, string[] operacion, string integrador, string verificador, string redactor, string[] comoRespuesta)[] Clasificaciones = {
-            ${CLASIFICACIONES.map(([e, o, i, v, r, cr]) => `(${cs(e)}, ${strs(o)}, ${cs(i)}, ${cs(v)}, ${cs(r)}, ${strs(cr)})`).join(",\n            ")}
+        /// <summary>clasificarLecturasPorEtapa(chatgpt, gemini, deepseek, glm, kimi, qwen; pool de 7; integrador deepseek, verificadores qwen, grok y glm, redactor kimi).</summary>
+        public static readonly (string etapa, string[] operacion, string integrador, string[] verificadores, string redactor, string[] comoRespuesta)[] Clasificaciones = {
+            ${CLASIFICACIONES.map(([e, o, i, v, r, cr]) => `(${cs(e)}, ${strs(o)}, ${cs(i)}, ${strs(v)}, ${cs(r)}, ${strs(cr)})`).join(",\n            ")}
         };
 
         public static readonly string[] Conocidos = ${strs(CONOCIDOS)};
@@ -1162,9 +1210,9 @@ namespace ChatCouncil.Motor.Pruebas
             ${SELECCIONES.map(([c, s, r]) => `(${cs(c)}, ${cs(s)}, ${cs(r)})`).join(",\n            ")}
         };
 
-        /// <summary>guardarSeleccion(Conocidos, marcados, integrador, verificador, redactor) como JSON.</summary>
-        public static readonly (string[] marcados, string integrador, string verificador, string redactor, string esperado)[] Guardados = {
-            ${GUARDADOS.map(([m, i, v, r, e]) => `(${strs(m)}, ${cs(i)}, ${cs(v)}, ${cs(r)}, ${cs(e)})`).join(",\n            ")}
+        /// <summary>guardarSeleccion(Conocidos, marcados, integrador, verificador1, verificador2, redactor) como JSON.</summary>
+        public static readonly (string[] marcados, string integrador, string verificador1, string verificador2, string redactor, string esperado)[] Guardados = {
+            ${GUARDADOS.map(([m, i, v1, v2, r, e]) => `(${strs(m)}, ${cs(i)}, ${cs(v1)}, ${cs(v2)}, ${cs(r)}, ${cs(e)})`).join(",\n            ")}
         };
 
         public static readonly (string roles, string[] pool)[] Pooles = {

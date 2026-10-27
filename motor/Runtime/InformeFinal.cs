@@ -59,6 +59,8 @@ namespace ChatCouncil.Motor
 
     public sealed class VerificacionParaInforme
     {
+        /// <summary>El proveedor que verificó: su nombre va en los encabezados cuando hay dos (D62).</summary>
+        public string VerificadorId { get; set; }
         public string AvisoSinComprobar { get; set; }
         public List<ItemVerificacion> Items { get; set; }
         public List<PuntoCiego> PuntosCiegos { get; set; }
@@ -80,7 +82,8 @@ namespace ChatCouncil.Motor
         public string Semilla { get; set; }
         public List<string> ProveedoresCargadosIncompletos { get; set; }
         public string Integrador { get; set; }
-        public VerificacionParaInforme Verificacion { get; set; }
+        /// <summary>Una por verificador, el 1 primero; vacía o null = no hubo verificación.</summary>
+        public List<VerificacionParaInforme> Verificaciones { get; set; }
         public RedaccionParaInforme Redaccion { get; set; }
     }
 
@@ -170,7 +173,8 @@ namespace ChatCouncil.Motor
             return partes.Count > 0 ? string.Join("; ", partes) : sinFuente;
         }
 
-        static List<string> SeccionesVerificacion(VerificacionParaInforme v)
+        /// <summary>nombre null = un solo verificador: los encabezados de siempre (D62).</summary>
+        static List<string> SeccionesVerificacion(VerificacionParaInforme v, string nombre)
         {
             var items = v.Items.Select(i =>
             {
@@ -191,13 +195,17 @@ namespace ChatCouncil.Motor
                     : $"- Punto ciego: {p.Descripcion} — Fuente: {p.Url} ({TiposLegibles(p.TiposFuente, p.TiposNoReconocidos, "tipo no declarado")})")
                 .Concat(v.Preguntas.Select(q => $"- Pregunta derivada: {q}"))
                 .ToList();
-            var r = new List<string> { EncabezadoVerificacion, "" };
+            var r = new List<string>
+            {
+                nombre == null ? EncabezadoVerificacion : $"## Verificación de fuentes — {nombre} (aporte de un modelo con búsqueda, no verificado por el consejo)",
+                "",
+            };
             if (!string.IsNullOrEmpty(v.AvisoSinComprobar)) r.AddRange(new[] { v.AvisoSinComprobar, "" });
             r.AddRange(new[]
             {
                 items.Count > 0 ? string.Join("\n\n", items) : "El verificador no registro lineas de correspondencia con la fuente.",
                 "",
-                EncabezadoPuntosCiegos,
+                nombre == null ? EncabezadoPuntosCiegos : $"## Puntos ciegos y preguntas derivadas — {nombre} (aporte del verificador)",
                 "",
                 aportes.Count > 0 ? string.Join("\n", aportes) : "El verificador no registro puntos ciegos ni preguntas derivadas.",
                 "",
@@ -257,7 +265,9 @@ namespace ChatCouncil.Motor
                 partes.AddRange(new[] { "", MarcarReferencias(input.Redaccion.Cuerpo, existentes), "" });
             }
             if (rescate != null) partes.AddRange(new[] { TituloInforme.EncabezadoRescate, "", rescate, "" });
-            if (input.Verificacion != null) partes.AddRange(SeccionesVerificacion(input.Verificacion));
+            var verificaciones = input.Verificaciones ?? new List<VerificacionParaInforme>();
+            foreach (var v in verificaciones)
+                partes.AddRange(SeccionesVerificacion(v, verificaciones.Count > 1 ? Dominio.NombreProveedor(v.VerificadorId) : null));
             partes.AddRange(new[]
             {
                 $"**Pregunta:** {input.Pregunta}",
@@ -353,6 +363,7 @@ namespace ChatCouncil.Motor
 
             return new VerificacionParaInforme
             {
+                VerificadorId = salida.VerificadorId,
                 AvisoSinComprobar = aviso,
                 Items = p.Correspondencias.Select(v =>
                 {

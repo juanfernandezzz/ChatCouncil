@@ -84,13 +84,13 @@ namespace ChatCouncil.Motor.Pruebas
         [Test]
         public void LasLecturasSeClasificanPorEtapa()
         {
-            var lecturas = new[] { "chatgpt", "gemini", "deepseek", "glm", "kimi" };
-            foreach (var (etapa, operacion, integrador, verificador, redactor, comoRespuesta) in Referencias.Clasificaciones)
+            var lecturas = new[] { "chatgpt", "gemini", "deepseek", "glm", "kimi", "qwen" };
+            foreach (var (etapa, operacion, integrador, verificadores, redactor, comoRespuesta) in Referencias.Clasificaciones)
             {
-                var c = Dominio.ClasificarLecturasPorEtapa(lecturas, x => x, etapa, Pool7, "deepseek", "glm", "kimi");
+                var c = Dominio.ClasificarLecturasPorEtapa(lecturas, x => x, etapa, Pool7, "deepseek", new[] { "qwen", "grok", "glm" }, "kimi");
                 Assert.That(c.Operacion, Is.EqualTo(operacion), etapa);
                 Assert.That(c.Integrador, Is.EqualTo(integrador), etapa);
-                Assert.That(c.Verificador, Is.EqualTo(verificador), etapa);
+                Assert.That(c.Verificadores, Is.EqualTo(verificadores), etapa);
                 Assert.That(c.Redactor, Is.EqualTo(redactor), etapa);
                 Assert.That(c.ComoRespuesta, Is.EqualTo(comoRespuesta), etapa);
             }
@@ -103,22 +103,23 @@ namespace ChatCouncil.Motor.Pruebas
             {
                 Assert.That(Registro.AJson(Roles.LeerSeleccion(contenido, Referencias.Conocidos)), Is.EqualTo(seleccion), contenido);
                 var r = Roles.Leer(contenido, Referencias.Conocidos);
-                Assert.That(Registro.AJson(new { integrador = r.Integrador, verificador = r.Verificador, redactor = r.Redactor }), Is.EqualTo(roles), contenido);
+                Assert.That(Registro.AJson(new { integrador = r.Integrador, verificador1 = r.Verificador1, verificador2 = r.Verificador2, redactor = r.Redactor }), Is.EqualTo(roles), contenido);
             }
         }
 
-        // Los casos del BLUEPRINT: selección vacía, roles iguales o desmarcados, redactor = verificador rechazado.
+        // Los casos del BLUEPRINT: selección vacía, roles iguales o desmarcados, redactor = verificador rechazado;
+        // D62: los dos verificadores iguales, o uno igual al integrador o al redactor.
         [Test]
         public void LaSeleccionSeValidaComoEnTypeScript()
         {
-            foreach (var (marcados, integrador, verificador, redactor, esperado) in Referencias.Guardados)
+            foreach (var (marcados, integrador, verificador1, verificador2, redactor, esperado) in Referencias.Guardados)
             {
-                var error = Roles.ValidarSeleccion(Referencias.Conocidos, marcados, integrador, verificador, redactor);
+                var error = Roles.ValidarSeleccion(Referencias.Conocidos, marcados, integrador, verificador1, verificador2, redactor);
                 Assert.That(Registro.AJson(error == null ? (object)new { ok = true } : new { ok = false, error }), Is.EqualTo(esperado));
             }
         }
 
-        // INVESTIGADORES de index.ts: el orden en que la configuración muestra a los nueve.
+        // INVESTIGADORES de index.ts: el orden en que la configuración muestra a los diez.
         [Test]
         public void LosConocidosSonLosDeTypeScript() => Assert.That(Roles.Conocidos, Is.EqualTo(Referencias.Conocidos));
 
@@ -126,10 +127,10 @@ namespace ChatCouncil.Motor.Pruebas
         [Test]
         public void LaSeleccionGuardadaSeLeeIgualAlReabrir()
         {
-            foreach (var (marcados, integrador, verificador, redactor, _) in Referencias.Guardados)
+            foreach (var (marcados, integrador, verificador1, verificador2, redactor, _) in Referencias.Guardados)
             {
-                var (error, contenido) = Roles.Guardar(Referencias.Conocidos, marcados, integrador, verificador, redactor, "2026-10-10T12:00:00.000Z");
-                Assert.That(error, Is.EqualTo(Roles.ValidarSeleccion(Referencias.Conocidos, marcados, integrador, verificador, redactor)));
+                var (error, contenido) = Roles.Guardar(Referencias.Conocidos, marcados, integrador, verificador1, verificador2, redactor, "2026-10-10T12:00:00.000Z");
+                Assert.That(error, Is.EqualTo(Roles.ValidarSeleccion(Referencias.Conocidos, marcados, integrador, verificador1, verificador2, redactor)));
                 if (error != null)
                 {
                     Assert.That(contenido, Is.Null, error);
@@ -137,7 +138,7 @@ namespace ChatCouncil.Motor.Pruebas
                 }
                 Assert.That(Roles.LeerSeleccion(contenido, Referencias.Conocidos), Is.EqualTo(Referencias.Conocidos.Where(marcados.Contains)));
                 var r = Roles.Leer(contenido, Referencias.Conocidos);
-                Assert.That((r.Integrador, r.Verificador, r.Redactor), Is.EqualTo((integrador, verificador, redactor)));
+                Assert.That((r.Integrador, r.Verificador1, r.Verificador2, r.Redactor), Is.EqualTo((integrador, verificador1, verificador2, redactor)));
             }
         }
 
@@ -145,9 +146,9 @@ namespace ChatCouncil.Motor.Pruebas
         [Test]
         public void LaSeleccionSeEscribeConElFormatoDeTypeScript()
         {
-            var (_, contenido) = Roles.Guardar(Referencias.Conocidos, new[] { "glm", "chatgpt" }, "chatgpt", "glm", "chatgpt", "2026-10-10T12:00:00.000Z");
+            var (_, contenido) = Roles.Guardar(Referencias.Conocidos, new[] { "qwen", "glm", "chatgpt" }, "chatgpt", "glm", "qwen", "chatgpt", "2026-10-10T12:00:00.000Z");
             Assert.That(contenido, Is.EqualTo(
-                "{\n  \"proveedores\": [\n    \"chatgpt\",\n    \"glm\"\n  ],\n  \"integrador\": \"chatgpt\",\n  \"verificador\": \"glm\",\n" +
+                "{\n  \"proveedores\": [\n    \"chatgpt\",\n    \"glm\",\n    \"qwen\"\n  ],\n  \"integrador\": \"chatgpt\",\n  \"verificador1\": \"glm\",\n  \"verificador2\": \"qwen\",\n" +
                 "  \"redactor\": \"chatgpt\",\n  \"guardadoEn\": \"2026-10-10T12:00:00.000Z\"\n}"));
         }
 
@@ -167,9 +168,30 @@ namespace ChatCouncil.Motor.Pruebas
             foreach (var (roles, pool) in Referencias.Pooles)
             {
                 var r = JsonEstricto.Leer(roles);
-                var elegidos = new RolesElegidos((string)r["integrador"], (string)r["verificador"], (string)r["redactor"]);
+                var elegidos = new RolesElegidos((string)r["integrador"], (string)r["verificador1"], (string)r["verificador2"], (string)r["redactor"]);
                 Assert.That(Roles.PoolDeInvestigadores(Referencias.Conocidos, elegidos), Is.EqualTo(pool), roles);
             }
+        }
+
+        // D62: diez proveedores menos tres roles distintos; los prompts literales dicen "siete".
+        [Test]
+        public void ConLosRolesPorDefectoElPoolSigueEnSiete()
+        {
+            var roles = Roles.Leer(null, Roles.Conocidos);
+            Assert.That(Roles.PoolDeInvestigadores(Roles.Conocidos, roles), Is.EqualTo(new[] { "chatgpt", "gemini", "claude", "grok", "mistral", "kimi", "perplexity" }));
+            Assert.That(roles.DeLaEtapa("verificacion"), Is.EqualTo(new[] { "glm", "qwen" }));
+            Assert.That(roles.DeLaEtapa("redaccion"), Is.EqualTo(new[] { "deepseek" }));
+            Assert.That(roles.DeLaEtapa("operacion"), Is.Empty);
+        }
+
+        // D62: la última verificación de cada verificador, el 1 primero; la de un proveedor que ya no verifica, al final.
+        [Test]
+        public void LasVerificacionesVigentesVanEnElOrdenDeLosVerificadores()
+        {
+            SalidaVerificador S(string id, string verificador, string ronda = "r") => new SalidaVerificador { Id = id, RondaId = ronda, VerificadorId = verificador };
+            var hechos = new Hecho[] { S("a", "kimi"), S("b", "qwen"), S("c", "glm"), S("d", "qwen"), S("e", "glm", "otra") };
+            Assert.That(Dominio.VerificacionesVigentes(hechos, "r", new[] { "glm", "qwen" }).Select(s => s.Id), Is.EqualTo(new[] { "c", "d", "a" }));
+            Assert.That(Dominio.VerificacionesVigentes(hechos, "nada", new[] { "glm", "qwen" }), Is.Empty);
         }
     }
 }

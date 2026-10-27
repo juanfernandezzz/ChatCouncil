@@ -39,7 +39,7 @@ import type { RespuestaEtiquetada } from "./prompt-operacion";
  *
  *  1. HOST propio de un proveedor — `OWN_DOMAINS`, tomado tal cual de
  *     `packages/providers/src/specs.json` (`newConversationUrl` de los
- *     nueve). Un `<a href>` que resuelve a `chatgpt.com`, `claude.ai`,
+ *     diez). Un `<a href>` que resuelve a `chatgpt.com`, `claude.ai`,
  *     `chat.z.ai` (glm — que ni siquiera contiene "glm" en el dominio,
  *     por eso la búsqueda de texto libre tampoco lo habría cubierto),
  *     etc. es casi con certeza un link de "compartir esta conversación"
@@ -74,7 +74,7 @@ import type { RespuestaEtiquetada } from "./prompt-operacion";
  */
 
 /**
- * `newConversationUrl` de los nueve, medido de `packages/providers/src/
+ * `newConversationUrl` de los diez, medido de `packages/providers/src/
  * specs.json` — no inventado. Nótese que glm (`chat.z.ai`) y kimi
  * (`kimi.ai`) no contienen su id de proveedor en el dominio: exactamente
  * el motivo por el que una búsqueda de texto libre del id NO alcanza para
@@ -90,9 +90,10 @@ const OWN_DOMAINS = [
   "chat.qwen.ai",
   "kimi.ai",
   "chat.deepseek.com",
+  "perplexity.ai",
 ] as const;
 
-const IDS_PROVEEDOR = ["chatgpt", "gemini", "claude", "grok", "mistral", "glm", "kimi", "qwen", "deepseek"] as const;
+const IDS_PROVEEDOR = ["chatgpt", "gemini", "claude", "grok", "mistral", "glm", "kimi", "qwen", "deepseek", "perplexity"] as const;
 
 /** Únicos parámetros de query que sobreviven la limpieza — declarados uno por uno, con motivo en la cabecera. */
 const PARAMS_PERMITIDOS = new Set(["model"]);

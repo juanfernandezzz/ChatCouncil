@@ -32,6 +32,7 @@ import type {
   Ronda,
   SalidaOperador,
   SalidaVerificador,
+  UrlComprobada,
   Sello,
 } from "@chatcouncil/domain";
 import { etapaDeRonda, integradorDeRonda, preguntaEfectivaDeRonda, proveedoresCargadosDeRonda } from "@chatcouncil/domain";
@@ -81,7 +82,7 @@ import {
   generarSemilla,
   leerRegistroDeArchivo,
 } from "./registro";
-import { guardarSeleccion, leerRoles, leerSeleccion, poolDeInvestigadores } from "./seleccion-proveedores";
+import { guardarSeleccion, leerRoles, leerSeleccion, poolDeInvestigadores, verificadoresDe } from "./seleccion-proveedores";
 import { armarArchivoRedactorConMarcas, armarCuerposDeRonda, armarOperacionConArchivo, armarYPersistirCuerposDeRonda } from "./operador";
 import { comprobarUrlsDeRonda } from "./comprobar-urls";
 import {
@@ -95,6 +96,7 @@ import {
   avisoSinPrevio,
   registrarRecaptura,
   ultimoDeRol,
+  verificacionesVigentes,
   ultimaRedaccion,
   type RolRecapturable,
   salidasVigentesDeRonda,
@@ -171,6 +173,7 @@ const INVESTIGADORES = [
   "kimi",
   "qwen",
   "deepseek",
+  "perplexity",
 ] as const;
 type ProviderId = (typeof INVESTIGADORES)[number];
 
@@ -593,11 +596,12 @@ const ROLES = leerRoles(app.getPath("userData"), INVESTIGADORES);
 const INTEGRADOR_ID = ROLES.integrador as ProviderId;
 
 /**
- * El VERIFICADOR de fuentes (2026-09-29, arquitectura 7-1-1): tercer rol fuera
- * del pool, igual que el integrador, con GLM por defecto. No investiga ni
- * opera: revisa con búsqueda web lo que el integrador marcó.
+ * Los VERIFICADORES de fuentes (2026-09-29, arquitectura 7-1-1; dos desde D62):
+ * fuera del pool, igual que el integrador, con GLM y Qwen por defecto. No
+ * investigan ni operan: revisan con búsqueda web lo que el integrador marcó,
+ * cada uno por su lado. El redactor recibe la del primero.
  */
-const VERIFICADOR_ID = ROLES.verificador as ProviderId;
+const VERIFICADOR_IDS = verificadoresDe(ROLES) as ProviderId[];
 
 /**
  * El REDACTOR (2026-10-02): escribe la respuesta a la pregunta con el material
@@ -939,7 +943,7 @@ async function pegarPreguntaAqui(prompt: string): Promise<ResultadoEnvio> {
   if (!objetivo) {
     return { id: "(ninguno)", ok: false, error: "no hay ningún panel visible" };
   }
-  if (objetivo.id === INTEGRADOR_ID || objetivo.id === VERIFICADOR_ID || objetivo.id === REDACTOR_ID) {
+  if (objetivo.id === INTEGRADOR_ID || VERIFICADOR_IDS.includes(objetivo.id as ProviderId) || objetivo.id === REDACTOR_ID) {
     return { id: objetivo.id, ok: false, error: `${nombreProveedor(objetivo.id)} no recibe la pregunta: no es investigador de la Parte 1` };
   }
   const [resultado] = await difundir(prompt, [objetivo.id as ProviderId]);
@@ -1061,7 +1065,7 @@ async function cargarPanelDeRol(id: ProviderId): Promise<(typeof vistas)[number]
 /** Cierra los paneles del integrador y del verificador (ronda nueva): salen del recorrido y de los chips. */
 function ocultarPanelesDeRol(): void {
   if (!CARGA_DIFERIDA_INTEGRADOR) return;
-  for (const id of new Set([INTEGRADOR_ID, VERIFICADOR_ID, REDACTOR_ID])) {
+  for (const id of new Set([INTEGRADOR_ID, ...VERIFICADOR_IDS, REDACTOR_ID])) {
     const i = vistas.findIndex((x) => x.id === id);
     if (i < 0) continue;
     const [v] = vistas.splice(i, 1);
@@ -1106,12 +1110,12 @@ function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProvee
   const etapa = etapaDeRonda(registro.hechos, rondaId, POOL_OPERADORES.length);
   const sello = registro.hechos.filter((h): h is Sello => h.tipo === "sello" && h.rondaId === rondaId);
 
-  const { lecturasOperacion, lecturaIntegrador, lecturaVerificador, lecturaRedactor, lecturasComoRespuesta } = clasificarLecturasPorEtapa(
+  const { lecturasOperacion, lecturaIntegrador, lecturasVerificador, lecturaRedactor, lecturasComoRespuesta } = clasificarLecturasPorEtapa(
     lecturas,
     etapa,
     POOL_OPERADORES,
     INTEGRADOR_ID,
-    VERIFICADOR_ID,
+    VERIFICADOR_IDS,
     REDACTOR_ID,
   );
 
@@ -1168,17 +1172,18 @@ function registrarRespuestasDeRondaActual(lecturasCrudas: readonly LecturaProvee
   }
 
   // 7-1-1 (2026-09-29): en la etapa de verificación sólo se captura el panel
-  // del verificador, con el mismo trato de errores que el integrador.
+  // de cada verificador (D62: dos), con el mismo trato de errores que el integrador.
   if (etapa === "verificacion") {
-    if (!lecturaVerificador) {
-      escribirErrorCaptura(userData, conv, rondaId, etapa, "salida-verificador",
-        `el panel del verificador (${VERIFICADOR_ID}) no estaba abierto al capturar`, VERIFICADOR_ID);
-    } else if (lecturaVerificador.error) {
-      escribirErrorCaptura(userData, conv, rondaId, etapa, "salida-verificador", lecturaVerificador.error, lecturaVerificador.id);
-    } else {
-      escribirSalidaVerificador(userData, conv, rondaId, lecturaVerificador.id, ultimoPromptVerificador ?? PROMPT_NO_DISPONIBLE,
-        lecturaVerificador.text, lecturaVerificador.html ?? null);
-    }
+    VERIFICADOR_IDS.forEach((id, i) => {
+      const lectura = lecturasVerificador[i];
+      if (!lectura) {
+        escribirErrorCaptura(userData, conv, rondaId, etapa, "salida-verificador", `el panel del verificador (${id}) no estaba abierto al capturar`, id);
+      } else if (lectura.error) {
+        escribirErrorCaptura(userData, conv, rondaId, etapa, "salida-verificador", lectura.error, lectura.id);
+      } else {
+        escribirSalidaVerificador(userData, conv, rondaId, lectura.id, ultimoPromptVerificador ?? PROMPT_NO_DISPONIBLE, lectura.text, lectura.html ?? null);
+      }
+    });
   }
 
   // Redactor (2026-10-02): en la etapa de redacción sólo se captura su panel.
@@ -1577,7 +1582,7 @@ function createWindow(): void {
   void uiView.webContents.loadFile(join(__dirname, "../renderer/index.html"));
 
   for (const id of ACTIVOS) {
-    if (CARGA_DIFERIDA_INTEGRADOR && (id === INTEGRADOR_ID || id === VERIFICADOR_ID || id === REDACTOR_ID)) continue;
+    if (CARGA_DIFERIDA_INTEGRADOR && (id === INTEGRADOR_ID || VERIFICADOR_IDS.includes(id) || id === REDACTOR_ID)) continue;
     agregarVista(id);
   }
 
@@ -2046,13 +2051,14 @@ function registrarIpc(): void {
     marcados: leerSeleccion(app.getPath("userData"), INVESTIGADORES) ?? [...INVESTIGADORES],
     ...leerRoles(app.getPath("userData"), INVESTIGADORES),
   }));
-  ipcMain.handle("cc:seleccion-guardar", (_e, marcados: unknown, integrador: unknown, verificador: unknown, redactor: unknown) =>
+  ipcMain.handle("cc:seleccion-guardar", (_e, marcados: unknown, integrador: unknown, verificador1: unknown, verificador2: unknown, redactor: unknown) =>
     guardarSeleccion(
       app.getPath("userData"),
       INVESTIGADORES,
       Array.isArray(marcados) ? marcados.filter((m): m is string => typeof m === "string") : [],
       typeof integrador === "string" ? integrador : undefined,
-      typeof verificador === "string" ? verificador : undefined,
+      typeof verificador1 === "string" ? verificador1 : undefined,
+      typeof verificador2 === "string" ? verificador2 : undefined,
       typeof redactor === "string" ? redactor : undefined,
     ),
   );
@@ -3963,7 +3969,8 @@ async function enviarPromptAIntegrador(): Promise<ResultadoIntegrador> {
  * con la sección "QUE CONVIENE RESCATAR" del último informe del integrador de
  * la ronda y los hallazgos que esa sección cita, y lo escribe en el panel del
  * verificador: mismo camino que "Pegar integrador" (panel al frente, guardia,
- * entrega comparada carácter por carácter) y, como él, NUNCA envía.
+ * entrega comparada carácter por carácter) y, como él, NUNCA envía. D62: el
+ * mismo prompt va a los dos verificadores, uno después del otro.
  */
 async function enviarPromptAVerificador(): Promise<ResultadoIntegrador> {
   const d = tablaDeRondaActiva("verificador");
@@ -3972,9 +3979,13 @@ async function enviarPromptAVerificador(): Promise<ResultadoIntegrador> {
   if (!informe) return sinEscribir("la ronda todavía no tiene un informe del integrador capturado", d.etapa);
   const armado = armarPromptVerificadorDeRonda(d.pregunta, textoDelInformeIntegrador(informe), d.tabla);
   if (!armado.ok) return sinEscribir(armado.error, d.etapa);
-  const r = await pegarEnPanelDeRol(VERIFICADOR_ID, "verificador", armado.prompt, d.etapa);
-  if (r.ok) ultimoPromptVerificador = armado.prompt;
-  return r;
+  let r: ResultadoIntegrador | undefined;
+  for (const id of VERIFICADOR_IDS) {
+    r = await pegarEnPanelDeRol(id, "verificador", armado.prompt, d.etapa);
+    if (!r.ok) return r;
+  }
+  ultimoPromptVerificador = armado.prompt;
+  return r!;
 }
 
 /**
@@ -3990,7 +4001,8 @@ async function enviarPromptARedactor(): Promise<ResultadoIntegrador & { ruta?: s
   if ("error" in d) return sinEscribir(d.error);
   const informe = ultimoDeRol(d.hechos, d.ronda.id, "integrador");
   if (!informe) return sinEscribir("la ronda todavía no tiene un informe del integrador capturado", d.etapa);
-  const verificacion = ultimoDeRol(d.hechos, d.ronda.id, "verificador");
+  // D62: el redactor recibe la verificación del verificador 1, para no tocar su prompt literal.
+  const verificacion = verificacionesVigentes(d.hechos, d.ronda.id, VERIFICADOR_IDS)[0] ?? null;
   const prep = prepararRondaParaOperar();
   if (!prep.ok) return sinEscribir(prep.error, d.etapa);
   let respuestas;
@@ -4136,7 +4148,19 @@ async function recapturarRol(rol: RolRecapturable): Promise<{ ok: boolean; mensa
   const hechos = leerRegistroDeArchivo(userData, conversacionActual).hechos;
   const aviso = avisoSinPrevio(hechos, rondaActualId, rol);
   if (aviso !== null) return { ok: false, mensaje: aviso };
-  const rolId = rol === "integrador" ? INTEGRADOR_ID : VERIFICADOR_ID;
+  if (rol === "verificador") {
+    // D62: se recapturan los dos verificadores, uno después del otro.
+    const uno = await recapturarPanel(conversacionActual, rondaActualId, rol, VERIFICADOR_IDS[0]!);
+    const dos = await recapturarPanel(conversacionActual, rondaActualId, rol, VERIFICADOR_IDS[1]!);
+    return { ok: uno.ok && dos.ok, mensaje: `${uno.mensaje}
+${dos.mensaje}` };
+  }
+  return recapturarPanel(conversacionActual, rondaActualId, rol, INTEGRADOR_ID);
+}
+
+async function recapturarPanel(conversacionActual: string, rondaActualId: string, rol: RolRecapturable, rolId: ProviderId): Promise<{ ok: boolean; mensaje: string }> {
+  const userData = app.getPath("userData");
+  const hechos = leerRegistroDeArchivo(userData, conversacionActual).hechos;
   const v = await cargarPanelDeRol(rolId);
   if (!v) return { ok: false, mensaje: `el ${rol} (${nombreProveedor(rolId)}) no está entre los proveedores cargados` };
   desplazarA(todas().findIndex((x) => x.id === v.id) * anchoPanel());
@@ -4816,9 +4840,13 @@ async function armarInformeFinalDeRondaActivaOTirar(): Promise<{ ok: boolean; me
 
   // 7-1-1: si hubo verificación, sus URLs se comprueban ahora (una sola vez por
   // verificación: si ya se comprobaron, no se vuelve a salir a la red).
-  const salidaVerificador = ultimoDeRol(hechos, ronda.id, "verificador");
-  const comprobacion = salidaVerificador ? await comprobarUrlsDeRonda(userData, conversacionActual, ronda.id) : null;
-  const urlsComprobadas = comprobacion?.ok ? comprobacion.urls : [];
+  // D62: las de cada verificador, el 1 primero.
+  const salidasVerificador = verificacionesVigentes(hechos, ronda.id, VERIFICADOR_IDS);
+  const urlsComprobadas: UrlComprobada[] = [];
+  for (const s of salidasVerificador) {
+    const comprobacion = await comprobarUrlsDeRonda(userData, conversacionActual, ronda.id, fetch, s.verificadorId);
+    if (comprobacion.ok) urlsComprobadas.push(...comprobacion.urls);
+  }
 
   const texto = armarInformeFinalDeRonda({
     pregunta,
@@ -4836,7 +4864,7 @@ async function armarInformeFinalDeRondaActivaOTirar(): Promise<{ ok: boolean; me
     proveedoresCargados: proveedoresCargadosDeRonda(hechos, ronda.id),
     pool: POOL_OPERADORES,
     integrador: integradorDeRonda(hechos, ronda.id),
-    salidaVerificador,
+    salidasVerificador,
     urlsComprobadas,
     respuestaRedactor: ultimaRedaccion(hechos, ronda.id),
   });
@@ -5009,8 +5037,8 @@ function construirMenu(): void {
               return;
             }
             void (async () => {
-              for (const id of new Set([INTEGRADOR_ID, VERIFICADOR_ID, REDACTOR_ID])) await cargarPanelDeRol(id);
-              uiView?.webContents.send("cc:aviso", `Paneles de los roles abiertos: ${[...new Set([INTEGRADOR_ID, VERIFICADOR_ID, REDACTOR_ID])].join(", ")}.`);
+              for (const id of new Set([INTEGRADOR_ID, ...VERIFICADOR_IDS, REDACTOR_ID])) await cargarPanelDeRol(id);
+              uiView?.webContents.send("cc:aviso", `Paneles de los roles abiertos: ${[...new Set([INTEGRADOR_ID, ...VERIFICADOR_IDS, REDACTOR_ID])].join(", ")}.`);
             })();
           },
         },

@@ -136,6 +136,8 @@ const FUGAS = [
   "https://learn.chatgpt.com/guides/best-practices, https://platform.kimi.ai/docs/x https://www.kimi.ai/blog/ https://KIMI.AI/Blog#a https://www.kimi.ai/blogs https://www.kimi.ai/chat/d1 https://www.chatgpt.com/c/1",
   // D62: perplexity es el décimo proveedor.
   "https://www.perplexity.ai/search/abc https://perplexity.ai/ https://docs.perplexity.ai/guia https://x.org/?src=perplexity",
+  // Ronda real del 2026-10-27: el centro de ayuda de Perplexity es una fuente; su interfaz no.
+  "https://www.perplexity.ai/help-center/en/articles/10352901-what-is-perplexity-pro https://PERPLEXITY.AI/Help-Center#x https://www.perplexity.ai/help-centers https://www.perplexity.ai/search/help-center",
 ].map((t) => [t, analisis.fugasDeProveedorEnUrls(t)]);
 const ARMADOS = [
   ["texto de respuesta sin nada raro", ["https://arxiv.org/abs/2212.10001"]],

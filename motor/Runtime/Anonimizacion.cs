@@ -33,6 +33,8 @@ namespace ChatCouncil.Motor
             "OpenAI", "ChatGPT", "GPT-5", "GPT-4", "GPT",
             "Google", "Gemini", "DeepMind", "Bard",
             "DeepSeek", "Perplexity", "Sonar", "Mistral", "Groq", "Grok", "xAI", "OpenRouter", "GLM", "Zhipu",
+            // D62: los diez pesan igual (provider-names.ts).
+            "Z.ai", "Qwen3", "Qwen", "Alibaba", "Kimi", "Moonshot",
         };
 
         /// <summary>Token uniforme: no insinúa el largo ni la inicial del término tapado.</summary>

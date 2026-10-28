@@ -100,8 +100,10 @@ const TAPADOS = [
   `${c(0x1d400)}Claude, ${c(0x1f600)}Claude, Claude${c(0x1d7cf)}, Claude${c(0x301)}`,
   `${String.fromCharCode(0xd800)}Claude ${String.fromCharCode(0xdc00)}Claude`,
   "Sin nombres de proveedor.",
+  // Los diez proveedores pesan igual: tambien Qwen (Alibaba), Kimi (Moonshot) y Z.ai, la empresa de GLM.
+  "Qwen de Alibaba, QWEN3, kimi y Kimi de Moonshot, Z.ai y chat.z.ai; Tongyi no.",
 ];
-const POOL = ["chatgpt", "gemini", "claude", "grok", "mistral", "kimi", "qwen", "deepseek"];
+const POOL = ["chatgpt", "gemini", "claude", "grok", "mistral", "kimi", "qwen", "deepseek", "perplexity"];
 const respuesta = (id, text) => ({ panelSourceId: id, replyId: `r-${id}`, attemptId: `a-${id}`, displayName: id, text });
 const ANONIMIZADOS = [
   [POOL.map((id, i) => respuesta(id, TAPADOS[i])), analisis.hashSemilla("semilla-fija")],

@@ -48,6 +48,15 @@ export const PROVIDER_NAME_BLOCKLIST: readonly string[] = [
   "OpenRouter",
   "GLM",
   "Zhipu",
+  // D62: los diez pesan igual. Faltaban dos proveedores del consejo y la
+  // empresa de GLM con su nombre actual: sin ellos, una respuesta o una
+  // verificacion de Qwen o de Kimi podia firmar con su nombre.
+  "Z.ai",
+  "Qwen3",
+  "Qwen",
+  "Alibaba",
+  "Kimi",
+  "Moonshot",
 ];
 
 /** Token uniforme: no insinúa longitud ni inicial del término tapado. */

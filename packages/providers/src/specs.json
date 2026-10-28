@@ -364,24 +364,24 @@
       "_notaEnvio": "submit es un div[role=\"button\"] (clase ds-button--primary), NO un <button>: el metodo de clic nativo sobre un HTMLElement funciona igual, y a diferencia de kimi el compositor es un TEXTAREA (kind:\"textarea\"), no un contenteditable rico -la misma categoria que qwen, donde el clic con escritura por DOM ya funciona-. No se le puso envioConfiable:true por eso: el corte medido entre kimi y el resto es el TIPO de compositor (contenteditable vs. textarea), no el proveedor (ver BLUEPRINT, regla de compositor). Sin confirmar todavia con un envio real en esta cuenta -promovido a INVESTIGADORES el 2026-08-23 sin haber gastado un envio de verificacion; se confirma en la primera ronda real."
     },
     "perplexity": {
-      "_provisional": "PROVISIONAL (D62, 2026-10-27): estimacion del DOM de perplexity.ai sin medir en vivo. Se confirma con el Diagnostico de selectores de ese panel; hasta entonces cualquier selector puede no matchear.",
       "newConversationUrl": "https://www.perplexity.ai/",
       "escritura": "pegado",
       "composer": {
-        "selector": "#ask-input, textarea#ask-input, div[contenteditable=\"true\"][role=\"textbox\"]",
+        "selector": "#ask-input",
         "kind": "contenteditable"
       },
       "submit": {
         "kind": "click",
-        "selector": "button[data-testid=\"submit-button\"]"
+        "selector": "button[aria-label=\"Enviar\"], button[aria-label=\"Submit\"]"
       },
       "responseRoot": {
         "selector": "main"
       },
       "assistantMessage": {
-        "selector": "div[id^=\"markdown-content-\"]",
+        "selector": "div.prose",
         "pick": "last"
       },
+      "_notaAsistente": "Medido el 2026-10-27: div[id^=markdown-content-] (la estimacion provisional) daba 0 en el Diagnostico de selectores de Juan (app 0.1.24). Comprobado despues en perplexity.ai con dos busquedas: la respuesta entera (parrafos, listas y fuentes) esta en un div.prose, uno por respuesta; la pregunta del usuario usa las mismas clases de parrafo (my-2 [&+p]:mt-4) pero NO esta en .prose, por eso no se selecciona por la clase del parrafo.",
       "completion": {
         "kind": "quiescence",
         "quiescenceMs": 20000
@@ -391,9 +391,10 @@
         "submitConfirmMs": 30000,
         "emptyResponseMs": 90000
       },
-      "_notaModelo": "SIN etiqueta de version, PROVISIONAL: no se midio si la cabecera o el selector de modelo de perplexity.ai dicen que modelo respondio. La procedencia queda con modelLabel en null hasta el diagnostico en vivo.",
-      "_notaFin": "perplexity: sin indicador de generacion medido. El fin se INFIERE por quiescencia, mismo piso provisional que qwen (20 s), hasta confirmar en vivo si existe un boton de detener con data-testid estable.",
-      "_notaComposer": "Estimado: el compositor de perplexity.ai es un editor contenteditable (Lexical) con id ask-input; por eso escritura pegado, la misma que kimi. Sin confirmar."
+      "_notaModelo": "SIN etiqueta de version. Medido el 2026-10-27: el selector de modelo es un button[aria-label=\"Modelo\"] junto al compositor; no se midio si su texto dice que modelo respondio, y la propia respuesta de Perplexity dice que en Free el modelo no es fijo. La procedencia queda con modelLabel en null.",
+      "_notaFin": "perplexity: el fin se INFIERE por quiescencia (20 s). Medido el 2026-10-27: hay un boton aria-label 'Detener respuesta (Esc)', pero DESAPARECE antes de que termine el texto (se fue con 920 caracteres; la respuesta siguio hasta 7.084 unos 4 s despues). Con element-gone sobre ese boton la captura se truncaria.",
+      "_notaIdioma": "submit es aria-label, LOCALIZADO: 'Enviar' medido en la cuenta de Juan en espanol el 2026-10-27; 'Submit' es el de la interfaz en ingles, sin medir. El boton no tiene id ni data-testid.",
+      "_notaComposer": "Medido el 2026-10-27: div#ask-input con role=textbox, una sola coincidencia; editor contenteditable, por eso escritura pegado, como kimi."
     }
   }
 }

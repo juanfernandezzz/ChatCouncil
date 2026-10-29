@@ -710,8 +710,9 @@ namespace ChatCouncil.Interfaz
             Anotar(copiada != ronda && Resultado.StartsWith("Ronda nueva abierta", StringComparison.Ordinal) && copias.Count == 7 && copias.All(r => r.CopiadaDe?.RondaId == ronda)
                    && Raiz.Q<Label>("barra-titulo").text == "Operación · 3 de 7",
                 "ronda nueva con las respuestas copiadas", $"«{Resultado}»; {copias.Count} copias; «{Raiz.Q<Label>("barra-titulo").text}»");
-            Anotar(Ronda.EnLaVista.SequenceEqual(Pool) && Pool.Contains(Ronda.Visible), "los roles salen del recorrido en la ronda nueva",
-                $"en la vista [{string.Join(",", Ronda.EnLaVista)}], visible {Ronda.Visible}");
+            var reabiertos = await Esperar(() => Pool.All(id => Ronda.PanelDe(id) != null) && new[] { "deepseek", "glm", "qwen" }.All(id => Ronda.PanelDe(id) == null), 90);
+            Anotar(reabiertos && Ronda.EnLaVista.SequenceEqual(Pool) && Pool.Contains(Ronda.Visible), "ronda nueva: se cierran los roles y se reabren los investigadores",
+                $"abiertos {Pool.Count(id => Ronda.PanelDe(id) != null)} de 7; en la vista [{string.Join(",", Ronda.EnLaVista)}], visible {Ronda.Visible}");
             // Reutilizar necesita el sello de la ronda nueva: primero se pega la operación en un panel, y el aviso vuelve.
             await AbrirConversacionNueva("gemini");
             Ronda.Seleccionar("gemini");
@@ -746,16 +747,19 @@ namespace ChatCouncil.Interfaz
             var ronda = Ronda.Puerta.RondaActual;
             using (var servidor = new ServidorDePrueba())
             {
-                // Integración: el rol aparece en su etapa, en una conversación nueva, con el prompt idéntico.
-                Anotar(Titulo == "Integración · 4 de 7" && Paso == "Pegar el prompt del integrador" && Habilitado && Ronda.PanelDe("deepseek") == null
-                       && EstadoEnLaLista("deepseek") == "Integra y redacta",
-                    "etapa Integración", $"«{Titulo}», «{Paso}»; sin página el integrador: {Ronda.PanelDe("deepseek") == null}; «{EstadoEnLaLista("deepseek")}»");
+                // Integración: los siete ya dejaron todo en el registro; sus páginas se cierran y se abren los tres roles (memoria).
+                var cambio = await Esperar(() => Pool.All(id => Ronda.PanelDe(id) == null) && new[] { "deepseek", "glm", "qwen" }.All(id => Ronda.PanelDe(id) != null), 90);
+                Anotar(cambio && Ronda.EnLaVista.SequenceEqual(new[] { "deepseek", "glm", "qwen" }) && !Visible(Raiz.Q("titulo-investigadores")),
+                    "segunda parte: se cierran los investigadores y se abren los roles", $"cerrados: {Pool.Count(id => Ronda.PanelDe(id) == null)} de 7; en el recorrido [{string.Join(",", Ronda.EnLaVista)}]");
+                Anotar(Titulo == "Integración · 4 de 7" && Paso == "Pegar el prompt del integrador" && Habilitado
+                       && EstadoEnLaLista("deepseek").StartsWith("Integra y redacta", StringComparison.Ordinal),
+                    "etapa Integración", $"«{Titulo}», «{Paso}»; «{EstadoEnLaLista("deepseek")}»");
                 await Pulsar("paso-ancha");
                 await Esperar(() => Resultado.StartsWith("Prompt pegado", StringComparison.Ordinal) || Resultado.StartsWith("No se", StringComparison.Ordinal), 90);
                 var promptIntegrador = Ronda.Puerta.ArmarPromptIntegrador();
                 var vacio = Ronda.PanelDe("deepseek") != null && (bool?)await Ronda.PanelDe("deepseek").Correr("chatVacio", Spec) == true;
                 Anotar(Resultado == "Prompt pegado en DeepSeek. Revísalo y envíalo." && vacio && await Compositor("deepseek") == promptIntegrador
-                       && Ronda.Visible == "deepseek" && Ronda.EnLaVista.Count == 8 && EstadoEnLaLista("deepseek") == "Integra y redacta · Pegado, falta que envíes",
+                       && Ronda.Visible == "deepseek" && Ronda.EnLaVista.Count == 3 && EstadoEnLaLista("deepseek") == "Integra y redacta · Pegado, falta que envíes",
                     "pegar el integrador", $"«{Resultado}»; chat nuevo vacío: {vacio}; a la vista {Ronda.Visible}, {Ronda.EnLaVista.Count} en el recorrido; «{EstadoEnLaLista("deepseek")}»");
 
                 await Enviar("deepseek");
@@ -778,12 +782,12 @@ namespace ChatCouncil.Interfaz
                     "recapturar el integrador", $"«{Resultado}»; {informes.Count} informes, el último «{informes.LastOrDefault()?.Titulo}»");
 
                 // Verificación (D62: dos verificadores): el mismo prompt, que cita lo que rescata el último informe, en los dos.
-                Anotar(Paso == "Pegar el prompt del verificador" && Habilitado && Ronda.PanelDe("glm") == null && Ronda.PanelDe("qwen") == null, "etapa Verificación", $"«{Paso}»");
+                Anotar(Paso == "Pegar el prompt del verificador" && Habilitado, "etapa Verificación", $"«{Paso}»");
                 await Pulsar("paso-ancha");
                 await Esperar(() => Resultado.StartsWith("Prompt pegado", StringComparison.Ordinal) || Resultado.StartsWith("No se", StringComparison.Ordinal), 120);
                 var promptVerificador = Ronda.Puerta.ArmarPromptVerificador();
                 Anotar(Resultado == "Prompt pegado en GLM y Qwen. Revísalo y envíalo." && await Compositor("glm") == promptVerificador && await Compositor("qwen") == promptVerificador
-                       && promptVerificador.Contains("[H2]") && Ronda.Visible == "qwen" && Ronda.EnLaVista.Count == 10,
+                       && promptVerificador.Contains("[H2]") && Ronda.Visible == "qwen" && Ronda.EnLaVista.Count == 3,
                     "pegar en los dos verificadores", $"«{Resultado}»; a la vista {Ronda.Visible}, {Ronda.EnLaVista.Count} en el recorrido");
                 await Enviar("glm");
                 await Enviar("qwen");
@@ -833,7 +837,8 @@ namespace ChatCouncil.Interfaz
                 var comprobadas = Hechos.OfType<UrlComprobada>().Where(u => u.RondaId == ronda).ToList();
                 const string local = "es una dirección local o de la red privada: no se comprueba";
                 var urls = comprobadas.Select(u => $"{u.Url} {u.Codigo?.ToString() ?? "sin código"} ({u.Detalle})").ToList();
-                Anotar(comprobadas.Count == 5 && comprobadas.All(u => u.Codigo == null) && comprobadas.Count(u => u.Detalle == local) == 4 && servidor.Pedidos.Count == 0,
+                // Cada verificador comprueba sus URLs (D62): 5 de GLM y la /ok de Qwen.
+                Anotar(comprobadas.Count == 6 && comprobadas.All(u => u.Codigo == null) && comprobadas.Count(u => u.Detalle == local) == 5 && servidor.Pedidos.Count == 0,
                     "las URLs locales y la imagen del PDF no se piden", $"{string.Join("; ", urls)}; pedidos al servidor: {string.Join("; ", servidor.Pedidos)}");
                 var carpeta = Directory.Exists(Path.Combine(app.CarpetaDatos, "informes")) ? Directory.GetDirectories(Path.Combine(app.CarpetaDatos, "informes")).SingleOrDefault() : null;
                 var nombre = carpeta == null ? "-" : Path.GetFileName(carpeta);
@@ -874,16 +879,12 @@ namespace ChatCouncil.Interfaz
                 // Para las capturas de la etapa Informe.
                 Copiar(app.CarpetaDatos, salida + ".roles");
 
-                // Ocultar y mostrar los roles (historia 59).
+                // En la segunda parte no hay investigadores detrás de los roles: ocultarlos no se ofrece.
                 await Pulsar("menu-ronda");
-                await Pulsar("item-Ocultar los paneles de los roles");
-                var oculto = Ronda.EnLaVista.SequenceEqual(Pool) && Pool.Contains(Ronda.Visible) && Ronda.PanelDe("glm").RectReal.x < 0 && Ronda.PanelDe("qwen").RectReal.x < 0
-                             && EstadoEnLaLista("glm") == "Verifica" && EstadoEnLaLista("qwen") == "Verifica";
+                var sinOcultar = Raiz.Q("item-Ocultar los paneles de los roles") == null;
                 await Pulsar("menu-ronda");
-                await Pulsar("item-Mostrar los paneles de los roles");
-                await Esperar(() => Ronda.EnLaVista.Count == 10);
-                Anotar(oculto && Ronda.EnLaVista.Count == 10 && EstadoEnLaLista("glm") == "Verifica · Capturado" && EstadoEnLaLista("qwen") == "Verifica · Capturado", "ocultar y mostrar los roles",
-                    $"ocultos: {oculto}; mostrados: {Ronda.EnLaVista.Count} en el recorrido");
+                Anotar(sinOcultar && Pool.All(id => Ronda.PanelDe(id) == null) && EstadoEnLaLista("glm") == "Verifica · Capturado" && EstadoEnLaLista("qwen") == "Verifica · Capturado",
+                    "los investigadores siguen cerrados y no se ofrece ocultar los roles", $"sin «Ocultar»: {sinOcultar}; abiertos {Pool.Count(id => Ronda.PanelDe(id) != null)} de 7");
             }
         }
 

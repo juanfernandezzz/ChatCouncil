@@ -84,7 +84,12 @@ namespace ChatCouncil.Interfaz
         public List<string> Operadores { get; private set; } = new List<string>();
         public string Visible => visible;
         /// <summary>Los paneles por los que se navega: los operadores y, desde su etapa o a pedido, los roles (D42).</summary>
-        public List<string> EnLaVista => Operadores.Concat(RolesDeLaRonda.Where(rolesMostrados.Contains)).ToList();
+        public List<string> EnLaVista => (investigadoresCerrados ? new List<string>() : Operadores).Concat(RolesDeLaRonda.Where(rolesMostrados.Contains)).ToList();
+
+        // Memoria: los siete y los tres roles nunca abiertos a la vez. Desde la integración los investigadores ya dejaron
+        // todo en el registro: sus páginas se cierran y se abren los roles; en una ronda nueva, al revés.
+        bool investigadoresCerrados, conectado;
+        static readonly string[] EtapasDeRoles = { "integracion", "verificacion", "redaccion" };
         List<string> RolesDeLaRonda => new[] { roles.Integrador }.Concat(roles.Verificadores).Append(roles.Redactor).Distinct().ToList();
 
         /// <summary>Capturar un rol en su etapa captura a todos los de la etapa (D62: los dos verificadores van juntos).</summary>
@@ -185,9 +190,11 @@ namespace ChatCouncil.Interfaz
 
             var lista = raiz.Q<ScrollView>("lista");
             lista.Clear();
-            lista.Add(Titulo($"Proveedores ({Operadores.Count})"));
+            var tituloInvestigadores = Titulo($"Investigación ({Operadores.Count})");
+            tituloInvestigadores.name = "titulo-investigadores";
+            lista.Add(tituloInvestigadores);
             foreach (var id in Operadores) lista.Add(Fila(id, "", () => Seleccionar(id)));
-            var tituloRoles = Titulo("Roles");
+            var tituloRoles = Titulo("Verificación e integración");
             tituloRoles.name = "titulo-roles";
             lista.Add(tituloRoles);
             funcion.Clear();
@@ -216,7 +223,16 @@ namespace ChatCouncil.Interfaz
                 Refrescar();
                 return;
             }
-            await Task.WhenAll(Operadores.Select(async id =>
+            conectado = true;
+            if (!investigadoresCerrados && !EtapasDeRoles.Contains(EtapaDelRegistro())) await AbrirInvestigadores();
+            else CambiarDeParte(true);
+            Ubicar();
+            Refrescar();
+            if (!sondeando) Sondear();
+        }
+
+        Task AbrirInvestigadores() =>
+            Task.WhenAll(Operadores.Where(id => !paneles.ContainsKey(id)).Select(async id =>
             {
                 try
                 {
@@ -227,9 +243,34 @@ namespace ChatCouncil.Interfaz
                     fallaAlAbrir[id] = e.Message;
                 }
             }));
+
+        void Cerrar(string id)
+        {
+            if (paneles.TryGetValue(id, out var p)) p.Cerrar();
+            paneles.Remove(id);
+            pagina.Remove(id);
+        }
+
+        /// <summary>A la segunda parte: se cierran las páginas de los investigadores y se abren los roles. A la primera, al revés.</summary>
+        async void CambiarDeParte(bool aRoles)
+        {
+            investigadoresCerrados = aRoles;
+            if (!conectado) return;
+            if (aRoles)
+            {
+                foreach (var id in Operadores) Cerrar(id);
+                if (visible != null && Operadores.Contains(visible)) visible = null;
+                MostrarRoles();
+            }
+            else
+            {
+                foreach (var id in RolesDeLaRonda) Cerrar(id);
+                rolesMostrados.Clear();
+                visible = Operadores.FirstOrDefault();
+                await AbrirInvestigadores();
+            }
             Ubicar();
             Refrescar();
-            if (!sondeando) Sondear();
         }
 
         async void Sondear()
@@ -366,6 +407,7 @@ namespace ChatCouncil.Interfaz
             }
             var paso = Puerta.PasoSiguiente();
             var etapa = EtapaDelRegistro();
+            if (EtapasDeRoles.Contains(etapa) != investigadoresCerrados) CambiarDeParte(!investigadoresCerrados);
             if (paso.Etapa != etapaMostrada)
             {
                 etapaMostrada = paso.Etapa;
@@ -413,9 +455,11 @@ namespace ChatCouncil.Interfaz
             raiz.Q<Label>("contadores-ancha").text = etapa == "investigacion" ? $"Enviados {enviados} de {n} · Parecen terminados {terminados} · Capturados {capturados}" : "";
             raiz.Q<Label>("contadores-angosta").text = etapa == "investigacion" ? $"{enviados} de {n} enviados · {terminados} terminados" : "";
 
+            raiz.Q("titulo-investigadores").style.display = investigadoresCerrados ? DisplayStyle.None : DisplayStyle.Flex;
             foreach (var id in Operadores)
             {
                 var fila = raiz.Q("fila-" + id);
+                fila.style.display = investigadoresCerrados ? DisplayStyle.None : DisplayStyle.Flex;
                 var (icono, palabra) = Estados[estados[id]];
                 fila.Q<IconoEstado>().Estado = icono;
                 fila.Q<Label>(className: "fila-estado").text = palabra;
@@ -985,7 +1029,7 @@ namespace ChatCouncil.Interfaz
         void SacarRoles()
         {
             rolesMostrados.Clear();
-            if (visible != null && !Operadores.Contains(visible)) visible = Operadores.FirstOrDefault();
+            if (visible != null && !Operadores.Contains(visible)) visible = investigadoresCerrados ? null : Operadores.FirstOrDefault();
             Ubicar();
         }
 
@@ -1244,7 +1288,7 @@ namespace ChatCouncil.Interfaz
                     Motivo = sinInforme ? "Solo cuando la ronda ya tiene un informe del integrador." : null },
                 new Item { Grupo = "Ronda", Texto = "Recapturar la verificación", Accion = () => _ = Recapturar("verificador"),
                     Motivo = sinVerificacion ? "Solo cuando la ronda ya tiene una verificación." : null },
-                rolesMostrados.Count > 0
+                rolesMostrados.Count > 0 && !investigadoresCerrados
                     ? new Item { Grupo = "Ronda", Texto = "Ocultar los paneles de los roles", Accion = OcultarRoles }
                     : new Item { Grupo = "Ronda", Texto = "Mostrar los paneles de los roles", Accion = () => MostrarRoles() },
                 new Item { Grupo = "Ronda", Texto = "Capturar lo que ya está en los paneles", Accion = () => _ = Capturar(Operadores.ToList()),

@@ -32,7 +32,9 @@ Siete sistemas leyeron un mismo conjunto de respuestas y registraron lo que obse
 
 LA PREGUNTA QUE ORIGINO TODO ESTO FUE:
 
+===== inicio de la pregunta =====
 {{PREGUNTA}}
+===== fin de la pregunta =====
 
 LA TABLA DE HALLAZGOS:
 

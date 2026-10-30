@@ -17,7 +17,9 @@ const PLANTILLA = `Vas a escribir la respuesta a una pregunta de investigacion. 
 
 LA PREGUNTA ORIGINAL FUE:
 
+===== inicio de la pregunta =====
 {{PREGUNTA}}
+===== fin de la pregunta =====
 
 ANTES DE EMPEZAR, CONFIRMA QUE LEISTE EL ARCHIVO ENTERO
 

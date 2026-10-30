@@ -24,7 +24,9 @@ const PLANTILLA = `Un grupo de sistemas comparó varias respuestas a una pregunt
 
 LA PREGUNTA ORIGINAL FUE:
 
+===== inicio de la pregunta =====
 {{PREGUNTA}}
+===== fin de la pregunta =====
 
 EL ANÁLISIS A REVISAR:
 

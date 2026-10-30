@@ -23,7 +23,9 @@ const PLANTILLA = `Vas a leer seis respuestas que distintos sistemas dieron a un
 
 LA PREGUNTA ORIGINAL FUE:
 
+===== inicio de la pregunta =====
 {{PREGUNTA}}
+===== fin de la pregunta =====
 
 LAS SEIS RESPUESTAS:
 
@@ -101,7 +103,9 @@ const PLANTILLA_CON_ARCHIVO = `Vas a leer seis respuestas que distintos sistemas
 
 LA PREGUNTA ORIGINAL FUE:
 
+===== inicio de la pregunta =====
 {{PREGUNTA}}
+===== fin de la pregunta =====
 
 ANTES DE EMPEZAR, CONFIRMA QUE LEISTE EL ARCHIVO ENTERO
 

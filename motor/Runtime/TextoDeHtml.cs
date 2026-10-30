@@ -180,7 +180,11 @@ namespace ChatCouncil.Motor
         public static string TextoDelInformeIntegrador(string informeCrudo, string html) =>
             string.IsNullOrEmpty(html) ? informeCrudo : TextoDeHtmlEnBloques(html);
 
-        /// <summary>Igual para la salida del verificador: GLM deja cada párrafo en un &lt;p&gt; y el textContent los pega.</summary>
+        /// <summary>
+        /// Igual para la salida del verificador: GLM deja cada párrafo en un &lt;p&gt; y el textContent los pega. El texto
+        /// crudo leído por bloques ya trae sus saltos y no trae lo excluido (el razonamiento, que el html sí guarda):
+        /// el html solo rescata las capturas de antes, sin saltos.
+        /// </summary>
         public static string TextoDeLaSalidaVerificador(string salidaCruda, string html) =>
-            string.IsNullOrEmpty(html) ? salidaCruda : TextoDeHtmlEnBloques(html);    }
+            string.IsNullOrEmpty(html) || salidaCruda.Contains('\n') ? salidaCruda : TextoDeHtmlEnBloques(html);    }
 }

@@ -645,7 +645,7 @@ namespace ChatCouncil.Interfaz
                 return;
             }
             AbrirDialogo("Antes de pegar la pregunta",
-                $"En cada panel, activa a mano lo que quieras que use el proveedor: la búsqueda web o la investigación profunda. La app pega la pregunta en los {Operadores.Count} paneles; tú la revisas y la envías en cada uno.",
+                $"En cada panel, activa a mano la búsqueda web y nada más: ni razonamiento ni investigación profunda. La app pega la pregunta en los {Operadores.Count} paneles; tú la revisas y la envías en cada uno.",
                 false, "No volver a avisar en esta sesión", $"Pegar en los {Operadores.Count}",
                 (campo, marcada) =>
                 {
@@ -826,8 +826,8 @@ namespace ChatCouncil.Interfaz
             }
             AbrirDialogo("Antes de pegar la operación",
                 "En cada panel, antes de pegar: abre una conversación nueva (si siguiera el hilo anterior, el operador leería su " +
-                "propia respuesta y la evaluación dejaría de ser ciega) y activa el razonamiento avanzado y la búsqueda si el " +
-                "proveedor los tiene. La app comprueba que cada conversación esté vacía, pega solo el prompt y adjunta el archivo " +
+                "propia respuesta y la evaluación dejaría de ser ciega) y activa el razonamiento si el proveedor lo tiene, sin " +
+                "búsqueda web: la operación compara las respuestas del archivo. La app comprueba que cada conversación esté vacía, pega solo el prompt y adjunta el archivo " +
                 "de ese proveedor. Nada se envía: revisa que el archivo quedó adjunto y envía tú.",
                 false, "Pegarla como texto, sin archivo", "Entendido, pegar",
                 (campo, marcada) =>

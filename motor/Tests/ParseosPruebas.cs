@@ -20,6 +20,15 @@ namespace ChatCouncil.Motor.Pruebas
             Assert.That(TextoDeHtml.TextoDeHtmlEnBloques("<ol start=\"5\"><li><p>QUE CONVIENE RESCATAR</p></li></ol>"), Is.EqualTo("5. QUE CONVIENE RESCATAR"));
         }
 
+        // El html guarda el razonamiento que el spec de GLM excluye: con saltos, el texto capturado manda.
+        [Test]
+        public void LaVerificacionCapturadaPorBloquesNoTraeElRazonamiento()
+        {
+            const string html = "<div><div class=\"thinking-chain-container\"><p>borrador|H9</p></div><p>CONFIRMA|H1</p><p>CONTRADICE|H2</p></div>";
+            Assert.That(TextoDeHtml.TextoDeLaSalidaVerificador("CONFIRMA|H1\nCONTRADICE|H2", html), Is.EqualTo("CONFIRMA|H1\nCONTRADICE|H2"));
+            Assert.That(TextoDeHtml.TextoDeLaSalidaVerificador("borrador|H9CONFIRMA|H1CONTRADICE|H2", html), Is.EqualTo("borrador|H9\nCONFIRMA|H1\nCONTRADICE|H2"));
+        }
+
         // Ronda real del 2026-10-25: "text", Copiar y Descargar del bloque de código de DeepSeek entraron al informe, y sus títulos y su tabla quedaron planos.
         [Test]
         public void ElCuerpoDelRedactorEnMarkdownSinLosControlesDeLaPagina()

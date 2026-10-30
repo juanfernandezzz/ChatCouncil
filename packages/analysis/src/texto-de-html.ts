@@ -138,7 +138,11 @@ export function textoDelInformeIntegrador(informe: { informeCrudo: string; html?
   return informe.html ? textoDeHtmlEnBloques(informe.html) : informe.informeCrudo;
 }
 
-/** Igual para la salida del verificador: GLM (svelte) deja cada párrafo en un `<p>` y el textContent los pega. */
+/**
+ * Igual para la salida del verificador: GLM (svelte) deja cada párrafo en un `<p>` y el textContent los pega.
+ * Desde que la captura lee por bloques, el texto crudo ya trae sus saltos y no trae lo que el spec excluye (el
+ * razonamiento de GLM y Qwen, que el html crudo sí guarda): el html solo rescata las capturas de antes, sin saltos.
+ */
 export function textoDeLaSalidaVerificador(salida: { salidaCruda: string; html?: string | null }): string {
-  return salida.html ? textoDeHtmlEnBloques(salida.html) : salida.salidaCruda;
+  return salida.html && !salida.salidaCruda.includes("\n") ? textoDeHtmlEnBloques(salida.html) : salida.salidaCruda;
 }

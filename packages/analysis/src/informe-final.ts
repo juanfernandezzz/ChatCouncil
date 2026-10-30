@@ -208,11 +208,11 @@ function seccionesVerificacion(v: VerificacionParaInforme, nombre: string | null
       : `## Verificación de fuentes — ${nombre} (aporte de un modelo con búsqueda, no verificado por el consejo)`,
     "",
     ...(v.avisoSinComprobar ? [v.avisoSinComprobar, ""] : []),
-    items.length > 0 ? items.join("\n\n") : "El verificador no registro lineas de correspondencia con la fuente.",
+    items.length > 0 ? items.join("\n\n") : "El verificador no registró líneas de correspondencia con la fuente.",
     "",
     nombre === null ? ENCABEZADO_PUNTOS_CIEGOS : `## Puntos ciegos y preguntas derivadas — ${nombre} (aporte del verificador)`,
     "",
-    aportes.length > 0 ? aportes.join("\n") : "El verificador no registro puntos ciegos ni preguntas derivadas.",
+    aportes.length > 0 ? aportes.join("\n") : "El verificador no registró puntos ciegos ni preguntas derivadas.",
     "",
   ];
 }
@@ -339,13 +339,13 @@ export function armarInformeFinal(input: InformeFinalInput): string {
   // Los tres estados se dicen por separado, nunca se colapsan.
   const sinTabla = input.hallazgos.length === 0;
   const sinIntegrador = cuerpoIntegrador === null;
-  const SIN_TABLA = "La tabla de hallazgos de esta ronda esta vacia: ningun operador dejo hallazgos parseables.";
+  const SIN_TABLA = "La tabla de hallazgos de esta ronda está vacía: ningún operador dejó hallazgos parseables.";
   const seccionReferenciados = sinTabla
     ? SIN_TABLA
     : referenciados.length > 0
       ? referenciados.map(entradaHallazgo).join("\n\n")
       : sinIntegrador
-        ? `${SIN_INFORME_INTEGRADOR} Sin informe no hay referencias que resolver: los ${input.hallazgos.length} hallazgos de la tabla estan completos en "Hallazgos no referenciados".`
+        ? `${SIN_INFORME_INTEGRADOR} Sin informe no hay referencias que resolver: los ${input.hallazgos.length} hallazgos de la tabla están completos en "Hallazgos no referenciados".`
         : "El integrador no referencio ningun hallazgo de la tabla.";
   const seccionNoReferenciados = sinTabla
     ? SIN_TABLA
@@ -395,7 +395,7 @@ export function armarInformeFinal(input: InformeFinalInput): string {
     "",
     lecturaMarcada,
     "",
-    "## Participacion de operadores",
+    "## Participación de operadores",
     "",
     seccionParticipacion,
     "",
@@ -418,10 +418,10 @@ export function armarInformeFinal(input: InformeFinalInput): string {
     ...(input.condiciones.length === 0
       ? ["No hay respuestas de investigador en el registro de esta ronda."]
       : [
-          "La columna Codigo es la clave de los [P#] que aparecen en el texto del",
-          "redactor y del integrador: es el codigo estable del sello de esta ronda.",
+          "La columna Código es la clave de los [P#] que aparecen en el texto del",
+          "redactor y del integrador: es el código estable del sello de esta ronda.",
           "",
-          "| Codigo | Proveedor | Etiqueta de modelo | Caracteres de su respuesta | Fuentes citadas |",
+          "| Código | Proveedor | Etiqueta de modelo | Caracteres de su respuesta | Fuentes citadas |",
           "|---|---|---|---|---|",
           input.condiciones.map(filaCondicion).join("\n"),
         ]),
@@ -439,11 +439,11 @@ export function armarInformeFinal(input: InformeFinalInput): string {
     "",
     "## Lo que este informe no dice",
     "",
-    "Este informe describe como se relacionan siete respuestas entre si. No",
-    "determina cual es correcta. La verificacion mecanica comprueba que una fuente",
-    "existe y coincide, no que sostenga la afirmacion. El informe del integrador es",
-    "una afirmacion de un modelo con su procedencia registrada, no un resultado",
-    "verificado. Las limitaciones completas del instrumento estan en",
+    "Este informe describe cómo se relacionan siete respuestas entre sí. No",
+    "determina cuál es correcta. La verificación mecánica comprueba que una fuente",
+    "existe y coincide, no que sostenga la afirmación. El informe del integrador es",
+    "una afirmación de un modelo con su procedencia registrada, no un resultado",
+    "verificado. Las limitaciones completas del instrumento están en",
     "docs/LIMITACIONES.md.",
   ].join("\n");
 
@@ -457,7 +457,7 @@ export function armarInformeFinal(input: InformeFinalInput): string {
         texto,
         "",
         `Se quitaron ${quitadas} marca(s) de integridad [[CC-...]] del texto de este informe:`,
-        "son instrumentacion del archivo que leyeron los modelos, no contenido. El texto",
-        "crudo con las marcas sigue intacto en el registro de la conversacion.",
+        "son instrumentación del archivo que leyeron los modelos, no contenido. El texto",
+        "crudo con las marcas sigue intacto en el registro de la conversación.",
       ].join("\n");
 }

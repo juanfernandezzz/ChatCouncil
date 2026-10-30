@@ -22,6 +22,8 @@
           "[data-conversation-role=\"assistant\"]"
         ]
       },
+      "fallaDeCarga": "[data-dil-render-failed]",
+      "_notaFallaDeCarga": "Medido el 2026-10-29 en la operacion de Juan (ronda 48e5d7bb): ChatGPT mostro 'No se pudo cargar esta respuesta.' en un div[role=status][data-dil-render-failed] dentro del mensaje, y se guardo como salida (0 hallazgos). Con este selector la lectura sale con error y no se guarda.",
       "_notaAsistente": "Medido el 2026-10-25: data-conversation-role=assistant es un H4 de encabezado (13 caracteres) y la respuesta es su contenedor; por eso se elige el que lo tiene como hijo (:has) y se excluye el encabezado. Con el selector plano, el ultimo nodo era el H4.",
       "informeEnIframe": {
         "turno": "section[data-testid^=\"conversation-turn-\"], body",
@@ -144,9 +146,11 @@
         "selector": "structured-content-container.model-response-text, #extended-response-markdown-content",
         "pick": "last",
         "exclude": [
-          "[class*=\"thought\"]"
+          "[class*=\"thought\"]",
+          "sources-carousel-inline"
         ]
       },
+      "_notaCitas": "Medido el 2026-10-29 en la operacion de Juan (ronda 48e5d7bb): las citas al archivo adjunto son chips sources-carousel-inline dentro del texto y se leian como 'TXT+ 4' al final de las lineas.",
       "userMessage": {
         "selector": "div.query-text",
         "pick": "first"

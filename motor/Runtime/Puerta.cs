@@ -1013,7 +1013,7 @@ namespace ChatCouncil.Motor
             {
                 var v = vigentes.FirstOrDefault(x => x.OperadorId == id);
                 var s = v == null ? null : hechos.OfType<SalidaOperador>().FirstOrDefault(h => h.Id == v.SalidaId);
-                if (v == null || s == null) return new ParticipacionOperador { OperadorId = id, Estado = "fallo", Detalle = "no se capturo salida: no hay salida de operador en el registro" };
+                if (v == null || s == null) return new ParticipacionOperador { OperadorId = id, Estado = "fallo", Detalle = "no se capturó salida: no hay salida de operador en el registro" };
                 if (v.Hallazgos.Count > 0) return new ParticipacionOperador { OperadorId = id, Estado = "ok", Detalle = $"{v.Hallazgos.Count} hallazgos" };
                 int descartadas;
                 try
@@ -1024,7 +1024,7 @@ namespace ChatCouncil.Motor
                 {
                     descartadas = 0;
                 }
-                return new ParticipacionOperador { OperadorId = id, Estado = "sin-hallazgos", Detalle = $"0 hallazgos parseables ({descartadas} lineas de la salida cruda descartadas)" };
+                return new ParticipacionOperador { OperadorId = id, Estado = "sin-hallazgos", Detalle = $"0 hallazgos parseables ({descartadas} líneas de la salida cruda descartadas)" };
             }).ToList();
 
             var informeIntegrador = Dominio.UltimoInformeIntegrador(hechos, ronda.Id);

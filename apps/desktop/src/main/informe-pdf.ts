@@ -250,7 +250,7 @@ export async function entregarCarpetaDeInforme(
         // esto, la subcarpeta incompleta se lee como "ese proveedor no participó".
         const nota = [
           "Estos archivos de respuesta de investigador no se pudieron escribir.",
-          "El texto de cada una sigue entero en el registro de la conversacion.",
+          "El texto de cada una sigue entero en el registro de la conversación.",
           "",
           ...faltantes.map((f) => `- ${f}`),
           "",

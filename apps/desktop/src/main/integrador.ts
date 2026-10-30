@@ -331,13 +331,13 @@ export interface ResultadoOperador {
 export function calcularParticipacionOperadores(resultados: readonly ResultadoOperador[]): ParticipacionOperador[] {
   return resultados.map((r) => {
     if (!r.capturado) {
-      return { operadorId: r.operadorId, estado: "fallo", detalle: `no se capturo salida: ${r.motivoFallo ?? "sin detalle"}` };
+      return { operadorId: r.operadorId, estado: "fallo", detalle: `no se capturó salida: ${r.motivoFallo ?? "sin detalle"}` };
     }
     if ((r.totalHallazgos ?? 0) === 0) {
       return {
         operadorId: r.operadorId,
         estado: "sin-hallazgos",
-        detalle: `0 hallazgos parseables (${r.lineasDescartadas ?? 0} lineas de la salida cruda descartadas)`,
+        detalle: `0 hallazgos parseables (${r.lineasDescartadas ?? 0} líneas de la salida cruda descartadas)`,
       };
     }
     return { operadorId: r.operadorId, estado: "ok", detalle: `${r.totalHallazgos} hallazgos` };

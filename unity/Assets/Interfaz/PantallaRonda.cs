@@ -345,6 +345,7 @@ namespace ChatCouncil.Interfaz
         }
 
         static bool Terminado(string estado) => estado.StartsWith("parece-terminado", StringComparison.Ordinal);
+        bool RolListo(string id) => paneles.ContainsKey(id) && (Terminado(EstadoDe(id)) || EstadoDe(id) == "con-problema");
 
         /// <summary>
         /// Qué pasó y qué hacer (D9): la cabecera del PC lleva el detalle; el selector del teléfono, una línea corta
@@ -439,7 +440,7 @@ namespace ChatCouncil.Interfaz
             int capturados = deOperadores.Count(e => e == "capturado");
             // Capturar un rol: cuando su página parece terminada o su captura falló (D7: lo imposible, deshabilitado).
             var rolDelPaso = roles.DeLaEtapa(paso.Etapa);
-            var rolListo = rolDelPaso.Count > 0 && rolDelPaso.All(id => paneles.ContainsKey(id) && (Terminado(estados[id]) || estados[id] == "con-problema"));
+            var rolListo = rolDelPaso.Count > 0 && rolDelPaso.All(RolListo);
 
             var (texto, habilitado) = TextoDelPaso(paso, terminados, rolListo);
             foreach (var nombre in new[] { "paso-ancha", "paso-angosta" })
@@ -617,7 +618,14 @@ namespace ChatCouncil.Interfaz
         {
             var accion = raiz.Q<Button>("accion-panel").text;
             if (accion == PegarAqui) _ = PegarEnEste();
-            else if (accion.StartsWith(CapturarEste, StringComparison.Ordinal)) _ = Capturar(AlCapturar(visible));
+            else if (accion.StartsWith(CapturarEste, StringComparison.Ordinal))
+            {
+                // Los dos verificadores se registran juntos: capturar uno solo se llevaría al otro a medio responder.
+                var ids = AlCapturar(visible);
+                var faltan = ids.Where(id => !RolListo(id)).Select(Dominio.NombreProveedor).ToList();
+                if (ids.Count > 1 && faltan.Count > 0) Resultado($"Falta que termine {string.Join(" y ", faltan)}: las verificaciones se capturan juntas.", true);
+                else _ = Capturar(ids);
+            }
             else if (accion == PegarOperacionAqui) ConAvisoDeOperacion(new List<string> { visible }, null);
             else if (accion == PegarPromptAqui) _ = PegarRol();
         }
@@ -720,6 +728,7 @@ namespace ChatCouncil.Interfaz
                     UserText = (string)j["userText"],
                     FuentesHref = (int?)j["fuentesHref"],
                     Html = (string)j["html"],
+                    Error = (string)j["error"],
                 };
                 if ((bool?)j["informeEnIframe"] != true) return l;
                 // Se captura todo: el mensaje y a continuación el informe del iframe; el html guarda los dos.

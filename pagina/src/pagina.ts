@@ -39,6 +39,8 @@ interface Spec {
   timeouts?: { composerMs?: number };
   modelLabel?: { selector: string };
   userMessage?: { selector: string; pick: "last" | "first" };
+  /** El aviso del sitio cuando no pudo mostrar la respuesta (ChatGPT): ese texto no es la respuesta. */
+  fallaDeCarga?: string;
 }
 
 interface Pedido {
@@ -385,7 +387,9 @@ async function leer(spec: Spec) {
   const archivos = await leerArchivos(spec, nodo);
   const mensaje = textoDelAsistente(spec, nodo);
   const base = canvas ? `${mensaje}\n\n${canvas.texto}` : mensaje;
+  const falla = spec.fallaDeCarga ? nodo?.querySelector<HTMLElement>(spec.fallaDeCarga) : null;
   return {
+    error: falla ? `la página mostró «${(falla.innerText ?? "").trim()}» en lugar de la respuesta: recárgala y vuelve a capturar` : null,
     text: archivos ? `${base}\n\n${archivos.texto}` : base,
     archivos: archivos ? { leidos: archivos.leidos, total: archivos.total } : null,
     userText: leerMensajeUsuario(spec),

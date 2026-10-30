@@ -123,7 +123,7 @@ namespace ChatCouncil.Motor
         const string EncabezadoVerificacion = "## Verificación de fuentes (aporte de un modelo con búsqueda, no verificado por el consejo)";
         const string EncabezadoPuntosCiegos = "## Puntos ciegos y preguntas derivadas (aporte del verificador)";
         const string SinInformeIntegrador = "No se capturo informe del integrador para esta ronda.";
-        const string SinTabla = "La tabla de hallazgos de esta ronda esta vacia: ningun operador dejo hallazgos parseables.";
+        const string SinTabla = "La tabla de hallazgos de esta ronda está vacía: ningún operador dejó hallazgos parseables.";
 
         static readonly Regex Corchetes = new Regex(@"\[[^\]\n]*\]");
         static readonly Regex CodigoH = new Regex($"{Js.Borde}H[0-9]+{Js.Borde}");
@@ -205,11 +205,11 @@ namespace ChatCouncil.Motor
             if (!string.IsNullOrEmpty(v.AvisoSinComprobar)) r.AddRange(new[] { v.AvisoSinComprobar, "" });
             r.AddRange(new[]
             {
-                items.Count > 0 ? string.Join("\n\n", items) : "El verificador no registro lineas de correspondencia con la fuente.",
+                items.Count > 0 ? string.Join("\n\n", items) : "El verificador no registró líneas de correspondencia con la fuente.",
                 "",
                 nombre == null ? EncabezadoPuntosCiegos : $"## Puntos ciegos y preguntas derivadas — {nombre} (aporte del verificador)",
                 "",
-                aportes.Count > 0 ? string.Join("\n", aportes) : "El verificador no registro puntos ciegos ni preguntas derivadas.",
+                aportes.Count > 0 ? string.Join("\n", aportes) : "El verificador no registró puntos ciegos ni preguntas derivadas.",
                 "",
             });
             return r;
@@ -243,7 +243,7 @@ namespace ChatCouncil.Motor
             bool sinTabla = input.Hallazgos.Count == 0;
             var seccionReferenciados = sinTabla ? SinTabla
                 : referenciados.Count > 0 ? string.Join("\n\n", referenciados.Select(EntradaHallazgo))
-                : cuerpoIntegrador == null ? $"{SinInformeIntegrador} Sin informe no hay referencias que resolver: los {input.Hallazgos.Count} hallazgos de la tabla estan completos en \"Hallazgos no referenciados\"."
+                : cuerpoIntegrador == null ? $"{SinInformeIntegrador} Sin informe no hay referencias que resolver: los {input.Hallazgos.Count} hallazgos de la tabla están completos en \"Hallazgos no referenciados\"."
                 : "El integrador no referencio ningun hallazgo de la tabla.";
             var seccionNoReferenciados = sinTabla ? SinTabla
                 : noReferenciados.Count > 0 ? string.Join("\n\n", noReferenciados.Select(EntradaHallazgo))
@@ -280,7 +280,7 @@ namespace ChatCouncil.Motor
                 "**Eje de registro:** los tres (HECHOS, FUENTES, CONCLUSIONES)",
                 "",
                 "## Lectura del integrador", "", lectura, "",
-                "## Participacion de operadores", "", seccionParticipacion, "",
+                "## Participación de operadores", "", seccionParticipacion, "",
                 "## Hallazgos referenciados", "", seccionReferenciados, "",
                 "## Hallazgos no referenciados", "", seccionNoReferenciados, "",
                 "## Limitaciones registradas por los operadores", "", seccionLimitaciones, "",
@@ -292,10 +292,10 @@ namespace ChatCouncil.Motor
             {
                 partes.AddRange(new[]
                 {
-                    "La columna Codigo es la clave de los [P#] que aparecen en el texto del",
-                    "redactor y del integrador: es el codigo estable del sello de esta ronda.",
+                    "La columna Código es la clave de los [P#] que aparecen en el texto del",
+                    "redactor y del integrador: es el código estable del sello de esta ronda.",
                     "",
-                    "| Codigo | Proveedor | Etiqueta de modelo | Caracteres de su respuesta | Fuentes citadas |",
+                    "| Código | Proveedor | Etiqueta de modelo | Caracteres de su respuesta | Fuentes citadas |",
                     "|---|---|---|---|---|",
                     string.Join("\n", input.Condiciones.Select(FilaCondicion)),
                 });
@@ -322,11 +322,11 @@ namespace ChatCouncil.Motor
                 "",
                 "## Lo que este informe no dice",
                 "",
-                "Este informe describe como se relacionan siete respuestas entre si. No",
-                "determina cual es correcta. La verificacion mecanica comprueba que una fuente",
-                "existe y coincide, no que sostenga la afirmacion. El informe del integrador es",
-                "una afirmacion de un modelo con su procedencia registrada, no un resultado",
-                "verificado. Las limitaciones completas del instrumento estan en",
+                "Este informe describe cómo se relacionan siete respuestas entre sí. No",
+                "determina cuál es correcta. La verificación mecánica comprueba que una fuente",
+                "existe y coincide, no que sostenga la afirmación. El informe del integrador es",
+                "una afirmación de un modelo con su procedencia registrada, no un resultado",
+                "verificado. Las limitaciones completas del instrumento están en",
                 "docs/LIMITACIONES.md.",
             });
 
@@ -338,8 +338,8 @@ namespace ChatCouncil.Motor
                     texto,
                     "",
                     $"Se quitaron {quitadas} marca(s) de integridad [[CC-...]] del texto de este informe:",
-                    "son instrumentacion del archivo que leyeron los modelos, no contenido. El texto",
-                    "crudo con las marcas sigue intacto en el registro de la conversacion.");
+                    "son instrumentación del archivo que leyeron los modelos, no contenido. El texto",
+                    "crudo con las marcas sigue intacto en el registro de la conversación.");
         }
 
         static string Otras(int n) => n == 1 ? "la otra sale" : $"las otras {n} salen";

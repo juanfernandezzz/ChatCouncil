@@ -799,6 +799,13 @@ namespace ChatCouncil.Interfaz
                 // Con un solo verificador terminado todavía no se captura: los dos van juntos.
                 await Cuadros(10);
                 var esperaAlOtro = !(Paso == "Capturar la verificación" && Habilitado);
+                // El botón del panel tampoco se lleva al que sigue respondiendo.
+                Ronda.Seleccionar("glm");
+                var botonListo = await Esperar(() => Raiz.Q<Button>("accion-panel").text.StartsWith("Capturar este panel", StringComparison.Ordinal));
+                await Pulsar("accion-panel");
+                await Cuadros(5);
+                Anotar(botonListo && Resultado == "Falta que termine Qwen: las verificaciones se capturan juntas." && !Hechos.OfType<SalidaVerificador>().Any(h => h.RondaId == ronda),
+                    "capturar un verificador espera al otro", $"botón: {botonListo}; «{Resultado}»; verificaciones {Hechos.OfType<SalidaVerificador>().Count(h => h.RondaId == ronda)}");
                 await ResponderEnParrafos("qwen", "Verifico por mi cuenta.", $"CONFIRMA|OFICIAL|H1|{b}/ok|\"la misma\"");
                 await Esperar(() => Paso == "Capturar la verificación" && Habilitado);
                 await Pulsar("paso-ancha");

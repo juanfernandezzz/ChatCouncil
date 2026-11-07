@@ -1,0 +1,95 @@
+{
+    "app":  "ChatCouncil-Unity 0.1.41",
+    "maquina":  "PC de Juan",
+    "condiciones":  {
+                        "registradoEn":  "2026-11-07T10:17:45.6608647-03:00",
+                        "cpu":  "Intel(R) Core(TM) i5-4210U CPU @ 1.70GHz",
+                        "nucleos":  2,
+                        "nucleosLogicos":  4,
+                        "ramTotalBytes":  17086361600,
+                        "windows":  "Microsoft Windows 10 Home Single Language",
+                        "windowsVersion":  "22H2",
+                        "windowsCompilacion":  "19045.7807",
+                        "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                        "enchufado":  true,
+                        "bateriaPorcentaje":  100,
+                        "appVersionRegistro":  "0.1.41",
+                        "appVersionEnBinario":  "0.1.41",
+                        "exeProductVersion":  "6000.3.25f1 (e1dba0a9aba4)",
+                        "webView2Runtime":  "156.0.4314.58"
+                    },
+    "corridas":  [
+                     {
+                         "medida":  "M5",
+                         "archivo":  "ChatCouncil-instalador.exe",
+                         "valor":  31213183,
+                         "unidad":  "bytes",
+                         "rotulo":  "exacta",
+                         "medidoEn":  "2026-11-07T10:17:55.6705638-03:00",
+                         "condiciones":  {
+                                             "enchufado":  true,
+                                             "bateriaPorcentaje":  100,
+                                             "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                                             "appsAbiertas":  [
+                                                                  "ApplicationFrameHost",
+                                                                  "ChatCouncil",
+                                                                  "claude",
+                                                                  "explorer",
+                                                                  "osk-win",
+                                                                  "SynTPEnh",
+                                                                  "SystemSettings",
+                                                                  "TextInputHost",
+                                                                  "thorium"
+                                                              ]
+                                         }
+                     },
+                     {
+                         "medida":  "M5",
+                         "archivo":  "ChatCouncil.apk",
+                         "valor":  39976050,
+                         "unidad":  "bytes",
+                         "rotulo":  "exacta",
+                         "medidoEn":  "2026-11-07T10:17:56.5536316-03:00",
+                         "condiciones":  {
+                                             "enchufado":  true,
+                                             "bateriaPorcentaje":  100,
+                                             "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                                             "appsAbiertas":  [
+                                                                  "ApplicationFrameHost",
+                                                                  "ChatCouncil",
+                                                                  "claude",
+                                                                  "explorer",
+                                                                  "osk-win",
+                                                                  "SynTPEnh",
+                                                                  "SystemSettings",
+                                                                  "TextInputHost",
+                                                                  "thorium"
+                                                              ]
+                                         }
+                     },
+                     {
+                         "medida":  "M5",
+                         "archivo":  "version.txt",
+                         "valor":  6,
+                         "unidad":  "bytes",
+                         "rotulo":  "exacta",
+                         "medidoEn":  "2026-11-07T10:17:56.9575077-03:00",
+                         "condiciones":  {
+                                             "enchufado":  true,
+                                             "bateriaPorcentaje":  100,
+                                             "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                                             "appsAbiertas":  [
+                                                                  "ApplicationFrameHost",
+                                                                  "ChatCouncil",
+                                                                  "claude",
+                                                                  "explorer",
+                                                                  "osk-win",
+                                                                  "SynTPEnh",
+                                                                  "SystemSettings",
+                                                                  "TextInputHost",
+                                                                  "thorium"
+                                                              ]
+                                         }
+                     }
+                 ]
+}

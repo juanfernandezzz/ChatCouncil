@@ -1,0 +1,466 @@
+{
+    "lote":  "E3 prueba de webviews (Windows)",
+    "fecha":  "2026-11-07",
+    "maquina":  {
+                    "so":  "Windows 10 Home 10.0.19045",
+                    "nucleosLogicos":  4,
+                    "flutter":  "3.47.9 stable",
+                    "dart":  "3.13.7",
+                    "vsBuildTools":  "2026 18.6.1 (MSVC 14.51.36231)"
+                },
+    "metodo":  {
+                   "paneles":  "Diez paneles vivos (GridView 5x2) con newConversationUrl de packages/providers/src/specs.json de ChatCouncil-Unity 247f6db, sesión cerrada, perfil nuevo en %TEMP% por corrida.",
+                   "medicion":  "M2 de bench/medir.ps1: detector de reposo (CPU media \u003c 10 % en 15 s y \u003e= 10 renderers, techo 240 s), luego 30 s de espera y 60 muestras a 1 Hz. Tres corridas por candidato, cerrando entre corridas. Valores = mediana de las tres corridas.",
+                   "diferenciaConBench":  "El árbol se toma desde e3_webviews.exe y el detector cuenta CPU y renderers solo dentro de ese árbol, para que otros WebView2 de la máquina no ensucien la comparación.",
+                   "unExePorPlugin":  "webview_windows, webview_plus y flutter_inappwebview_windows crean cada uno un DispatcherQueue en el hilo de la plataforma; Windows admite uno por hilo. Con los plugins juntos, webview_windows falla con PlatformException(unsupported_platform, The platform is not supported). Por eso construir.ps1 compila un exe por plugin.",
+                   "rutaAscii":  "Se compila en C:\\cc-e3\\\u003cplugin\u003e con PUB_CACHE propio: con la ruta del repo, la «á» de «Fernández» hace fallar flutter assemble con «Unable to read file: ...\\app.dill».",
+                   "reposoNoAlcanzado":  "En 8 de 9 corridas el árbol no bajó de 10 % de CPU en 240 s (diez páginas reales con scripts y animaciones); la M2 se tomó igual al vencer el techo. Bajo esa carga las 60 muestras duraron entre 60 y 1384 s; la CPU media usa el tiempo real transcurrido."
+               },
+    "candidatos":  {
+                       "webview_windows":  {
+                                               "version":  "0.4.0",
+                                               "compila":  "SÍ, con ajuste",
+                                               "notaCompilacion":  "Sin ajuste no compila con MSVC 14.51 (VS Build Tools 2026): «error STL1011: \u003cexperimental/coroutine\u003e ... /await» en el plugin; compila con add_definitions(-D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS) en windows/CMakeLists.txt.",
+                                               "corridas":  [
+                                                                {
+                                                                    "corrida":  1,
+                                                                    "inicio":  "2026-11-07T16:57:22.1936706-03:00",
+                                                                    "muestras":  60,
+                                                                    "segundos":  415.39,
+                                                                    "workingSetMedianaBytes":  2854227968,
+                                                                    "privateBytesMedianaBytes":  2234165248,
+                                                                    "cpuMediaPorcentajeMaquina":  44.46,
+                                                                    "appWorkingSetMedianaBytes":  87683072,
+                                                                    "appPrivateBytesMedianaBytes":  131024896,
+                                                                    "appCpuMediaPorcentajeMaquina":  11.46,
+                                                                    "procesosMediana":  18,
+                                                                    "renderers":  12,
+                                                                    "nucleosLogicos":  4,
+                                                                    "reposoAlcanzado":  true,
+                                                                    "reposoSegundos":  17.4,
+                                                                    "plugin":  "windows"
+                                                                },
+                                                                {
+                                                                    "corrida":  2,
+                                                                    "inicio":  "2026-11-07T17:06:35.1796735-03:00",
+                                                                    "muestras":  60,
+                                                                    "segundos":  172.69,
+                                                                    "workingSetMedianaBytes":  2908817408,
+                                                                    "privateBytesMedianaBytes":  2272837632,
+                                                                    "cpuMediaPorcentajeMaquina":  39.34,
+                                                                    "appWorkingSetMedianaBytes":  87965696,
+                                                                    "appPrivateBytesMedianaBytes":  130723840,
+                                                                    "appCpuMediaPorcentajeMaquina":  8.9,
+                                                                    "procesosMediana":  19,
+                                                                    "renderers":  12,
+                                                                    "nucleosLogicos":  4,
+                                                                    "reposoAlcanzado":  false,
+                                                                    "reposoSegundos":  240,
+                                                                    "plugin":  "windows"
+                                                                },
+                                                                {
+                                                                    "corrida":  3,
+                                                                    "inicio":  "2026-11-07T17:15:36.4782120-03:00",
+                                                                    "muestras":  60,
+                                                                    "segundos":  61.31,
+                                                                    "workingSetMedianaBytes":  3105751040,
+                                                                    "privateBytesMedianaBytes":  2426220544,
+                                                                    "cpuMediaPorcentajeMaquina":  34.49,
+                                                                    "appWorkingSetMedianaBytes":  86384640,
+                                                                    "appPrivateBytesMedianaBytes":  129581056,
+                                                                    "appCpuMediaPorcentajeMaquina":  9.66,
+                                                                    "procesosMediana":  21,
+                                                                    "renderers":  14,
+                                                                    "nucleosLogicos":  4,
+                                                                    "reposoAlcanzado":  false,
+                                                                    "reposoSegundos":  240,
+                                                                    "plugin":  "windows"
+                                                                }
+                                                            ],
+                                               "medianas":  {
+                                                                "ramArbolWorkingSetMB":  2774,
+                                                                "ramArbolPrivateMB":  2168,
+                                                                "ramProcesoWorkingSetMB":  84,
+                                                                "ramProcesoPrivateMB":  125,
+                                                                "cpuArbolPorcentajeMaquina":  39.34,
+                                                                "cpuProcesoPorcentajeMaquina":  9.66
+                                                            },
+                                               "requisitos":  {
+                                                                  "perfilPersistente":  {
+                                                                                            "valor":  "SÍ",
+                                                                                            "evidencia":  {
+                                                                                                              "escribir":  {
+                                                                                                                               "cookie":  "cc_e3=persistente",
+                                                                                                                               "localStorage":  "persistente"
+                                                                                                                           },
+                                                                                                              "leerTrasReabrir":  {
+                                                                                                                                      "cookie":  "cc_e3=persistente",
+                                                                                                                                      "localStorage":  "persistente"
+                                                                                                                                  }
+                                                                                                          }
+                                                                                        },
+                                                                  "compositor":  {
+                                                                                     "valor":  "SÍ",
+                                                                                     "evidencia":  {
+                                                                                                       "textareaInsertText":  {
+                                                                                                                                  "igual":  true,
+                                                                                                                                  "leidos":  44,
+                                                                                                                                  "esperados":  44
+                                                                                                                              },
+                                                                                                       "textareaPaste":  {
+                                                                                                                             "igual":  true,
+                                                                                                                             "leidos":  44,
+                                                                                                                             "esperados":  44
+                                                                                                                         },
+                                                                                                       "contenteditableInsertText":  {
+                                                                                                                                         "igual":  true,
+                                                                                                                                         "leidos":  44,
+                                                                                                                                         "esperados":  44
+                                                                                                                                     },
+                                                                                                       "contenteditablePaste":  {
+                                                                                                                                    "igual":  true,
+                                                                                                                                    "leidos":  44,
+                                                                                                                                    "esperados":  44
+                                                                                                                                }
+                                                                                                   }
+                                                                                 },
+                                                                  "domYHtml":  {
+                                                                                   "valor":  "SÍ",
+                                                                                   "evidencia":  {
+                                                                                                     "texto":  "Hola mundo ñ 😀",
+                                                                                                     "html":  "\u003cdiv id=\"respuesta\"\u003e\u003cp\u003eHola \u003cb\u003emundo\u003c/b\u003e ñ 😀\u003c/p\u003e\u003c/div\u003e",
+                                                                                                     "textoIgual":  true,
+                                                                                                     "htmlTraeNegrita":  true
+                                                                                                 }
+                                                                               },
+                                                                  "adjuntarSinDialogo":  {
+                                                                                             "valor":  "NO",
+                                                                                             "evidencia":  {
+                                                                                                               "error":  "Unsupported operation: el plugin no expone DevTools Protocol"
+                                                                                                           }
+                                                                                         },
+                                                                  "loginGoogle":  {
+                                                                                      "valor":  "SÍ",
+                                                                                      "evidencia":  {
+                                                                                                        "host":  "accounts.google.com",
+                                                                                                        "ruta":  "/v3/signin/identifier",
+                                                                                                        "titulo":  "Acceso: Cuentas de Google",
+                                                                                                        "disallowedUseragent":  false,
+                                                                                                        "avisoInseguro":  false,
+                                                                                                        "campoCorreo":  false
+                                                                                                    }
+                                                                                  },
+                                                                  "widgetsEncima":  {
+                                                                                        "valor":  "SÍ",
+                                                                                        "evidencia":  "Captura del modo pruebas: el rectángulo rojo «FLUTTER ENCIMA» se ve sobre la página (textura compuesta por Flutter)."
+                                                                                    }
+                                                              }
+                                           },
+                       "webview_win_floating":  {
+                                                    "version":  "3.0.3",
+                                                    "compila":  "SÍ",
+                                                    "corridas":  [
+                                                                     {
+                                                                         "corrida":  1,
+                                                                         "inicio":  "2026-11-07T17:22:30.6126717-03:00",
+                                                                         "muestras":  60,
+                                                                         "segundos":  60.5,
+                                                                         "workingSetMedianaBytes":  3351523328,
+                                                                         "privateBytesMedianaBytes":  2625040384,
+                                                                         "cpuMediaPorcentajeMaquina":  26.07,
+                                                                         "appWorkingSetMedianaBytes":  78327808,
+                                                                         "appPrivateBytesMedianaBytes":  116162560,
+                                                                         "appCpuMediaPorcentajeMaquina":  0.02,
+                                                                         "procesosMediana":  21,
+                                                                         "renderers":  14,
+                                                                         "nucleosLogicos":  4,
+                                                                         "reposoAlcanzado":  false,
+                                                                         "reposoSegundos":  240,
+                                                                         "plugin":  "floating"
+                                                                     },
+                                                                     {
+                                                                         "corrida":  2,
+                                                                         "inicio":  "2026-11-07T17:28:40.4276497-03:00",
+                                                                         "muestras":  60,
+                                                                         "segundos":  60.47,
+                                                                         "workingSetMedianaBytes":  3201099776,
+                                                                         "privateBytesMedianaBytes":  2453768192,
+                                                                         "cpuMediaPorcentajeMaquina":  21.88,
+                                                                         "appWorkingSetMedianaBytes":  77692928,
+                                                                         "appPrivateBytesMedianaBytes":  115490816,
+                                                                         "appCpuMediaPorcentajeMaquina":  0.04,
+                                                                         "procesosMediana":  21,
+                                                                         "renderers":  14,
+                                                                         "nucleosLogicos":  4,
+                                                                         "reposoAlcanzado":  false,
+                                                                         "reposoSegundos":  240,
+                                                                         "plugin":  "floating"
+                                                                     },
+                                                                     {
+                                                                         "corrida":  3,
+                                                                         "inicio":  "2026-11-07T17:34:48.8595097-03:00",
+                                                                         "muestras":  60,
+                                                                         "segundos":  60.53,
+                                                                         "workingSetMedianaBytes":  3229390848,
+                                                                         "privateBytesMedianaBytes":  2467489792,
+                                                                         "cpuMediaPorcentajeMaquina":  21.48,
+                                                                         "appWorkingSetMedianaBytes":  77578240,
+                                                                         "appPrivateBytesMedianaBytes":  115306496,
+                                                                         "appCpuMediaPorcentajeMaquina":  0.03,
+                                                                         "procesosMediana":  21,
+                                                                         "renderers":  14,
+                                                                         "nucleosLogicos":  4,
+                                                                         "reposoAlcanzado":  false,
+                                                                         "reposoSegundos":  240,
+                                                                         "plugin":  "floating"
+                                                                     }
+                                                                 ],
+                                                    "medianas":  {
+                                                                     "ramArbolWorkingSetMB":  3080,
+                                                                     "ramArbolPrivateMB":  2353,
+                                                                     "ramProcesoWorkingSetMB":  74,
+                                                                     "ramProcesoPrivateMB":  110,
+                                                                     "cpuArbolPorcentajeMaquina":  21.88,
+                                                                     "cpuProcesoPorcentajeMaquina":  0.03
+                                                                 },
+                                                    "requisitos":  {
+                                                                       "perfilPersistente":  {
+                                                                                                 "valor":  "SÍ",
+                                                                                                 "evidencia":  {
+                                                                                                                   "escribir":  {
+                                                                                                                                    "cookie":  "cc_e3=persistente",
+                                                                                                                                    "localStorage":  "persistente"
+                                                                                                                                },
+                                                                                                                   "leerTrasReabrir":  {
+                                                                                                                                           "cookie":  "cc_e3=persistente",
+                                                                                                                                           "localStorage":  "persistente"
+                                                                                                                                       }
+                                                                                                               }
+                                                                                             },
+                                                                       "compositor":  {
+                                                                                          "valor":  "SÍ",
+                                                                                          "evidencia":  {
+                                                                                                            "textareaInsertText":  {
+                                                                                                                                       "igual":  true,
+                                                                                                                                       "leidos":  44,
+                                                                                                                                       "esperados":  44
+                                                                                                                                   },
+                                                                                                            "textareaPaste":  {
+                                                                                                                                  "igual":  true,
+                                                                                                                                  "leidos":  44,
+                                                                                                                                  "esperados":  44
+                                                                                                                              },
+                                                                                                            "contenteditableInsertText":  {
+                                                                                                                                              "igual":  true,
+                                                                                                                                              "leidos":  44,
+                                                                                                                                              "esperados":  44
+                                                                                                                                          },
+                                                                                                            "contenteditablePaste":  {
+                                                                                                                                         "igual":  true,
+                                                                                                                                         "leidos":  44,
+                                                                                                                                         "esperados":  44
+                                                                                                                                     }
+                                                                                                        }
+                                                                                      },
+                                                                       "domYHtml":  {
+                                                                                        "valor":  "SÍ",
+                                                                                        "evidencia":  {
+                                                                                                          "texto":  "Hola mundo ñ 😀",
+                                                                                                          "html":  "\u003cdiv id=\"respuesta\"\u003e\u003cp\u003eHola \u003cb\u003emundo\u003c/b\u003e ñ 😀\u003c/p\u003e\u003c/div\u003e",
+                                                                                                          "textoIgual":  true,
+                                                                                                          "htmlTraeNegrita":  true
+                                                                                                      }
+                                                                                    },
+                                                                       "adjuntarSinDialogo":  {
+                                                                                                  "valor":  "NO",
+                                                                                                  "evidencia":  {
+                                                                                                                    "error":  "Unsupported operation: el plugin no expone DevTools Protocol"
+                                                                                                                }
+                                                                                              },
+                                                                       "loginGoogle":  {
+                                                                                           "valor":  "SÍ",
+                                                                                           "evidencia":  {
+                                                                                                             "host":  "accounts.google.com",
+                                                                                                             "ruta":  "/v3/signin/identifier",
+                                                                                                             "titulo":  "Acceso: Cuentas de Google",
+                                                                                                             "disallowedUseragent":  false,
+                                                                                                             "avisoInseguro":  false,
+                                                                                                             "campoCorreo":  false
+                                                                                                         }
+                                                                                       },
+                                                                       "widgetsEncima":  {
+                                                                                             "valor":  "NO",
+                                                                                             "evidencia":  "Captura del modo pruebas: la ventana nativa del webview tapa el rectángulo rojo (ventana flotante sobre la de Flutter)."
+                                                                                         }
+                                                                   }
+                                                },
+                       "flutter_inappwebview":  {
+                                                    "version":  "6.1.5 (flutter_inappwebview_windows 0.6.0)",
+                                                    "compila":  "SÍ, con ajuste",
+                                                    "notaCompilacion":  "Requiere NuGet en el PATH («Nuget is not installed!»; se instaló con winget Microsoft.NuGet). Sin ajuste no compila con MSVC 14.51 (VS Build Tools 2026): «error STL1011: \u003cexperimental/coroutine\u003e ... /await» en el plugin; compila con add_definitions(-D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS) en windows/CMakeLists.txt.",
+                                                    "corridas":  [
+                                                                     {
+                                                                         "corrida":  1,
+                                                                         "inicio":  "2026-11-07T17:40:58.5127295-03:00",
+                                                                         "muestras":  60,
+                                                                         "segundos":  1384.5,
+                                                                         "workingSetMedianaBytes":  2999296000,
+                                                                         "privateBytesMedianaBytes":  2363271168,
+                                                                         "cpuMediaPorcentajeMaquina":  49.1,
+                                                                         "appWorkingSetMedianaBytes":  89858048,
+                                                                         "appPrivateBytesMedianaBytes":  134682624,
+                                                                         "appCpuMediaPorcentajeMaquina":  11.6,
+                                                                         "procesosMediana":  20,
+                                                                         "renderers":  13,
+                                                                         "nucleosLogicos":  4,
+                                                                         "reposoAlcanzado":  false,
+                                                                         "reposoSegundos":  240,
+                                                                         "plugin":  "inapp"
+                                                                     },
+                                                                     {
+                                                                         "corrida":  2,
+                                                                         "inicio":  "2026-11-07T18:10:41.0474439-03:00",
+                                                                         "muestras":  60,
+                                                                         "segundos":  141.72,
+                                                                         "workingSetMedianaBytes":  3341924352,
+                                                                         "privateBytesMedianaBytes":  2588065792,
+                                                                         "cpuMediaPorcentajeMaquina":  38.36,
+                                                                         "appWorkingSetMedianaBytes":  90804224,
+                                                                         "appPrivateBytesMedianaBytes":  132814848,
+                                                                         "appCpuMediaPorcentajeMaquina":  8.83,
+                                                                         "procesosMediana":  22,
+                                                                         "renderers":  15,
+                                                                         "nucleosLogicos":  4,
+                                                                         "reposoAlcanzado":  false,
+                                                                         "reposoSegundos":  240,
+                                                                         "plugin":  "inapp"
+                                                                     },
+                                                                     {
+                                                                         "corrida":  3,
+                                                                         "inicio":  "2026-11-07T18:18:51.7439269-03:00",
+                                                                         "muestras":  60,
+                                                                         "segundos":  802.27,
+                                                                         "workingSetMedianaBytes":  3116705792,
+                                                                         "privateBytesMedianaBytes":  2405193728,
+                                                                         "cpuMediaPorcentajeMaquina":  46.77,
+                                                                         "appWorkingSetMedianaBytes":  91373568,
+                                                                         "appPrivateBytesMedianaBytes":  134473728,
+                                                                         "appCpuMediaPorcentajeMaquina":  10.71,
+                                                                         "procesosMediana":  20,
+                                                                         "renderers":  13,
+                                                                         "nucleosLogicos":  4,
+                                                                         "reposoAlcanzado":  false,
+                                                                         "reposoSegundos":  240,
+                                                                         "plugin":  "inapp"
+                                                                     }
+                                                                 ],
+                                                    "medianas":  {
+                                                                     "ramArbolWorkingSetMB":  2972,
+                                                                     "ramArbolPrivateMB":  2294,
+                                                                     "ramProcesoWorkingSetMB":  87,
+                                                                     "ramProcesoPrivateMB":  128,
+                                                                     "cpuArbolPorcentajeMaquina":  46.77,
+                                                                     "cpuProcesoPorcentajeMaquina":  10.71
+                                                                 },
+                                                    "requisitos":  {
+                                                                       "perfilPersistente":  {
+                                                                                                 "valor":  "SÍ",
+                                                                                                 "evidencia":  {
+                                                                                                                   "escribir":  {
+                                                                                                                                    "cookie":  "cc_e3=persistente",
+                                                                                                                                    "localStorage":  "persistente"
+                                                                                                                                },
+                                                                                                                   "leerTrasReabrir":  {
+                                                                                                                                           "cookie":  "cc_e3=persistente",
+                                                                                                                                           "localStorage":  "persistente"
+                                                                                                                                       }
+                                                                                                               }
+                                                                                             },
+                                                                       "compositor":  {
+                                                                                          "valor":  "SÍ",
+                                                                                          "evidencia":  {
+                                                                                                            "textareaInsertText":  {
+                                                                                                                                       "igual":  true,
+                                                                                                                                       "leidos":  44,
+                                                                                                                                       "esperados":  44
+                                                                                                                                   },
+                                                                                                            "textareaPaste":  {
+                                                                                                                                  "igual":  true,
+                                                                                                                                  "leidos":  44,
+                                                                                                                                  "esperados":  44
+                                                                                                                              },
+                                                                                                            "contenteditableInsertText":  {
+                                                                                                                                              "igual":  true,
+                                                                                                                                              "leidos":  44,
+                                                                                                                                              "esperados":  44
+                                                                                                                                          },
+                                                                                                            "contenteditablePaste":  {
+                                                                                                                                         "igual":  true,
+                                                                                                                                         "leidos":  44,
+                                                                                                                                         "esperados":  44
+                                                                                                                                     }
+                                                                                                        }
+                                                                                      },
+                                                                       "domYHtml":  {
+                                                                                        "valor":  "SÍ",
+                                                                                        "evidencia":  {
+                                                                                                          "texto":  "Hola mundo ñ 😀",
+                                                                                                          "html":  "\u003cdiv id=\"respuesta\"\u003e\u003cp\u003eHola \u003cb\u003emundo\u003c/b\u003e ñ 😀\u003c/p\u003e\u003c/div\u003e",
+                                                                                                          "textoIgual":  true,
+                                                                                                          "htmlTraeNegrita":  true
+                                                                                                      }
+                                                                                    },
+                                                                       "adjuntarSinDialogo":  {
+                                                                                                  "valor":  "SÍ",
+                                                                                                  "evidencia":  {
+                                                                                                                    "n":  1,
+                                                                                                                    "nombre":  "e3-adjunto.txt",
+                                                                                                                    "bytes":  21,
+                                                                                                                    "esperado":  {
+                                                                                                                                     "nombre":  "e3-adjunto.txt",
+                                                                                                                                     "bytes":  21
+                                                                                                                                 }
+                                                                                                                }
+                                                                                              },
+                                                                       "loginGoogle":  {
+                                                                                           "valor":  "SÍ",
+                                                                                           "evidencia":  {
+                                                                                                             "host":  "accounts.google.com",
+                                                                                                             "ruta":  "/v3/signin/identifier",
+                                                                                                             "titulo":  "Acceso: Cuentas de Google",
+                                                                                                             "disallowedUseragent":  false,
+                                                                                                             "avisoInseguro":  false,
+                                                                                                             "campoCorreo":  false
+                                                                                                         }
+                                                                                       },
+                                                                       "widgetsEncima":  {
+                                                                                             "valor":  "SÍ",
+                                                                                             "evidencia":  "Captura del modo pruebas: el rectángulo rojo se ve sobre la página."
+                                                                                         }
+                                                                   }
+                                                },
+                       "webview_plus":  {
+                                            "version":  "0.9.5",
+                                            "compila":  "SÍ, pero no carga páginas",
+                                            "error":  "El webview queda en about:blank aunque se pase initialUrl y se llame loadUrl en onWebViewCreated: «TimeoutException: la página no terminó de cargar en 60 s» (main.dart:42). Un solo msedgewebview2 y ningún renderer en el árbol; al salir, código -1073741819 (0xC0000005). Hipótesis sin verificar: la GPU híbrida AMD R7 M260 + Intel HD de esta máquina.",
+                                            "corridas":  [
+
+                                                         ],
+                                            "medianas":  null,
+                                            "requisitos":  {
+                                                               "perfilPersistente":  "NO (no carga)",
+                                                               "compositor":  "NO (no carga)",
+                                                               "domYHtml":  "NO (no carga)",
+                                                               "adjuntarSinDialogo":  "NO (no carga; tampoco expone CDP)",
+                                                               "loginGoogle":  {
+                                                                                   "valor":  "NO (queda en about:blank)",
+                                                                                   "evidencia":  {
+                                                                                                     "error":  "TimeoutException: la página no terminó de cargar en 60 s",
+                                                                                                     "pila":  "#0      esperarCarga (package:e3_webviews/main.dart:42)\n\u003casynchronous suspension\u003e\n#1      correrModo (package:e3_webviews/main.dart:90)\n\u003casynchronous suspension\u003e\n#2      main (package:e3_webviews/main.dart:155)\n\u003casynchronous suspension\u003e\n"
+                                                                                                 }
+                                                                               },
+                                                               "widgetsEncima":  "NO CONCLUYENTE: la captura muestra el rojo sobre una página vacía"
+                                                           }
+                                        }
+                   }
+}

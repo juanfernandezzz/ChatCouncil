@@ -40,7 +40,7 @@ La lista viva de gates vive en el CI (`.github/workflows/`). Un gate se mantiene
 
 - `git add` por ruta; commits que explican por qué; push cuando está verificado.
 - Cambios grandes: rama y PR. Juan hace el merge.
-- git-guardrails frena lo destructivo. Si te frena, para y reporta.
+- Hooks: si GateGuard pide datos, los das y sigues. Si un hook bloquea (git-guardrails u otro), paras y reportas.
 
 ## Skills por etapa
 
@@ -64,7 +64,7 @@ strategic-compact avisa a los 250.000 tokens: compacta en un punto lógico. Cada
 
 ## Cuándo escalar a Juan
 
-Falta una credencial o una cuenta; la acción es irreversible; un gate frena; el repo contradice el plan. Las decisiones van en Serie E: preguntas numeradas, opciones por letra con lo que se gana y lo que se pierde, y una recomendación firme.
+Falta una credencial o una cuenta; la acción es irreversible; un hook o un gate bloquea; el repo contradice el plan. Las decisiones van en Serie E: preguntas numeradas, opciones por letra con lo que se gana y lo que se pierde, y una recomendación firme.
 
 ## Idioma y entorno
 

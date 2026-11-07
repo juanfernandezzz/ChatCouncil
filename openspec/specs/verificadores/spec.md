@@ -63,7 +63,7 @@ Propósito: que dos verificadores, por separado, busquen fuentes para lo que el 
 - Plataforma: ambas
 
 ### VER-009 · Comprobación de URLs citadas
-- Qué hace: antes de armar el informe, cada URL de la sección 1 de cada verificación vigente se pide sin cookies (HEAD y, si no da 2xx, GET, siguiendo redirecciones, sin leer el cuerpo), con 10 s por URL y un máximo de 20 URLs por verificación; solo http/https; las locales o privadas no se piden. Cada verificación se comprueba una sola vez y el resultado queda como hecho UrlComprobada.
+- Qué hace: antes de armar el informe, cada URL de la sección 1 de cada verificación vigente se pide sin cookies (HEAD y, si no da 2xx, GET, siguiendo redirecciones, sin leer el cuerpo), con 10 s por URL y un máximo de 20 URLs por verificación (con dos verificadores, hasta 40 por ronda); solo http/https; las locales o privadas no se piden. Cada verificación se comprueba una sola vez y el resultado queda como hecho UrlComprobada.
 - Condición y resultado observable: tras armar, la pantalla dice «URLs de los verificadores: responden {x} de {n}.».
 - Fuente: motor/Runtime/Puerta.cs:860-977 ; unity/Assets/Interfaz/Adaptadores.cs:15-33 ; unity/Assets/Interfaz/PantallaRonda.cs:1176-1194
 - Prueba: vector — motor/Tests/PuertaPruebas.cs:278 (CadaUrlSeComprueba) ; motor/Tests/PuertaPruebas.cs:291 (LasUrlsLocalesOConOtroEsquemaNoSePiden)
@@ -88,10 +88,12 @@ Propósito: que dos verificadores, por separado, busquen fuentes para lo que el 
 
 ## Conflictos
 
-### CONFLICTO-VER-01
+### RESUELTO-VER-01
+Resuelto por Claude el 2026-11-07 con la regla de paridad: manda el comportamiento actual del código; el documento citado está desactualizado.
 - docs/FASE6-SPEC.md:254-256 (historia 60) fija «máximo 20 por ronda».
 - motor/Runtime/Puerta.cs:963 aplica el techo de 20 por cada verificación (`ComprobarUrlsDe` por salida, llamado una vez por verificador en motor/Runtime/Puerta.cs:946-951); con dos verificadores (D62) una ronda puede comprobar hasta 40.
 
-### CONFLICTO-VER-02
+### RESUELTO-VER-02
+Resuelto por Claude el 2026-11-07 con la regla de paridad: manda el comportamiento actual del código; el documento citado está desactualizado.
 - PRODUCT.md:27-28 y docs/FASE6-SPEC.md:79-81 hablan de un verificador.
 - motor/Runtime/Roles.cs:22-23 y unity/Assets/Interfaz/PantallaRonda.cs:1128 trabajan con dos verificadores que reciben el mismo prompt.

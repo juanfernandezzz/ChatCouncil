@@ -116,6 +116,7 @@ Propósito: pegar pregunta, operación y prompts de rol en el compositor de cada
 
 ## Conflictos
 
-### CONFLICTO-ESC-01
+### RESUELTO-ESC-01
+Resuelto por Claude el 2026-11-07 con la regla de paridad: manda el comportamiento actual del código; el documento citado está desactualizado.
 - docs/BLUEPRINT.md:2765-2768 (D36) fija un techo de 20 s para que la conversación nueva quede vacía.
 - unity/Assets/Interfaz/PantallaRonda.cs:56 usa `EsperaChatNuevoMs = 60_000` (60 s) en `AbrirChatNuevo` (unity/Assets/Interfaz/PantallaRonda.cs:926).

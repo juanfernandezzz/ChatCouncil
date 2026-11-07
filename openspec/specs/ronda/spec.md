@@ -111,6 +111,20 @@ Propósito: decidir qué proveedores investigan y cuáles cumplen los roles, y g
 - Prueba: nueva — `NombreProveedor` para los diez conocidos.
 - Plataforma: ambas
 
+### RON-016 · Diálogo para declarar la pregunta
+- Qué hace: desde el paso «Declarar la pregunta de esta ronda» o desde el menú Ronda, abre el diálogo «Declarar la pregunta de esta ronda» con el texto «Las respuestas se capturaron sin pegar la pregunta con la app. Escribe la pregunta que hiciste: queda en el registro junto a la ronda, sin reescribirla.», un campo y el botón «Declarar». Con el campo vacío o en blanco no escribe y dice «La pregunta declarada no puede quedar vacía.» como problema; si no, declara y dice «Pregunta declarada.».
+- Condición y resultado observable: tras capturar sin pegar y declarar «Pregunta escrita a mano en cada página», el registro tiene PreguntaDeclarada con ese texto y la barra pasa a «Operación · 3 de 7».
+- Fuente: unity/Assets/Interfaz/PantallaRonda.cs:600-602 ; unity/Assets/Interfaz/PantallaRonda.cs:793-808 ; unity/Assets/Interfaz/PantallaRonda.cs:1386-1387
+- Prueba: vector — unity/Assets/Interfaz/PruebaRonda.cs:262-280 («declarar la pregunta»)
+- Plataforma: ambas
+
+### RON-017 · Diálogo para abandonar la ronda
+- Qué hace: «Abandonar la ronda» abre el diálogo con ese título, el texto «La ronda queda en el registro tal como está y vuelves a la etapa Pregunta. Si cierras la app antes de pegar la pregunta nueva, al abrirla vuelve esta ronda.» y el botón «Abandonar la ronda»; al aceptar, abandona, olvida las navegaciones guardadas al capturar y dice «Ronda abandonada. Escribe la pregunta nueva.».
+- Condición y resultado observable: tras aceptar, el paso es «Pegar la pregunta en los paneles» y el archivo del registro tiene las mismas líneas.
+- Fuente: unity/Assets/Interfaz/PantallaRonda.cs:810-821 ; unity/Assets/Interfaz/PantallaRonda.cs:1390-1391
+- Prueba: vector — unity/Assets/Interfaz/PruebaRonda.cs:253-260 («abandonar la ronda»)
+- Plataforma: ambas
+
 ## Invariantes
 
 ### INV-RON-001 · Un rol nunca investiga
@@ -130,14 +144,17 @@ Propósito: decidir qué proveedores investigan y cuáles cumplen los roles, y g
 
 ## Conflictos
 
-### CONFLICTO-RON-01
+### RESUELTO-RON-01
+Resuelto por Claude el 2026-11-07 con la regla de paridad: manda el comportamiento actual del código; el documento citado está desactualizado.
 - PRODUCT.md:27-28 dice que el consejo tiene «un integrador, un verificador y un redactor».
 - motor/Runtime/Roles.cs:46-48 y motor/Runtime/Roles.cs:22-23 tienen dos verificadores (D62).
 
-### CONFLICTO-RON-02
+### RESUELTO-RON-02
+Resuelto por Claude el 2026-11-07 con la regla de paridad: manda el comportamiento actual del código; el documento citado está desactualizado.
 - docs/FASE6-SPEC.md:80 y docs/FASE6-SPEC.md:87 (historias 4 y 6) piden un solo verificador, GLM por defecto.
 - motor/Runtime/Roles.cs:46-48 usa glm y qwen como verificadores 1 y 2.
 
-### CONFLICTO-RON-03
+### RESUELTO-RON-03
+Resuelto por Claude el 2026-11-07 con la regla de paridad: manda el comportamiento actual del código; el documento citado está desactualizado.
 - PRODUCT.md:47 dice «Hay nueve proveedores; un consejo usa siete.».
 - motor/Runtime/Roles.cs:40 conoce diez proveedores (incluye perplexity).

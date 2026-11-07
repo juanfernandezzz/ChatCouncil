@@ -97,6 +97,13 @@ Propósito: armar desde el registro un informe trazable en Markdown y PDF tamañ
 - Prueba: manual — 1. Armar un informe con un perfil de prueba. 2. Comprobar que se abre el explorador en la carpeta nueva.
 - Plataforma: windows
 
+### INF-014 · Páginas del PDF en tamaño Carta (612 x 792 pt)
+- Qué hace: el PDF del informe sale con todas sus páginas en tamaño Carta: PrintToPdf con la configuración por defecto de WebView2 (sin tamaño propio) y un @page que solo fija márgenes y pie.
+- Condición y resultado observable: cada página del PDF tiene MediaBox [0 0 612 792]; medido el 2026-11-07 en un rearmado con ChatCouncil-Unity 0.1.41 en el PC de Juan: 87 de 87 páginas.
+- Fuente: panel/windows/panel.cpp:560-561 ; unity/Assets/Interfaz/Adaptadores.cs:37 ; unity/Assets/Interfaz/Adaptadores.cs:46
+- Prueba: nueva — armar un informe con un perfil de prueba y comprobar que cada /MediaBox del PDF es [0 0 612 792].
+- Plataforma: windows
+
 ## Invariantes
 
 ### INV-INF-001 · Un informe nunca se sobrescribe
@@ -116,6 +123,7 @@ Propósito: armar desde el registro un informe trazable en Markdown y PDF tamañ
 
 ## Conflictos
 
-### CONFLICTO-INF-01
+### RESUELTO-INF-01
+Resuelto por Claude el 2026-11-07 con la regla de paridad: manda el comportamiento actual del código; el documento citado está desactualizado.
 - docs/FASE6-SPEC.md:276-277 (historia 67) pide que la app abra el informe al terminar.
 - unity/Assets/Interfaz/PantallaRonda.cs:1192 abre la carpeta, según D41 (docs/BLUEPRINT.md:2810).

@@ -104,6 +104,13 @@ Propósito: mostrar las páginas reales de cada proveedor en paneles nativos con
 - Prueba: manual — 1. Armar un informe con un perfil de prueba. 2. Comprobar que el PDF existe y que no apareció ninguna página visible nueva.
 - Plataforma: ambas
 
+### PAN-015 · Título y fallo del cierre de sesión
+- Qué hace: el diálogo de cierre de sesión se titula «Cerrar la sesión de {nombre}»; si borrar el sitio o volver a abrir la página falla, dice «No se pudo cerrar la sesión de {nombre}: {error}» marcado como problema.
+- Condición y resultado observable: en Gemini, el diálogo dice «Cerrar la sesión de Gemini» y, al aceptar, la página queda sin almacenamiento ni cookies.
+- Fuente: unity/Assets/Interfaz/PantallaRonda.cs:1296-1315
+- Prueba: vector — unity/Assets/Interfaz/PruebaRonda.cs:460-469 («cerrar la sesión con confirmación»)
+- Plataforma: ambas
+
 ## Invariantes
 
 ### INV-PAN-001 · Nunca se leen cookies ni almacenamiento

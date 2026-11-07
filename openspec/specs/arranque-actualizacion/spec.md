@@ -104,6 +104,7 @@ Propósito: abrir la app en la carpeta de datos correcta, guiar el primer arranq
 
 ## Conflictos
 
-### CONFLICTO-ARR-01
+### RESUELTO-ARR-01
+Resuelto por Claude el 2026-11-07 con la regla de paridad: manda el comportamiento actual del código; el documento citado está desactualizado.
 - docs/BLUEPRINT.md:2633-2637 (D16) rechaza el aviso automático: «sin tienda, nada avisa de una versión nueva».
 - unity/Assets/Interfaz/Actualizador.cs:38-55 busca la versión al abrir y muestra el aviso, como dice D59 (docs/BLUEPRINT.md:2962-2966), posterior.

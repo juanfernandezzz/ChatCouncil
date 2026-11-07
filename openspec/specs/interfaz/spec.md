@@ -139,6 +139,41 @@ Propósito: mostrar la ronda por etapas con el estado de cada panel, dar navegac
 - Prueba: manual — 1. Abrir la app sin ronda en un perfil de prueba. 2. Abrir el menú Ronda. 3. Comprobar los ítems deshabilitados y sus motivos.
 - Plataforma: ambas
 
+### IFZ-020 · Jerarquía para el lector de pantalla
+- Qué hace: con un lector de pantalla activo (Narrador en Windows, TalkBack en Android), cada 0,5 s arma la jerarquía de accesibilidad con los controles a la vista, en el orden del documento: botones y filas de panel como botón, casillas como casilla, campos de texto, desplegables, y textos sueltos como texto o como encabezado (títulos de sección y de bloque); cada nodo lleva el marco del control en píxeles de la ventana. Sin lector activo no hace nada.
+- Condición y resultado observable: con Narrador activo, el botón del paso aparece como botón con su texto y un marco de ancho mayor que 0, y «Ronda…» está en la jerarquía.
+- Fuente: unity/Assets/Interfaz/Lector.cs:9-53 ; unity/Assets/Interfaz/Lector.cs:66-78 ; unity/Assets/Interfaz/Lector.cs:103-117 ; unity/Assets/Interfaz/Aplicacion.cs:143
+- Prueba: vector — unity/Assets/Interfaz/PruebaRonda.cs:528-547 («jerarquía para el lector de pantalla»)
+- Plataforma: ambas
+
+### IFZ-021 · Lo que dice el lector de cada control
+- Qué hace: el nombre de un botón es su texto; el de una fila de panel, sus textos unidos con «, » (proveedor y estado); un texto de la etapa actual agrega «, etapa actual» y uno de una etapa hecha, «, hecha»; una casilla, su texto; un campo, su etiqueta y su contenido como valor. El estado es deshabilitado si el control no está habilitado y seleccionado si la casilla está marcada; solo se asigna lo que cambió, y asignarlo avisa al lector.
+- Condición y resultado observable: en Operación, el lector dice «3 Operación, etapa actual» y la fila de Kimi empieza con «Kimi, ».
+- Fuente: unity/Assets/Interfaz/Lector.cs:55-64 ; unity/Assets/Interfaz/Lector.cs:87-101
+- Prueba: vector — unity/Assets/Interfaz/PruebaRonda.cs:541-547
+- Plataforma: ambas
+
+### IFZ-022 · Activar un control desde el lector
+- Qué hace: activar un nodo desde el lector cambia una casilla; en un botón, un desplegable o una fila de panel manda el mismo evento que Enter; en otro control enfocable le da el foco; si el control está deshabilitado no hace nada. Cuando el lector enfoca un nodo, el control enfocable recibe el foco.
+- Condición y resultado observable: con Narrador, activar la fila de Kimi pone a Kimi a la vista, igual que Enter sobre la fila.
+- Fuente: unity/Assets/Interfaz/Lector.cs:49-50 ; unity/Assets/Interfaz/Lector.cs:119-141 ; unity/Assets/Interfaz/PantallaRonda.cs:314-315
+- Prueba: manual — 1. Abrir una ronda de prueba con Narrador activo. 2. Llevar el cursor de Narrador a la fila de Kimi y activarla. 3. Comprobar que Kimi queda a la vista. 4. Activar una casilla de Ajustes y comprobar que cambia.
+- Plataforma: ambas
+
+### IFZ-023 · Símbolo dibujado de cada estado
+- Qué hace: el símbolo del estado de un panel se dibuja con una forma por estado: «por-pegar» círculo vacío; «falta-enviar» círculo con un punto; «respondiendo» círculo medio lleno; «terminado» círculo lleno; «capturado» círculo lleno con una marca; «problema» triángulo con un signo de exclamación. El color sale de los tokens `--icono-color` y `--icono-fondo`. Se usa en cada fila, en la cabecera y en el selector; «Parece terminado» observado y deducido comparten el círculo lleno.
+- Condición y resultado observable: un panel «Con problema» muestra el triángulo con el signo y un panel «Capturado», el círculo lleno con la marca.
+- Fuente: unity/Assets/Interfaz/IconoEstado.cs:6-45 ; unity/Assets/Interfaz/IconoEstado.cs:47-102 ; unity/Assets/Interfaz/PantallaRonda.cs:33-43 ; unity/Assets/Interfaz/PantallaRonda.cs:463-489
+- Prueba: manual — 1. Abrir una ronda de prueba. 2. Pegar en un panel sin enviar y comprobar el círculo con punto junto a «Pegado, falta que envíes». 3. Enviar y comprobar el medio lleno, y al terminar el lleno. 4. Capturar y comprobar la marca.
+- Plataforma: ambas
+
+### IFZ-024 · Diálogo propio con Cancelar
+- Qué hace: los diálogos de la ronda muestran título y texto, un campo opcional (que recibe el foco; si no hay campo, el foco va al botón de aceptar), una casilla opcional que arranca desmarcada y el botón de aceptar con su texto; «Cancelar» o tocar el fondo lo cierran sin hacer nada; aceptar cierra y luego corre la acción con el texto del campo y la casilla.
+- Condición y resultado observable: al tocar «Cancelar» en «Abandonar la ronda», la ronda sigue abierta.
+- Fuente: unity/Assets/Interfaz/PantallaRonda.cs:143-152 ; unity/Assets/Interfaz/PantallaRonda.cs:1461-1487 ; unity/Assets/Interfaz/Resources/Interfaz/Ronda.uxml:207
+- Prueba: vector — unity/Assets/Interfaz/PruebaRonda.cs:245-251 («diálogo cancelado»)
+- Plataforma: ambas
+
 ## Invariantes
 
 ### INV-IFZ-001 · Una acción deshabilitada nunca queda sin motivo visible
@@ -155,3 +190,23 @@ Propósito: mostrar la ronda por etapas con el estado de cada panel, dar navegac
 - Qué nunca pasa: un menú queda fuera de la ventana; su alto máximo es el espacio disponible del lado en que se abre.
 - Fuente: unity/Assets/Interfaz/PantallaRonda.cs:1432-1445
 - Prueba: manual — 1. Achicar la ventana al mínimo de alto. 2. Abrir cada menú. 3. Comprobar que se ve entero o con desplazamiento dentro de la ventana.
+
+### INV-IFZ-004 · Un texto que cambia nunca rearma la jerarquía del lector
+- Qué nunca pasa: un cambio de texto, valor o estado rearma la jerarquía y mueve el foco del lector; solo se rearma cuando cambian los controles a la vista.
+- Fuente: unity/Assets/Interfaz/Lector.cs:32-37
+- Prueba: vector — unity/Assets/Interfaz/PruebaRonda.cs:549-561 («un texto nuevo no rearma la jerarquía»)
+
+### INV-IFZ-005 · La página nativa nunca entra en la jerarquía de la app
+- Qué nunca pasa: el relleno bajo la página del proveedor, los textos dentro de un control o de una fila de panel, o un elemento oculto o de tamaño cero aparecen como nodo propio del lector.
+- Fuente: unity/Assets/Interfaz/Lector.cs:72-77 ; unity/Assets/Interfaz/Lector.cs:103-108
+- Prueba: vector — unity/Assets/Interfaz/PruebaRonda.cs:546 (ningún nodo «Página del proveedor (vista nativa)» ni «Kimi» suelto)
+
+### INV-IFZ-006 · El estado nunca se distingue solo por color
+- Qué nunca pasa: dos estados de panel comparten forma sin ser el mismo símbolo, o el símbolo aparece sin la palabra del estado al lado (WCAG 1.4.1).
+- Fuente: unity/Assets/Interfaz/IconoEstado.cs:6-10 ; unity/Assets/Interfaz/PantallaRonda.cs:318-325
+- Prueba: manual — 1. Activar en Windows el filtro de color en escala de grises. 2. Recorrer una ronda de prueba hasta tener paneles en varios estados. 3. Comprobar que cada estado se distingue por la forma y lleva su palabra.
+
+### INV-IFZ-007 · Un diálogo cerrado nunca deja su acción
+- Qué nunca pasa: tras cancelar o cerrar un diálogo, un «Aceptar» posterior ejecuta la acción de ese diálogo.
+- Fuente: unity/Assets/Interfaz/PantallaRonda.cs:1461-1466
+- Prueba: vector — unity/Assets/Interfaz/PruebaRonda.cs:245-251

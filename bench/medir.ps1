@@ -4,6 +4,8 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidateSet('condiciones', 'm5', 'arrancar', 'diez', 'informe', 'captura', 'cerrar')]
     [string]$Accion,
+    [Parameter(Mandatory = $true)]
+    [string]$Version,
     [int]$Corrida = 0,
     [switch]$SinRegistro,
     [string]$Traza,
@@ -15,7 +17,7 @@ $ErrorActionPreference = 'Stop'
 
 $Exe = Join-Path $env:ProgramFiles 'ChatCouncil\ChatCouncil.exe'
 $Datos = Join-Path $env:USERPROFILE 'AppData\LocalLow\ChatCouncil\ChatCouncil'
-$Salida = Join-Path $PSScriptRoot 'resultados\unity-0.1.39-pc.json'
+$Salida = Join-Path $PSScriptRoot "resultados\unity-$Version-pc.json"
 $Logicos = [Environment]::ProcessorCount
 
 Add-Type @'
@@ -32,7 +34,7 @@ function Hora([datetime]$t) { $t.ToString('o') }
 
 function Leer-Resultados {
     if (Test-Path $Salida) { return [IO.File]::ReadAllText($Salida, [Text.Encoding]::UTF8) | ConvertFrom-Json }
-    [pscustomobject]@{ app = 'ChatCouncil-Unity 0.1.39'; maquina = 'PC de Juan'; condiciones = $null; corridas = @() }
+    [pscustomobject]@{ app = "ChatCouncil-Unity $Version"; maquina = 'PC de Juan'; condiciones = $null; corridas = @() }
 }
 
 function Guardar-Resultados($d) {
@@ -40,7 +42,18 @@ function Guardar-Resultados($d) {
     [IO.File]::WriteAllText($Salida, ($d | ConvertTo-Json -Depth 8) + "`n", (New-Object Text.UTF8Encoding($false)))
 }
 
+# Solo nombres de proceso de las ventanas abiertas: los titulos pueden traer contenido privado.
+function Get-CondicionesCorrida {
+    $bat = Get-CimInstance Win32_Battery | Select-Object -First 1
+    [pscustomobject]@{
+        enchufado = ($null -eq $bat) -or ($bat.BatteryStatus -eq 2); bateriaPorcentaje = $bat.EstimatedChargeRemaining
+        planEnergia = ((powercfg /getactivescheme) -join ' ').Trim()
+        appsAbiertas = @(Get-Process | Where-Object { $_.MainWindowHandle -ne 0 } | ForEach-Object ProcessName | Sort-Object -Unique)
+    }
+}
+
 function Agregar-Corrida($entrada) {
+    $entrada | Add-Member condiciones (Get-CondicionesCorrida)
     if ($SinRegistro) { $entrada | ConvertTo-Json -Depth 6; return }
     $d = Leer-Resultados
     $d.corridas = @($d.corridas) + $entrada
@@ -86,7 +99,8 @@ function Tomar-Muestra($ids, $previo, [bool]$primera) {
     foreach ($p in @(Get-Process -Id $ids -ErrorAction SilentlyContinue)) {
         try { $t = $p.TotalProcessorTime.TotalSeconds } catch { continue }
         $ws += $p.WorkingSet64; $priv += $p.PrivateMemorySize64; $vivos++
-        if ($previo.ContainsKey($p.Id)) { $cpu += [Math]::Max(0, $t - $previo[$p.Id]) }
+        # [double]0: con un 0 entero PowerShell elige Max(int, int) y redondea cada diferencia al segundo entero (E1 lo sufrio).
+        if ($previo.ContainsKey($p.Id)) { $cpu += [Math]::Max([double]0, $t - $previo[$p.Id]) }
         elseif (-not $primera) { $cpu += $t } # proceso nuevo: todo su tiempo cae dentro de la ventana
         $previo[$p.Id] = $t
     }
@@ -96,7 +110,7 @@ function Tomar-Muestra($ids, $previo, [bool]$primera) {
 function Get-WebView { @(Get-Process -Name msedgewebview2 -ErrorAction SilentlyContinue | ForEach-Object Id) }
 
 # Devuelve el inicio de la primera ventana de $SegundosQuietos con CPU media de los WebView2 bajo el umbral y $Paneles renderers vivos.
-# ChatCouncil.exe queda fuera: Unity corre sin tope de cuadros (vSyncCount 0) y gasta casi un nucleo siempre, nunca reposa.
+# ChatCouncil.exe queda fuera: en 0.1.39 corria sin tope de cuadros (vSyncCount 0) y nunca reposaba; el criterio se mantiene igual para comparar.
 # Es media y no cada muestra porque con diez paneles las paginas activas dejan picos de ~15 % que no terminan nunca.
 function Esperar-Reposo([int]$Paneles) {
     $previo = @{}; $ids = Get-WebView
@@ -131,10 +145,14 @@ function Es-App {
 function Esperar-Clic([scriptblock]$Efecto, [int]$Techo = 600) {
     $clics = New-Object Collections.ArrayList
     $abajo = $false
+    [void][Entrada]::GetAsyncKeyState(1) # vacia el bit de "pulsado desde la ultima lectura" para no contar un clic viejo
     $reloj = [Diagnostics.Stopwatch]::StartNew(); $revision = 0
     while ($reloj.Elapsed.TotalSeconds -lt $Techo) {
-        $b = ([Entrada]::GetAsyncKeyState(1) -band 0x8000) -ne 0
-        if ($abajo -and -not $b -and (Es-App)) { [void]$clics.Add((Get-Date)) }
+        $e = [Entrada]::GetAsyncKeyState(1)
+        $b = ($e -band 0x8000) -ne 0
+        # Un clic sintetico baja y sube entre dos muestras de 15 ms: solo lo delata el bit bajo.
+        $rapido = -not $abajo -and -not $b -and ($e -band 1) -ne 0
+        if ((($abajo -and -not $b) -or $rapido) -and (Es-App)) { [void]$clics.Add((Get-Date)) }
         $abajo = $b
         if ($reloj.Elapsed.TotalSeconds -ge $revision) {
             $revision = $reloj.Elapsed.TotalSeconds + 1
@@ -157,10 +175,13 @@ function Mediana($v) {
 function Medir-M2 {
     Start-Sleep -Seconds 30
     $previo = @{}; $ids = Get-Arbol
+    $previoApp = @{}; $idsApp = @(Get-Process -Name ChatCouncil | ForEach-Object Id)
     [void](Tomar-Muestra $ids $previo $true)
+    [void](Tomar-Muestra $idsApp $previoApp $true)
     $inicio = Get-Date
     $reloj = [Diagnostics.Stopwatch]::StartNew()
     $muestras = New-Object Collections.ArrayList; $cpu = [double]0
+    $app = New-Object Collections.ArrayList; $cpuApp = [double]0
     for ($i = 1; $i -le 60; $i++) {
         $espera = $i * 1000 - $reloj.ElapsedMilliseconds
         if ($espera -gt 0) { Start-Sleep -Milliseconds $espera }
@@ -168,6 +189,9 @@ function Medir-M2 {
         $m = Tomar-Muestra $ids $previo $false
         $cpu += $m.cpuSeg
         [void]$muestras.Add($m)
+        $a = Tomar-Muestra $idsApp $previoApp $false
+        $cpuApp += $a.cpuSeg
+        [void]$app.Add($a)
     }
     $seg = $reloj.Elapsed.TotalSeconds
     Agregar-Corrida ([pscustomobject]@{
@@ -176,6 +200,9 @@ function Medir-M2 {
             workingSetMedianaBytes = [long](Mediana $muestras.ws); workingSetMaximoBytes = [long]($muestras.ws | Measure-Object -Maximum).Maximum
             privateBytesMedianaBytes = [long](Mediana $muestras.priv); privateBytesMaximoBytes = [long]($muestras.priv | Measure-Object -Maximum).Maximum
             cpuMediaPorcentajeMaquina = [Math]::Round(100 * $cpu / $seg / $Logicos, 2); nucleosLogicos = $Logicos
+            appCpuMediaPorcentajeMaquina = [Math]::Round(100 * $cpuApp / $seg / $Logicos, 2)
+            appWorkingSetMedianaBytes = [long](Mediana $app.ws); appWorkingSetMaximoBytes = [long]($app.ws | Measure-Object -Maximum).Maximum
+            appPrivateBytesMedianaBytes = [long](Mediana $app.priv); appPrivateBytesMaximoBytes = [long]($app.priv | Measure-Object -Maximum).Maximum
             procesosMediana = Mediana $muestras.procesos; renderers = Contar-Renderers
         })
 }

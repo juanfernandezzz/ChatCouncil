@@ -1,0 +1,383 @@
+{
+    "app":  "ChatCouncil-Unity 0.1.40",
+    "maquina":  "PC de Juan",
+    "condiciones":  {
+                        "registradoEn":  "2026-11-07T06:29:37.6261273-03:00",
+                        "cpu":  "Intel(R) Core(TM) i5-4210U CPU @ 1.70GHz",
+                        "nucleos":  2,
+                        "nucleosLogicos":  4,
+                        "ramTotalBytes":  17086361600,
+                        "windows":  "Microsoft Windows 10 Home Single Language",
+                        "windowsVersion":  "22H2",
+                        "windowsCompilacion":  "19045.7807",
+                        "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                        "enchufado":  true,
+                        "bateriaPorcentaje":  100,
+                        "appVersionRegistro":  "0.1.40",
+                        "appVersionEnBinario":  "0.1.40",
+                        "exeProductVersion":  "6000.3.25f1 (e1dba0a9aba4)",
+                        "webView2Runtime":  "156.0.4314.58"
+                    },
+    "corridas":  [
+                     {
+                         "medida":  "M1a",
+                         "corrida":  1,
+                         "inicio":  "2026-11-07T06:19:49.1983063-03:00",
+                         "fin":  "2026-11-07T06:20:14.9364166-03:00",
+                         "valor":  25.74,
+                         "unidad":  "s",
+                         "rotulo":  "aproximada",
+                         "reposoAlcanzado":  true,
+                         "ventanaSegundos":  1.62,
+                         "primerWebViewSegundos":  2.45,
+                         "arbolProcesos":  11,
+                         "webview":  9,
+                         "renderers":  3,
+                         "condiciones":  {
+                                             "enchufado":  true,
+                                             "bateriaPorcentaje":  100,
+                                             "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                                             "appsAbiertas":  [
+                                                                  "ApplicationFrameHost",
+                                                                  "ChatCouncil",
+                                                                  "claude",
+                                                                  "explorer",
+                                                                  "SynTPEnh",
+                                                                  "SystemSettings",
+                                                                  "TextInputHost",
+                                                                  "thorium"
+                                                              ]
+                                         }
+                     },
+                     {
+                         "medida":  "M1b",
+                         "corrida":  1,
+                         "inicio":  "2026-11-07T06:20:45.7879665-03:00",
+                         "fin":  "2026-11-07T06:21:53.6383395-03:00",
+                         "valor":  67.85,
+                         "unidad":  "s",
+                         "rotulo":  "aproximada",
+                         "reposoAlcanzado":  true,
+                         "arbolProcesos":  20,
+                         "renderers":  12,
+                         "condiciones":  {
+                                             "enchufado":  true,
+                                             "bateriaPorcentaje":  100,
+                                             "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                                             "appsAbiertas":  [
+                                                                  "ApplicationFrameHost",
+                                                                  "ChatCouncil",
+                                                                  "claude",
+                                                                  "explorer",
+                                                                  "SynTPEnh",
+                                                                  "SystemSettings",
+                                                                  "TextInputHost",
+                                                                  "thorium"
+                                                              ]
+                                         }
+                     },
+                     {
+                         "medida":  "M2",
+                         "corrida":  1,
+                         "inicio":  "2026-11-07T06:22:39.5518618-03:00",
+                         "fin":  "2026-11-07T06:23:39.7547081-03:00",
+                         "rotulo":  "exacta",
+                         "muestras":  60,
+                         "segundos":  60.2,
+                         "workingSetMedianaBytes":  3315585024,
+                         "workingSetMaximoBytes":  3329040384,
+                         "privateBytesMedianaBytes":  2770679808,
+                         "privateBytesMaximoBytes":  2790187008,
+                         "cpuMediaPorcentajeMaquina":  16.66,
+                         "nucleosLogicos":  4,
+                         "appCpuMediaPorcentajeMaquina":  5.12,
+                         "appWorkingSetMedianaBytes":  278859776,
+                         "appWorkingSetMaximoBytes":  279801856,
+                         "appPrivateBytesMedianaBytes":  382824448,
+                         "appPrivateBytesMaximoBytes":  383963136,
+                         "procesosMediana":  19,
+                         "renderers":  11,
+                         "condiciones":  {
+                                             "enchufado":  true,
+                                             "bateriaPorcentaje":  100,
+                                             "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                                             "appsAbiertas":  [
+                                                                  "ApplicationFrameHost",
+                                                                  "ChatCouncil",
+                                                                  "claude",
+                                                                  "explorer",
+                                                                  "SynTPEnh",
+                                                                  "SystemSettings",
+                                                                  "TextInputHost",
+                                                                  "thorium"
+                                                              ]
+                                         }
+                     },
+                     {
+                         "medida":  "M4",
+                         "corrida":  1,
+                         "inicio":  "2026-11-07T06:25:53.1858230-03:00",
+                         "fin":  "2026-11-07T06:25:56.9276907-03:00",
+                         "valor":  3.74,
+                         "unidad":  "s",
+                         "rotulo":  "exacta",
+                         "archivos":  16,
+                         "bytes":  1886034,
+                         "condiciones":  {
+                                             "enchufado":  true,
+                                             "bateriaPorcentaje":  100,
+                                             "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                                             "appsAbiertas":  [
+                                                                  "ApplicationFrameHost",
+                                                                  "ChatCouncil",
+                                                                  "claude",
+                                                                  "explorer",
+                                                                  "SynTPEnh",
+                                                                  "SystemSettings",
+                                                                  "TextInputHost",
+                                                                  "thorium"
+                                                              ]
+                                         }
+                     },
+                     {
+                         "medida":  "M1a",
+                         "corrida":  2,
+                         "inicio":  "2026-11-07T06:30:18.1202876-03:00",
+                         "fin":  "2026-11-07T06:30:38.8047420-03:00",
+                         "valor":  20.68,
+                         "unidad":  "s",
+                         "rotulo":  "aproximada",
+                         "reposoAlcanzado":  true,
+                         "ventanaSegundos":  1.53,
+                         "primerWebViewSegundos":  2.36,
+                         "arbolProcesos":  11,
+                         "webview":  9,
+                         "renderers":  3,
+                         "condiciones":  {
+                                             "enchufado":  true,
+                                             "bateriaPorcentaje":  100,
+                                             "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                                             "appsAbiertas":  [
+                                                                  "ApplicationFrameHost",
+                                                                  "ChatCouncil",
+                                                                  "claude",
+                                                                  "explorer",
+                                                                  "SynTPEnh",
+                                                                  "SystemSettings",
+                                                                  "TextInputHost",
+                                                                  "thorium"
+                                                              ]
+                                         }
+                     },
+                     {
+                         "medida":  "M1b",
+                         "corrida":  2,
+                         "inicio":  "2026-11-07T06:31:09.7286449-03:00",
+                         "fin":  "2026-11-07T06:33:16.1430115-03:00",
+                         "valor":  126.41,
+                         "unidad":  "s",
+                         "rotulo":  "aproximada",
+                         "reposoAlcanzado":  true,
+                         "arbolProcesos":  19,
+                         "renderers":  11,
+                         "condiciones":  {
+                                             "enchufado":  true,
+                                             "bateriaPorcentaje":  100,
+                                             "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                                             "appsAbiertas":  [
+                                                                  "ApplicationFrameHost",
+                                                                  "ChatCouncil",
+                                                                  "claude",
+                                                                  "explorer",
+                                                                  "SynTPEnh",
+                                                                  "SystemSettings",
+                                                                  "TextInputHost",
+                                                                  "thorium"
+                                                              ]
+                                         }
+                     },
+                     {
+                         "medida":  "M2",
+                         "corrida":  2,
+                         "inicio":  "2026-11-07T06:34:01.9066529-03:00",
+                         "fin":  "2026-11-07T06:35:02.1584580-03:00",
+                         "rotulo":  "exacta",
+                         "muestras":  60,
+                         "segundos":  60.25,
+                         "workingSetMedianaBytes":  3379744768,
+                         "workingSetMaximoBytes":  3385704448,
+                         "privateBytesMedianaBytes":  2799429632,
+                         "privateBytesMaximoBytes":  2812776448,
+                         "cpuMediaPorcentajeMaquina":  15.05,
+                         "nucleosLogicos":  4,
+                         "appCpuMediaPorcentajeMaquina":  5.34,
+                         "appWorkingSetMedianaBytes":  277489664,
+                         "appWorkingSetMaximoBytes":  278499328,
+                         "appPrivateBytesMedianaBytes":  381784064,
+                         "appPrivateBytesMaximoBytes":  382873600,
+                         "procesosMediana":  19,
+                         "renderers":  11,
+                         "condiciones":  {
+                                             "enchufado":  true,
+                                             "bateriaPorcentaje":  100,
+                                             "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                                             "appsAbiertas":  [
+                                                                  "ApplicationFrameHost",
+                                                                  "ChatCouncil",
+                                                                  "claude",
+                                                                  "explorer",
+                                                                  "SynTPEnh",
+                                                                  "SystemSettings",
+                                                                  "TextInputHost",
+                                                                  "thorium"
+                                                              ]
+                                         }
+                     },
+                     {
+                         "medida":  "M4",
+                         "corrida":  2,
+                         "inicio":  "2026-11-07T06:39:51.5813621-03:00",
+                         "fin":  "2026-11-07T06:39:55.1825323-03:00",
+                         "valor":  3.6,
+                         "unidad":  "s",
+                         "rotulo":  "exacta",
+                         "archivos":  16,
+                         "bytes":  1886029,
+                         "condiciones":  {
+                                             "enchufado":  true,
+                                             "bateriaPorcentaje":  100,
+                                             "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                                             "appsAbiertas":  [
+                                                                  "ApplicationFrameHost",
+                                                                  "ChatCouncil",
+                                                                  "claude",
+                                                                  "explorer",
+                                                                  "SynTPEnh",
+                                                                  "SystemSettings",
+                                                                  "TextInputHost",
+                                                                  "thorium"
+                                                              ]
+                                         }
+                     },
+                     {
+                         "medida":  "M1a",
+                         "corrida":  3,
+                         "inicio":  "2026-11-07T06:40:54.3280927-03:00",
+                         "fin":  "2026-11-07T06:44:57.9497997-03:00",
+                         "valor":  243.62,
+                         "unidad":  "s",
+                         "rotulo":  "aproximada",
+                         "reposoAlcanzado":  false,
+                         "ventanaSegundos":  0.98,
+                         "primerWebViewSegundos":  2.22,
+                         "arbolProcesos":  11,
+                         "webview":  9,
+                         "renderers":  3,
+                         "condiciones":  {
+                                             "enchufado":  true,
+                                             "bateriaPorcentaje":  100,
+                                             "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                                             "appsAbiertas":  [
+                                                                  "ApplicationFrameHost",
+                                                                  "ChatCouncil",
+                                                                  "claude",
+                                                                  "explorer",
+                                                                  "SynTPEnh",
+                                                                  "SystemSettings",
+                                                                  "TextInputHost",
+                                                                  "thorium"
+                                                              ]
+                                         }
+                     },
+                     {
+                         "medida":  "M1b",
+                         "corrida":  3,
+                         "inicio":  "2026-11-07T06:45:13.4499499-03:00",
+                         "fin":  "2026-11-07T06:46:19.4935676-03:00",
+                         "valor":  66.04,
+                         "unidad":  "s",
+                         "rotulo":  "aproximada",
+                         "reposoAlcanzado":  true,
+                         "arbolProcesos":  19,
+                         "renderers":  11,
+                         "condiciones":  {
+                                             "enchufado":  true,
+                                             "bateriaPorcentaje":  100,
+                                             "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                                             "appsAbiertas":  [
+                                                                  "ApplicationFrameHost",
+                                                                  "ChatCouncil",
+                                                                  "claude",
+                                                                  "explorer",
+                                                                  "SynTPEnh",
+                                                                  "SystemSettings",
+                                                                  "TextInputHost",
+                                                                  "thorium"
+                                                              ]
+                                         }
+                     },
+                     {
+                         "medida":  "M2",
+                         "corrida":  3,
+                         "inicio":  "2026-11-07T06:47:05.4454642-03:00",
+                         "fin":  "2026-11-07T06:48:05.6391411-03:00",
+                         "rotulo":  "exacta",
+                         "muestras":  60,
+                         "segundos":  60.19,
+                         "workingSetMedianaBytes":  3589916672,
+                         "workingSetMaximoBytes":  3601031168,
+                         "privateBytesMedianaBytes":  2982930432,
+                         "privateBytesMaximoBytes":  2998464512,
+                         "cpuMediaPorcentajeMaquina":  16.06,
+                         "nucleosLogicos":  4,
+                         "appCpuMediaPorcentajeMaquina":  5.24,
+                         "appWorkingSetMedianaBytes":  278433792,
+                         "appWorkingSetMaximoBytes":  279388160,
+                         "appPrivateBytesMedianaBytes":  383033344,
+                         "appPrivateBytesMaximoBytes":  384401408,
+                         "procesosMediana":  19,
+                         "renderers":  11,
+                         "condiciones":  {
+                                             "enchufado":  true,
+                                             "bateriaPorcentaje":  100,
+                                             "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                                             "appsAbiertas":  [
+                                                                  "ApplicationFrameHost",
+                                                                  "ChatCouncil",
+                                                                  "claude",
+                                                                  "explorer",
+                                                                  "SynTPEnh",
+                                                                  "SystemSettings",
+                                                                  "TextInputHost",
+                                                                  "thorium"
+                                                              ]
+                                         }
+                     },
+                     {
+                         "medida":  "M4",
+                         "corrida":  3,
+                         "inicio":  "2026-11-07T06:51:57.9000518-03:00",
+                         "fin":  "2026-11-07T06:52:01.6745121-03:00",
+                         "valor":  3.77,
+                         "unidad":  "s",
+                         "rotulo":  "exacta",
+                         "archivos":  16,
+                         "bytes":  1886035,
+                         "condiciones":  {
+                                             "enchufado":  true,
+                                             "bateriaPorcentaje":  100,
+                                             "planEnergia":  "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+                                             "appsAbiertas":  [
+                                                                  "ApplicationFrameHost",
+                                                                  "ChatCouncil",
+                                                                  "claude",
+                                                                  "explorer",
+                                                                  "SynTPEnh",
+                                                                  "SystemSettings",
+                                                                  "TextInputHost",
+                                                                  "thorium"
+                                                              ]
+                                         }
+                     }
+                 ]
+}

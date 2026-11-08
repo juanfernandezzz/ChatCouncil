@@ -1,0 +1,631 @@
+{
+    "lote":  "E3 medición controlada de CPU (Windows)",
+    "fecha":  "2026-11-08",
+    "maquina":  {
+                    "so":  "Windows 10 Home 10.0.19045",
+                    "nucleosLogicos":  4,
+                    "flutter":  "3.47.9 stable"
+                },
+    "metodo":  "Diez paneles con la misma página local por file:/// (sin red): estatica.html (texto, sin scripts ni animaciones) y animada.html (animación CSS continua). Perfil nuevo en %TEMP% por corrida. 5 s tras abrir, 30 s de espera fija y 60 muestras a 1 Hz sin detector de reposo, del árbol completo de e3_webviews.exe y del proceso solo. Tres corridas por combinación, cerrando entre corridas. CPU en % de la máquina (4 núcleos lógicos). Exe release de la rama e3-webviews con el argumento de URL en el modo diez.",
+    "versiones":  {
+                      "webview_windows":  "0.4.0",
+                      "webview_win_floating":  "3.0.3",
+                      "flutter_inappwebview":  "6.1.5 (flutter_inappwebview_windows 0.6.0)"
+                  },
+    "combinaciones":  [
+                          {
+                              "plugin":  "windows",
+                              "pagina":  "estatica",
+                              "cpuProceso":  {
+                                                 "c1":  4.47,
+                                                 "c2":  0.01,
+                                                 "c3":  0,
+                                                 "mediana":  0.01
+                                             },
+                              "cpuArbolMediana":  0.24,
+                              "ramArbolWorkingSetMedianaMB":  1004,
+                              "ramArbolPrivateMedianaMB":  579,
+                              "ramProcesoWorkingSetMedianaMB":  125,
+                              "ramProcesoPrivateMedianaMB":  122,
+                              "duracionMuestreoSegundos":  [
+                                                               60.16,
+                                                               60.17,
+                                                               60.16
+                                                           ],
+                              "algunMuestreoMasDe90s":  false,
+                              "corridas":  [
+                                               {
+                                                   "corrida":  1,
+                                                   "inicio":  "2026-11-08T02:28:09.1315017-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.16,
+                                                   "workingSetMedianaBytes":  956538880,
+                                                   "privateBytesMedianaBytes":  600039424,
+                                                   "cpuMediaPorcentajeMaquina":  4.76,
+                                                   "appWorkingSetMedianaBytes":  85794816,
+                                                   "appPrivateBytesMedianaBytes":  128987136,
+                                                   "appCpuMediaPorcentajeMaquina":  4.47,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/estatica.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9067,
+                                                                       "procesosMaquina":  248,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-windows-1-46ace2cf"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "windows",
+                                                   "pagina":  "estatica"
+                                               },
+                                               {
+                                                   "corrida":  2,
+                                                   "inicio":  "2026-11-08T02:30:26.2263422-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.17,
+                                                   "workingSetMedianaBytes":  1071370240,
+                                                   "privateBytesMedianaBytes":  620857344,
+                                                   "cpuMediaPorcentajeMaquina":  0.24,
+                                                   "appWorkingSetMedianaBytes":  135434240,
+                                                   "appPrivateBytesMedianaBytes":  128049152,
+                                                   "appCpuMediaPorcentajeMaquina":  0.01,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/estatica.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9520,
+                                                                       "procesosMaquina":  216,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-windows-2-b03f4b58"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "windows",
+                                                   "pagina":  "estatica"
+                                               },
+                                               {
+                                                   "corrida":  3,
+                                                   "inicio":  "2026-11-08T02:32:40.6459539-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.16,
+                                                   "workingSetMedianaBytes":  1053267968,
+                                                   "privateBytesMedianaBytes":  606801920,
+                                                   "cpuMediaPorcentajeMaquina":  0.14,
+                                                   "appWorkingSetMedianaBytes":  130650112,
+                                                   "appPrivateBytesMedianaBytes":  128016384,
+                                                   "appCpuMediaPorcentajeMaquina":  0,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/estatica.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9612,
+                                                                       "procesosMaquina":  210,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-windows-3-0853594b"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "windows",
+                                                   "pagina":  "estatica"
+                                               }
+                                           ]
+                          },
+                          {
+                              "plugin":  "floating",
+                              "pagina":  "estatica",
+                              "cpuProceso":  {
+                                                 "c1":  0,
+                                                 "c2":  0.01,
+                                                 "c3":  0,
+                                                 "mediana":  0
+                                             },
+                              "cpuArbolMediana":  0.21,
+                              "ramArbolWorkingSetMedianaMB":  1063,
+                              "ramArbolPrivateMedianaMB":  579,
+                              "ramProcesoWorkingSetMedianaMB":  122,
+                              "ramProcesoPrivateMedianaMB":  110,
+                              "duracionMuestreoSegundos":  [
+                                                               60.14,
+                                                               60.15,
+                                                               60.14
+                                                           ],
+                              "algunMuestreoMasDe90s":  false,
+                              "corridas":  [
+                                               {
+                                                   "corrida":  1,
+                                                   "inicio":  "2026-11-08T02:34:56.1112039-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.14,
+                                                   "workingSetMedianaBytes":  1114988544,
+                                                   "privateBytesMedianaBytes":  605014016,
+                                                   "cpuMediaPorcentajeMaquina":  0.29,
+                                                   "appWorkingSetMedianaBytes":  127819776,
+                                                   "appPrivateBytesMedianaBytes":  116080640,
+                                                   "appCpuMediaPorcentajeMaquina":  0,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/estatica.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9608,
+                                                                       "procesosMaquina":  206,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-floating-1-c113f6fa"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "floating",
+                                                   "pagina":  "estatica"
+                                               },
+                                               {
+                                                   "corrida":  2,
+                                                   "inicio":  "2026-11-08T02:37:03.1012794-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.15,
+                                                   "workingSetMedianaBytes":  1114861568,
+                                                   "privateBytesMedianaBytes":  620924928,
+                                                   "cpuMediaPorcentajeMaquina":  0.21,
+                                                   "appWorkingSetMedianaBytes":  127455232,
+                                                   "appPrivateBytesMedianaBytes":  114941952,
+                                                   "appCpuMediaPorcentajeMaquina":  0.01,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/estatica.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9573,
+                                                                       "procesosMaquina":  204,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-floating-2-6502f06f"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "floating",
+                                                   "pagina":  "estatica"
+                                               },
+                                               {
+                                                   "corrida":  3,
+                                                   "inicio":  "2026-11-08T02:39:10.0997564-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.14,
+                                                   "workingSetMedianaBytes":  1118588928,
+                                                   "privateBytesMedianaBytes":  606728192,
+                                                   "cpuMediaPorcentajeMaquina":  0.19,
+                                                   "appWorkingSetMedianaBytes":  127434752,
+                                                   "appPrivateBytesMedianaBytes":  114806784,
+                                                   "appCpuMediaPorcentajeMaquina":  0,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/estatica.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9598,
+                                                                       "procesosMaquina":  205,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-floating-3-29ba04d8"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "floating",
+                                                   "pagina":  "estatica"
+                                               }
+                                           ]
+                          },
+                          {
+                              "plugin":  "inapp",
+                              "pagina":  "estatica",
+                              "cpuProceso":  {
+                                                 "c1":  0,
+                                                 "c2":  0,
+                                                 "c3":  0.01,
+                                                 "mediana":  0
+                                             },
+                              "cpuArbolMediana":  0.18,
+                              "ramArbolWorkingSetMedianaMB":  1001,
+                              "ramArbolPrivateMedianaMB":  540,
+                              "ramProcesoWorkingSetMedianaMB":  132,
+                              "ramProcesoPrivateMedianaMB":  123,
+                              "duracionMuestreoSegundos":  [
+                                                               60.16,
+                                                               60.14,
+                                                               60.15
+                                                           ],
+                              "algunMuestreoMasDe90s":  false,
+                              "corridas":  [
+                                               {
+                                                   "corrida":  1,
+                                                   "inicio":  "2026-11-08T02:41:17.6273953-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.16,
+                                                   "workingSetMedianaBytes":  1049591808,
+                                                   "privateBytesMedianaBytes":  569577472,
+                                                   "cpuMediaPorcentajeMaquina":  0.3,
+                                                   "appWorkingSetMedianaBytes":  138012672,
+                                                   "appPrivateBytesMedianaBytes":  129290240,
+                                                   "appCpuMediaPorcentajeMaquina":  0,
+                                                   "procesosMediana":  17,
+                                                   "renderers":  11,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/estatica.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9561,
+                                                                       "procesosMaquina":  209,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-inapp-1-28ed90a6"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "inapp",
+                                                   "pagina":  "estatica"
+                                               },
+                                               {
+                                                   "corrida":  2,
+                                                   "inicio":  "2026-11-08T02:43:28.2025749-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.14,
+                                                   "workingSetMedianaBytes":  1035433984,
+                                                   "privateBytesMedianaBytes":  566011904,
+                                                   "cpuMediaPorcentajeMaquina":  0.18,
+                                                   "appWorkingSetMedianaBytes":  137682944,
+                                                   "appPrivateBytesMedianaBytes":  128741376,
+                                                   "appCpuMediaPorcentajeMaquina":  0,
+                                                   "procesosMediana":  17,
+                                                   "renderers":  11,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/estatica.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9623,
+                                                                       "procesosMaquina":  208,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-inapp-2-d9b2f788"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "inapp",
+                                                   "pagina":  "estatica"
+                                               },
+                                               {
+                                                   "corrida":  3,
+                                                   "inicio":  "2026-11-08T02:45:39.4905310-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.15,
+                                                   "workingSetMedianaBytes":  1056092160,
+                                                   "privateBytesMedianaBytes":  562188288,
+                                                   "cpuMediaPorcentajeMaquina":  0.16,
+                                                   "appWorkingSetMedianaBytes":  138219520,
+                                                   "appPrivateBytesMedianaBytes":  129302528,
+                                                   "appCpuMediaPorcentajeMaquina":  0.01,
+                                                   "procesosMediana":  17,
+                                                   "renderers":  11,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/estatica.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9650,
+                                                                       "procesosMaquina":  206,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-inapp-3-b8eb9f29"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "inapp",
+                                                   "pagina":  "estatica"
+                                               }
+                                           ]
+                          },
+                          {
+                              "plugin":  "windows",
+                              "pagina":  "animada",
+                              "cpuProceso":  {
+                                                 "c1":  5.11,
+                                                 "c2":  5.35,
+                                                 "c3":  5.5,
+                                                 "mediana":  5.35
+                                             },
+                              "cpuArbolMediana":  28.93,
+                              "ramArbolWorkingSetMedianaMB":  888,
+                              "ramArbolPrivateMedianaMB":  539,
+                              "ramProcesoWorkingSetMedianaMB":  83,
+                              "ramProcesoPrivateMedianaMB":  124,
+                              "duracionMuestreoSegundos":  [
+                                                               60.29,
+                                                               60.29,
+                                                               60.32
+                                                           ],
+                              "algunMuestreoMasDe90s":  false,
+                              "corridas":  [
+                                               {
+                                                   "corrida":  1,
+                                                   "inicio":  "2026-11-08T02:47:50.8196840-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.29,
+                                                   "workingSetMedianaBytes":  931180544,
+                                                   "privateBytesMedianaBytes":  561426432,
+                                                   "cpuMediaPorcentajeMaquina":  27.85,
+                                                   "appWorkingSetMedianaBytes":  87138304,
+                                                   "appPrivateBytesMedianaBytes":  130203648,
+                                                   "appCpuMediaPorcentajeMaquina":  5.11,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/animada.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9622,
+                                                                       "procesosMaquina":  209,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-windows-1-5235cc92"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "windows",
+                                                   "pagina":  "animada"
+                                               },
+                                               {
+                                                   "corrida":  2,
+                                                   "inicio":  "2026-11-08T02:50:09.8598472-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.29,
+                                                   "workingSetMedianaBytes":  930177024,
+                                                   "privateBytesMedianaBytes":  564871168,
+                                                   "cpuMediaPorcentajeMaquina":  28.93,
+                                                   "appWorkingSetMedianaBytes":  87355392,
+                                                   "appPrivateBytesMedianaBytes":  130752512,
+                                                   "appCpuMediaPorcentajeMaquina":  5.35,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/animada.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9665,
+                                                                       "procesosMaquina":  205,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-windows-2-f4a17aa8"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "windows",
+                                                   "pagina":  "animada"
+                                               },
+                                               {
+                                                   "corrida":  3,
+                                                   "inicio":  "2026-11-08T02:52:28.0427596-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.32,
+                                                   "workingSetMedianaBytes":  934033408,
+                                                   "privateBytesMedianaBytes":  566013952,
+                                                   "cpuMediaPorcentajeMaquina":  28.95,
+                                                   "appWorkingSetMedianaBytes":  87007232,
+                                                   "appPrivateBytesMedianaBytes":  130404352,
+                                                   "appCpuMediaPorcentajeMaquina":  5.5,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/animada.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9675,
+                                                                       "procesosMaquina":  205,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-windows-3-70837767"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "windows",
+                                                   "pagina":  "animada"
+                                               }
+                                           ]
+                          },
+                          {
+                              "plugin":  "floating",
+                              "pagina":  "animada",
+                              "cpuProceso":  {
+                                                 "c1":  0,
+                                                 "c2":  0,
+                                                 "c3":  0,
+                                                 "mediana":  0
+                                             },
+                              "cpuArbolMediana":  22,
+                              "ramArbolWorkingSetMedianaMB":  879,
+                              "ramArbolPrivateMedianaMB":  527,
+                              "ramProcesoWorkingSetMedianaMB":  74,
+                              "ramProcesoPrivateMedianaMB":  109,
+                              "duracionMuestreoSegundos":  [
+                                                               60.22,
+                                                               60.2,
+                                                               60.2
+                                                           ],
+                              "algunMuestreoMasDe90s":  false,
+                              "corridas":  [
+                                               {
+                                                   "corrida":  1,
+                                                   "inicio":  "2026-11-08T02:54:48.7035523-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.22,
+                                                   "workingSetMedianaBytes":  921993216,
+                                                   "privateBytesMedianaBytes":  552941568,
+                                                   "cpuMediaPorcentajeMaquina":  22,
+                                                   "appWorkingSetMedianaBytes":  77223936,
+                                                   "appPrivateBytesMedianaBytes":  114728960,
+                                                   "appCpuMediaPorcentajeMaquina":  0,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/animada.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9673,
+                                                                       "procesosMaquina":  208,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-floating-1-002380e4"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "floating",
+                                                   "pagina":  "animada"
+                                               },
+                                               {
+                                                   "corrida":  2,
+                                                   "inicio":  "2026-11-08T02:56:55.5921974-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.2,
+                                                   "workingSetMedianaBytes":  909883392,
+                                                   "privateBytesMedianaBytes":  532781056,
+                                                   "cpuMediaPorcentajeMaquina":  21.38,
+                                                   "appWorkingSetMedianaBytes":  77164544,
+                                                   "appPrivateBytesMedianaBytes":  114601984,
+                                                   "appCpuMediaPorcentajeMaquina":  0,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/animada.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9678,
+                                                                       "procesosMaquina":  205,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-floating-2-a3ee4bbb"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "floating",
+                                                   "pagina":  "animada"
+                                               },
+                                               {
+                                                   "corrida":  3,
+                                                   "inicio":  "2026-11-08T02:59:02.5119283-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.2,
+                                                   "workingSetMedianaBytes":  922353664,
+                                                   "privateBytesMedianaBytes":  565047296,
+                                                   "cpuMediaPorcentajeMaquina":  22.33,
+                                                   "appWorkingSetMedianaBytes":  74051584,
+                                                   "appPrivateBytesMedianaBytes":  114798592,
+                                                   "appCpuMediaPorcentajeMaquina":  0,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/animada.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9668,
+                                                                       "procesosMaquina":  205,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-floating-3-a0457f47"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "floating",
+                                                   "pagina":  "animada"
+                                               }
+                                           ]
+                          },
+                          {
+                              "plugin":  "inapp",
+                              "pagina":  "animada",
+                              "cpuProceso":  {
+                                                 "c1":  5.31,
+                                                 "c2":  5.45,
+                                                 "c3":  5.72,
+                                                 "mediana":  5.45
+                                             },
+                              "cpuArbolMediana":  29.16,
+                              "ramArbolWorkingSetMedianaMB":  935,
+                              "ramArbolPrivateMedianaMB":  550,
+                              "ramProcesoWorkingSetMedianaMB":  84,
+                              "ramProcesoPrivateMedianaMB":  125,
+                              "duracionMuestreoSegundos":  [
+                                                               60.34,
+                                                               60.31,
+                                                               60.34
+                                                           ],
+                              "algunMuestreoMasDe90s":  false,
+                              "corridas":  [
+                                               {
+                                                   "corrida":  1,
+                                                   "inicio":  "2026-11-08T03:01:09.5261712-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.34,
+                                                   "workingSetMedianaBytes":  979089408,
+                                                   "privateBytesMedianaBytes":  571437056,
+                                                   "cpuMediaPorcentajeMaquina":  29.16,
+                                                   "appWorkingSetMedianaBytes":  89165824,
+                                                   "appPrivateBytesMedianaBytes":  132169728,
+                                                   "appCpuMediaPorcentajeMaquina":  5.31,
+                                                   "procesosMediana":  17,
+                                                   "renderers":  11,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/animada.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9675,
+                                                                       "procesosMaquina":  204,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-inapp-1-65b5ff31"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "inapp",
+                                                   "pagina":  "animada"
+                                               },
+                                               {
+                                                   "corrida":  2,
+                                                   "inicio":  "2026-11-08T03:03:20.5931544-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.31,
+                                                   "workingSetMedianaBytes":  983726080,
+                                                   "privateBytesMedianaBytes":  584507392,
+                                                   "cpuMediaPorcentajeMaquina":  28.94,
+                                                   "appWorkingSetMedianaBytes":  88244224,
+                                                   "appPrivateBytesMedianaBytes":  130777088,
+                                                   "appCpuMediaPorcentajeMaquina":  5.45,
+                                                   "procesosMediana":  17,
+                                                   "renderers":  11,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/animada.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9676,
+                                                                       "procesosMaquina":  205,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-inapp-2-6c70cbff"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "inapp",
+                                                   "pagina":  "animada"
+                                               },
+                                               {
+                                                   "corrida":  3,
+                                                   "inicio":  "2026-11-08T03:05:31.7625057-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.34,
+                                                   "workingSetMedianaBytes":  980119552,
+                                                   "privateBytesMedianaBytes":  576528384,
+                                                   "cpuMediaPorcentajeMaquina":  29.39,
+                                                   "appWorkingSetMedianaBytes":  88199168,
+                                                   "appPrivateBytesMedianaBytes":  130416640,
+                                                   "appCpuMediaPorcentajeMaquina":  5.72,
+                                                   "procesosMediana":  17,
+                                                   "renderers":  11,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/Users/Juan%20Fern%C3%A1ndez/Documents/Proyectos/ChatCouncil/prototipos/e3-webviews/paginas/animada.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  9655,
+                                                                       "procesosMaquina":  204,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-inapp-3-52607433"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "inapp",
+                                                   "pagina":  "animada"
+                                               }
+                                           ]
+                          }
+                      ],
+    "diferenciaContraFloating":  [
+                                     {
+                                         "pagina":  "estatica",
+                                         "plugin":  "windows",
+                                         "cpuProcesoMenosFloating":  0.01,
+                                         "cpuArbolMenosFloating":  0.03
+                                     },
+                                     {
+                                         "pagina":  "estatica",
+                                         "plugin":  "inapp",
+                                         "cpuProcesoMenosFloating":  0,
+                                         "cpuArbolMenosFloating":  -0.03
+                                     },
+                                     {
+                                         "pagina":  "animada",
+                                         "plugin":  "windows",
+                                         "cpuProcesoMenosFloating":  5.35,
+                                         "cpuArbolMenosFloating":  6.93
+                                     },
+                                     {
+                                         "pagina":  "animada",
+                                         "plugin":  "inapp",
+                                         "cpuProcesoMenosFloating":  5.45,
+                                         "cpuArbolMenosFloating":  7.16
+                                     }
+                                 ]
+}

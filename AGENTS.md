@@ -68,4 +68,4 @@ Falta una credencial o una cuenta; la acción es irreversible; un hook o un gate
 
 ## Idioma y entorno
 
-Español latino neutro, con «tú». Las versiones de Rust y Flutter se fijan en E4 en sus archivos de configuración, que mandan sobre cualquier texto.
+Español latino neutro, con «tú». Las versiones de Rust y Flutter se fijan en E4 en sus archivos de configuración, que mandan sobre cualquier texto. Toda compilación de Flutter corre desde la unión C:\cc-repo, nunca desde la ruta con «á» (ADR-0002); la unión se borra solo con rmdir sin recursivo.

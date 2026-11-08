@@ -1,0 +1,91 @@
+{
+  "lote": "E3 compilar desde la ruta con acentos",
+  "fecha": "2026-11-08",
+  "entorno": {
+    "flutter": "3.47.9",
+    "dart": "3.13.7",
+    "sdkEnPath": "C:\\Users\\JUANFE~1\\HERRAM~1\\flutter\\bin",
+    "prototipo": "copia temporal de prototipos/e3-webviews solo con webview_win_floating",
+    "comando": "flutter clean y luego flutter build windows --release, en un proceso cmd nuevo por vía",
+    "arranqueCorto": "e3_webviews.exe floating diez <perfil de prueba en %TEMP%> <estatica.html por file:///>; 20 s, cuenta de renderers de su árbol, cierre por ventana"
+  },
+  "vias": [
+    {
+      "via": "a",
+      "nombre": "directo en la ruta con á",
+      "cwd": "C:\\Users\\Juan Fernández\\Documents\\Proyectos\\ChatCouncil\\prototipos\\e3-acentos-tmp",
+      "paginaCodigos": 850,
+      "pubCache": "predeterminada (bajo el perfil, con á)",
+      "compila": false,
+      "exeAbre": false,
+      "renderers": 0,
+      "cierre": null,
+      "segundos": 72,
+      "error": "CUSTOMBUILD : error : Unable to read file: C:\\Users\\Juan Fern´┐¢ndez\\Documents\\Proyectos\\ChatCouncil\\prototipos\\e3-acentos-tmp\\.dart_tool\\flutter_build\\a9a8aea64fa61f413f1422e19fcfef8d\\app.dill"
+    },
+    {
+      "via": "b",
+      "nombre": "unión de directorio C:\\cc-repo",
+      "cwd": "C:\\cc-repo\\prototipos\\e3-acentos-tmp",
+      "paginaCodigos": 850,
+      "pubCache": "predeterminada (bajo el perfil, con á)",
+      "compila": true,
+      "exeAbre": true,
+      "renderers": 10,
+      "cierre": "normal",
+      "segundos": 107,
+      "error": null
+    },
+    {
+      "via": "c",
+      "nombre": "letra de unidad X: con subst",
+      "cwd": "X:\\prototipos\\e3-acentos-tmp",
+      "paginaCodigos": 850,
+      "pubCache": "predeterminada (bajo el perfil, con á)",
+      "compila": true,
+      "exeAbre": true,
+      "renderers": 10,
+      "cierre": "normal",
+      "segundos": 99,
+      "error": null
+    },
+    {
+      "via": "d",
+      "nombre": "PUB_CACHE sin acentos, proyecto en la ruta con á",
+      "cwd": "C:\\Users\\Juan Fernández\\Documents\\Proyectos\\ChatCouncil\\prototipos\\e3-acentos-tmp",
+      "paginaCodigos": 850,
+      "pubCache": "C:\\cc-pub",
+      "compila": false,
+      "exeAbre": false,
+      "renderers": 0,
+      "cierre": null,
+      "segundos": 52,
+      "error": "CUSTOMBUILD : error : Unable to read file: C:\\Users\\Juan Fern´┐¢ndez\\Documents\\Proyectos\\ChatCouncil\\prototipos\\e3-acentos-tmp\\.dart_tool\\flutter_build\\a9a8aea64fa61f413f1422e19fcfef8d\\app.dill"
+    },
+    {
+      "via": "e",
+      "nombre": "chcp 65001, proyecto en la ruta con á",
+      "cwd": "C:\\Users\\Juan Fernández\\Documents\\Proyectos\\ChatCouncil\\prototipos\\e3-acentos-tmp",
+      "paginaCodigos": 65001,
+      "pubCache": "predeterminada (bajo el perfil, con á)",
+      "compila": false,
+      "exeAbre": false,
+      "renderers": 0,
+      "cierre": null,
+      "segundos": 38,
+      "error": "CUSTOMBUILD : error : Unable to read file: C:\\Users\\Juan Fern´┐¢ndez\\Documents\\Proyectos\\ChatCouncil\\prototipos\\e3-acentos-tmp\\.dart_tool\\flutter_build\\a9a8aea64fa61f413f1422e19fcfef8d\\app.dill"
+    }
+  ],
+  "lectura": {
+    "compilanSoloSiElProyectoSeVeSinAcento": "b y c compilan aunque la caché de pub siga bajo el perfil con á; a, d y e fallan con el mismo error aunque cambien la caché o la página de códigos",
+    "descartado": ["caché de pub", "página de códigos del proceso"],
+    "noDeterminado": "qué componente corrompe la á dentro de flutter assemble; el lote no lo pedía"
+  },
+  "limpieza": {
+    "letraX": "quitada",
+    "copiaTemporal": "borrada",
+    "perfilesDePrueba": "borrados",
+    "unionCcRepo": "SIGUE: la validación de la herramienta bloqueó el borrado",
+    "cachePruebaCcPub": "SIGUE: la validación de la herramienta bloqueó el borrado"
+  }
+}

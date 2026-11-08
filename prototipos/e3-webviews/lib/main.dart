@@ -112,7 +112,9 @@ final paneles = ValueNotifier<List<Panel>>([]);
 
 Future<void> main(List<String> args) async {
   final plugin = args[0], modo = args[1], datos = args[2];
-  final salida = args.length > 3 ? File(args[3]) : null;
+  // En «diez», el cuarto argumento es una URL para los diez paneles (medición controlada); en los demás modos, el archivo de salida.
+  final urlDiez = modo == 'diez' && args.length > 3 ? args[3] : null;
+  final salida = args.length > 3 && urlDiez == null ? File(args[3]) : null;
   void escribir(Object? r) =>
       salida?.writeAsStringSync(const JsonEncoder.withIndent('  ').convert({'plugin': plugin, 'modo': modo, 'resultado': r}));
   // El runner de Windows muestra la ventana con el primer cuadro: runApp va antes que los plugins.
@@ -146,7 +148,7 @@ Future<void> main(List<String> args) async {
         ..close());
     }
     final urls = switch (modo) {
-      'diez' => urlsProveedores,
+      'diez' => urlDiez == null ? urlsProveedores : List.filled(10, urlDiez),
       'google' => ['https://accounts.google.com/'],
       _ => ['http://127.0.0.1:$puerto/'],
     };

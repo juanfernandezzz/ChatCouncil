@@ -8,7 +8,8 @@ param(
     [int]$Corridas = 3,
     [double]$UmbralCpu = 10,
     [int]$SegundosQuietos = 15,
-    [int]$TechoReposo = 240
+    [int]$TechoReposo = 240,
+    [string]$Url # medición controlada: los diez paneles cargan esta URL y no se usa el detector de reposo (30 s fijos de Medir-M2)
 )
 $ErrorActionPreference = 'Stop'
 $Logicos = [Environment]::ProcessorCount
@@ -122,13 +123,18 @@ if ((Get-Arbol).Count -gt 0) { throw 'el prototipo ya está abierto' }
 for ($c = 1; $c -le $Corridas; $c++) {
     $datos = Join-Path $env:TEMP "e3-$Plugin-$c-$([guid]::NewGuid().ToString('N').Substring(0, 8))" # perfil de prueba nuevo por corrida
     $inicio = Get-Date
-    Start-Process -FilePath $Exe -ArgumentList $Plugin, 'diez', $datos | Out-Null
+    $so = Get-CimInstance Win32_OperatingSystem -Property FreePhysicalMemory
+    $condiciones = [ordered]@{ memoriaLibreMB = [Math]::Round($so.FreePhysicalMemory / 1KB); procesosMaquina = @(Get-Process).Count
+        enCorriente = @(Get-CimInstance Win32_Battery | Where-Object { $_.BatteryStatus -ne 2 }).Count -eq 0; perfil = $datos }
+    $argumentos = @($Plugin, 'diez', $datos) + @($Url | Where-Object { $_ })
+    Start-Process -FilePath $Exe -ArgumentList $argumentos | Out-Null
     Start-Sleep -Seconds 5
-    $r = Esperar-Reposo 10
+    if (-not $Url) { $r = Esperar-Reposo 10 }
     $m = Medir-M2
     $m.Insert(0, 'corrida', $c); $m.Insert(1, 'inicio', $inicio.ToString('o'))
-    $m.reposoAlcanzado = $r.alcanzado; $m.reposoSegundos = $r.segundos
+    if ($Url) { $m.url = $Url; $m.condiciones = $condiciones; $m.muestreoMasDe90s = $m.segundos -gt 90 }
+    else { $m.reposoAlcanzado = $r.alcanzado; $m.reposoSegundos = $r.segundos }
     [IO.File]::AppendAllText($Salida, (([pscustomobject]$m | Add-Member plugin $Plugin -PassThru) | ConvertTo-Json -Compress) + "`n")
-    "$Plugin corrida $c : ws=$([Math]::Round($m.workingSetMedianaBytes / 1MB)) MB cpu=$($m.cpuMediaPorcentajeMaquina) % renderers=$($m.renderers) reposo=$($r.alcanzado)"
+    "$Plugin corrida $c : ws=$([Math]::Round($m.workingSetMedianaBytes / 1MB)) MB cpu=$($m.cpuMediaPorcentajeMaquina) % appCpu=$($m.appCpuMediaPorcentajeMaquina) % renderers=$($m.renderers) segundos=$($m.segundos)"
     Cerrar
 }

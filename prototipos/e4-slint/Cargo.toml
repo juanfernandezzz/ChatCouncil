@@ -1,0 +1,25 @@
+# Prototipo desechable de E4: Slint con diez WebView2 hijos. No es código de producto.
+[package]
+name = "e4_slint"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "e4_ui"
+
+[[bin]]
+name = "e4_slint"
+path = "src/main.rs"
+
+[dependencies]
+slint = "=1.18.1"
+
+[target.'cfg(windows)'.dependencies]
+# https://docs.rs/slint/1.18.1/slint/struct.WindowHandle.html
+slint = { version = "=1.18.1", features = ["raw-window-handle-06"] }
+wry = "=0.57.1"
+
+[target.'cfg(target_os = "android")'.dependencies]
+# https://docs.rs/slint/1.18.1/slint/android/index.html
+slint = { version = "=1.18.1", features = ["backend-android-activity-06"] }

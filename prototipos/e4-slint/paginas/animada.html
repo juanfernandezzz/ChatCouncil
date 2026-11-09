@@ -1,0 +1,13 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>animada</title>
+<style>
+  body { font: 16px sans-serif; margin: 16px; }
+  /* Animación CSS continua: el compositor redibuja a la frecuencia de la pantalla (60 fps) sin scripts. */
+  #caja { width: 80px; height: 80px; background: #3a7; animation: mover 1s linear infinite alternate; }
+  @keyframes mover { from { transform: translateX(0) rotate(0deg); } to { transform: translateX(160px) rotate(180deg); } }
+</style>
+<body>
+<h1>Página animada</h1>
+<div id="caja"></div>
+</body>

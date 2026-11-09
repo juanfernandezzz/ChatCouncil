@@ -1,0 +1,892 @@
+{
+  "lote": "E4 compatibilidad de Slint",
+  "fecha": "2026-11-09",
+  "maquina": {
+    "so": "Windows 10 Home 10.0.19045",
+    "nucleosLogicos": 4
+  },
+  "metodo": "Mismas pruebas y páginas locales que E3 (requisitos.ps1 y el modo pruebas de e3-webviews), servidas en 127.0.0.1:47831, con perfil de prueba nuevo en %TEMP% por corrida. Reacomodo y foco con agent-desktop sobre la ventana real: resize-window, maximize, restore, mouse-click y press con teclas físicas. Corrida de control: medir.ps1 con -Corridas 1, igual que e4-slint.json.",
+  "versionesPrototipo": {
+    "slint": "1.18.1",
+    "wry": "0.57.1",
+    "webview2-com": "0.39.1",
+    "windows-core": "0.62.2"
+  },
+  "requisitos": {
+    "perfilPersistente": {
+      "valor": "SÍ",
+      "evidencia": {
+        "escribir": {
+          "cookie": "cc_e3=persistente",
+          "localStorage": "persistente"
+        },
+        "leerTrasReabrir": {
+          "cookie": "cc_e3=persistente",
+          "localStorage": "persistente"
+        }
+      }
+    },
+    "compositor": {
+      "valor": "SÍ",
+      "evidencia": {
+        "contenteditableInsertText": {
+          "esperados": 44,
+          "igual": true,
+          "leidos": 44
+        },
+        "contenteditablePaste": {
+          "esperados": 44,
+          "igual": true,
+          "leidos": 44
+        },
+        "textareaInsertText": {
+          "esperados": 44,
+          "igual": true,
+          "leidos": 44
+        },
+        "textareaPaste": {
+          "esperados": 44,
+          "igual": true,
+          "leidos": 44
+        }
+      }
+    },
+    "domYHtml": {
+      "valor": "SÍ",
+      "evidencia": {
+        "html": "<div id=\"respuesta\"><p>Hola <b>mundo</b> ñ 😀</p></div>",
+        "htmlTraeNegrita": true,
+        "texto": "Hola mundo ñ 😀",
+        "textoIgual": true
+      }
+    },
+    "adjuntarSinDialogo": {
+      "valor": "SÍ",
+      "via": "DOM.getDocument, DOM.querySelector y DOM.setFileInputFiles por ICoreWebView2::CallDevToolsProtocolMethod, con WebViewExtWindows::webview() de wry y webview2-com 0.39.1",
+      "evidencia": {
+        "bytes": 21,
+        "esperado": {
+          "bytes": 21,
+          "nombre": "e4-adjunto.txt"
+        },
+        "n": 1,
+        "nombre": "e4-adjunto.txt"
+      }
+    },
+    "loginGoogle": {
+      "valor": "SÍ",
+      "nota": "Solo se abrió la página; no se escribió nada.",
+      "evidencia": {
+        "avisoInseguro": false,
+        "campoCorreo": false,
+        "disallowedUseragent": false,
+        "host": "accounts.google.com",
+        "ruta": "/v3/signin/identifier",
+        "titulo": "Acceso: Cuentas de Google"
+      }
+    },
+    "reacomodo": {
+      "valor": "SÍ",
+      "via": "changed width/height en Slint llama a reacomodar(); Rust mueve cada webview con WebView::set_bounds. agent-desktop hizo resize-window 900x600, maximize y restore.",
+      "evidencia": {
+        "lineas": [
+          {
+            "cliente": [
+              1264,
+              681
+            ],
+            "escala": 1.0,
+            "maximizada": false,
+            "paneles": [
+              [
+                0,
+                0,
+                253,
+                341
+              ],
+              [
+                253,
+                0,
+                253,
+                341
+              ],
+              [
+                506,
+                0,
+                253,
+                341
+              ],
+              [
+                758,
+                0,
+                253,
+                341
+              ],
+              [
+                1011,
+                0,
+                253,
+                341
+              ],
+              [
+                0,
+                341,
+                253,
+                341
+              ],
+              [
+                253,
+                341,
+                253,
+                341
+              ],
+              [
+                506,
+                341,
+                253,
+                341
+              ],
+              [
+                758,
+                341,
+                253,
+                341
+              ],
+              [
+                1011,
+                341,
+                253,
+                341
+              ]
+            ]
+          },
+          {
+            "cliente": [
+              884,
+              561
+            ],
+            "escala": 1.0,
+            "maximizada": false,
+            "paneles": [
+              [
+                0,
+                0,
+                177,
+                281
+              ],
+              [
+                177,
+                0,
+                177,
+                281
+              ],
+              [
+                354,
+                0,
+                177,
+                281
+              ],
+              [
+                530,
+                0,
+                177,
+                281
+              ],
+              [
+                707,
+                0,
+                177,
+                281
+              ],
+              [
+                0,
+                281,
+                177,
+                281
+              ],
+              [
+                177,
+                281,
+                177,
+                281
+              ],
+              [
+                354,
+                281,
+                177,
+                281
+              ],
+              [
+                530,
+                281,
+                177,
+                281
+              ],
+              [
+                707,
+                281,
+                177,
+                281
+              ]
+            ]
+          },
+          {
+            "cliente": [
+              884,
+              561
+            ],
+            "escala": 1.0,
+            "maximizada": false,
+            "paneles": [
+              [
+                0,
+                0,
+                177,
+                281
+              ],
+              [
+                177,
+                0,
+                177,
+                281
+              ],
+              [
+                354,
+                0,
+                177,
+                281
+              ],
+              [
+                530,
+                0,
+                177,
+                281
+              ],
+              [
+                707,
+                0,
+                177,
+                281
+              ],
+              [
+                0,
+                281,
+                177,
+                281
+              ],
+              [
+                177,
+                281,
+                177,
+                281
+              ],
+              [
+                354,
+                281,
+                177,
+                281
+              ],
+              [
+                530,
+                281,
+                177,
+                281
+              ],
+              [
+                707,
+                281,
+                177,
+                281
+              ]
+            ]
+          },
+          {
+            "cliente": [
+              1366,
+              705
+            ],
+            "escala": 1.0,
+            "maximizada": true,
+            "paneles": [
+              [
+                0,
+                0,
+                273,
+                353
+              ],
+              [
+                273,
+                0,
+                273,
+                353
+              ],
+              [
+                546,
+                0,
+                273,
+                353
+              ],
+              [
+                820,
+                0,
+                273,
+                353
+              ],
+              [
+                1093,
+                0,
+                273,
+                353
+              ],
+              [
+                0,
+                353,
+                273,
+                353
+              ],
+              [
+                273,
+                353,
+                273,
+                353
+              ],
+              [
+                546,
+                353,
+                273,
+                353
+              ],
+              [
+                820,
+                353,
+                273,
+                353
+              ],
+              [
+                1093,
+                353,
+                273,
+                353
+              ]
+            ]
+          },
+          {
+            "cliente": [
+              1366,
+              705
+            ],
+            "escala": 1.0,
+            "maximizada": true,
+            "paneles": [
+              [
+                0,
+                0,
+                273,
+                353
+              ],
+              [
+                273,
+                0,
+                273,
+                353
+              ],
+              [
+                546,
+                0,
+                273,
+                353
+              ],
+              [
+                820,
+                0,
+                273,
+                353
+              ],
+              [
+                1093,
+                0,
+                273,
+                353
+              ],
+              [
+                0,
+                353,
+                273,
+                353
+              ],
+              [
+                273,
+                353,
+                273,
+                353
+              ],
+              [
+                546,
+                353,
+                273,
+                353
+              ],
+              [
+                820,
+                353,
+                273,
+                353
+              ],
+              [
+                1093,
+                353,
+                273,
+                353
+              ]
+            ]
+          },
+          {
+            "cliente": [
+              884,
+              561
+            ],
+            "escala": 1.0,
+            "maximizada": false,
+            "paneles": [
+              [
+                0,
+                0,
+                177,
+                281
+              ],
+              [
+                177,
+                0,
+                177,
+                281
+              ],
+              [
+                354,
+                0,
+                177,
+                281
+              ],
+              [
+                530,
+                0,
+                177,
+                281
+              ],
+              [
+                707,
+                0,
+                177,
+                281
+              ],
+              [
+                0,
+                281,
+                177,
+                281
+              ],
+              [
+                177,
+                281,
+                177,
+                281
+              ],
+              [
+                354,
+                281,
+                177,
+                281
+              ],
+              [
+                530,
+                281,
+                177,
+                281
+              ],
+              [
+                707,
+                281,
+                177,
+                281
+              ]
+            ]
+          },
+          {
+            "cliente": [
+              884,
+              561
+            ],
+            "escala": 1.0,
+            "maximizada": false,
+            "paneles": [
+              [
+                0,
+                0,
+                177,
+                281
+              ],
+              [
+                177,
+                0,
+                177,
+                281
+              ],
+              [
+                354,
+                0,
+                177,
+                281
+              ],
+              [
+                530,
+                0,
+                177,
+                281
+              ],
+              [
+                707,
+                0,
+                177,
+                281
+              ],
+              [
+                0,
+                281,
+                177,
+                281
+              ],
+              [
+                177,
+                281,
+                177,
+                281
+              ],
+              [
+                354,
+                281,
+                177,
+                281
+              ],
+              [
+                530,
+                281,
+                177,
+                281
+              ],
+              [
+                707,
+                281,
+                177,
+                281
+              ]
+            ]
+          }
+        ],
+        "todasCubrenElAreaCliente": true,
+        "capturas": [
+          "C:\\cc-e4\\req\\reac-inicial.png",
+          "C:\\cc-e4\\req\\reac-redimensionar.png",
+          "C:\\cc-e4\\req\\reac-maximizar.png",
+          "C:\\cc-e4\\req\\reac-restaurar.png"
+        ]
+      }
+    },
+    "focoYTeclado": {
+      "valor": "SÍ",
+      "via": "Con WebView::focus_parent de wry al enfocarse el campo Slint (modo foco). Sin eso (modo foco-crudo) el teclado sigue en el webview.",
+      "evidencia": {
+        "pasos": "agent-desktop focus-window; mouse-click en el textarea del panel y press h o l a; mouse-click en el campo Slint y press c h a o; mouse-click en el textarea y press x. Estado leído 1,5 s después de cada paso.",
+        "foco": [
+          "1 panel : textarea='hola' activo=ta docFoco=True slint='' campoSlintConFoco=False ventanaEnPrimerPlano=True",
+          "2 campo Slint : textarea='hola' activo=ta docFoco=False slint='chao' campoSlintConFoco=True ventanaEnPrimerPlano=True",
+          "3 vuelta al panel : textarea='holax' activo=ta docFoco=True slint='chao' campoSlintConFoco=False ventanaEnPrimerPlano=True"
+        ],
+        "focoCrudo": [
+          "1 panel : textarea='hola' activo=ta docFoco=True slint='' campoSlintConFoco=False ventanaEnPrimerPlano=True",
+          "2 campo Slint : textarea='holachao' activo=ta docFoco=True slint='' campoSlintConFoco=True ventanaEnPrimerPlano=True",
+          "3 vuelta al panel : textarea='holachaxo' activo=ta docFoco=True slint='' campoSlintConFoco=True ventanaEnPrimerPlano=True"
+        ],
+        "capturas": [
+          "C:\\cc-e4\\req\\foco.png",
+          "C:\\cc-e4\\req\\foco-crudo.png"
+        ]
+      }
+    }
+  },
+  "comparacionE3": {
+    "perfilPersistente": {
+      "slint": "SÍ",
+      "flutter_inappwebview": "SÍ",
+      "webview_win_floating": "SÍ"
+    },
+    "compositor": {
+      "slint": "SÍ",
+      "flutter_inappwebview": "SÍ",
+      "webview_win_floating": "SÍ"
+    },
+    "domYHtml": {
+      "slint": "SÍ",
+      "flutter_inappwebview": "SÍ",
+      "webview_win_floating": "SÍ"
+    },
+    "adjuntarSinDialogo": {
+      "slint": "SÍ",
+      "flutter_inappwebview": "SÍ",
+      "webview_win_floating": "NO"
+    },
+    "loginGoogle": {
+      "slint": "SÍ",
+      "flutter_inappwebview": "SÍ",
+      "webview_win_floating": "SÍ"
+    },
+    "reacomodo": {
+      "slint": "SÍ",
+      "flutter_inappwebview": "no probado en E3",
+      "webview_win_floating": "no probado en E3"
+    },
+    "focoYTeclado": {
+      "slint": "SÍ",
+      "flutter_inappwebview": "no probado en E3",
+      "webview_win_floating": "no probado en E3"
+    }
+  },
+  "corridaDeControl": {
+    "estatica": {
+      "corrida": {
+        "corrida": 1,
+        "inicio": "2026-11-09T18:44:47.8867506-03:00",
+        "muestras": 60,
+        "segundos": 60.17,
+        "workingSetMedianaBytes": 908275712,
+        "privateBytesMedianaBytes": 520146944,
+        "cpuMediaPorcentajeMaquina": 0.07,
+        "appWorkingSetMedianaBytes": 55025664,
+        "appPrivateBytesMedianaBytes": 83349504,
+        "appCpuMediaPorcentajeMaquina": 0,
+        "procesosMediana": 16,
+        "renderers": 10,
+        "nucleosLogicos": 4,
+        "url": "file:///C:/cc-repo/prototipos/e4-slint/paginas/estatica.html",
+        "condiciones": {
+          "memoriaLibreMB": 10524,
+          "procesosMaquina": 212,
+          "enCorriente": true,
+          "perfil": "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-slint-1-b9338d4d"
+        },
+        "muestreoMasDe90s": false,
+        "plugin": "slint"
+      },
+      "control": {
+        "cpuArbol": 0.07,
+        "cpuProceso": 0,
+        "ramArbolWS_MB": 866,
+        "ramArbolPriv_MB": 496,
+        "ramProcesoWS_MB": 52,
+        "ramProcesoPriv_MB": 79
+      },
+      "medianaE4": {
+        "cpuArbol": 0.1,
+        "cpuProceso": 0,
+        "ramArbolWS_MB": 958,
+        "ramArbolPriv_MB": 509,
+        "ramProcesoWS_MB": 74,
+        "ramProcesoPriv_MB": 79
+      },
+      "rangoE4CpuArbol": [
+        0.08,
+        0.1
+      ],
+      "rangoE4RamArbolWS_MB": [
+        926,
+        964
+      ]
+    },
+    "animada": {
+      "corrida": {
+        "corrida": 1,
+        "inicio": "2026-11-09T18:46:59.4282465-03:00",
+        "muestras": 60,
+        "segundos": 61.25,
+        "workingSetMedianaBytes": 911839232,
+        "privateBytesMedianaBytes": 524158976,
+        "cpuMediaPorcentajeMaquina": 49.19,
+        "appWorkingSetMedianaBytes": 58355712,
+        "appPrivateBytesMedianaBytes": 83021824,
+        "appCpuMediaPorcentajeMaquina": 0,
+        "procesosMediana": 16,
+        "renderers": 10,
+        "nucleosLogicos": 4,
+        "url": "file:///C:/cc-repo/prototipos/e4-slint/paginas/animada.html",
+        "condiciones": {
+          "memoriaLibreMB": 10381,
+          "procesosMaquina": 234,
+          "enCorriente": true,
+          "perfil": "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-slint-1-2ecf59ce"
+        },
+        "muestreoMasDe90s": false,
+        "plugin": "slint"
+      },
+      "control": {
+        "cpuArbol": 49.19,
+        "cpuProceso": 0,
+        "ramArbolWS_MB": 870,
+        "ramArbolPriv_MB": 500,
+        "ramProcesoWS_MB": 56,
+        "ramProcesoPriv_MB": 79
+      },
+      "medianaE4": {
+        "cpuArbol": 20.79,
+        "cpuProceso": 0,
+        "ramArbolWS_MB": 852,
+        "ramArbolPriv_MB": 475,
+        "ramProcesoWS_MB": 52,
+        "ramProcesoPriv_MB": 79
+      },
+      "rangoE4CpuArbol": [
+        20.47,
+        21.13
+      ],
+      "rangoE4RamArbolWS_MB": [
+        847,
+        864
+      ]
+    },
+    "animadaAB": {
+      "motivo": "La corrida de control animada dio 49,19 % de CPU del árbol contra la mediana de 20,79 %. Para separar el cambio del prototipo de las condiciones del día se alternaron el binario del commit anterior (ac8a32a, viejo) y el nuevo, una corrida cada uno, dos veces, en las mismas condiciones.",
+      "corridas": [
+        {
+          "binario": "viejo",
+          "inicio": "2026-11-09T18:51:04.0231691-03:00",
+          "cpuArbol": 55.42,
+          "cpuProceso": 0,
+          "ramArbolWS_MB": 886,
+          "ramProcesoWS_MB": 87,
+          "corrida": {
+            "corrida": 1,
+            "inicio": "2026-11-09T18:51:04.0231691-03:00",
+            "muestras": 60,
+            "segundos": 60.39,
+            "workingSetMedianaBytes": 928655360,
+            "privateBytesMedianaBytes": 510746624,
+            "cpuMediaPorcentajeMaquina": 55.42,
+            "appWorkingSetMedianaBytes": 91107328,
+            "appPrivateBytesMedianaBytes": 99348480,
+            "appCpuMediaPorcentajeMaquina": 0,
+            "procesosMediana": 16,
+            "renderers": 10,
+            "nucleosLogicos": 4,
+            "url": "file:///C:/cc-repo/prototipos/e4-slint/paginas/animada.html",
+            "condiciones": {
+              "memoriaLibreMB": 10471,
+              "procesosMaquina": 215,
+              "enCorriente": true,
+              "perfil": "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-slint-1-5c8b3131"
+            },
+            "muestreoMasDe90s": false,
+            "plugin": "slint"
+          }
+        },
+        {
+          "binario": "nuevo",
+          "inicio": "2026-11-09T18:53:16.7000229-03:00",
+          "cpuArbol": 55.3,
+          "cpuProceso": 0,
+          "ramArbolWS_MB": 877,
+          "ramProcesoWS_MB": 83,
+          "corrida": {
+            "corrida": 1,
+            "inicio": "2026-11-09T18:53:16.7000229-03:00",
+            "muestras": 60,
+            "segundos": 60.51,
+            "workingSetMedianaBytes": 919687168,
+            "privateBytesMedianaBytes": 505081856,
+            "cpuMediaPorcentajeMaquina": 55.3,
+            "appWorkingSetMedianaBytes": 87408640,
+            "appPrivateBytesMedianaBytes": 99074048,
+            "appCpuMediaPorcentajeMaquina": 0,
+            "procesosMediana": 16,
+            "renderers": 10,
+            "nucleosLogicos": 4,
+            "url": "file:///C:/cc-repo/prototipos/e4-slint/paginas/animada.html",
+            "condiciones": {
+              "memoriaLibreMB": 10686,
+              "procesosMaquina": 198,
+              "enCorriente": true,
+              "perfil": "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-slint-1-4cbcbdfe"
+            },
+            "muestreoMasDe90s": false,
+            "plugin": "slint"
+          }
+        },
+        {
+          "binario": "viejo",
+          "inicio": "2026-11-09T18:55:26.4178587-03:00",
+          "cpuArbol": 55.74,
+          "cpuProceso": 0,
+          "ramArbolWS_MB": 853,
+          "ramProcesoWS_MB": 51,
+          "corrida": {
+            "corrida": 1,
+            "inicio": "2026-11-09T18:55:26.4178587-03:00",
+            "muestras": 60,
+            "segundos": 60.32,
+            "workingSetMedianaBytes": 894396416,
+            "privateBytesMedianaBytes": 499927040,
+            "cpuMediaPorcentajeMaquina": 55.74,
+            "appWorkingSetMedianaBytes": 53948416,
+            "appPrivateBytesMedianaBytes": 83226624,
+            "appCpuMediaPorcentajeMaquina": 0,
+            "procesosMediana": 16,
+            "renderers": 10,
+            "nucleosLogicos": 4,
+            "url": "file:///C:/cc-repo/prototipos/e4-slint/paginas/animada.html",
+            "condiciones": {
+              "memoriaLibreMB": 10688,
+              "procesosMaquina": 196,
+              "enCorriente": true,
+              "perfil": "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-slint-1-e3ec14cf"
+            },
+            "muestreoMasDe90s": false,
+            "plugin": "slint"
+          }
+        },
+        {
+          "binario": "nuevo",
+          "inicio": "2026-11-09T18:57:34.7790106-03:00",
+          "cpuArbol": 58.75,
+          "cpuProceso": 0,
+          "ramArbolWS_MB": 859,
+          "ramProcesoWS_MB": 52,
+          "corrida": {
+            "corrida": 1,
+            "inicio": "2026-11-09T18:57:34.7790106-03:00",
+            "muestras": 60,
+            "segundos": 60.33,
+            "workingSetMedianaBytes": 900820992,
+            "privateBytesMedianaBytes": 506441728,
+            "cpuMediaPorcentajeMaquina": 58.75,
+            "appWorkingSetMedianaBytes": 54808576,
+            "appPrivateBytesMedianaBytes": 82980864,
+            "appCpuMediaPorcentajeMaquina": 0,
+            "procesosMediana": 16,
+            "renderers": 10,
+            "nucleosLogicos": 4,
+            "url": "file:///C:/cc-repo/prototipos/e4-slint/paginas/animada.html",
+            "condiciones": {
+              "memoriaLibreMB": 10689,
+              "procesosMaquina": 196,
+              "enCorriente": true,
+              "perfil": "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-slint-1-5b58f625"
+            },
+            "muestreoMasDe90s": false,
+            "plugin": "slint"
+          }
+        }
+      ],
+      "conclusion": "El binario viejo también da unos 55 %: la diferencia con la mediana es de las condiciones de hoy, no de las pruebas nuevas. En las mismas condiciones, viejo y nuevo gastan lo mismo."
+    }
+  },
+  "errores": [
+    "Modo leer, primera vez: sin resultado en 120 s. Causa: el servidor local atendía una conexión a la vez y WebView2 abrió una preconexión que no envía nada (netstat: dos conexiones ESTABLISHED al 47831), así que read() quedó bloqueado. Arreglo: un hilo por conexión.",
+    "Prueba de foco, primera vez: ningún clic llegó a la ventana. Causa: en PowerShell 5.1 el $null pasado a un parámetro string llega como \"\", así que FindWindow devolvió 0 y la ventana no estaba al frente. Arreglo: el HWND sale del id de agent-desktop y focus-window la pone al frente; el script no hace clic si no queda en primer plano."
+  ]
+}

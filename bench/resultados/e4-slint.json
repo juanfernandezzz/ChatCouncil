@@ -1,0 +1,304 @@
+{
+    "lote":  "E4 entorno actualizado y prototipo Slint",
+    "fecha":  "2026-11-09",
+    "maquina":  {
+                    "so":  "Windows 10 Home 10.0.19045",
+                    "nucleosLogicos":  4
+                },
+    "metodo":  "Igual que e3-controlada.json: diez paneles con la misma página local por file:/// (sin red), estatica.html y animada.html de la rama e3-webviews. Perfil nuevo en %TEMP% por corrida. 5 s tras abrir, 30 s de espera fija y 60 muestras a 1 Hz sin detector de reposo, del árbol completo de e4_slint.exe y del proceso solo. Tres corridas por combinación, cerrando entre corridas. CPU en % de la máquina (4 núcleos lógicos). Exe release con perfil por defecto de cargo. Ventana igualada a la del runner de Flutter: origen 10,10, exterior 1280x720, cliente 1264x681, paneles de 252,8 x 337,07. Las filas de windows, floating e inapp se copian de e3-controlada.json (2026-11-08), no se repitieron.",
+    "versionesPrototipo":  {
+                               "slint":  "1.18.1 (renderer por defecto)",
+                               "wry":  "0.57.1",
+                               "webview2-com":  "0.39.1"
+                           },
+    "integracion":  "Directa: WebViewBuilder::build_as_child sobre slint::Window::window_handle (feature raw-window-handle-06). No hizo falta el plan B con webview2-com. El manejador no existe en la primera iteración del bucle (WindowHandleError(NotSupported)); se reintenta cada 10 ms con temporizadores de un solo disparo.",
+    "arranqueNota":  "Tiempo desde Start-Process hasta una ventana visible de más de 1000 px de ancho; no incluye que los webviews terminen de cargar. dataBytes es la carpeta data que Flutter necesita junto al exe. WebView2 Runtime es externo a ambos.",
+    "combinaciones":  [
+                          {
+                              "plugin":  "slint",
+                              "pagina":  "estatica",
+                              "cpuProceso":  {
+                                                 "c1":  0,
+                                                 "c2":  0.01,
+                                                 "c3":  0,
+                                                 "mediana":  0
+                                             },
+                              "cpuArbolMediana":  0.1,
+                              "ramArbolWorkingSetMedianaMB":  958,
+                              "ramArbolPrivateMedianaMB":  509,
+                              "ramProcesoWorkingSetMedianaMB":  74,
+                              "ramProcesoPrivateMedianaMB":  79,
+                              "duracionMuestreoSegundos":  [
+                                                               60.15,
+                                                               60.15,
+                                                               60.13
+                                                           ],
+                              "algunMuestreoMasDe90s":  false,
+                              "corridas":  [
+                                               {
+                                                   "corrida":  1,
+                                                   "inicio":  "2026-11-09T00:30:51.9046147-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.15,
+                                                   "workingSetMedianaBytes":  970612736,
+                                                   "privateBytesMedianaBytes":  519069696,
+                                                   "cpuMediaPorcentajeMaquina":  0.08,
+                                                   "appWorkingSetMedianaBytes":  76587008,
+                                                   "appPrivateBytesMedianaBytes":  83038208,
+                                                   "appCpuMediaPorcentajeMaquina":  0,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/cc-repo/prototipos/e4-slint/paginas/estatica.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  10191,
+                                                                       "procesosMaquina":  225,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-slint-1-4743509e"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "slint"
+                                               },
+                                               {
+                                                   "corrida":  2,
+                                                   "inicio":  "2026-11-09T00:33:00.1946572-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.15,
+                                                   "workingSetMedianaBytes":  1011294208,
+                                                   "privateBytesMedianaBytes":  533248000,
+                                                   "cpuMediaPorcentajeMaquina":  0.1,
+                                                   "appWorkingSetMedianaBytes":  77398016,
+                                                   "appPrivateBytesMedianaBytes":  83107840,
+                                                   "appCpuMediaPorcentajeMaquina":  0.01,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/cc-repo/prototipos/e4-slint/paginas/estatica.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  10306,
+                                                                       "procesosMaquina":  208,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-slint-2-4cc98d18"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "slint"
+                                               },
+                                               {
+                                                   "corrida":  3,
+                                                   "inicio":  "2026-11-09T00:35:07.6772393-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.13,
+                                                   "workingSetMedianaBytes":  1004060672,
+                                                   "privateBytesMedianaBytes":  544288768,
+                                                   "cpuMediaPorcentajeMaquina":  0.1,
+                                                   "appWorkingSetMedianaBytes":  77504512,
+                                                   "appPrivateBytesMedianaBytes":  83877888,
+                                                   "appCpuMediaPorcentajeMaquina":  0,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/cc-repo/prototipos/e4-slint/paginas/estatica.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  10356,
+                                                                       "procesosMaquina":  204,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-slint-3-4b31e43c"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "slint"
+                                               }
+                                           ]
+                          },
+                          {
+                              "plugin":  "slint",
+                              "pagina":  "animada",
+                              "cpuProceso":  {
+                                                 "c1":  0,
+                                                 "c2":  0,
+                                                 "c3":  0.01,
+                                                 "mediana":  0
+                                             },
+                              "cpuArbolMediana":  20.79,
+                              "ramArbolWorkingSetMedianaMB":  852,
+                              "ramArbolPrivateMedianaMB":  475,
+                              "ramProcesoWorkingSetMedianaMB":  52,
+                              "ramProcesoPrivateMedianaMB":  79,
+                              "duracionMuestreoSegundos":  [
+                                                               60.21,
+                                                               60.22,
+                                                               60.22
+                                                           ],
+                              "algunMuestreoMasDe90s":  false,
+                              "corridas":  [
+                                               {
+                                                   "corrida":  1,
+                                                   "inicio":  "2026-11-09T00:37:15.5877679-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.21,
+                                                   "workingSetMedianaBytes":  887687168,
+                                                   "privateBytesMedianaBytes":  491769856,
+                                                   "cpuMediaPorcentajeMaquina":  21.13,
+                                                   "appWorkingSetMedianaBytes":  54898688,
+                                                   "appPrivateBytesMedianaBytes":  83210240,
+                                                   "appCpuMediaPorcentajeMaquina":  0,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/cc-repo/prototipos/e4-slint/paginas/animada.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  10325,
+                                                                       "procesosMaquina":  205,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-slint-1-9a856f18"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "slint"
+                                               },
+                                               {
+                                                   "corrida":  2,
+                                                   "inicio":  "2026-11-09T00:39:22.3264944-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.22,
+                                                   "workingSetMedianaBytes":  892934144,
+                                                   "privateBytesMedianaBytes":  498515968,
+                                                   "cpuMediaPorcentajeMaquina":  20.47,
+                                                   "appWorkingSetMedianaBytes":  54624256,
+                                                   "appPrivateBytesMedianaBytes":  83197952,
+                                                   "appCpuMediaPorcentajeMaquina":  0,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/cc-repo/prototipos/e4-slint/paginas/animada.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  10358,
+                                                                       "procesosMaquina":  204,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-slint-2-323f5f48"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "slint"
+                                               },
+                                               {
+                                                   "corrida":  3,
+                                                   "inicio":  "2026-11-09T00:41:29.2584314-03:00",
+                                                   "muestras":  60,
+                                                   "segundos":  60.22,
+                                                   "workingSetMedianaBytes":  906106880,
+                                                   "privateBytesMedianaBytes":  521744384,
+                                                   "cpuMediaPorcentajeMaquina":  20.79,
+                                                   "appWorkingSetMedianaBytes":  53698560,
+                                                   "appPrivateBytesMedianaBytes":  83349504,
+                                                   "appCpuMediaPorcentajeMaquina":  0.01,
+                                                   "procesosMediana":  16,
+                                                   "renderers":  10,
+                                                   "nucleosLogicos":  4,
+                                                   "url":  "file:///C:/cc-repo/prototipos/e4-slint/paginas/animada.html",
+                                                   "condiciones":  {
+                                                                       "memoriaLibreMB":  10356,
+                                                                       "procesosMaquina":  207,
+                                                                       "enCorriente":  true,
+                                                                       "perfil":  "C:\\Users\\JUANFE~1\\AppData\\Local\\Temp\\e3-slint-3-7aff3e98"
+                                                                   },
+                                                   "muestreoMasDe90s":  false,
+                                                   "plugin":  "slint"
+                                               }
+                                           ]
+                          }
+                      ],
+    "arranqueYTamano":  [
+                            {
+                                "plugin":  "slint",
+                                "msHastaVisible":  [
+                                                       1590,
+                                                       731,
+                                                       762
+                                                   ],
+                                "msMediana":  762,
+                                "exeBytes":  11561984,
+                                "dllBytes":  0,
+                                "dllArchivos":  0,
+                                "dataBytes":  0,
+                                "totalBytes":  11561984,
+                                "ventana":  "10,10,1290,730",
+                                "cliente":  "1264x681"
+                            },
+                            {
+                                "plugin":  "floating",
+                                "msHastaVisible":  [
+                                                       3904,
+                                                       3349,
+                                                       3335
+                                                   ],
+                                "msMediana":  3349,
+                                "exeBytes":  91648,
+                                "dllBytes":  21750200,
+                                "dllArchivos":  4,
+                                "dataBytes":  4873005,
+                                "totalBytes":  26714853,
+                                "ventana":  "10,10,1290,730",
+                                "cliente":  "1264x681"
+                            }
+                        ],
+    "entorno":  {
+                    "rustc":  {
+                                  "antes":  "1.99.1 (58cf8f9c3 2026-10-13)",
+                                  "despues":  "1.99.1 (58cf8f9c3 2026-10-13)"
+                              },
+                    "cargo":  {
+                                  "antes":  "1.99.1 (5f94df478 2026-08-27)",
+                                  "despues":  "1.99.1 (5f94df478 2026-08-27)"
+                              },
+                    "rustup":  {
+                                   "antes":  "1.29.1 (d95a37b6a 2026-08-13)",
+                                   "despues":  "1.29.3 (edbc831ce 2026-11-02)"
+                               },
+                    "flutter":  {
+                                    "antes":  "3.47.9 stable (c197ca5199)",
+                                    "despues":  "3.47.9 stable (c197ca5199)"
+                                },
+                    "dart":  {
+                                 "antes":  "3.13.7",
+                                 "despues":  "3.13.7"
+                             },
+                    "buildTools":  {
+                                       "antes":  "Microsoft.VisualStudio.BuildTools 18.6.1",
+                                       "despues":  "Microsoft.VisualStudio.BuildTools 18.11.3",
+                                       "nota":  "El lote nombra Microsoft.VisualStudio.2022.BuildTools; lo instalado es la edición 2026, con otro id."
+                                   },
+                    "msvc":  {
+                                 "antes":  "14.51.36231",
+                                 "despues":  "14.51.36231"
+                             },
+                    "nuget":  {
+                                  "antes":  "7.9.0.83",
+                                  "despues":  "7.9.0.83"
+                              },
+                    "gh":  {
+                               "antes":  "2.103.3",
+                               "despues":  "2.103.3"
+                           },
+                    "agentDesktop":  {
+                                         "antes":  "1.2.0",
+                                         "despues":  "1.2.0"
+                                     },
+                    "plannable":  {
+                                      "antes":  "1.0.0, commit 0dff53c (main)",
+                                      "despues":  "1.0.0, commit 6f56e60 (tag v1.0.0)",
+                                      "nota":  "El último tag queda 21 commits por detrás del commit anterior; se siguió la instrucción del lote."
+                                  },
+                    "node":  {
+                                 "antes":  "v24.16.0",
+                                 "despues":  "v24.16.0"
+                             }
+                },
+    "android":  {
+                    "compila":  true,
+                    "alcance":  "Solo compila y enlaza libe4_ui.so para aarch64-linux-android; no se empaquetó en APK ni se ejecutó, porque no hay dispositivo.",
+                    "comando":  "cargo rustc --lib --release --target aarch64-linux-android --crate-type cdylib",
+                    "soBytes":  16353720,
+                    "segundosCompilacion":  146,
+                    "instalacionSegundos":  617,
+                    "instalado":  "En C:\\cc-e4, sin aviso de control de cuentas y con variables solo del proceso: NDK r30 (30.0.16248370), platforms;android-36, build-tools 37.0.0 y Microsoft JDK 21.0.13 portátil.",
+                    "primerError":  "i-slint-backend-android-activity 1.18.1, build.rs:34: No Android platforms found. Slint compila un helper Java, así que además del NDK exige android.jar, javac y d8."
+                }
+}

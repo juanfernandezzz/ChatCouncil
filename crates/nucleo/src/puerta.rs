@@ -1,16 +1,18 @@
 //! La Puerta mínima (Puerta.cs de la Unity, D13): la conversación y la ronda en curso, y los comandos
-//! que dejan sus hechos en el registro. Solo REG-008 a REG-011 y REG-014 a REG-016; el resto de la
-//! Puerta llega con las partes que portan sus etapas.
+//! que dejan sus hechos en el registro. REG-008 a REG-011, REG-014 a REG-016 y la operación (OPE-001,
+//! OPE-002, OPE-012, OPE-013); el resto de la Puerta llega con las partes que portan sus etapas.
 
 use crate::dominio;
 use crate::json::Valor;
+use crate::operacion::{self, EntradaSello, INTERVALO_MARCA, RespuestaParaOperar};
 use crate::registro::{self, Hecho, RegistroLeido};
 use crate::texto::Texto;
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// "yyyy-MM-ddTHH:mm:ss.fffZ" en UTC, como Puerta.Ahora.
 pub fn formatear_utc(t: SystemTime) -> String {
@@ -65,6 +67,95 @@ pub struct Puerta {
     conversacion_actual: Option<String>,
     ronda_actual: Option<String>,
     ultima_lectura: Option<(String, u64, SystemTime, Rc<RegistroLeido>)>,
+    /// Segundos al este de UTC de la hora local en ese instante: la de los nombres de archivo.
+    desfase_local: fn(SystemTime) -> i64,
+}
+
+/// Lo que se pega en el panel de un operador (Puerta.Operacion).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Operacion {
+    pub operador_id: String,
+    /// Lo que se pega: el prompt entero con sus marcas, o sin el cuerpo si va con archivo.
+    pub texto: Texto,
+    pub cuerpo_archivo: Option<Texto>,
+    pub nombre_archivo: Option<String>,
+    pub marcas: Vec<String>,
+    /// El prompt tal como lo lee el operador, con el archivo adjunto incluido.
+    pub prompt_completo: Texto,
+}
+
+fn falla(mensaje: impl Into<String>) -> io::Error {
+    io::Error::other(mensaje.into())
+}
+
+fn concatenar(partes: &[&Texto]) -> Texto {
+    // Por UTF-16: un surrogate suelto al final de una parte se une con el del principio de la siguiente.
+    let unidades: Vec<u16> = partes.iter().flat_map(|t| t.a_utf16()).collect();
+    Texto::desde_utf16(&unidades)
+}
+
+#[cfg(windows)]
+fn desfase_local_del_sistema(t: SystemTime) -> i64 {
+    #[repr(C)]
+    struct FileTime {
+        bajo: u32,
+        alto: u32,
+    }
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn FileTimeToLocalFileTime(utc: *const FileTime, local: *mut FileTime) -> i32;
+    }
+    // FILETIME: intervalos de 100 ns desde 1601-01-01. Usa el desfase vigente, el que importa para «ahora».
+    let Ok(d) = t.duration_since(UNIX_EPOCH) else {
+        return 0;
+    };
+    let utc = d.as_secs() * 10_000_000 + 116_444_736_000_000_000;
+    let entrada = FileTime {
+        bajo: utc as u32,
+        alto: (utc >> 32) as u32,
+    };
+    let mut local = FileTime { bajo: 0, alto: 0 };
+    // SAFETY: los dos punteros apuntan a FILETIME válidos durante la llamada.
+    if unsafe { FileTimeToLocalFileTime(&entrada, &mut local) } == 0 {
+        return 0;
+    }
+    let local = (u64::from(local.alto) << 32) | u64::from(local.bajo);
+    (local as i64 - utc as i64) / 10_000_000
+}
+
+#[cfg(unix)]
+fn desfase_local_del_sistema(t: SystemTime) -> i64 {
+    use std::ffi::{c_char, c_int, c_long};
+    // struct tm de glibc, musl, bionic y Darwin: nueve int, tm_gmtoff y tm_zone.
+    #[repr(C)]
+    struct Tm {
+        campos: [c_int; 9],
+        gmtoff: c_long,
+        zona: *const c_char,
+    }
+    unsafe extern "C" {
+        fn localtime_r(t: *const c_long, tm: *mut Tm) -> *mut Tm;
+    }
+    let s = match t.duration_since(UNIX_EPOCH) {
+        Ok(d) => d.as_secs() as c_long,
+        Err(e) => -(e.duration().as_secs() as c_long),
+    };
+    let mut tm = Tm {
+        campos: [0; 9],
+        gmtoff: 0,
+        zona: std::ptr::null(),
+    };
+    // SAFETY: time_t es long en estas plataformas; los dos punteros son válidos durante la llamada.
+    if unsafe { localtime_r(&s, &mut tm) }.is_null() {
+        return 0;
+    }
+    i64::from(tm.gmtoff)
+}
+
+// shortcut: fuera de Windows y Unix la hora de los nombres de archivo es UTC; portar al sumar la plataforma.
+#[cfg(not(any(windows, unix)))]
+fn desfase_local_del_sistema(_: SystemTime) -> i64 {
+    0
 }
 
 /// Los .jsonl de conversaciones/, en orden de nombre (el de NTFS, el que ve la Unity).
@@ -90,6 +181,9 @@ fn texto_de(h: &Hecho, campo: &str) -> Option<Texto> {
     h.texto(campo).cloned()
 }
 
+/// Registro, ronda, pregunta efectiva y última respuesta de cada proveedor del pool.
+type RondaPreparada = (Rc<RegistroLeido>, Hecho, Texto, HashMap<String, Hecho>);
+
 impl Puerta {
     /// `integrador` es el de los roles elegidos; `total_operadores`, el largo del pool de operadores.
     pub fn new(
@@ -111,6 +205,7 @@ impl Puerta {
             conversacion_actual: None,
             ronda_actual: None,
             ultima_lectura: None,
+            desfase_local: desfase_local_del_sistema,
         }
     }
 
@@ -379,6 +474,266 @@ impl Puerta {
         }
         Ok(())
     }
+
+    /// OPE-001: la ronda en curso con su pregunta y la última respuesta de cada proveedor del pool; se
+    /// niega con el motivo exacto si falta algo.
+    fn preparar_ronda(&mut self, pool: &[&str]) -> io::Result<RondaPreparada> {
+        let (Some(_), Some(ronda_id)) = (&self.conversacion_actual, self.ronda_actual.clone())
+        else {
+            return Err(falla(
+                "no hay una ronda activa: captura las respuestas del pool antes de pegar la operación",
+            ));
+        };
+        let leido = self.leer_registro()?;
+        let id = Texto::from(ronda_id.as_str());
+        let ronda = leido
+            .hechos
+            .iter()
+            .find(|h| h.tipo() == "ronda" && h.texto("id") == Some(&id))
+            .ok_or_else(|| falla("no se encontró la ronda actual en el registro"))?
+            .clone();
+        let pregunta = dominio::pregunta_efectiva_de_ronda(&leido.hechos, &ronda)
+            .cloned()
+            .ok_or_else(|| {
+                falla(format!(
+                    "la ronda {ronda_id} no tiene pregunta registrada: declárala antes de pegar la operación"
+                ))
+            })?;
+        // UltimaPorProveedor: gana la última captura de cada uno.
+        let mut ultimas: HashMap<String, Hecho> = HashMap::new();
+        for r in leido
+            .hechos
+            .iter()
+            .filter(|h| h.tipo() == "respuesta" && h.texto("rondaId") == Some(&id))
+        {
+            if let Some(p) = r.texto("proveedorId").and_then(Texto::como_str)
+                && pool.contains(&p)
+            {
+                ultimas.insert(p.to_string(), r.clone());
+            }
+        }
+        let faltantes: Vec<&str> = pool
+            .iter()
+            .copied()
+            .filter(|p| !ultimas.contains_key(*p))
+            .collect();
+        if !faltantes.is_empty() {
+            return Err(falla(format!(
+                "faltan respuestas capturadas en esta ronda: {}. Usa \"Capturar\" antes de pegar la operación",
+                faltantes.join(", ")
+            )));
+        }
+        Ok((leido, ronda, pregunta, ultimas))
+    }
+
+    /// OPE-002 y OPE-012: los cuerpos con la semilla persistida de la ronda. La primera vez escribe el
+    /// sello; después lo compara con el recién calculado y, si discrepa, se niega sin escribir nada.
+    fn armar_y_persistir_cuerpos(
+        &mut self,
+        pool: &[&str],
+    ) -> io::Result<(Texto, operacion::CuerposPorOperador)> {
+        let (leido, ronda, pregunta, ultimas) = self.preparar_ronda(pool)?;
+        let ronda_id = ronda.texto("id").cloned().unwrap_or_default();
+        // Sin semilla no hay barajado que reproducir, y simular uno inventaría un dato.
+        let Some(semilla) = ronda.texto("semilla") else {
+            return Err(falla(format!(
+                "ronda {} no tiene semilla persistida: no se puede armar un cuerpo anonimizado reproducible sobre una ronda sin semilla.",
+                ronda_id.para_mostrar()
+            )));
+        };
+        let mut urls_por: HashMap<&Texto, Vec<Texto>> = HashMap::new();
+        for c in leido.hechos.iter().filter(|h| h.tipo() == "cita") {
+            if let (Some(r), Some(u)) = (c.texto("respuestaId"), c.texto("url")) {
+                urls_por.entry(r).or_default().push(u.clone());
+            }
+        }
+        let para_operar: Vec<RespuestaParaOperar> = pool
+            .iter()
+            .map(|p| {
+                let r = &ultimas[*p];
+                let id = r.texto("id").cloned().unwrap_or_default();
+                RespuestaParaOperar {
+                    proveedor_id: p.to_string(),
+                    urls_citadas: urls_por.get(&id).cloned().unwrap_or_default(),
+                    reply_id: id.clone(),
+                    attempt_id: id,
+                    texto: r.texto("textoOriginal").cloned().unwrap_or_default(),
+                }
+            })
+            .collect();
+        let nuevo_id = &mut self.nuevo_id;
+        let resultado = operacion::armar_cuerpos_por_operador(
+            &para_operar,
+            pool,
+            operacion::hash_semilla(semilla),
+            &mut || nuevo_id(),
+        )
+        .map_err(falla)?;
+        let existente: Vec<&Hecho> = leido
+            .hechos
+            .iter()
+            .filter(|h| h.tipo() == "sello" && h.texto("rondaId") == Some(&ronda_id))
+            .collect();
+        if !existente.is_empty() {
+            if let Some(motivo) = discrepancia_de_sello(&existente, &resultado.sello) {
+                return Err(falla(format!(
+                    "el sello ya persistido para la ronda {} no coincide con el que se acaba de calcular ({motivo}) — posible cambio en las respuestas, la semilla o el orden del pool entre consolidaciones. No se escribió nada.",
+                    ronda_id.para_mostrar()
+                )));
+            }
+            return Ok((pregunta, resultado));
+        }
+        for s in &resultado.sello {
+            let h = Hecho::nuevo(
+                "sello",
+                &[
+                    ("id", Valor::Texto((self.nuevo_id)().into())),
+                    ("rondaId", Valor::Texto(ronda_id.clone())),
+                    ("label", Valor::Texto(s.label.as_str().into())),
+                    (
+                        "codigoEstable",
+                        Valor::Texto(s.codigo_estable.as_str().into()),
+                    ),
+                    (
+                        "panelSourceId",
+                        Valor::Texto(s.panel_source_id.as_str().into()),
+                    ),
+                    ("replyId", Valor::Texto(s.reply_id.clone())),
+                    ("attemptId", Valor::Texto(s.attempt_id.clone())),
+                ],
+            )?;
+            self.escribir(&h)?;
+        }
+        Ok((pregunta, resultado))
+    }
+
+    // "AAAA-MM-DD-HHMM" con la hora local, para los nombres de archivo que ve Juan.
+    fn sello_de_archivo(&self) -> String {
+        let t = (self.reloj)();
+        let d = (self.desfase_local)(t);
+        let local = if d >= 0 {
+            t + Duration::from_secs(d as u64)
+        } else {
+            t - Duration::from_secs(d.unsigned_abs())
+        };
+        let s = formatear_utc(local);
+        format!("{}-{}{}", &s[..10], &s[11..13], &s[14..16])
+    }
+
+    /// OPE-013: la operación de un panel, pegada (el prompt entero con sus marcas) o con archivo (el
+    /// prompt sin cuerpo, y el cuerpo con sus marcas en un .txt). Escribe el sello la primera vez.
+    /// `pool` es el de operadores en su orden fijo, de donde salen los P#.
+    pub fn armar_operacion(
+        &mut self,
+        pool: &[&str],
+        operador_id: &str,
+        con_archivo: bool,
+    ) -> io::Result<Operacion> {
+        if !pool.contains(&operador_id) {
+            return Err(falla(format!(
+                "\"{}\" no es un operador del pool: no tiene cuerpo que operar",
+                dominio::nombre_proveedor(operador_id)
+            )));
+        }
+        let (pregunta, resultado) = self.armar_y_persistir_cuerpos(pool)?;
+        let cuerpo = resultado
+            .cuerpos
+            .iter()
+            .find(|c| c.operador_id == operador_id)
+            .expect("un cuerpo por operador del pool");
+        let token = (self.nuevo_id)();
+        let marca_fin = Texto::from(format!("[[CC-MARCA-FIN-{token}]]"));
+        if con_archivo {
+            let codigo = &resultado
+                .sello
+                .iter()
+                .find(|s| s.panel_source_id == operador_id)
+                .expect("una entrada del sello por operador")
+                .codigo_estable;
+            let (prompt, cuerpo_archivo) = operacion::armar_prompt_operacion_con_archivo(
+                &pregunta,
+                &cuerpo.respuestas_para_operador,
+            );
+            let (con_marcas, mut marcas) =
+                operacion::insertar_marcas_intercaladas(&cuerpo_archivo, &token, INTERVALO_MARCA);
+            marcas.push(marca_fin.para_mostrar().into_owned());
+            let salto = Texto::from("\n");
+            let archivo = concatenar(&[&con_marcas, &salto, &marca_fin, &salto]);
+            let nombre = format!("operacion-{codigo}-{}.txt", self.sello_de_archivo());
+            let cabecera = Texto::from(format!("\n\n=== ARCHIVO ADJUNTO: {nombre} ===\n"));
+            return Ok(Operacion {
+                operador_id: operador_id.to_string(),
+                prompt_completo: concatenar(&[&prompt, &cabecera, &archivo]),
+                texto: prompt,
+                cuerpo_archivo: Some(archivo),
+                nombre_archivo: Some(nombre),
+                marcas,
+            });
+        }
+        // Las marcas van sobre el texto ENTERO; sin salto final, que cada editor trata distinto.
+        let (texto, mut marcas) = operacion::insertar_marcas_intercaladas(
+            &operacion::armar_prompt_operacion(&pregunta, &cuerpo.respuestas_para_operador),
+            &token,
+            INTERVALO_MARCA,
+        );
+        marcas.push(marca_fin.para_mostrar().into_owned());
+        let completo = concatenar(&[&texto, &Texto::from("\n"), &marca_fin]);
+        Ok(Operacion {
+            operador_id: operador_id.to_string(),
+            texto: completo.clone(),
+            cuerpo_archivo: None,
+            nombre_archivo: None,
+            marcas,
+            prompt_completo: completo,
+        })
+    }
+}
+
+fn discrepancia_de_sello(persistido: &[&Hecho], calculado: &[EntradaSello]) -> Option<String> {
+    if persistido.len() != calculado.len() {
+        return Some(format!(
+            "el sello persistido tiene {} entradas y el recién calculado tiene {}",
+            persistido.len(),
+            calculado.len()
+        ));
+    }
+    let por_label: HashMap<&Texto, &Hecho> = persistido
+        .iter()
+        .filter_map(|s| Some((s.texto("label")?, *s)))
+        .collect();
+    let ver = |h: &Hecho, k: &str| {
+        h.texto(k)
+            .map(|t| t.para_mostrar().into_owned())
+            .unwrap_or_default()
+    };
+    for c in calculado {
+        let Some(p) = por_label.get(&Texto::from(c.label.as_str())) else {
+            return Some(format!(
+                "el sello recién calculado tiene la etiqueta \"{}\", que no está en el persistido",
+                c.label
+            ));
+        };
+        let igual = |k: &str, v: &Texto| p.texto(k) == Some(v);
+        if !igual("codigoEstable", &c.codigo_estable.as_str().into())
+            || !igual("panelSourceId", &c.panel_source_id.as_str().into())
+            || !igual("replyId", &c.reply_id)
+            || !igual("attemptId", &c.attempt_id)
+        {
+            return Some(format!(
+                "la etiqueta \"{}\" no coincide: persistido {{codigoEstable:{}, panelSourceId:{}, replyId:{}, attemptId:{}}} vs calculado {{codigoEstable:{}, panelSourceId:{}, replyId:{}, attemptId:{}}}",
+                c.label,
+                ver(p, "codigoEstable"),
+                ver(p, "panelSourceId"),
+                ver(p, "replyId"),
+                ver(p, "attemptId"),
+                c.codigo_estable,
+                c.panel_source_id,
+                c.reply_id.para_mostrar(),
+                c.attempt_id.para_mostrar()
+            ));
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -409,7 +764,11 @@ mod pruebas {
 
     /// Ids y reloj fijos, como NuevaPuerta de las pruebas de la Unity: las 12:00 UTC del 2026-10-06.
     fn nueva_puerta(carpeta: &Path) -> Puerta {
-        let mut n = 0;
+        puerta_con_ids_desde(carpeta, 1)
+    }
+
+    fn puerta_con_ids_desde(carpeta: &Path, primero: u64) -> Puerta {
+        let mut n = primero - 1;
         Puerta::new(
             carpeta.to_path_buf(),
             Box::new(move || {
@@ -806,6 +1165,297 @@ mod pruebas {
         let r = q.leer_registro().unwrap();
         let ronda = r.hechos.iter().find(|h| h.tipo() == "ronda").unwrap();
         assert_eq!(ronda.entero("indice"), Some(0));
+    }
+
+    // ------------------------------------------------------------ operación
+
+    const CONVERSACION_CORRIDA: &str = "00000000-0000-4000-8000-000000000001";
+    const RONDA_CORRIDA: &str = "00000000-0000-4000-8000-000000000003";
+
+    fn strs_del_vector(nombre: &str) -> Vec<String> {
+        use crate::registro::pruebas::{lista, str_de};
+        lista(&crate::json::vector(nombre))
+            .iter()
+            .map(|l| str_de(l).to_string())
+            .collect()
+    }
+
+    fn lineas_corrida() -> Vec<String> {
+        strs_del_vector("CorridaOperacionLineas")
+    }
+
+    fn pool_puerta() -> Vec<String> {
+        strs_del_vector("PoolPuerta")
+    }
+
+    /// El registro de la corrida hasta sus respuestas (líneas 0 a `hasta`), con la puerta en su ronda,
+    /// ids desde el 15 y la hora local a −3 h, como NuevaPuerta de la Unity.
+    fn puerta_en_corrida(c: &Path, lineas: &[String]) -> Puerta {
+        fs::create_dir_all(c.join("conversaciones")).unwrap();
+        let mut texto = lineas.join("\n");
+        texto.push('\n');
+        fs::write(registro::ruta_archivo(c, CONVERSACION_CORRIDA), texto).unwrap();
+        let mut p = puerta_con_ids_desde(c, 15);
+        p.desfase_local = |_| -3 * 3600;
+        p.restaurar_ronda_activa();
+        assert_eq!(p.ronda_actual(), Some(RONDA_CORRIDA));
+        p
+    }
+
+    #[test]
+    fn operacion_la_corrida_de_la_unity_da_los_mismos_sellos_y_prompts() {
+        let c = Carpeta::nueva("operacion-corrida");
+        let todas = lineas_corrida();
+        let pool = pool_puerta();
+        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
+        let mut p = puerta_en_corrida(&c.0, &todas[..=12]);
+        let mut operaciones = Vec::new();
+        for op in &pool {
+            operaciones.push(p.armar_operacion(&pool, op, *op == "kimi").unwrap());
+        }
+        let escritas: Vec<String> = String::from_utf8(lineas(&c.0, CONVERSACION_CORRIDA))
+            .unwrap()
+            .lines()
+            .map(String::from)
+            .collect();
+        assert_eq!(
+            escritas.len(),
+            20,
+            "solo la primera operación escribe el sello"
+        );
+        assert_eq!(
+            escritas[13..20],
+            todas[13..20],
+            "los siete sellos, byte a byte"
+        );
+        let hechos = registro::leer(&format!("{}\n", todas.join("\n"))).hechos;
+        let es = |h: &Hecho, k: &str, v: &str| h.texto(k).and_then(Texto::como_str) == Some(v);
+        for o in &operaciones {
+            let salida = hechos
+                .iter()
+                .find(|h| {
+                    h.tipo() == "salida-operador"
+                        && es(h, "rondaId", RONDA_CORRIDA)
+                        && es(h, "operadorId", &o.operador_id)
+                })
+                .unwrap();
+            assert_eq!(
+                Some(&o.prompt_completo),
+                salida.texto("promptCompleto"),
+                "{}",
+                o.operador_id
+            );
+        }
+        let kimi = operaciones
+            .iter()
+            .find(|o| o.operador_id == "kimi")
+            .unwrap();
+        assert_eq!(
+            kimi.nombre_archivo.as_deref(),
+            Some(crate::registro::pruebas::str_de(&crate::json::vector(
+                "ArchivoKimi"
+            )))
+        );
+        assert!(
+            operaciones
+                .iter()
+                .all(|o| o.marcas.last().unwrap().starts_with("[[CC-MARCA-FIN-"))
+        );
+    }
+
+    #[test]
+    fn operacion_sin_ronda_sin_pregunta_o_con_faltantes_se_niega_con_el_motivo_de_la_unity() {
+        let pool = pool_puerta();
+        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
+        let error = |p: &mut Puerta| {
+            p.armar_operacion(&pool, "chatgpt", false)
+                .unwrap_err()
+                .to_string()
+        };
+
+        let c = Carpeta::nueva("operacion-sin-ronda");
+        assert_eq!(
+            error(&mut nueva_puerta(&c.0)),
+            "no hay una ronda activa: captura las respuestas del pool antes de pegar la operación"
+        );
+
+        // PuertaPruebas:510: solo chatgpt capturado.
+        let c = Carpeta::nueva("operacion-faltantes");
+        let todas = lineas_corrida();
+        let mut p = puerta_en_corrida(&c.0, &todas[..=5]);
+        let antes = lineas(&c.0, CONVERSACION_CORRIDA);
+        assert_eq!(
+            error(&mut p),
+            "faltan respuestas capturadas en esta ronda: gemini, claude, grok, mistral, kimi, perplexity. Usa \"Capturar\" antes de pegar la operación"
+        );
+        assert_eq!(
+            lineas(&c.0, CONVERSACION_CORRIDA),
+            antes,
+            "no se escribe nada"
+        );
+
+        let c = Carpeta::nueva("operacion-sin-pregunta");
+        let mut sin_pregunta = todas[..=12].to_vec();
+        sin_pregunta[1] = sin_pregunta[1].replace(
+            "\"prompt\":\"¿Qué dice la evidencia sobre la dosis?\"",
+            "\"prompt\":\"\"",
+        );
+        assert_ne!(sin_pregunta[1], todas[1]);
+        let mut p = puerta_en_corrida(&c.0, &sin_pregunta);
+        assert_eq!(
+            error(&mut p),
+            format!(
+                "la ronda {RONDA_CORRIDA} no tiene pregunta registrada: declárala antes de pegar la operación"
+            )
+        );
+    }
+
+    #[test]
+    fn operacion_una_ronda_sin_semilla_se_niega_y_no_escribe_sello() {
+        // INV-OPE-004
+        let c = Carpeta::nueva("operacion-sin-semilla");
+        let todas = lineas_corrida();
+        let pool = pool_puerta();
+        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
+        let mut lineas_sin = todas[..=12].to_vec();
+        lineas_sin[1] = lineas_sin[1].replace(
+            "\"semilla\":\"00000000-0000-4000-8000-000000000002\"",
+            "\"semilla\":null",
+        );
+        assert_ne!(lineas_sin[1], todas[1]);
+        let mut p = puerta_en_corrida(&c.0, &lineas_sin);
+        let antes = lineas(&c.0, CONVERSACION_CORRIDA);
+        assert_eq!(
+            p.armar_operacion(&pool, "chatgpt", false)
+                .unwrap_err()
+                .to_string(),
+            format!(
+                "ronda {RONDA_CORRIDA} no tiene semilla persistida: no se puede armar un cuerpo anonimizado reproducible sobre una ronda sin semilla."
+            )
+        );
+        assert_eq!(lineas(&c.0, CONVERSACION_CORRIDA), antes, "sin sello");
+    }
+
+    #[test]
+    fn operacion_con_el_sello_ya_escrito_una_respuesta_cambiada_se_niega_sin_escribir() {
+        // PuertaPruebas:248: después del sello, kimi se recaptura con otra respuesta.
+        let c = Carpeta::nueva("operacion-sello");
+        let todas = lineas_corrida();
+        let pool = pool_puerta();
+        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
+        let mut p = puerta_en_corrida(&c.0, &todas[..=12]);
+        p.armar_operacion(&pool, "chatgpt", false).unwrap();
+        let mismo = p.armar_operacion(&pool, "gemini", false);
+        assert!(mismo.is_ok(), "el mismo sello recalculado coincide");
+        let corregida = todas[10].replace("00000000-0000-4000-8000-000000000012", "corregida");
+        assert_ne!(corregida, todas[10]);
+        let hecho = registro::leer(&format!("{corregida}\n")).hechos.remove(0);
+        registro::agregar(&c.0, CONVERSACION_CORRIDA, &hecho).unwrap();
+        let antes = lineas(&c.0, CONVERSACION_CORRIDA);
+        let e = p
+            .armar_operacion(&pool, "claude", false)
+            .unwrap_err()
+            .to_string();
+        println!("{e}");
+        assert!(e.starts_with(&format!(
+            "el sello ya persistido para la ronda {RONDA_CORRIDA} no coincide con el que se acaba de calcular (la etiqueta \"Modelo G\" no coincide: persistido {{codigoEstable:P6, panelSourceId:kimi, replyId:00000000-0000-4000-8000-000000000012"
+        )), "{e}");
+        assert!(e.ends_with("No se escribió nada."), "{e}");
+        assert_eq!(
+            lineas(&c.0, CONVERSACION_CORRIDA),
+            antes,
+            "no se escribió nada"
+        );
+    }
+
+    #[test]
+    fn operacion_un_operador_fuera_del_pool_no_tiene_cuerpo() {
+        let c = Carpeta::nueva("operacion-fuera");
+        let pool = pool_puerta();
+        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
+        let mut p = puerta_en_corrida(&c.0, &lineas_corrida()[..=12]);
+        let antes = lineas(&c.0, CONVERSACION_CORRIDA);
+        assert_eq!(
+            p.armar_operacion(&pool, "deepseek", false)
+                .unwrap_err()
+                .to_string(),
+            "\"DeepSeek\" no es un operador del pool: no tiene cuerpo que operar"
+        );
+        assert_eq!(
+            p.armar_operacion(&pool, "nuevo", false)
+                .unwrap_err()
+                .to_string(),
+            "\"Nuevo\" no es un operador del pool: no tiene cuerpo que operar"
+        );
+        assert_eq!(lineas(&c.0, CONVERSACION_CORRIDA), antes);
+    }
+
+    /// PART-004 T3: armar la operación de los siete del pool con los textos reales de la ronda del
+    /// 2026-11-10 (docs/investigacion). Se corre a mano, en release:
+    /// cargo test --release -p nucleo medicion -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn operacion_medicion_con_las_respuestas_de_la_ronda_2026_11_10() {
+        let carpeta = Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            "../../docs/investigacion/2026-11-10-alternativas-ui/Respuestas de los investigadores",
+        );
+        let archivos = [
+            ("chatgpt", "1 - ChatGPT.md"),
+            ("gemini", "2 - Gemini.md"),
+            ("claude", "3 - Claude.md"),
+            ("grok", "4 - Grok.md"),
+            ("mistral", "5 - Mistral.md"),
+            ("kimi", "6 - Kimi.md"),
+            ("perplexity", "7 - Perplexity.md"),
+        ];
+        let mut todas = lineas_corrida()[..=12].to_vec();
+        let mut unidades = 0;
+        for linea in todas.iter_mut() {
+            let h = registro::leer(&format!("{linea}\n")).hechos.remove(0);
+            if h.tipo() != "respuesta" {
+                continue;
+            }
+            let Some((_, nombre)) = archivos
+                .iter()
+                .find(|(id, _)| h.texto("proveedorId").and_then(Texto::como_str) == Some(*id))
+            else {
+                continue;
+            };
+            let nuevo: Texto = fs::read_to_string(carpeta.join(nombre))
+                .unwrap()
+                .as_str()
+                .into();
+            unidades += nuevo.a_utf16().len();
+            let (mut viejo_json, mut nuevo_json) = (Vec::new(), Vec::new());
+            crate::json::escapar(h.texto("textoOriginal").unwrap(), &mut viejo_json);
+            crate::json::escapar(&nuevo, &mut nuevo_json);
+            let (viejo_json, nuevo_json) = (
+                String::from_utf8(viejo_json).unwrap(),
+                String::from_utf8(nuevo_json).unwrap(),
+            );
+            assert_eq!(linea.matches(&viejo_json).count(), 1);
+            *linea = linea.replace(&viejo_json, &nuevo_json);
+        }
+        println!("respuestas: 7, unidades UTF-16: {unidades}");
+        let pool = pool_puerta();
+        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
+        for corrida in 1..=3 {
+            let c = Carpeta::nueva(&format!("operacion-medicion-{corrida}"));
+            let mut p = puerta_en_corrida(&c.0, &todas);
+            let inicio = std::time::Instant::now();
+            let mut tiempos = Vec::new();
+            for op in &pool {
+                let t = std::time::Instant::now();
+                let o = p.armar_operacion(&pool, op, *op == "kimi").unwrap();
+                tiempos.push(format!("{op} {:.2} ms", t.elapsed().as_secs_f64() * 1000.0));
+                assert!(o.prompt_completo.a_utf16().len() > unidades / 2);
+            }
+            println!(
+                "corrida {corrida}: siete operaciones {:.2} ms ({})",
+                inicio.elapsed().as_secs_f64() * 1000.0,
+                tiempos.join(", ")
+            );
+        }
     }
 
     #[test]

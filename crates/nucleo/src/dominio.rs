@@ -113,6 +113,29 @@ pub fn proveedores_cargados_de_ronda<'a>(
     (*v != crate::json::Valor::Nulo).then_some(v)
 }
 
+/// El nombre de un proveedor como lo ve Juan; un id desconocido sale con la inicial en mayúscula.
+pub fn nombre_proveedor(id: &str) -> String {
+    let conocido = match id {
+        "chatgpt" => "ChatGPT",
+        "gemini" => "Gemini",
+        "claude" => "Claude",
+        "grok" => "Grok",
+        "mistral" => "Mistral",
+        "glm" => "GLM",
+        "kimi" => "Kimi",
+        "qwen" => "Qwen",
+        "deepseek" => "DeepSeek",
+        _ => {
+            let mut c = id.chars();
+            return c
+                .next()
+                .map(|p| p.to_uppercase().chain(c).collect())
+                .unwrap_or_default();
+        }
+    };
+    conocido.to_string()
+}
+
 /// El marcador interno de una ronda capturada sin envío es texto no vacío y no es una pregunta.
 pub fn es_pregunta_valida(texto: Option<&Texto>) -> bool {
     // Un surrogate suelto (U+FFFD en la vista) no es blanco ni "(" y corta la frase igual que en la Unity.

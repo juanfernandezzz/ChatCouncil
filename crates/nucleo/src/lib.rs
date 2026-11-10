@@ -4,6 +4,7 @@ pub mod datos;
 pub mod dominio;
 pub mod importar;
 pub mod json;
+pub mod operacion;
 pub mod puerta;
 pub mod registro;
 pub mod texto;

@@ -34,7 +34,8 @@ T:
 3 Medir el tamaño del binario de prueba del núcleo y guardar las mediciones de E6.
 
 AC:
-- Todos los requisitos e invariantes de ajustes y diagnosticos tienen prueba y pasan.
+- AJU-001 a AJU-010, INV-AJU-001, INV-AJU-002, DIA-001 a DIA-005 e INV-DIA-001 tienen prueba y pasan.
+- INF-001 (armar el informe, con la comprobación de URL) e INF-007 (verificación en el informe, con el estado de cada URL) tienen prueba y pasan (D14).
 - Una tabla de cobertura muestra cada requisito de las capacidades de E6 con el nombre de su prueba; ninguno queda sin prueba.
 - Caso de falla: un diagnóstico generado en una prueba con un perfil falso no contiene ninguna cadena del perfil.
 

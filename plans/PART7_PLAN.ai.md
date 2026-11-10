@@ -32,7 +32,7 @@ T:
 2 Prueba de una ronda completa con respuestas de ejemplo tomadas de la ronda del 2026-11-10 (docs/investigacion/), sin paneles.
 
 AC:
-- Todos los requisitos e invariantes de ronda tienen prueba y pasan.
+- RON-001 a RON-017 e INV-RON-001 a INV-RON-003 tienen prueba y pasan.
 - La ronda de prueba llega de la pregunta al informe con los mismos roles por defecto que la Unity (diez proveedores; verificadores glm y qwen).
 - Caso de falla: un intento de avanzar sin la acción del usuario que la etapa exige se rechaza y el estado no cambia.
 - REG-016 completo: AbandonarRonda limpia también los prompts armados, y la Puerta recibe RolesElegidos y la lista del pool en vez del integrador y el largo del pool (D13; PART-003, decisión 6).

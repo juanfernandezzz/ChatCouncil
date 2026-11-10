@@ -4,7 +4,7 @@ ID=PART-004
 PH=E6_NUCLEO_RUST
 SCN=SCN-004
 OUT=Operación con cuerpos, marcas, anonimización, barajado y control de fugas
-DEP=[PART-002]
+DEP=[PART-002, PART-003]
 
 DICT:
 G=goal; CTX=context; C=constraint; F=file; T=task; AC=acceptance; V=verify; DONE=completion; S=stop
@@ -33,7 +33,7 @@ T:
 3 Medir el tiempo de armar una operación con siete respuestas del tamaño de la ronda del 2026-11-10.
 
 AC:
-- Todos los requisitos e invariantes de operacion tienen prueba y pasan.
+- OPE-001 a OPE-014 e INV-OPE-001 a INV-OPE-004 tienen prueba y pasan; OPE-015 y OPE-016 van en PART-005 (D14).
 - Los vectores de la Unity para esas funciones pasan todos.
 - Caso de falla: una URL de un host de interfaz (por ejemplo claude.ai/new) bloquea la operación con el mismo aviso que la Unity.
 

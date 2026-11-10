@@ -36,6 +36,7 @@ T:
 
 AC:
 - El .md armado con los datos de la ronda del 2026-11-10 es igual al de docs/investigacion/ (o la diferencia está explicada por un requisito de openspec).
+- INF-002 a INF-006, INF-008 a INF-014 e INV-INF-001 a INV-INF-003 tienen prueba y pasan; INF-001 e INF-007, que usan la comprobación de URL de PART-009, van en PART-010 (D14).
 - Cada página del PDF mide 612 x 792 pt.
 - Caso de falla: un hallazgo citado que no existe en la tabla se informa como en la Unity.
 

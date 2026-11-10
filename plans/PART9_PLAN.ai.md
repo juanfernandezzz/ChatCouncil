@@ -32,7 +32,7 @@ T:
 2 Pruebas con un servidor local que responde 200, 301, 404 y tiempo agotado.
 
 AC:
-- Todos los requisitos de verificación de URL tienen prueba y pasan.
+- VER-009, INV-VER-002 e INV-VER-003 tienen prueba y pasan; INF-001 e INF-007 van en PART-010 (D14).
 - Una URL ya comprobada no genera una segunda petición.
 - Caso de falla: un tiempo agotado se informa igual que en la Unity, sin colgar la ronda.
 

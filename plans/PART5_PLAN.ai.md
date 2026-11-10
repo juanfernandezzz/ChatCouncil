@@ -4,7 +4,7 @@ ID=PART-005
 PH=E6_NUCLEO_RUST
 SCN=SCN-005
 OUT=Parseos de hallazgos, verificación, referencias y título
-DEP=[PART-002, PART-003]
+DEP=[PART-002, PART-003, PART-004]
 
 DICT:
 G=goal; CTX=context; C=constraint; F=file; T=task; AC=acceptance; V=verify; DONE=completion; S=stop
@@ -32,7 +32,8 @@ T:
 2 Pasar los vectores de parseo.
 
 AC:
-- Todos los requisitos de parseo tienen prueba y pasan.
+- CAP-011, INT-005, INT-008, INT-009, VER-005 y VER-006 tienen prueba y pasan; INT-007, RED-006, RED-007 e INV-RED-002 van en PART-006 (D14).
+- OPE-015 (hallazgos del operador, Parseos.cs:86-151) y OPE-016 (reutilizar la operación en una ronda con respuestas copiadas) tienen prueba y pasan (D14).
 - Los vectores de parseo de la Unity pasan todos.
 - REG-017 (ronda nueva con respuestas copiadas: CopiadaDe y citas recalculadas con Citas.cs) tiene prueba y pasa, sobre puerta.rs (D13).
 - Caso de falla: una línea con una categoría desconocida no se cuenta como hallazgo, igual que en la Unity.

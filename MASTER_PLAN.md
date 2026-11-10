@@ -2,10 +2,10 @@
 
 ## Phase 1: E6 · Núcleo Rust
 
-- [ ] Part 1: Read `plans/PART1_PLAN.ai.md`
+- [x] Part 1: Read `plans/PART1_PLAN.ai.md`
   - Scenario: SCN-001
   - Outcome: Workspace Rust compila y prueba en CI
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 2: Read `plans/PART2_PLAN.ai.md`
   - Scenario: SCN-002

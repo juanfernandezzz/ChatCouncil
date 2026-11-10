@@ -5,14 +5,14 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART1_PLAN.ai.md
+Next: plans/PART2_PLAN.ai.md
 
 ## Parts
 
-- [ ] Part 1: plans/PART1_PLAN.ai.md
+- [x] Part 1: plans/PART1_PLAN.ai.md
   - Scenario: SCN-001
   - Outcome: Workspace Rust compila y prueba en CI
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 2: plans/PART2_PLAN.ai.md
   - Scenario: SCN-002

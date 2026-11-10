@@ -5,8 +5,21 @@ use std::borrow::Cow;
 
 /// Bytes WTF-8. Un par de surrogates siempre queda unido como un solo carácter; solo los sueltos usan
 /// la forma de 3 bytes ED A0..BF xx.
-#[derive(Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Default, PartialEq, Eq, Hash)]
 pub struct Texto(Vec<u8>);
+
+/// El orden de string.CompareOrdinal de la Unity: por unidades UTF-16, no por bytes WTF-8.
+impl Ord for Texto {
+    fn cmp(&self, otro: &Self) -> std::cmp::Ordering {
+        self.unidades().cmp(otro.unidades())
+    }
+}
+
+impl PartialOrd for Texto {
+    fn partial_cmp(&self, otro: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(otro))
+    }
+}
 
 impl Texto {
     /// Desde UTF-16 sin pérdida: así entra el texto de los paneles.
@@ -38,16 +51,23 @@ impl Texto {
     /// Las unidades UTF-16, como las ve la Unity (largo, cortes por índice).
     pub fn a_utf16(&self) -> Vec<u16> {
         let mut u = Vec::with_capacity(self.0.len());
-        for c in self.puntos() {
-            if c >= 0x10000 {
-                let c = c - 0x10000;
-                u.push(0xD800 | (c >> 10) as u16);
-                u.push(0xDC00 | (c & 0x3FF) as u16);
-            } else {
-                u.push(c as u16);
-            }
-        }
+        u.extend(self.unidades());
         u
+    }
+
+    fn unidades(&self) -> impl Iterator<Item = u16> + '_ {
+        self.puntos().flat_map(|c| {
+            let par = if c >= 0x10000 {
+                let c = c - 0x10000;
+                [
+                    Some(0xD800 | (c >> 10) as u16),
+                    Some(0xDC00 | (c & 0x3FF) as u16),
+                ]
+            } else {
+                [Some(c as u16), None]
+            };
+            par.into_iter().flatten()
+        })
     }
 
     /// Los puntos de código, con los surrogates sueltos como su valor (D800..DFFF).
@@ -170,5 +190,14 @@ mod pruebas {
         t.empujar(0xD83D);
         t.empujar(0xDE00);
         assert_eq!(t.como_str(), Some("😀"));
+    }
+
+    #[test]
+    fn el_orden_es_el_de_las_unidades_utf16_como_compare_ordinal() {
+        // revisión PART-003: en bytes WTF-8 U+FF5E < 😀, en UTF-16 (CompareOrdinal) es al revés.
+        assert!(Texto::from("\u{FF5E}") > Texto::from("😀"));
+        assert!(Texto::desde_utf16(&[0xDC00]) > Texto::from("😀"));
+        assert!(Texto::from("a") < Texto::from("b"));
+        assert!(Texto::from("ab") > Texto::from("a"));
     }
 }

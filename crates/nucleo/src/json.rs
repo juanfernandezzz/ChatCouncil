@@ -20,10 +20,14 @@ pub enum Valor {
 pub fn leer(s: &str) -> Option<Valor> {
     let b = s.as_bytes();
     let mut i = 0;
-    let v = valor(b, &mut i)?;
+    let v = valor(b, &mut i, 0)?;
     blancos(b, &mut i);
     (i == b.len()).then_some(v)
 }
+
+/// Tope de contenedores anidados. Ningún hecho pasa de tres niveles; la Unity rechaza las líneas más
+/// hondas en Newtonsoft (MaxDepth 64) y sin tope la recursión desborda la pila.
+const HONDURA_MAXIMA: usize = 64;
 
 fn blancos(b: &[u8], i: &mut usize) {
     while matches!(b.get(*i), Some(b' ' | b'\t' | b'\n' | b'\r')) {
@@ -31,11 +35,11 @@ fn blancos(b: &[u8], i: &mut usize) {
     }
 }
 
-fn valor(b: &[u8], i: &mut usize) -> Option<Valor> {
+fn valor(b: &[u8], i: &mut usize, abiertos: usize) -> Option<Valor> {
     blancos(b, i);
     match *b.get(*i)? {
-        b'{' => objeto(b, i),
-        b'[' => lista(b, i),
+        b'{' => objeto(b, i, abiertos),
+        b'[' => lista(b, i, abiertos),
         b'"' => texto(b, i).map(Valor::Texto),
         b't' => palabra(b, i, b"true", Valor::Bool(true)),
         b'f' => palabra(b, i, b"false", Valor::Bool(false)),
@@ -44,7 +48,10 @@ fn valor(b: &[u8], i: &mut usize) -> Option<Valor> {
     }
 }
 
-fn objeto(b: &[u8], i: &mut usize) -> Option<Valor> {
+fn objeto(b: &[u8], i: &mut usize, abiertos: usize) -> Option<Valor> {
+    if abiertos >= HONDURA_MAXIMA {
+        return None;
+    }
     let mut o: Vec<(Texto, Valor)> = Vec::new();
     *i += 1;
     blancos(b, i);
@@ -63,7 +70,7 @@ fn objeto(b: &[u8], i: &mut usize) -> Option<Valor> {
             return None;
         }
         *i += 1;
-        let v = valor(b, i)?;
+        let v = valor(b, i, abiertos + 1)?;
         match o.iter_mut().find(|(n, _)| *n == nombre) {
             Some(par) => par.1 = v,
             None => o.push((nombre, v)),
@@ -80,7 +87,10 @@ fn objeto(b: &[u8], i: &mut usize) -> Option<Valor> {
     }
 }
 
-fn lista(b: &[u8], i: &mut usize) -> Option<Valor> {
+fn lista(b: &[u8], i: &mut usize, abiertos: usize) -> Option<Valor> {
+    if abiertos >= HONDURA_MAXIMA {
+        return None;
+    }
     let mut a = Vec::new();
     *i += 1;
     blancos(b, i);
@@ -89,7 +99,7 @@ fn lista(b: &[u8], i: &mut usize) -> Option<Valor> {
         return Some(Valor::Lista(a));
     }
     loop {
-        a.push(valor(b, i)?);
+        a.push(valor(b, i, abiertos + 1)?);
         blancos(b, i);
         match b.get(*i) {
             Some(b',') => *i += 1,
@@ -330,5 +340,14 @@ mod pruebas {
             String::from_utf8(s).unwrap(),
             "\"\\\"\\\\\\b\\f\\n\\r\\t\\u0001\\u001f\u{7f} ñ\u{2028}/\""
         );
+    }
+
+    #[test]
+    fn un_anidamiento_profundo_es_ilegible_y_no_tumba_el_proceso() {
+        // revisión PART-003: sin tope, esto desborda la pila.
+        assert_eq!(leer(&"[".repeat(200_000)), None);
+        assert_eq!(leer(&"{\"a\":".repeat(100_000)), None);
+        let hondo = format!("{}{}", "[".repeat(64), "]".repeat(64));
+        assert!(leer(&hondo).is_some());
     }
 }

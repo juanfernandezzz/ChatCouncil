@@ -14,10 +14,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// "yyyy-MM-ddTHH:mm:ss.fffZ" en UTC, como Puerta.Ahora.
 pub fn formatear_utc(t: SystemTime) -> String {
-    let ms = t
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0);
+    // Antes de 1970 los milisegundos son negativos y se redondean hacia abajo, como los ticks de .NET.
+    let ms = match t.duration_since(UNIX_EPOCH) {
+        Ok(d) => d.as_millis() as i64,
+        Err(e) => {
+            let d = e.duration();
+            -(d.as_millis() as i64) - i64::from(d.subsec_nanos() % 1_000_000 != 0)
+        }
+    };
     let (dias, ms_dia) = (ms.div_euclid(86_400_000), ms.rem_euclid(86_400_000));
     // civil_from_days de Howard Hinnant: días desde 1970-01-01 a año, mes y día gregorianos.
     let z = dias + 719_468;
@@ -284,16 +288,19 @@ impl Puerta {
             return Ok(());
         }
         let id = (self.nuevo_id)();
-        self.conversacion_actual = Some(id.clone());
         let h = Hecho::nuevo(
             "conversacion",
             &[
-                ("id", Valor::Texto(id.into())),
+                ("id", Valor::Texto(id.as_str().into())),
                 ("creadaEn", Valor::Texto(self.ahora().into())),
                 ("esPrueba", Valor::Bool(false)),
             ],
         );
-        self.escribir(&h)
+        // Vigente solo si su hecho quedó escrito: si no, las rondas irían a un registro sin conversación
+        // y no se restaurarían (revisión PART-003; la Unity la fijaba antes de escribir).
+        registro::agregar(&self.carpeta, &id, &h)?;
+        self.conversacion_actual = Some(id);
+        Ok(())
     }
 
     /// REG-010: escribe la Ronda con su semilla y, como condición suya, qué proveedores estaban
@@ -314,8 +321,8 @@ impl Puerta {
                 ("semilla", Valor::Texto(semilla.into())),
             ],
         );
-        self.indice_ronda += 1;
         self.escribir(&ronda)?;
+        self.indice_ronda += 1;
         let condicion = Hecho::nuevo(
             "condicion-proveedores-cargados",
             &[
@@ -781,6 +788,36 @@ mod pruebas {
         assert_eq!(
             ids(&p).into_iter().find(|(r, _)| *r == primera).unwrap().1,
             Some(informe)
+        );
+    }
+
+    #[test]
+    fn una_escritura_fallida_no_deja_la_conversacion_a_medias() {
+        // revisión PART-003: si el hecho conversacion no se escribió, la conversación no queda vigente.
+        let c = Carpeta::nueva("falla");
+        fs::write(c.0.join("conversaciones"), "bloquea la carpeta").unwrap();
+        let mut p = nueva_puerta(&c.0);
+        assert!(p.abrir_ronda("pregunta").is_err());
+        fs::remove_file(c.0.join("conversaciones")).unwrap();
+        let id = p.abrir_ronda("pregunta").unwrap();
+        let mut q = nueva_puerta(&c.0);
+        q.restaurar_ronda_activa();
+        assert_eq!(q.ronda_actual(), Some(id.as_str()));
+        let r = q.leer_registro().unwrap();
+        let ronda = r.hechos.iter().find(|h| h.tipo() == "ronda").unwrap();
+        assert_eq!(ronda.entero("indice"), Some(0));
+    }
+
+    #[test]
+    fn la_hora_antes_de_1970_no_se_vuelve_1970() {
+        // revisión PART-003
+        assert_eq!(
+            formatear_utc(UNIX_EPOCH - Duration::from_millis(1)),
+            "1969-12-31T23:59:59.999Z"
+        );
+        assert_eq!(
+            formatear_utc(UNIX_EPOCH - Duration::from_micros(1500)),
+            "1969-12-31T23:59:59.998Z"
         );
     }
 }

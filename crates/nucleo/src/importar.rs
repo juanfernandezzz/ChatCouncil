@@ -30,10 +30,17 @@ pub fn importar(origen: &Path, destino: &Path) -> io::Result<usize> {
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(e) => return Err(e),
         };
-        io::copy(
-            &mut File::open(entrada.path())?,
-            &mut io::BufWriter::new(nuevo),
-        )?;
+        let copia = (|| {
+            let mut w = io::BufWriter::new(nuevo);
+            io::copy(&mut File::open(entrada.path())?, &mut w)?;
+            w.into_inner().map_err(|e| e.into_error())?.sync_all()
+        })();
+        // Un destino a medias se borra: si quedara, la importación siguiente lo daría por copiado
+        // (revisión PART-003). Es un archivo que esta misma llamada creó con create_new.
+        if let Err(e) = copia {
+            let _ = fs::remove_file(salida.join(&nombre));
+            return Err(e);
+        }
         copiados += 1;
     }
     Ok(copiados)
@@ -105,6 +112,32 @@ mod pruebas {
         );
         assert!(!destino.join("conversaciones/notas.txt").exists());
         assert_eq!(importar(&base.join("no-existe"), &destino).unwrap(), 0);
+        fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn una_copia_fallida_se_reintenta_en_la_importacion_siguiente() {
+        // revisión PART-003: un destino a medias no puede quedar como ya importado.
+        use std::os::windows::fs::OpenOptionsExt;
+        let base = std::env::temp_dir().join(format!("cc-importar-falla-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let (origen, destino) = (base.join("unity"), base.join("nueva"));
+        fs::create_dir_all(origen.join("conversaciones")).unwrap();
+        let a = origen.join("conversaciones/a.jsonl");
+        fs::write(&a, "{\"tipo\":\"conversacion\"}\n").unwrap();
+        let bloqueo = OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&a)
+            .unwrap();
+        assert!(importar(&origen, &destino).is_err());
+        drop(bloqueo);
+        assert_eq!(importar(&origen, &destino).unwrap(), 1);
+        assert_eq!(
+            fs::read(destino.join("conversaciones/a.jsonl")).unwrap(),
+            fs::read(&a).unwrap()
+        );
         fs::remove_dir_all(&base).unwrap();
     }
 }

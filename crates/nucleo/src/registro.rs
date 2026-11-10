@@ -5,7 +5,7 @@
 use crate::json::{self, Valor};
 use crate::texto::Texto;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 pub const VERSION_ESQUEMA: i64 = 1;
@@ -544,7 +544,7 @@ pub fn ruta_archivo(carpeta: &Path, conversacion_id: &str) -> PathBuf {
 /// El registro de una conversación; vacío si el archivo no existe. Los bytes se decodifican tal cual:
 /// un BOM queda como U+FEFF y cuenta como línea ilegible, igual que en la Unity.
 pub fn leer_archivo(carpeta: &Path, conversacion_id: &str) -> io::Result<RegistroLeido> {
-    match fs::read(ruta_archivo(carpeta, conversacion_id)) {
+    match fs::read(ruta_valida(carpeta, conversacion_id)?) {
         Ok(b) => Ok(leer(&String::from_utf8_lossy(&b))),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(RegistroLeido::default()),
         Err(e) => Err(e),
@@ -554,16 +554,46 @@ pub fn leer_archivo(carpeta: &Path, conversacion_id: &str) -> io::Result<Registr
 /// El único modo de abrir un registro para escribir: solo agregar al final. En Windows este handle
 /// manda toda escritura al final y rechaza truncar.
 fn abrir_para_agregar(ruta: &Path) -> io::Result<File> {
-    OpenOptions::new().append(true).create(true).open(ruta)
+    OpenOptions::new()
+        .append(true)
+        .read(true)
+        .create(true)
+        .open(ruta)
+}
+
+/// El id es parte de la ruta: no puede salir de conversaciones/ (revisión PART-003).
+fn ruta_valida(carpeta: &Path, conversacion_id: &str) -> io::Result<PathBuf> {
+    if conversacion_id.is_empty()
+        || conversacion_id.starts_with('.')
+        || conversacion_id.contains(['/', '\\', ':'])
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "id de conversación inválido",
+        ));
+    }
+    Ok(ruta_archivo(carpeta, conversacion_id))
 }
 
 /// Una línea completa por hecho, al final del archivo, en una sola escritura: el registro nunca se
-/// reescribe.
+/// reescribe. Si la última línea quedó cortada, el hecho empieza en una línea propia (revisión PART-003;
+/// la Unity lo pegaba a la línea cortada y ambos quedaban ilegibles).
 pub fn agregar(carpeta: &Path, conversacion_id: &str, hecho: &Hecho) -> io::Result<()> {
+    let ruta = ruta_valida(carpeta, conversacion_id)?;
     fs::create_dir_all(carpeta.join("conversaciones"))?;
-    let mut linea = hecho.a_linea();
+    let mut f = abrir_para_agregar(&ruta)?;
+    let mut linea = Vec::new();
+    if f.seek(SeekFrom::End(0))? > 0 {
+        let mut ultimo = [0u8];
+        f.seek(SeekFrom::End(-1))?;
+        f.read_exact(&mut ultimo)?;
+        if ultimo[0] != b'\n' {
+            linea.push(b'\n');
+        }
+    }
+    linea.extend(hecho.a_linea());
     linea.push(b'\n');
-    abrir_para_agregar(&ruta_archivo(carpeta, conversacion_id))?.write_all(&linea)
+    f.write_all(&linea)
 }
 
 #[cfg(test)]
@@ -871,5 +901,46 @@ pub(crate) mod pruebas {
             );
         }
         assert_eq!(sha256(&fs::read(&ruta).unwrap()), antes, "leer no escribe");
+    }
+
+    #[test]
+    fn agregar_tras_una_linea_cortada_no_pega_el_hecho_nuevo() {
+        // revisión PART-003: el hecho nuevo empieza en su propia línea aunque la anterior quedó cortada.
+        let dir = std::env::temp_dir().join(format!("cc-registro-corte-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("conversaciones")).unwrap();
+        fs::write(ruta_archivo(&dir, "c"), "{\"tipo\":\"ron").unwrap();
+        let a = Hecho::nuevo("conversacion", &[("id", Valor::Texto("c".into()))]);
+        agregar(&dir, "c", &a).unwrap();
+        let r = leer_archivo(&dir, "c").unwrap();
+        assert_eq!(r.hechos, vec![a.clone()]);
+        assert_eq!(r.lineas_ilegibles.len(), 1);
+        // con el archivo bien terminado no se agrega ningún salto de más
+        agregar(&dir, "c", &a).unwrap();
+        let mut fin = a.a_linea();
+        fin.push(b'\n');
+        let bytes = fs::read(ruta_archivo(&dir, "c")).unwrap();
+        assert!(bytes.ends_with(&[b"\n".as_slice(), &fin].concat()));
+        assert!(!bytes.ends_with(&[b"\n\n".as_slice(), &fin].concat()));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn un_id_de_conversacion_no_sale_de_la_carpeta_del_registro() {
+        // revisión PART-003: el id forma parte de la ruta.
+        let dir = std::env::temp_dir().join(format!("cc-registro-id-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let a = Hecho::nuevo("conversacion", &[("id", Valor::Texto("c".into()))]);
+        for malo in ["../fuera", r"..\fuera", "a/b", r"C:\x", "..", ""] {
+            let e = agregar(&dir, malo, &a).unwrap_err();
+            assert_eq!(e.kind(), io::ErrorKind::InvalidInput, "{malo:?}");
+            assert_eq!(
+                leer_archivo(&dir, malo).unwrap_err().kind(),
+                io::ErrorKind::InvalidInput
+            );
+        }
+        assert!(!dir.join("fuera.jsonl").exists());
+        agregar(&dir, "00000000-0000-4000-8000-000000000001", &a).unwrap();
+        let _ = fs::remove_dir_all(&dir);
     }
 }

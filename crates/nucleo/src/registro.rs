@@ -363,13 +363,15 @@ fn objeto(campos: &[Campo], o: &[(Texto, Valor)]) -> Option<Valor> {
 }
 
 impl Hecho {
-    /// Un hecho nuevo con los valores dados y el resto por defecto. Un tipo o campo desconocido es un
-    /// error de programación.
-    pub fn nuevo(tipo: &str, valores: &[(&str, Valor)]) -> Hecho {
+    /// Un hecho nuevo con los valores dados y el resto por defecto. Cada valor se valida contra la
+    /// clase de su campo, igual que al leer: lo que el lector no aceptaría nunca se construye
+    /// (revisión PART-003). Un tipo o campo desconocido también es un error.
+    pub fn nuevo(tipo: &str, valores: &[(&str, Valor)]) -> io::Result<Hecho> {
+        let invalido = |m: String| io::Error::new(io::ErrorKind::InvalidInput, m);
         let (tipo, campos) = *TIPOS
             .iter()
             .find(|(t, _)| *t == tipo)
-            .expect("tipo de hecho desconocido");
+            .ok_or_else(|| invalido(format!("tipo de hecho desconocido: {tipo}")))?;
         let mut h = Hecho {
             tipo,
             campos,
@@ -379,10 +381,11 @@ impl Hecho {
             let i = campos
                 .iter()
                 .position(|c| c.nombre == *nombre)
-                .expect("campo desconocido");
-            h.valores[i] = v.clone();
+                .ok_or_else(|| invalido(format!("{tipo}: campo desconocido {nombre}")))?;
+            h.valores[i] = normalizar(campos[i].clase, Some(v))
+                .ok_or_else(|| invalido(format!("{tipo}.{nombre}: {v:?} no es de su clase")))?;
         }
-        h
+        Ok(h)
     }
 
     pub fn tipo(&self) -> &'static str {
@@ -691,13 +694,48 @@ pub(crate) mod pruebas {
     }
 
     #[test]
+    fn un_valor_que_no_es_de_la_clase_del_campo_no_construye_el_hecho() {
+        // revisión PART-003: antes escribía una línea que el lector vuelve ilegible o llegaba a
+        // unreachable! con un Valor::Real.
+        let malos: &[(&str, &str, Valor)] = &[
+            ("ronda", "indice", Valor::Texto("3".into())),
+            ("ronda", "indice", Valor::Real(0.5)),
+            ("ronda", "prompt", Valor::Real(1.0)),
+            ("conversacion", "esPrueba", Valor::Nulo),
+            ("intento", "ok", Valor::Entero(1)),
+            (
+                "hallazgo",
+                "etiquetas",
+                Valor::Lista(vec![Valor::Real(2.0)]),
+            ),
+            (
+                "respuesta",
+                "procedencia",
+                Valor::Objeto(vec![("quiescenceMs".into(), Valor::Real(1.5))]),
+            ),
+            (
+                "respuesta-redactor",
+                "selloVerificaciones",
+                Valor::Lista(vec![Valor::Texto("A".into())]),
+            ),
+        ];
+        for (tipo, campo, v) in malos {
+            let r = Hecho::nuevo(tipo, &[(campo, v.clone())]);
+            assert!(r.is_err(), "{tipo}.{campo} = {v:?} construyó el hecho");
+        }
+        let bueno = Hecho::nuevo("ronda", &[("indice", Valor::Entero(2))]).unwrap();
+        let leido = leer(&String::from_utf8(bueno.a_linea()).unwrap());
+        assert_eq!(leido.hechos, vec![bueno]);
+    }
+
+    #[test]
     fn un_hecho_nuevo_usa_los_valores_por_defecto_de_la_unity() {
-        let h = Hecho::nuevo("pregunta-declarada", &[("id", Valor::Texto("p".into()))]);
+        let h = Hecho::nuevo("pregunta-declarada", &[("id", Valor::Texto("p".into()))]).unwrap();
         assert_eq!(
             String::from_utf8(h.a_linea()).unwrap(),
             r#"{"tipo":"pregunta-declarada","esquema":1,"id":"p","rondaId":null,"texto":null,"declaradaEn":null,"procedencia":"declarado-por-usuario"}"#
         );
-        let e = Hecho::nuevo("error-captura", &[]);
+        let e = Hecho::nuevo("error-captura", &[]).unwrap();
         assert!(
             !String::from_utf8(e.a_linea())
                 .unwrap()
@@ -729,8 +767,8 @@ pub(crate) mod pruebas {
     fn agregar_escribe_una_linea_al_final_sin_bom() {
         let dir = std::env::temp_dir().join(format!("cc-registro-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
-        let a = Hecho::nuevo("conversacion", &[("id", Valor::Texto("c".into()))]);
-        let b = Hecho::nuevo("ronda", &[("id", Valor::Texto("r".into()))]);
+        let a = Hecho::nuevo("conversacion", &[("id", Valor::Texto("c".into()))]).unwrap();
+        let b = Hecho::nuevo("ronda", &[("id", Valor::Texto("r".into()))]).unwrap();
         agregar(&dir, "c", &a).unwrap();
         agregar(&dir, "c", &b).unwrap();
         let bytes = fs::read(ruta_archivo(&dir, "c")).unwrap();
@@ -775,7 +813,7 @@ pub(crate) mod pruebas {
     #[test]
     fn un_registro_con_bom_no_aporta_hechos() {
         let dir = carpeta_temporal("bom");
-        let h = Hecho::nuevo("conversacion", &[("id", Valor::Texto("c".into()))]);
+        let h = Hecho::nuevo("conversacion", &[("id", Valor::Texto("c".into()))]).unwrap();
         fs::create_dir_all(dir.join("conversaciones")).unwrap();
         let mut b = vec![0xEF, 0xBB, 0xBF];
         b.extend(h.a_linea());
@@ -802,13 +840,13 @@ pub(crate) mod pruebas {
         agregar(
             &dir,
             "c",
-            &Hecho::nuevo("conversacion", &[("id", Valor::Texto("c".into()))]),
+            &Hecho::nuevo("conversacion", &[("id", Valor::Texto("c".into()))]).unwrap(),
         )
         .unwrap();
         agregar(
             &dir,
             "c",
-            &Hecho::nuevo("ronda", &[("id", Valor::Texto("r".into()))]),
+            &Hecho::nuevo("ronda", &[("id", Valor::Texto("r".into()))]).unwrap(),
         )
         .unwrap();
         let ruta = ruta_archivo(&dir, "c");
@@ -910,7 +948,7 @@ pub(crate) mod pruebas {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(dir.join("conversaciones")).unwrap();
         fs::write(ruta_archivo(&dir, "c"), "{\"tipo\":\"ron").unwrap();
-        let a = Hecho::nuevo("conversacion", &[("id", Valor::Texto("c".into()))]);
+        let a = Hecho::nuevo("conversacion", &[("id", Valor::Texto("c".into()))]).unwrap();
         agregar(&dir, "c", &a).unwrap();
         let r = leer_archivo(&dir, "c").unwrap();
         assert_eq!(r.hechos, vec![a.clone()]);
@@ -930,7 +968,7 @@ pub(crate) mod pruebas {
         // revisión PART-003: el id forma parte de la ruta.
         let dir = std::env::temp_dir().join(format!("cc-registro-id-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
-        let a = Hecho::nuevo("conversacion", &[("id", Valor::Texto("c".into()))]);
+        let a = Hecho::nuevo("conversacion", &[("id", Valor::Texto("c".into()))]).unwrap();
         for malo in ["../fuera", r"..\fuera", "a/b", r"C:\x", "..", ""] {
             let e = agregar(&dir, malo, &a).unwrap_err();
             assert_eq!(e.kind(), io::ErrorKind::InvalidInput, "{malo:?}");

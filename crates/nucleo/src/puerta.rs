@@ -295,7 +295,7 @@ impl Puerta {
                 ("creadaEn", Valor::Texto(self.ahora().into())),
                 ("esPrueba", Valor::Bool(false)),
             ],
-        );
+        )?;
         // Vigente solo si su hecho quedó escrito: si no, las rondas irían a un registro sin conversación
         // y no se restaurarían (revisión PART-003; la Unity la fijaba antes de escribir).
         registro::agregar(&self.carpeta, &id, &h)?;
@@ -320,7 +320,7 @@ impl Puerta {
                 ("enviadaEn", Valor::Texto(self.ahora().into())),
                 ("semilla", Valor::Texto(semilla.into())),
             ],
-        );
+        )?;
         self.escribir(&ronda)?;
         self.indice_ronda += 1;
         let condicion = Hecho::nuevo(
@@ -345,7 +345,7 @@ impl Puerta {
                 ),
                 ("registradoEn", Valor::Texto(self.ahora().into())),
             ],
-        );
+        )?;
         self.escribir(&condicion)?;
         self.ronda_actual = Some(id.clone());
         Ok(id)
@@ -374,7 +374,7 @@ impl Puerta {
                     ),
                     ("enviadoEn", Valor::Texto(ahora.as_str().into())),
                 ],
-            );
+            )?;
             self.escribir(&h)?;
         }
         Ok(())
@@ -443,7 +443,7 @@ mod pruebas {
             v.retain(|(k, _)| *k != "indice");
             v.push(("indice", Valor::Entero(i.1.parse().unwrap())));
         }
-        registro::agregar(c, conversacion, &Hecho::nuevo(tipo, &v)).unwrap();
+        registro::agregar(c, conversacion, &Hecho::nuevo(tipo, &v).unwrap()).unwrap();
     }
 
     #[test]

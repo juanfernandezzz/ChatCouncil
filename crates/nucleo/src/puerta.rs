@@ -1390,9 +1390,49 @@ mod pruebas {
         assert_eq!(lineas(&c.0, CONVERSACION_CORRIDA), antes);
     }
 
+    /// Ciclos de CPU del hilo actual (D15, enmienda a ADR-0007) y tiempos de la máquina
+    /// (inactivo, total) en intervalos de 100 ns, para la CPU de la máquina durante la medición.
+    #[cfg(windows)]
+    fn ciclos_del_hilo() -> Option<u64> {
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetCurrentThread() -> *mut std::ffi::c_void;
+            fn QueryThreadCycleTime(hilo: *mut std::ffi::c_void, ciclos: *mut u64) -> i32;
+        }
+        let mut ciclos = 0u64;
+        // SAFETY: el seudo-handle del hilo actual siempre es válido; el puntero apunta a un u64 vivo.
+        (unsafe { QueryThreadCycleTime(GetCurrentThread(), &mut ciclos) } != 0).then_some(ciclos)
+    }
+
+    #[cfg(windows)]
+    fn tiempos_de_la_maquina() -> Option<(u64, u64)> {
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetSystemTimes(inactivo: *mut u64, kernel: *mut u64, usuario: *mut u64) -> i32;
+        }
+        let (mut inactivo, mut kernel, mut usuario) = (0u64, 0u64, 0u64);
+        // SAFETY: FILETIME es un u64 alineado; los tres punteros viven durante la llamada.
+        let ok = unsafe { GetSystemTimes(&mut inactivo, &mut kernel, &mut usuario) } != 0;
+        // El tiempo de kernel ya incluye el inactivo.
+        ok.then_some((inactivo, kernel + usuario))
+    }
+
+    // Fuera de Windows la medición queda como no medida: falta el equivalente por plataforma
+    // (docs/SEGUNDA-PASADA.md).
+    #[cfg(not(windows))]
+    fn ciclos_del_hilo() -> Option<u64> {
+        None
+    }
+
+    #[cfg(not(windows))]
+    fn tiempos_de_la_maquina() -> Option<(u64, u64)> {
+        None
+    }
+
     /// PART-004 T3: armar la operación de los siete del pool con los textos reales de la ronda del
-    /// 2026-11-10 (docs/investigacion). Se corre a mano, en release:
-    /// cargo test --release -p nucleo medicion -- --ignored --nocapture
+    /// 2026-11-10 (docs/investigacion), medida con D15 (ciclos del hilo, mediana de 3, dispersión
+    /// ≤ 10 %). Se corre a mano, en release:
+    /// cargo test --release -p nucleo medicion -- --ignored --nocapture --test-threads=1
     #[test]
     #[ignore]
     fn operacion_medicion_con_las_respuestas_de_la_ronda_2026_11_10() {
@@ -1439,23 +1479,54 @@ mod pruebas {
         println!("respuestas: 7, unidades UTF-16: {unidades}");
         let pool = pool_puerta();
         let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
+        let Some(_) = ciclos_del_hilo() else {
+            println!("no medido: sin ciclos del hilo en esta plataforma (D15)");
+            return;
+        };
+        let mut totales = Vec::new();
         for corrida in 1..=3 {
             let c = Carpeta::nueva(&format!("operacion-medicion-{corrida}"));
             let mut p = puerta_en_corrida(&c.0, &todas);
-            let inicio = std::time::Instant::now();
-            let mut tiempos = Vec::new();
+            let maquina_antes = tiempos_de_la_maquina().unwrap();
+            let reloj = std::time::Instant::now();
+            let ciclos_antes = ciclos_del_hilo().unwrap();
+            let mut detalle = Vec::new();
             for op in &pool {
-                let t = std::time::Instant::now();
+                let (t, k) = (std::time::Instant::now(), ciclos_del_hilo().unwrap());
                 let o = p.armar_operacion(&pool, op, *op == "kimi").unwrap();
-                tiempos.push(format!("{op} {:.2} ms", t.elapsed().as_secs_f64() * 1000.0));
+                let ciclos = ciclos_del_hilo().unwrap() - k;
+                detalle.push(format!(
+                    "{op} {:.1} Mciclos {:.2} ms",
+                    ciclos as f64 / 1e6,
+                    t.elapsed().as_secs_f64() * 1000.0
+                ));
                 assert!(o.prompt_completo.a_utf16().len() > unidades / 2);
             }
+            let ciclos = ciclos_del_hilo().unwrap() - ciclos_antes;
+            let ms = reloj.elapsed().as_secs_f64() * 1000.0;
+            let maquina_despues = tiempos_de_la_maquina().unwrap();
+            let total = maquina_despues.1 - maquina_antes.1;
+            let ocupado = total - (maquina_despues.0 - maquina_antes.0);
             println!(
-                "corrida {corrida}: siete operaciones {:.2} ms ({})",
-                inicio.elapsed().as_secs_f64() * 1000.0,
-                tiempos.join(", ")
+                "corrida {corrida}: siete operaciones {:.1} Mciclos, reloj {ms:.2} ms, CPU de la máquina {:.1} % ({})",
+                ciclos as f64 / 1e6,
+                100.0 * ocupado as f64 / total.max(1) as f64,
+                detalle.join(", ")
             );
+            totales.push(ciclos);
         }
+        totales.sort_unstable();
+        let mediana = totales[1];
+        let dispersion = 100.0 * (totales[2] - totales[0]) as f64 / mediana as f64;
+        println!(
+            "D15: mediana {:.1} Mciclos, dispersión {dispersion:.1} % ({})",
+            mediana as f64 / 1e6,
+            if dispersion <= 10.0 {
+                "vale"
+            } else {
+                "no vale, repetir"
+            }
+        );
     }
 
     #[test]

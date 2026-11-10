@@ -1,0 +1,4 @@
+[
+{"roles":"{\"integrador\":\"deepseek\",\"verificador1\":\"glm\",\"verificador2\":\"qwen\",\"redactor\":\"deepseek\"}","pool":["chatgpt","gemini","claude","grok","mistral","kimi","perplexity"]},
+{"roles":"{\"integrador\":\"claude\",\"verificador1\":\"grok\",\"verificador2\":\"kimi\",\"redactor\":\"mistral\"}","pool":["chatgpt","gemini","glm","qwen","deepseek","perplexity"]}
+]

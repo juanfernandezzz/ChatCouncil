@@ -1,0 +1,5 @@
+[
+{"ids":["chatgpt","gemini","claude","grok","mistral","kimi","qwen","deepseek","perplexity"],"claves":["chatgpt","gemini","claude","grok","mistral","kimi","qwen","deepseek","perplexity"],"codigos":["P1","P2","P3","P4","P5","P6","P7","P8","P9"]},
+{"ids":["chatgpt","gemini","chatgpt"],"claves":["chatgpt","gemini"],"codigos":["P3","P2"]},
+{"ids":[],"claves":[],"codigos":[]}
+]

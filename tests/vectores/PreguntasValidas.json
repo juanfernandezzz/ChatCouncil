@@ -1,0 +1,8 @@
+[
+{"texto":"","valida":false},
+{"texto":"  ","valida":false},
+{"texto":"(capturado sin ronda de envio: el texto ya estaba en pantalla al presionar Leer/Capturar)","valida":false},
+{"texto":"Hola","valida":true},
+{"texto":"texto Capturado Sin Ronda De Envio adentro","valida":false},
+{"texto":" (x)","valida":false}
+]

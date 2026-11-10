@@ -1,0 +1,6 @@
+[
+{"titulo":"Un \"título\": con/prohibidos*?<>|\\ y —guiones– ","limpio":"Un título con prohibidos y -guiones-"},
+{"titulo":"con\u0001control  y    espacios...","limpio":"con control y espacios"},
+{"titulo":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀 fin","limpio":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\ud83d"},
+{"titulo":" . . ","limpio":""}
+]

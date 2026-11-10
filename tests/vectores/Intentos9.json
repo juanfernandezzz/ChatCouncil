@@ -1,0 +1,1 @@
+"[{\"id\":\"chatgpt\",\"ok\":true},{\"id\":\"gemini\",\"ok\":true},{\"id\":\"claude\",\"ok\":true},{\"id\":\"grok\",\"ok\":false,\"error\":\"compositor no encontrado\"},{\"id\":\"mistral\",\"ok\":true},{\"id\":\"glm\",\"ok\":true},{\"id\":\"kimi\",\"ok\":true},{\"id\":\"perplexity\",\"ok\":true},{\"id\":\"deepseek\",\"ok\":true}]"

@@ -1,0 +1,8 @@
+[
+{"url":"https://ejemplo.org/a?utm_source=chatgpt.com&model=gpt-5.5#frag","limpia":"https://ejemplo.org/a?model=gpt-5.5#frag"},
+{"url":"https://ejemplo.org/a?model=x&MODEL=y&%6Dodel=z&mo%zzdel=w&%E2%82model=u&&=v&model","limpia":"https://ejemplo.org/a?model=x&%6Dodel=z&model"},
+{"url":"https://ejemplo.org/sin-query","limpia":"https://ejemplo.org/sin-query"},
+{"url":"https://ejemplo.org/?#solo","limpia":"https://ejemplo.org/#solo"},
+{"url":"https://ejemplo.org/a#h?no=query","limpia":"https://ejemplo.org/a#h"},
+{"url":"https://ejemplo.org/a?ref=kimi","limpia":"https://ejemplo.org/a"}
+]

@@ -1,5 +1,7 @@
 //! Núcleo de ChatCouncil: lógica sin interfaz ni webviews.
 
+pub mod datos;
+
 #[cfg(test)]
 mod pruebas {
     #[test]

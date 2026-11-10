@@ -1,0 +1,406 @@
+{
+  "_nota": "Selectores DERIVADOS del DOM real de cada proveedor y validados en el navegador de Juan (v2, secciones 0.19 y 0.35). Es conocimiento del DOM ajeno, no del armazon que los usaba: sobrevive intacto a la reconstruccion. SOLO datos declarativos, nunca codigo.",
+  "specs": {
+    "chatgpt": {
+      "newConversationUrl": "https://chatgpt.com/",
+      "escritura": "lineaParrafo",
+      "composer": {
+        "selector": "#prompt-textarea, div.ProseMirror[contenteditable=\"true\"]",
+        "kind": "contenteditable"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "button[data-testid=\"send-button\"]"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "[data-message-author-role=\"assistant\"], :has(> [data-conversation-role=\"assistant\"])",
+        "pick": "last",
+        "exclude": [
+          "[data-conversation-role=\"assistant\"]"
+        ]
+      },
+      "fallaDeCarga": "[data-dil-render-failed]",
+      "_notaFallaDeCarga": "Medido el 2026-10-29 en la operacion de Juan (ronda 48e5d7bb): ChatGPT mostro 'No se pudo cargar esta respuesta.' en un div[role=status][data-dil-render-failed] dentro del mensaje, y se guardo como salida (0 hallazgos). Con este selector la lectura sale con error y no se guarda.",
+      "_notaAsistente": "Medido el 2026-10-25: data-conversation-role=assistant es un H4 de encabezado (13 caracteres) y la respuesta es su contenedor; por eso se elige el que lo tiene como hijo (:has) y se excluye el encabezado. Con el selector plano, el ultimo nodo era el H4.",
+      "informeEnIframe": {
+        "turno": "section[data-testid^=\"conversation-turn-\"], body",
+        "iframe": "iframe[title=\"internal://deep-research\"], iframe[src*=\"web-sandbox.oaiusercontent.com\"]",
+        "frameUrl": "web-sandbox.oaiusercontent.com",
+        "contenido": "[class*=\"_reportPage_\"]"
+      },
+      "_notaInforme": "Medido el 2026-09-30 sobre la conversacion de investigacion de Juan (Deep Research): la burbuja del asistente trae solo el aviso de inicio (347 caracteres); el informe vive en un iframe de otro origen (connector-openai-deep-research.web-sandbox.oaiusercontent.com, title 'internal://deep-research'), en el mismo conversation-turn que ese mensaje, y dentro de el en un iframe#root about:blank con div._reportPage_<hash> (21.017 caracteres). Ya montado sin abrir nada. _reportPage_ lleva un hash de modulo CSS: por eso [class*=]. Remedido 2026-10-23 (interfaz nueva): el mensaje es [data-conversation-role=assistant] (13 caracteres); el informe va en un iframe de mcp-app-<hash>.web-sandbox.oaiusercontent.com (title 'Investigacion profunda') que cuelga de body, fuera de la conversacion: el turno comun es body. Dentro, el mismo _reportPage_ (21.474 caracteres).",
+      "userMessage": {
+        "selector": "[data-message-author-role=\"user\"], [data-user-message-bubble=\"true\"]",
+        "pick": "first"
+      },
+      "completion": {
+        "kind": "element-gone",
+        "selector": "button[data-testid=\"stop-button\"]",
+        "quiescenceMs": 1500
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 10000,
+        "emptyResponseMs": 90000
+      },
+      "_notaModelo": "SIN etiqueta de version. Medido en cinco corridas, a 333 y a 1334 px de panel: el selector de modelo existe (button[data-testid=\"model-switcher-dropdown-button\"], una coincidencia) pero su texto dice solo \"ChatGPT\" y su aria-label \"Selector de modelo\". No es un problema de ancho. CONSECUENCIA: en chatgpt la deriva de version NO es detectable desde la cabecera, y la procedencia va a quedar con modelLabel en null. Pendiente: buscarla en los atributos de los mensajes de respuesta, que solo existen cuando hay conversacion.",
+      "_notaUsuario": "NO derivado por sondeo todavia -mismo atributo data-message-author-role que assistantMessage, con valor \"user\" en vez de \"assistant\": es la MISMA familia estructural, ya confirmada por sondeo para el valor \"assistant\". Confianza alta por simetria, pero falta una corrida real que lo confirme con el valor \"user\" puntualmente."
+    },
+    "glm": {
+      "newConversationUrl": "https://chat.z.ai/",
+      "escritura": "insertText",
+      "composer": {
+        "selector": "#chat-input",
+        "kind": "textarea"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "#send-message-button"
+      },
+      "responseRoot": {
+        "selector": "#messages-container"
+      },
+      "assistantMessage": {
+        "selector": ".chat-assistant .markdown-prose",
+        "pick": "last",
+        "exclude": [
+          ".thinking-chain-container"
+        ]
+      },
+      "completion": {
+        "kind": "element-gone",
+        "selector": "[aria-label=\"Stop\"]",
+        "quiescenceMs": 1200
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 12000,
+        "emptyResponseMs": 120000
+      },
+      "modelLabel": {
+        "selector": "button[aria-label=\"Select a model\"]"
+      },
+      "_notaIdioma": "derivado con la cuenta de Juan en INGLES: completion usa [aria-label=\"Stop\"] y modelLabel usa button[aria-label=\"Select a model\"]. Ambos son localizados. Si esa cuenta pasa a espanol, los dos dejan de matchear: el sintoma seria 'generating' siempre falso y el gate de modelo abortando por etiqueta ilegible, ninguno de los dos parecido a la causa. Latente desde la Fase 0; lo detecto guard:specs en su primera corrida."
+    },
+    "claude": {
+      "newConversationUrl": "https://claude.ai/new",
+      "escritura": "pegado",
+      "composer": {
+        "selector": "div[data-testid=\"chat-input\"]",
+        "kind": "contenteditable"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "button[aria-label=\"Send message\"], button[aria-label=\"Enviar mensaje\"]"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "[data-testid=\"assistant-message\"], div.font-claude-response",
+        "pick": "last",
+        "exclude": [
+          "[data-testid=\"TurnStatus\"]",
+          "[data-testid=\"message-actions\"]",
+          "[data-testid=\"paper-finch-chip\"]",
+          "[data-testid=\"file-card-stack\"]"
+        ]
+      },
+      "_notaTarjetas": "Medido el 2026-11-03 en el html guardado de la ronda de Juan (d4fc7e58): las tarjetas de archivos y la propuesta de skill van en div[data-testid=file-card-stack] dentro del mensaje, y se leian como 'Guardar Skill ... Contenido Guardar ... ZIP ... Documento·MD Descargar todo' al final de la respuesta.",
+      "userMessage": {
+        "selector": "[data-testid=\"user-message\"]",
+        "pick": "first"
+      },
+      "completion": {
+        "kind": "element-gone",
+        "selector": "[data-is-streaming=\"true\"]",
+        "quiescenceMs": 1500
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 10000,
+        "emptyResponseMs": 90000
+      },
+      "modelLabel": {
+        "selector": "button[data-testid=\"model-selector-dropdown\"]"
+      },
+      "_notaIdioma": "el boton de envio de Claude cambia de aria-label segun su propio estado, no solo por idioma de cuenta: 'Send message' (ingles) mientras esta deshabilitado, 'Enviar mensaje' (espanol, cuenta de Juan) una vez habilitado. El selector combina ambas variantes con una lista separada por comas. model-selector-dropdown es data-testid, no localizado.",
+      "_notaFin": "claude, interfaz nueva medida el 2026-10-25: el mensaje del asistente es [data-testid=assistant-message] y lleva data-is-streaming (true mientras escribe, false al terminar). Antes el selector div.font-claude-response ya no encontraba nada: la respuesta nunca terminaba ni se capturaba. Se conserva como alternativa."
+    },
+    "gemini": {
+      "newConversationUrl": "https://gemini.google.com/app",
+      "escritura": "insertText",
+      "composer": {
+        "selector": "div[aria-label=\"Ingresa una instrucción para Gemini\"]",
+        "kind": "contenteditable"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "button[aria-label=\"Enviar mensaje\"]"
+      },
+      "responseRoot": {
+        "selector": "infinite-scroller[data-test-id=\"chat-history-container\"]"
+      },
+      "assistantMessage": {
+        "selector": "structured-content-container.model-response-text, #extended-response-markdown-content",
+        "pick": "last",
+        "exclude": [
+          "[class*=\"thought\"]",
+          "sources-carousel-inline"
+        ]
+      },
+      "_notaCitas": "Medido el 2026-10-29 en la operacion de Juan (ronda 48e5d7bb): las citas al archivo adjunto son chips sources-carousel-inline dentro del texto y se leian como 'TXT+ 4' al final de las lineas.",
+      "userMessage": {
+        "selector": "div.query-text",
+        "pick": "first"
+      },
+      "completion": {
+        "kind": "quiescence",
+        "quiescenceMs": 20000
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 30000,
+        "emptyResponseMs": 90000,
+        "composerMs": 45000
+      },
+      "_notaIdioma": "compositor derivado con la cuenta de Juan en espanol (aria-label localizado): 'Ingresa una instruccion para Gemini'. Si la cuenta cambia de idioma, este selector deja de matchear. El boton de envio tiene el mismo problema y es MAS fragil que el de claude: solo se pudo observar la variante en espanol 'Enviar mensaje' (derivada con --cc-probe-escribe, matches:1) porque la cuenta de Juan esta en espanol; a diferencia de claude, el boton no tiene data-testid ni clase distintiva que sirva de respaldo, solo clases genericas de Material (mdc-icon-button, mat-mdc-icon-button) compartidas con otros botones del panel. No se agrega la variante en ingles ('Send message', sin confirmar) porque no se observo: agregarla seria inventar un selector, no derivarlo. Si la cuenta cambia de idioma, este selector deja de matchear y hay que volver a correr --cc-probe-escribe.",
+      "_notaTiempo": "composerMs subido de 15000 (default) a 45000: con panel angosto (800x600, aislado, sin contencion) el compositor monta bien -> descarta tamano; con paneles grandes (~1280x734) bajo la misma contencion de 4 procesos, tambien anda -> descarta contencion pura. La falla intermitente observada con paneles chicos en grupo es de TIEMPO al margen bajo contencion, no un defecto estructural. Ver BLUEPRINT SS10 para el detalle de las tres corridas que lo separaron. submitConfirmMs subido de 10000 a 30000 el 2026-08-23: en la primera ronda real con el pool de 8, Juan reporto el error 'el envio no produjo ningun cambio observable' en gemini que resulto ser impaciencia del instrumento, no una falla real -la pagina todavia no habia terminado de responder-. PISO PROVISIONAL, no remedido con un cronometro: sube el margen en la direccion que el sintoma indica, no esta confirmado que 30000 alcance siempre.",
+      "_notaFin": "gemini: sin indicador de generacion conocido en su DOM. El fin se INFIERE de que el texto dejo de crecer durante quiescenceMs. Los 20000 ms son un PISO PROVISIONAL, no un valor medido: se copio del piso de claude por prudencia, y el modo de razonamiento de Gemini todavia no se observo, asi que la ventana real podria ser distinta en cualquiera de las dos direcciones. Queda por validar en la Fase 2 con un prompt largo.",
+      "modelLabel": {
+        "selector": "div[data-test-id=\"logo-pill-label-container\"]"
+      },
+      "_notaModelo": "Derivado por medicion el 2026-08-09 (sondeo, via estructural). El boton hermano lleva la version DENTRO del aria-label (\"...actualmente 3.5 Flash-Lite\"), asi que se rompe justo cuando el modelo cambia: por eso se usa el div, que es estable y deja la version en el texto.",
+      "_notaInforme": "Medido el 2026-08-26: con Deep Research, gemini abre el informe real en un panel APARTE del stream de chat (deep-research-immersive-panel), y structured-content-container.model-response-text solo capturaba el mensaje procedural del chat (\"He completado su investigacion\", 138 caracteres) -el informe entero se perdia. Derivado por sondeo (contenedoresDeTextoLargo, busqueda sin depender de clase): el contenido limpio del informe vive en #extended-response-markdown-content, un id estable. Se agrega como segunda opcion del selector separada por coma; pick:last lo prefiere cuando esta presente porque aparece despues en el orden de documento, y cae al selector de chat normal cuando no hay Deep Research. No se probo con una conversacion sin Deep Research tras este cambio: falta confirmar que pick:last sigue eligiendo bien el mensaje de chat normal cuando el id nuevo no existe.",
+      "_notaUsuario": "Derivado por sondeo (contenedoresDeTextoLargo) el 2026-08-26, confirmado en dos corridas distintas: div.query-text contiene el ultimo mensaje del usuario, con el prefijo de accesibilidad \"Tu dijiste\" incluido en el texto -no se filtra porque esta funcion solo se usa para COMPARAR prompts entre proveedores, no para mostrar el texto; el prefijo no cambia si dos prompts son iguales o no. CORREGIDO 2026-09-06: pick paso de \"last\" a \"first\". Medido con una conversacion real de Deep Research: \"last\" traia \"Empezar la investigacion\" -el clic de confirmacion del plan, que gemini registra como un turno de usuario mas-, no la pregunta original. \"first\" es lo que hay que comparar entre proveedores para saber si recibieron la MISMA pregunta."
+    },
+    "grok": {
+      "newConversationUrl": "https://grok.com/",
+      "escritura": "lineaParrafo",
+      "composer": {
+        "selector": "div[aria-label=\"Ask Grok anything\"], div.ProseMirror[contenteditable=\"true\"]",
+        "kind": "contenteditable"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "button[data-testid=\"chat-submit\"]"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "div.relative.response-content-markdown",
+        "pick": "last",
+        "exclude": [
+          "[data-testid=\"code-block\"] div[class*=\"group/code-header\"]"
+        ]
+      },
+      "completion": {
+        "kind": "quiescence",
+        "quiescenceMs": 20000
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 30000,
+        "emptyResponseMs": 90000,
+        "composerMs": 45000
+      },
+      "modelLabel": {
+        "selector": "#model-select-trigger"
+      },
+      "_notaIdioma": "el compositor es 'Ask Grok anything', en ingles, aunque el resto de la interfaz de grok esta en espanol ('Buscar', 'Historial', 'Alternar barra lateral'): no es un problema de cuenta completa en un idioma, es ese control puntual. Si grok lo traduce, el selector deja de matchear. modelLabel (#model-select-trigger) es un id estable, no localizado; medido con texto 'Fast'.",
+      "_notaFin": "grok: sin indicador de generacion conocido en su DOM, medido en dos corridas de sondeo (2026-08-13 y 2026-08-23). El fin se INFIERE por quiescencia. 20000 ms es el mismo PISO PROVISIONAL que claude/gemini, no un valor medido para grok en particular: falta un prompt largo con pausas para confirmar si esa ventana alcanza."
+    },
+    "mistral": {
+      "newConversationUrl": "https://chat.mistral.ai/",
+      "escritura": "lineaParrafo",
+      "composer": {
+        "selector": "div.ProseMirror",
+        "kind": "contenteditable"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "button[aria-label=\"Enviar\"]"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "div.markdown-container-style.max-w-none",
+        "pick": "last"
+      },
+      "canvas": {
+        "mensaje": "[data-message-author-role=\"assistant\"]",
+        "abrir": "div.rounded-t-xl.border-b > button.cursor-pointer, button[aria-label=\"Abrir Canvas\"]",
+        "contenido": "#chat-side-panel .tiptap.ProseMirror, .tiptap.ProseMirror.markdown-editor",
+        "cerrar": "#chat-side-panel button[aria-label=\"Cerrar\"], .bg-subtle:has(.markdown-editor) > .shrink-0 button[aria-label=\"Cerrar\"]"
+      },
+      "_notaCanvas": "Medido el 2026-09-25 sobre la conversacion de la ronda de cierre de Juan: el texto del canvas no existe en el DOM hasta abrir la tarjeta del mensaje; se monta en #chat-side-panel del mismo documento (sin iframe). 'Abrir Canvas' y 'Cerrar' son aria-label en espanol. La tarjeta cerrada es el boton del titulo en la cabecera de la tarjeta; con otro canvas abierto, la tarjeta minimizada lleva aria-label 'Abrir Canvas'.",
+      "completion": {
+        "kind": "quiescence",
+        "quiescenceMs": 20000
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 30000,
+        "emptyResponseMs": 90000,
+        "composerMs": 45000
+      },
+      "modelLabel": {
+        "selector": "button[aria-label=\"Rápido\"]"
+      },
+      "_notaIdioma": "submit ('Enviar') y modelLabel ('Rápido') son aria-label en espanol (cuenta de Juan). El submit SOLO aparece con texto en el compositor (medido: cero candidatos en reposo, presente con texto), igual que qwen. 'Rápido' es el nombre del MODO activo (rapido/razonamiento, etc.), no necesariamente un nombre de modelo formal — se usa como modelLabel porque es lo unico que la interfaz expone en ese lugar, con esta salvedad anotada.",
+      "_notaFin": "mistral: sin indicador de generacion conocido en su DOM. El fin se INFIERE por quiescencia. 20000 ms es el mismo PISO PROVISIONAL que claude/gemini/grok, sin medir todavia con un prompt largo especifico de mistral."
+    },
+    "qwen": {
+      "newConversationUrl": "https://chat.qwen.ai/",
+      "escritura": "insertText",
+      "composer": {
+        "selector": "textarea.message-input-textarea",
+        "kind": "textarea"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "button[aria-label=\"Send\"]"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "div.qwen-chat-message.qwen-chat-message-assistant",
+        "pick": "last",
+        "exclude": [
+          "div.qwen-chat-thinking-tool-status-card-wraper",
+          "div.overflow-guard > div.margin"
+        ]
+      },
+      "completion": {
+        "kind": "quiescence",
+        "quiescenceMs": 20000
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 30000,
+        "emptyResponseMs": 90000,
+        "composerMs": 45000
+      },
+      "modelLabel": {
+        "selector": "div[aria-label=\"Select Model\"]"
+      },
+      "_notaIdioma": "submit ('Send') y modelLabel ('Select Model') son aria-label en ingles, aunque el resto de la cuenta de Juan esta en espanol/mixto. El boton de envio EXISTE en reposo (deshabilitado, clase 'send-button disabled') y es un control DISTINTO del boton de voz que ocupa un lugar cercano — no el mismo elemento cambiando de rol, como se penso antes de medirlo con una conversacion real (ver BLUEPRINT C0e/f). modelLabel dio 'Qwen3.7-Max' el 2026-08-10 y 'Qwen3.7-Plus' el 2026-08-23: deriva de version real, capturada en vivo.",
+      "_notaFin": "qwen: sin indicador de generacion conocido en su DOM. El fin se INFIERE por quiescencia, mismo piso provisional que el resto."
+    },
+    "kimi": {
+      "newConversationUrl": "https://kimi.ai/",
+      "escritura": "pegado",
+      "composer": {
+        "selector": "div.chat-input-editor",
+        "kind": "contenteditable"
+      },
+      "submit": {
+        "kind": "key",
+        "key": "Enter"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "div.chat-content-item.chat-content-item-assistant",
+        "pick": "last",
+        "exclude": [
+          "div.markdown-container.toolcall-content-text",
+          "div.segment-assistant-actions",
+          "div.toolcall-container"
+        ]
+      },
+      "completion": {
+        "kind": "quiescence",
+        "quiescenceMs": 20000
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 30000,
+        "emptyResponseMs": 90000,
+        "composerMs": 45000
+      },
+      "archivos": {
+        "tarjeta": ".preview-card.card-hover-animate",
+        "titulo": ".title",
+        "iframe": "iframe[src*=\"kimink/embed\"]",
+        "contenido": ".kme-editor-content"
+      },
+      "_notaArchivos": "Medido el 2026-10-03 sobre la ronda c3801f42 de Juan: en modo agente kimi creo 12 archivos .md y el mensaje solo trae sus tarjetas (preview-card con card-hover-animate y .title; 'Todos los archivos' no lleva card-hover-animate). El contenido se monta al abrir la tarjeta en un iframe del mismo origen (/pages/kimink/embed.html), en .kme-editor-content: 27.041 caracteres el primero, medido con el sondeo vivo.",
+      "_notaModelo": "Sin modelLabel. Cuatro corridas de sondeo (tres antes de tener conversacion real, una el 2026-08-23 con conversacion viva) dieron CERO candidatos en las tres vias de deteccion, con controlesNivelesArriba:9 en las cuatro: el arbol del compositor de kimi es mas profundo que el resto y ninguna via estructural encuentra un selector de etiqueta de modelo. No es un problema de ancho de panel ni de estado de la pagina. Tres hipotesis agotadas (ver BLUEPRINT C0b): no hay una cuarta pendiente de probar.",
+      "_notaFin": "kimi: sin indicador de generacion conocido en su DOM. El fin se INFIERE por quiescencia, mismo piso provisional que el resto.",
+      "_notaEnvio": "submit.kind='key' (Enter), PORQUE NO HAY selector de envio derivado (ver _notaModelo: mismo bloqueo estructural). HISTORICO (2026-08-23): el Enter sintetico por dispatchEvent no enviaba porque el editor de kimi (contenteditable rico) ignoraba entrada por 'beforeinput'/'textContent' construida a mano -medido sin enviar nada: tras escribir asi, el contenedor seguia con la clase is-empty-. La solucion de entonces fue envioConfiable:true: escribir y enviar con webContents.sendInputEvent() desde el proceso principal, entrada real a nivel de Chromium (isTrusted:true). SUPERADO, MEDIDO el 2026-09-13: la hipotesis de la ronda de camino de entrada portable era que el editor de kimi no fallaba por isTrusted sino porque el texto insertado por DOM no llegaba a su MODELO INTERNO. Confirmado: escribiendo con document.execCommand('insertText') -que dispara beforeinput/input NATIVOS, el mismo camino que usa el navegador al pegar- y enviando con el MISMO Enter sintetico de siempre (dispatchEvent, isTrusted:false) sobre el compositor asi escrito, el mensaje aparece en el hilo IDENTICO caracter a caracter al marcador enviado. Un envio real de verificacion, sin sendInputEvent. envioConfiable:true se retira de esta spec: la via JS (execCommand + Enter sintetico) es ahora el camino compartido con los otros ocho. sendInputEvent/difundirConfiable quedan en el codigo como respaldo declarado, sin usarse hoy en ningun proveedor -se reactivarian solo si un proveedor futuro medido asi lo exige."
+    },
+    "deepseek": {
+      "newConversationUrl": "https://chat.deepseek.com/sign_in",
+      "escritura": "insertText",
+      "composer": {
+        "selector": "textarea._27c9245.ds-scroll-area",
+        "kind": "textarea"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "div.ds-button.ds-button--primary"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "div.ds-markdown.ds-assistant-message-main-content",
+        "pick": "last"
+      },
+      "completion": {
+        "kind": "quiescence",
+        "quiescenceMs": 20000
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 30000,
+        "emptyResponseMs": 90000,
+        "composerMs": 45000
+      },
+      "_notaModelo": "Sin modelLabel. Sondeo con conversacion real (2026-08-23) dio cero candidatos en las tres vias de deteccion: deepseek no expone un selector de etiqueta de modelo visible en esta cuenta.",
+      "_notaFin": "deepseek: sin indicador de generacion conocido en su DOM. El fin se INFIERE por quiescencia, mismo piso provisional que el resto.",
+      "_notaEnvio": "submit es un div[role=\"button\"] (clase ds-button--primary), NO un <button>: el metodo de clic nativo sobre un HTMLElement funciona igual, y a diferencia de kimi el compositor es un TEXTAREA (kind:\"textarea\"), no un contenteditable rico -la misma categoria que qwen, donde el clic con escritura por DOM ya funciona-. No se le puso envioConfiable:true por eso: el corte medido entre kimi y el resto es el TIPO de compositor (contenteditable vs. textarea), no el proveedor (ver BLUEPRINT, regla de compositor). Sin confirmar todavia con un envio real en esta cuenta -promovido a INVESTIGADORES el 2026-08-23 sin haber gastado un envio de verificacion; se confirma en la primera ronda real."
+    },
+    "perplexity": {
+      "newConversationUrl": "https://www.perplexity.ai/",
+      "escritura": "pegado",
+      "composer": {
+        "selector": "#ask-input, div[data-lexical-editor=\"true\"][role=\"textbox\"]",
+        "kind": "contenteditable"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": "button[aria-label=\"Enviar\"], button[aria-label=\"Submit\"]"
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "div.prose",
+        "pick": "last"
+      },
+      "_notaAsistente": "Medido el 2026-10-27: div[id^=markdown-content-] (la estimacion provisional) daba 0 en el Diagnostico de selectores de Juan (app 0.1.24). Comprobado despues en perplexity.ai con dos busquedas: la respuesta entera (parrafos, listas y fuentes) esta en un div.prose, uno por respuesta; la pregunta del usuario usa las mismas clases de parrafo (my-2 [&+p]:mt-4) pero NO esta en .prose, por eso no se selecciona por la clase del parrafo.",
+      "completion": {
+        "kind": "quiescence",
+        "quiescenceMs": 20000
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 30000,
+        "emptyResponseMs": 90000
+      },
+      "_notaModelo": "SIN etiqueta de version. Medido el 2026-10-27: el selector de modelo es un button[aria-label=\"Modelo\"] junto al compositor; no se midio si su texto dice que modelo respondio, y la propia respuesta de Perplexity dice que en Free el modelo no es fijo. La procedencia queda con modelLabel en null.",
+      "_notaFin": "perplexity: el fin se INFIERE por quiescencia (20 s). Medido el 2026-10-27: hay un boton aria-label 'Detener respuesta (Esc)', pero DESAPARECE antes de que termine el texto (se fue con 920 caracteres; la respuesta siguio hasta 7.084 unos 4 s despues). Con element-gone sobre ese boton la captura se truncaria.",
+      "_notaIdioma": "submit es aria-label, LOCALIZADO: 'Enviar' medido en la cuenta de Juan en espanol el 2026-10-27; 'Submit' es el de la interfaz en ingles, sin medir. El boton no tiene id ni data-testid.",
+      "_notaComposer": "Medido el 2026-10-27: div#ask-input con role=textbox, una sola coincidencia; editor contenteditable, por eso escritura pegado, como kimi. Medido el 2026-10-31 en perplexity.ai: el id ask-input ya no existe (ronda ffa0d7bc: compositor no encontrado); el compositor es un div Lexical (data-lexical-editor=true, role=textbox), una sola coincidencia, y el evento paste deja el texto con sus saltos y habilita Enviar."
+    }
+  }
+}

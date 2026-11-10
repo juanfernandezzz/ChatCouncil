@@ -1,0 +1,6 @@
+[
+{"textos":["a","A  "," a"],"etapa":"investigacion","aviso":"Prompt de usuario: coincide en los 3 proveedores donde se pudo leer."},
+{"textos":["a","b",null,""],"etapa":"investigacion","aviso":"⚠ Los prompts de usuario capturados NO coinciden entre proveedores (2 versiones distintas) — revisar antes de comparar respuestas."},
+{"textos":["a"],"etapa":"investigacion","aviso":""},
+{"textos":["a","b"],"etapa":"operacion","aviso":""}
+]

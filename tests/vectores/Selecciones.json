@@ -1,0 +1,20 @@
+[
+{"contenido":null,"seleccion":"null","roles":"{\"integrador\":\"deepseek\",\"verificador1\":\"glm\",\"verificador2\":\"qwen\",\"redactor\":\"deepseek\"}"},
+{"contenido":"no es json","seleccion":"null","roles":"{\"integrador\":\"deepseek\",\"verificador1\":\"glm\",\"verificador2\":\"qwen\",\"redactor\":\"deepseek\"}"},
+{"contenido":"null","seleccion":"null","roles":"{\"integrador\":\"deepseek\",\"verificador1\":\"glm\",\"verificador2\":\"qwen\",\"redactor\":\"deepseek\"}"},
+{"contenido":"7","seleccion":"null","roles":"{\"integrador\":\"deepseek\",\"verificador1\":\"glm\",\"verificador2\":\"qwen\",\"redactor\":\"deepseek\"}"},
+{"contenido":"{\"proveedores\":[\"gemini\",\"chatgpt\",\"inventado\"],\"integrador\":\"claude\",\"verificador\":\"grok\",\"redactor\":\"mistral\"}","seleccion":"[\"chatgpt\",\"gemini\"]","roles":"{\"integrador\":\"claude\",\"verificador1\":\"grok\",\"verificador2\":\"qwen\",\"redactor\":\"mistral\"}"},
+{"contenido":"{\"proveedores\":[],\"integrador\":\"glm\",\"verificador\":\"glm\"}","seleccion":"null","roles":"{\"integrador\":\"deepseek\",\"verificador1\":\"glm\",\"verificador2\":\"qwen\",\"redactor\":\"deepseek\"}"},
+{"contenido":"{\"proveedores\":\"chatgpt\",\"integrador\":\"chatgpt\",\"verificador\":\"glm\"}","seleccion":"null","roles":"{\"integrador\":\"chatgpt\",\"verificador1\":\"glm\",\"verificador2\":\"qwen\",\"redactor\":\"chatgpt\"}"},
+{"contenido":"{\"proveedores\":[\"inventado\"],\"integrador\":\"inventado\",\"verificador\":3,\"redactor\":\"glm\"}","seleccion":"null","roles":"{\"integrador\":\"deepseek\",\"verificador1\":\"glm\",\"verificador2\":\"qwen\",\"redactor\":\"deepseek\"}"},
+{"contenido":"{\"integrador\":\"claude\",\"verificador\":\"grok\",\"redactor\":\"grok\"}","seleccion":"null","roles":"{\"integrador\":\"claude\",\"verificador1\":\"grok\",\"verificador2\":\"qwen\",\"redactor\":\"claude\"}"},
+{"contenido":"{\"integrador\":\"deepseek\",\"verificador\":\"glm\",\"redactor\":\"deepseek\"}","seleccion":"null","roles":"{\"integrador\":\"deepseek\",\"verificador1\":\"glm\",\"verificador2\":\"qwen\",\"redactor\":\"deepseek\"}"},
+{"contenido":"{\"integrador\":\"deepseek\",\"verificador1\":\"glm\",\"verificador2\":\"qwen\",\"redactor\":\"deepseek\"}","seleccion":"null","roles":"{\"integrador\":\"deepseek\",\"verificador1\":\"glm\",\"verificador2\":\"qwen\",\"redactor\":\"deepseek\"}"},
+{"contenido":"{\"integrador\":\"claude\",\"verificador\":\"kimi\",\"verificador1\":\"grok\",\"verificador2\":\"perplexity\",\"redactor\":\"mistral\"}","seleccion":"null","roles":"{\"integrador\":\"claude\",\"verificador1\":\"grok\",\"verificador2\":\"perplexity\",\"redactor\":\"mistral\"}"},
+{"contenido":"{\"integrador\":\"claude\",\"verificador\":\"kimi\",\"verificador2\":\"grok\"}","seleccion":"null","roles":"{\"integrador\":\"claude\",\"verificador1\":\"kimi\",\"verificador2\":\"grok\",\"redactor\":\"claude\"}"},
+{"contenido":"{\"integrador\":\"claude\",\"verificador1\":\"grok\",\"verificador2\":\"grok\"}","seleccion":"null","roles":"{\"integrador\":\"deepseek\",\"verificador1\":\"glm\",\"verificador2\":\"qwen\",\"redactor\":\"deepseek\"}"},
+{"contenido":"{\"integrador\":\"qwen\",\"verificador1\":\"glm\"}","seleccion":"null","roles":"{\"integrador\":\"deepseek\",\"verificador1\":\"glm\",\"verificador2\":\"qwen\",\"redactor\":\"deepseek\"}"},
+{"contenido":"{\"integrador\":\"claude\",\"verificador1\":\"grok\",\"verificador2\":\"kimi\",\"redactor\":\"kimi\"}","seleccion":"null","roles":"{\"integrador\":\"claude\",\"verificador1\":\"grok\",\"verificador2\":\"kimi\",\"redactor\":\"claude\"}"},
+{"contenido":"{\"integrador\":\"claude\",\"verificador1\":\"grok\",\"verificador2\":\"inventado\",\"redactor\":\"grok\"}","seleccion":"null","roles":"{\"integrador\":\"claude\",\"verificador1\":\"grok\",\"verificador2\":\"qwen\",\"redactor\":\"claude\"}"},
+{"contenido":"{\"integrador\":\"claude\",\"verificador1\":null,\"verificador2\":\"qwen\"}","seleccion":"null","roles":"{\"integrador\":\"claude\",\"verificador1\":\"glm\",\"verificador2\":\"qwen\",\"redactor\":\"claude\"}"}
+]

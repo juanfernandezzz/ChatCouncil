@@ -1,0 +1,14 @@
+[
+{"marcados":[],"integrador":"deepseek","verificador1":"glm","verificador2":"qwen","redactor":"deepseek","esperado":"{\"ok\":false,\"error\":\"Tienes que marcar al menos un proveedor.\"}"},
+{"marcados":["chatgpt","glm","qwen"],"integrador":"deepseek","verificador1":"glm","verificador2":"glm","redactor":"deepseek","esperado":"{\"ok\":false,\"error\":\"Los dos verificadores tienen que ser proveedores distintos.\"}"},
+{"marcados":["chatgpt","glm","qwen"],"integrador":"glm","verificador1":"glm","verificador2":"glm","redactor":"glm","esperado":"{\"ok\":false,\"error\":\"Los dos verificadores tienen que ser proveedores distintos.\"}"},
+{"marcados":["chatgpt","glm","qwen"],"integrador":"glm","verificador1":"glm","verificador2":"qwen","redactor":"glm","esperado":"{\"ok\":false,\"error\":\"El integrador y los verificadores tienen que ser proveedores distintos.\"}"},
+{"marcados":["chatgpt","glm","qwen"],"integrador":"qwen","verificador1":"glm","verificador2":"qwen","redactor":"qwen","esperado":"{\"ok\":false,\"error\":\"El integrador y los verificadores tienen que ser proveedores distintos.\"}"},
+{"marcados":["chatgpt","glm","qwen"],"integrador":"deepseek","verificador1":"glm","verificador2":"qwen","redactor":"deepseek","esperado":"{\"ok\":false,\"error\":\"El integrador y los verificadores tienen que estar entre los proveedores cargados.\"}"},
+{"marcados":["chatgpt","deepseek","glm"],"integrador":"deepseek","verificador1":"glm","verificador2":"qwen","redactor":"deepseek","esperado":"{\"ok\":false,\"error\":\"El integrador y los verificadores tienen que estar entre los proveedores cargados.\"}"},
+{"marcados":["chatgpt","deepseek","glm","qwen"],"integrador":"deepseek","verificador1":"glm","verificador2":"qwen","redactor":"glm","esperado":"{\"ok\":false,\"error\":\"El redactor y los verificadores tienen que ser proveedores distintos.\"}"},
+{"marcados":["chatgpt","deepseek","glm","qwen"],"integrador":"deepseek","verificador1":"glm","verificador2":"qwen","redactor":"qwen","esperado":"{\"ok\":false,\"error\":\"El redactor y los verificadores tienen que ser proveedores distintos.\"}"},
+{"marcados":["chatgpt","deepseek","glm","qwen"],"integrador":"deepseek","verificador1":"glm","verificador2":"qwen","redactor":"kimi","esperado":"{\"ok\":false,\"error\":\"El redactor tiene que estar entre los proveedores cargados.\"}"},
+{"marcados":["chatgpt","deepseek","glm","kimi","qwen"],"integrador":"deepseek","verificador1":"glm","verificador2":"qwen","redactor":"kimi","esperado":"{\"ok\":true}"},
+{"marcados":["chatgpt","deepseek","glm","qwen","inventado"],"integrador":"deepseek","verificador1":"glm","verificador2":"qwen","redactor":"deepseek","esperado":"{\"ok\":true}"}
+]

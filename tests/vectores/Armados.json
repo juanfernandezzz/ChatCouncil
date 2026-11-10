@@ -1,0 +1,7 @@
+[
+{"texto":"texto de respuesta sin nada raro","urls":["https://arxiv.org/abs/2212.10001"],"cuerpo":"texto de respuesta sin nada raro\n\nFuentes citadas:\n- https://arxiv.org/abs/2212.10001","error":null},
+{"texto":"texto","urls":[],"cuerpo":"texto","error":null},
+{"texto":"texto","urls":["https://ejemplo.org/a?utm_source=chatgpt.com&model=gpt-5.5","https://otro.org/b?ref=x"],"cuerpo":"texto\n\nFuentes citadas:\n- https://ejemplo.org/a?model=gpt-5.5\n- https://otro.org/b","error":null},
+{"texto":"texto de respuesta","urls":["https://chatgpt.com/share/abc123"],"cuerpo":null,"error":"cuerpo anonimizado filtra identidad de proveedor por URL (1): https://chatgpt.com/share/abc123"},
+{"texto":"texto con https://claude.ai/chat/1 adentro","urls":[],"cuerpo":null,"error":"cuerpo anonimizado filtra identidad de proveedor por URL (1): https://claude.ai/chat/1"}
+]

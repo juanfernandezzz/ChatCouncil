@@ -1,0 +1,5 @@
+[
+{"registro":"","integrador":null,"cargados":null},
+{"registro":"{\"esquema\":1,\"id\":\"x\",\"tipo\":\"condicion-proveedores-cargados\",\"rondaId\":\"R\",\"proveedores\":[\"a\"],\"integrador\":\"deepseek\",\"registradoEn\":\"2026-10-06T12:00:00.000Z\"}\n{\"esquema\":1,\"id\":\"x\",\"tipo\":\"condicion-proveedores-cargados\",\"rondaId\":\"R\",\"proveedores\":[\"a\",\"b\"],\"integrador\":\"glm\",\"registradoEn\":\"2026-10-06T12:00:00.000Z\"}","integrador":"glm","cargados":["a","b"]},
+{"registro":"{\"esquema\":1,\"id\":\"x\",\"tipo\":\"condicion-proveedores-cargados\",\"rondaId\":\"R\",\"proveedores\":[\"a\"],\"registradoEn\":\"2026-10-06T12:00:00.000Z\"}","integrador":null,"cargados":["a"]}
+]

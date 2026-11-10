@@ -1,0 +1,10 @@
+[
+{"html":"<ol start=\"5\"><li><p>QUE CONVIENE RESCATAR</p></li></ol><p>texto</p>","texto":"5. QUE CONVIENE RESCATAR\ntexto"},
+{"html":"<h3>TITULO: Un título</h3><p>Hola&nbsp;mundo &amp;amp; &lt;b&gt; &quot;x&quot; &#39;y&#39; &apos;z&apos; &#241; &#xF1; &#X1F600; &#55296; &amp;nbsp;</p><ul><li>uno</li><li><p>dos</p></li></ul><ol><li>a</li><li>b</li></ol><table><tr><td>c1</td><th>c2</th></tr></table>br<br>fin<br/>x</br>y","texto":"TITULO: Un título\nHola mundo &amp; <b> \"x\" 'y' 'z' ñ ñ 😀 \ud800 &nbsp;\n- uno\n- dos\n1. a\n2. b\nc1 | c2 |\nbr\nfin\nx\ny"},
+{"html":"<!-- comentario --><style>p{}</style><SCRIPT>x</script><Style>y</STYLE><styles>visible</styles><style>sin cierre","texto":"visiblesin cierre"},
+{"html":"<p>a   </p>\n\n\n\n<p>b\t</p>   \n<pre>  c \t \nd</pre>","texto":"a\n\nb\n\n  c \nd"},
+{"html":"<OL START=3><LI>x<LI>y</OL><ol start = \"0012\"><li>z</li></ol><ol start=\"99\"><li>w</li></ol>","texto":"3. x\n4. y\n12. z\n99. w"},
+{"html":"a < b <!DOCTYPE html> <3 <li>suelto</li> <p start=\"2\">p</p>","texto":"a  b !DOCTYPE html> suelto\n\np"},
+{"html":"<ol><li>a<ul><li>b</li></ul></li><li>c</li></ol></ul></ol><li>fuera</li>","texto":"1. a\n- b\n2. c\nfuera"},
+{"html":"<p> linea﻿</p><div> </div>","texto":"linea"}
+]

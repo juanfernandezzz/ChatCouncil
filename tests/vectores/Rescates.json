@@ -1,0 +1,8 @@
+[
+{"informe":"1. TIPOS\nx\n5. QUE CONVIENE RESCATAR\nLo firme [H1]\n\nOtro [H2]","rescate":"Lo firme [H1]\n\nOtro [H2]"},
+{"informe":"## Qué conviene rescatar\n  cuerpo  ","rescate":"cuerpo"},
+{"informe":"**5) Que conviene rescatar**\r\ncuerpo crlf","rescate":"cuerpo crlf"},
+{"informe":"5 - QUÉ CONVIENE RESCATAR:\n\n","rescate":null},
+{"informe":"qué conviene rescatarlo\nno es encabezado","rescate":null},
+{"informe":"sin seccion","rescate":null}
+]

@@ -1,0 +1,12 @@
+[
+{"texto":"sin urls","fugas":[]},
+{"texto":"ver https://platform.claude.com/docs/claude-prompting y HTTPS://CHATGPT.COM/share/x","fugas":["HTTPS://CHATGPT.COM/share/x"]},
+{"texto":"https://x.org/?ref=Kimi https://chat.z.ai/c/1 http://sub.claude.ai/ https://notclaude.ai/ https://claude.ai.evil.org/ https://kimi.ai","fugas":["https://x.org/?ref=Kimi","https://chat.z.ai/c/1","https://kimi.ai"]},
+{"texto":"https://ejemplo.org/?q=kimİ https://claude.aİ/ https://x.org/?a=Kimi","fugas":["https://ejemplo.org/?q=kimİ","https://x.org/?a=Kimi"]},
+{"texto":"http:// suelto, https://a.org/x y https://b.org/?q=glm https://c.org/?deepseek﻿https://d.org/?x=qwenfin","fugas":["https://b.org/?q=glm","https://c.org/?deepseek","https://d.org/?x=qwenfin"]},
+{"texto":"httpſ://claude.ai/ y httpS://grok.com y http://https://gemini.google.com","fugas":["httpS://grok.com"]},
+{"texto":"https://learn.chatgpt.com/guides/best-practices, https://platform.kimi.ai/docs/x https://www.kimi.ai/blog/ https://KIMI.AI/Blog#a https://www.kimi.ai/blogs https://www.kimi.ai/chat/d1 https://www.chatgpt.com/c/1","fugas":["https://www.kimi.ai/blogs","https://www.kimi.ai/chat/d1","https://www.chatgpt.com/c/1"]},
+{"texto":"https://www.perplexity.ai/search/abc https://perplexity.ai/ https://docs.perplexity.ai/guia https://x.org/?src=perplexity","fugas":["https://www.perplexity.ai/search/abc","https://perplexity.ai/","https://x.org/?src=perplexity"]},
+{"texto":"https://www.perplexity.ai/help-center/en/articles/10352901-what-is-perplexity-pro https://PERPLEXITY.AI/Help-Center#x https://www.perplexity.ai/help-centers https://www.perplexity.ai/search/help-center","fugas":["https://www.perplexity.ai/help-centers","https://www.perplexity.ai/search/help-center"]},
+{"texto":"https://www.perplexity.ai/hub/blog/designing-refining-and-maintaining-agent-skills-at-perplexity https://www.perplexity.ai/hubs https://www.perplexity.ai/search/hub","fugas":["https://www.perplexity.ai/hubs","https://www.perplexity.ai/search/hub"]}
+]

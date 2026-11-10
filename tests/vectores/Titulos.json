@@ -1,0 +1,10 @@
+[
+{"informe":"TITULO: Un titulo\n\ncuerpo","titulo":"{\"titulo\":\"Un titulo\",\"cuerpo\":\"cuerpo\"}","esParrafoTitulo":true},
+{"informe":"\n\n  **TÍTULO:** Algo con negritas **\n\n\ncuerpo","titulo":"{\"titulo\":\"** Algo con negritas\",\"cuerpo\":\"cuerpo\"}","esParrafoTitulo":false},
+{"informe":"# Título: con almohadilla\r\n\r\ncuerpo","titulo":"{\"titulo\":\"con almohadilla\",\"cuerpo\":\"cuerpo\"}","esParrafoTitulo":true},
+{"informe":"TITULO:\ncuerpo sin titulo","titulo":"{\"titulo\":null,\"cuerpo\":\"cuerpo sin titulo\"}","esParrafoTitulo":true},
+{"informe":"Sin linea de titulo\nTITULO: en medio","titulo":"{\"titulo\":null,\"cuerpo\":\"Sin linea de titulo\\nTITULO: en medio\"}","esParrafoTitulo":false},
+{"informe":"  __titulo :  bajo guiones __","titulo":"{\"titulo\":\"bajo guiones\",\"cuerpo\":\"\"}","esParrafoTitulo":true},
+{"informe":"TITULO: con separador","titulo":"{\"titulo\":null,\"cuerpo\":\"TITULO: con separador\"}","esParrafoTitulo":false},
+{"informe":"","titulo":"{\"titulo\":null,\"cuerpo\":\"\"}","esParrafoTitulo":false}
+]

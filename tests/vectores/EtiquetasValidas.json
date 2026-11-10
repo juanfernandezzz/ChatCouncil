@@ -1,0 +1,9 @@
+[
+{"operador":"chatgpt","validas":["P2","P3","P4","P5","P6","P7"]},
+{"operador":"gemini","validas":["P1","P3","P4","P5","P6","P7"]},
+{"operador":"claude","validas":["P1","P2","P4","P5","P6","P7"]},
+{"operador":"grok","validas":["P1","P2","P3","P5","P6","P7"]},
+{"operador":"mistral","validas":["P1","P2","P3","P4","P6","P7"]},
+{"operador":"kimi","validas":["P1","P2","P3","P4","P5","P7"]},
+{"operador":"qwen","validas":["P1","P2","P3","P4","P5","P6"]}
+]

@@ -1,0 +1,7 @@
+[
+{"etapa":"investigacion","operacion":[],"integrador":null,"verificadores":[],"redactor":null,"comoRespuesta":["chatgpt","gemini","deepseek","glm","kimi","qwen"]},
+{"etapa":"operacion","operacion":["chatgpt","gemini","kimi","qwen"],"integrador":null,"verificadores":[],"redactor":null,"comoRespuesta":["deepseek","glm"]},
+{"etapa":"integracion","operacion":[],"integrador":"deepseek","verificadores":[],"redactor":null,"comoRespuesta":[]},
+{"etapa":"verificacion","operacion":[],"integrador":null,"verificadores":["qwen",null,"glm"],"redactor":null,"comoRespuesta":[]},
+{"etapa":"redaccion","operacion":[],"integrador":null,"verificadores":[],"redactor":"kimi","comoRespuesta":[]}
+]

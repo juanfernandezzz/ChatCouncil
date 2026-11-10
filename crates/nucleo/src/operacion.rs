@@ -504,7 +504,11 @@ pub fn insertar_marcas_intercaladas(
     (Texto::desde_utf16(&t), marcas)
 }
 
-fn marcas_intercaladas(t: &[u16], token: &str, intervalo: usize) -> (Vec<u16>, Vec<String>) {
+pub(crate) fn marcas_intercaladas(
+    t: &[u16],
+    token: &str,
+    intervalo: usize,
+) -> (Vec<u16>, Vec<String>) {
     let (mut s, mut marcas, mut pos) = (Vec::with_capacity(t.len() + t.len() / 20), Vec::new(), 0);
     while pos < t.len() {
         let mut corte = (pos + intervalo).min(t.len());
@@ -659,6 +663,8 @@ pub fn armar_cuerpos_por_operador(
         largo_por.insert(&s.panel_source_id, c.len());
         limpios.push(c);
     }
+    // Cada respuesta limpia pasa a Texto una sola vez; los cuerpos de los operadores la clonan.
+    let limpios_texto: Vec<Texto> = limpios.iter().map(|c| Texto::desde_utf16(c)).collect();
     let suma_total: usize = largo_por.values().sum();
     let codigos = codigos_estables(pool_orden);
     let codigo_de = |id: &str| codigos.get(id).cloned().unwrap_or_default();
@@ -666,14 +672,14 @@ pub fn armar_cuerpos_por_operador(
     let mut cuerpos = Vec::with_capacity(pool_orden.len());
     for &operador in pool_orden {
         let (mut bloques, mut incluidos, mut para_operador) = (Vec::new(), Vec::new(), Vec::new());
-        for (s, limpio) in a.sello.iter().zip(&limpios) {
+        for ((s, limpio), limpio_texto) in a.sello.iter().zip(&limpios).zip(&limpios_texto) {
             if s.panel_source_id == operador {
                 continue; // exclusión de autoevaluación
             }
             bloques.push([u(&format!("### Respuesta {}\n", s.label)), limpio.clone()].concat());
             incluidos.push(s.panel_source_id.clone());
             // El prompt de operación promete «P1 a P7»: el operador lee el código estable.
-            para_operador.push((codigo_de(&s.panel_source_id), Texto::desde_utf16(limpio)));
+            para_operador.push((codigo_de(&s.panel_source_id), limpio_texto.clone()));
         }
         let token = generar_token();
         let (con_marcas, mut marcas) =
@@ -707,8 +713,8 @@ pub fn armar_cuerpos_por_operador(
     let respuestas_todas = a
         .sello
         .iter()
-        .zip(&limpios)
-        .map(|(s, c)| (s.codigo_estable.clone(), Texto::desde_utf16(c)))
+        .zip(limpios_texto)
+        .map(|(s, c)| (s.codigo_estable.clone(), c))
         .collect();
     Ok(CuerposPorOperador {
         cuerpos,
@@ -731,7 +737,7 @@ fn sustituir(texto: &[u16], pares: &[(&str, &[u16])]) -> Vec<u16> {
         .join(*valor)
 }
 
-fn cuerpo_de(respuestas: &[(String, Texto)]) -> Vec<u16> {
+pub(crate) fn cuerpo_de(respuestas: &[(String, Texto)]) -> Vec<u16> {
     respuestas
         .iter()
         .map(|(e, t)| [u(&format!("=== {e} ===\n")), t.a_utf16()].concat())
@@ -745,12 +751,24 @@ fn plantilla(nombre: &str) -> Vec<u16> {
 }
 
 pub fn armar_prompt_operacion(pregunta: &Texto, respuestas: &[(String, Texto)]) -> Texto {
-    Texto::desde_utf16(&sustituir(
+    Texto::desde_utf16(&prompt_operacion_utf16(pregunta, respuestas))
+}
+
+/// El prompt de operación en unidades UTF-16, para intercalarle las marcas sin pasar por Texto.
+pub(crate) fn prompt_operacion_utf16(pregunta: &Texto, respuestas: &[(String, Texto)]) -> Vec<u16> {
+    sustituir(
         &plantilla("PLANTILLA"),
         &[
             ("{{PREGUNTA}}", &pregunta.a_utf16()),
             ("{{CUERPO}}", &cuerpo_de(respuestas)),
         ],
+    )
+}
+
+pub(crate) fn prompt_con_archivo(pregunta: &Texto) -> Texto {
+    Texto::desde_utf16(&sustituir(
+        &plantilla("PLANTILLA_CON_ARCHIVO"),
+        &[("{{PREGUNTA}}", &pregunta.a_utf16())],
     ))
 }
 
@@ -761,10 +779,7 @@ pub fn armar_prompt_operacion_con_archivo(
     respuestas: &[(String, Texto)],
 ) -> (Texto, Texto) {
     (
-        Texto::desde_utf16(&sustituir(
-            &plantilla("PLANTILLA_CON_ARCHIVO"),
-            &[("{{PREGUNTA}}", &pregunta.a_utf16())],
-        )),
+        prompt_con_archivo(pregunta),
         Texto::desde_utf16(&cuerpo_de(respuestas)),
     )
 }

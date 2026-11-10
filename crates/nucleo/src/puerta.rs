@@ -89,9 +89,13 @@ fn falla(mensaje: impl Into<String>) -> io::Error {
 }
 
 fn concatenar(partes: &[&Texto]) -> Texto {
-    // Por UTF-16: un surrogate suelto al final de una parte se une con el del principio de la siguiente.
-    let unidades: Vec<u16> = partes.iter().flat_map(|t| t.a_utf16()).collect();
-    Texto::desde_utf16(&unidades)
+    // Como por UTF-16, sin pasar por él: un surrogate suelto al final de una parte se une con el del
+    // principio de la siguiente.
+    let mut t = Texto::default();
+    for p in partes {
+        t.empujar_texto(p);
+    }
+    t
 }
 
 #[cfg(windows)]
@@ -642,7 +646,8 @@ impl Puerta {
             .find(|c| c.operador_id == operador_id)
             .expect("un cuerpo por operador del pool");
         let token = (self.nuevo_id)();
-        let marca_fin = Texto::from(format!("[[CC-MARCA-FIN-{token}]]"));
+        let marca_fin = format!("[[CC-MARCA-FIN-{token}]]");
+        // Cuerpo y marcas siguen en UTF-16 hasta el final: un solo paso a Texto.
         if con_archivo {
             let codigo = &resultado
                 .sello
@@ -650,15 +655,15 @@ impl Puerta {
                 .find(|s| s.panel_source_id == operador_id)
                 .expect("una entrada del sello por operador")
                 .codigo_estable;
-            let (prompt, cuerpo_archivo) = operacion::armar_prompt_operacion_con_archivo(
-                &pregunta,
-                &cuerpo.respuestas_para_operador,
+            let prompt = operacion::prompt_con_archivo(&pregunta);
+            let (mut unidades, mut marcas) = operacion::marcas_intercaladas(
+                &operacion::cuerpo_de(&cuerpo.respuestas_para_operador),
+                &token,
+                INTERVALO_MARCA,
             );
-            let (con_marcas, mut marcas) =
-                operacion::insertar_marcas_intercaladas(&cuerpo_archivo, &token, INTERVALO_MARCA);
-            marcas.push(marca_fin.para_mostrar().into_owned());
-            let salto = Texto::from("\n");
-            let archivo = concatenar(&[&con_marcas, &salto, &marca_fin, &salto]);
+            unidades.extend(format!("\n{marca_fin}\n").encode_utf16());
+            marcas.push(marca_fin);
+            let archivo = Texto::desde_utf16(&unidades);
             let nombre = format!("operacion-{codigo}-{}.txt", self.sello_de_archivo());
             let cabecera = Texto::from(format!("\n\n=== ARCHIVO ADJUNTO: {nombre} ===\n"));
             return Ok(Operacion {
@@ -671,13 +676,14 @@ impl Puerta {
             });
         }
         // Las marcas van sobre el texto ENTERO; sin salto final, que cada editor trata distinto.
-        let (texto, mut marcas) = operacion::insertar_marcas_intercaladas(
-            &operacion::armar_prompt_operacion(&pregunta, &cuerpo.respuestas_para_operador),
+        let (mut unidades, mut marcas) = operacion::marcas_intercaladas(
+            &operacion::prompt_operacion_utf16(&pregunta, &cuerpo.respuestas_para_operador),
             &token,
             INTERVALO_MARCA,
         );
-        marcas.push(marca_fin.para_mostrar().into_owned());
-        let completo = concatenar(&[&texto, &Texto::from("\n"), &marca_fin]);
+        unidades.extend(format!("\n{marca_fin}").encode_utf16());
+        marcas.push(marca_fin);
+        let completo = Texto::desde_utf16(&unidades);
         Ok(Operacion {
             operador_id: operador_id.to_string(),
             texto: completo.clone(),
@@ -1526,6 +1532,22 @@ mod pruebas {
             } else {
                 "no vale, repetir"
             }
+        );
+    }
+
+    #[test]
+    fn concatenar_une_los_surrogates_sueltos_de_la_frontera_como_la_unity() {
+        let t = |u: &[u16]| Texto::desde_utf16(u);
+        // alto suelto al final + bajo suelto al principio = un solo carácter (😀)
+        let unido = concatenar(&[&t(&[0x61, 0xD83D]), &t(&[0xDE00, 0x62])]);
+        assert_eq!(unido, Texto::from("a😀b"));
+        assert_eq!(unido.a_utf16(), [0x61, 0xD83D, 0xDE00, 0x62]);
+        // sin par en la frontera, cada suelto queda suelto; U+D7FF (ED 9F BF) no es un surrogate
+        let sueltos = concatenar(&[&t(&[0xDC00]), &t(&[0xD800]), &t(&[0xD7FF, 0xD801])]);
+        assert_eq!(sueltos.a_utf16(), [0xDC00, 0xD800, 0xD7FF, 0xD801]);
+        assert_eq!(
+            concatenar(&[&Texto::from("ñ"), &Texto::default(), &Texto::from("ú")]),
+            Texto::from("ñú")
         );
     }
 

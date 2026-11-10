@@ -122,6 +122,18 @@ impl Texto {
         }
     }
 
+    /// Agrega otro texto sin pasar por UTF-16; un bajo suelto al principio se une con un alto suelto al final.
+    pub(crate) fn empujar_texto(&mut self, otro: &Texto) {
+        match otro.0.first() {
+            // ED abre los puntos D000..DFFF, de 3 bytes: los surrogates sueltos están ahí.
+            Some(0xED) => {
+                self.empujar(otro.puntos().next().unwrap());
+                self.0.extend_from_slice(&otro.0[3..]);
+            }
+            _ => self.0.extend_from_slice(&otro.0),
+        }
+    }
+
     fn empujar_suelto(&mut self, s: u16) {
         let s = s as u32;
         self.0.extend_from_slice(&[

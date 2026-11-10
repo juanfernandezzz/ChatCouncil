@@ -12,10 +12,10 @@
   - Outcome: Datos idénticos y vectores de referencia como oráculo
   - Evidence: recorded
 
-- [ ] Part 3: Read `plans/PART3_PLAN.ai.md`
+- [x] Part 3: Read `plans/PART3_PLAN.ai.md`
   - Scenario: SCN-003
   - Outcome: Registro append-only en JSONL e importación de solo lectura
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 4: Read `plans/PART4_PLAN.ai.md`
   - Scenario: SCN-004

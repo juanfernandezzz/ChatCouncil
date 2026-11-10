@@ -7,10 +7,10 @@
   - Outcome: Workspace Rust compila y prueba en CI
   - Evidence: recorded
 
-- [ ] Part 2: Read `plans/PART2_PLAN.ai.md`
+- [x] Part 2: Read `plans/PART2_PLAN.ai.md`
   - Scenario: SCN-002
   - Outcome: Datos idénticos y vectores de referencia como oráculo
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 3: Read `plans/PART3_PLAN.ai.md`
   - Scenario: SCN-003

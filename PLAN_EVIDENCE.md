@@ -221,3 +221,152 @@ Notes:
 - En Windows el handle de agregar manda seek+write al final y rechaza set_len; la prueba del caso de falla es cfg(windows). En Linux O_APPEND permite ftruncate: no verificado en otras plataformas.
 - La lectura no coerciona tipos como Newtonsoft (número a texto, "3" a int) ni empareja claves sin distinguir mayúsculas: queda como shortcut comentado en registro.rs; la Unity nunca escribe así.
 - La Puerta recibe el integrador y el largo del pool en vez de RolesElegidos y el pool, que llegan con sus partes.
+
+### PART-004
+
+Operacion portada al nucleo (operacion.rs, armar_operacion en puerta.rs): cuerpos anonimizados, marcas, barajado con semilla, codigos estables y control de fugas, con el mismo resultado que la Unity. OPE-001 a OPE-014 e INV-OPE-001 a INV-OPE-004 con prueba; vectores de la Unity en verde; caso de falla claude.ai/new bloquea con el aviso de la Unity. T3 medido con D15 (enmienda a ADR-0007): siete operaciones sobre las respuestas reales de la ronda 2026-11-10 (137299 unidades UTF-16), mediana 645.5 Mciclos, dispersion 4.7 %, reloj 338-351 ms. Paso B: sin idas y vueltas Texto/UTF-16 en el camino de la operacion, 1179.5 -> 880.5 Mciclos (-25.4 %, dispersion base 6.8 %). Notas: OPE-015 y OPE-016 trasladados a PART-005 (D14). T3 medido con D15 (enmienda a ADR-0007). CI 42876264759 y 42903180138 success.
+
+Artifacts:
+- cargo test -p nucleo operacion
+- cargo test --release -p nucleo medicion -- --ignored --nocapture --test-threads=1
+- cargo fmt --all --check
+- cargo clippy --workspace --all-targets -- -D warnings
+- cargo test --workspace
+- cargo tree -p nucleo -e normal
+- cargo check -p nucleo --target aarch64-linux-android
+- https://github.com/juanfernandezzz/ChatCouncil/actions/runs/42876264759
+- https://github.com/juanfernandezzz/ChatCouncil/actions/runs/42903180138
+
+Files:
+- crates/nucleo/src/operacion.rs, puerta.rs (armar_operacion, medicion D15), texto.rs (empujar_texto), dominio.rs, lib.rs
+- docs/adr/0007-versiones-y-medicion.md (enmienda D15), docs/SEGUNDA-PASADA.md
+- Commits 1991c84, cdb7074, 7097ea4, b894080
+
+Notes:
+- OPE-015 y OPE-016 trasladados a PART-005 (D14).
+- T3 medido con D15 (enmienda a ADR-0007). Los ciclos del hilo siguen la carga de la maquina (1590 Mciclos con 94 % de CPU, 898 con 38 %); por eso se repite hasta que la dispersion baja del 10 %.
+
+Checks (salida real, local desde C:\cc-repo, CARGO_TARGET_DIR=C:\cc-target):
+
+```
+== Lote anterior (1991c84)
+$ cargo fmt --all --check
+exit=0
+$ cargo clippy --workspace --all-targets -- -D warnings
+    Checking nucleo v0.1.0 (C:\Users\Juan Fernández\Documents\Proyectos\ChatCouncil\crates\nucleo)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.94s
+exit=0
+$ cargo tree -p nucleo -e normal
+nucleo v0.1.0 (C:\Users\Juan Fernández\Documents\Proyectos\ChatCouncil\crates\nucleo)
+exit=0
+$ cargo check -p nucleo --target aarch64-linux-android
+    Checking nucleo v0.1.0 (C:\Users\Juan Fernández\Documents\Proyectos\ChatCouncil\crates\nucleo)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.93s
+exit=0
+$ cargo test -p nucleo operacion -- --nocapture
+resultado: Err("cuerpo anonimizado filtra identidad de proveedor por URL (1): https://claude.ai/new")
+test operacion::pruebas::operacion_caso_de_falla_claude_ai_new_bloquea_con_el_aviso_de_la_unity ... ok
+test operacion::pruebas::operacion_el_barajado_es_el_de_la_unity_y_no_toca_la_entrada ... ok
+test operacion::pruebas::operacion_anonimizar_da_etiquetas_textos_sello_y_conteo_de_la_unity ... ok
+test operacion::pruebas::operacion_el_cuerpo_con_fuentes_es_el_de_la_unity ... ok
+test operacion::pruebas::operacion_el_cuerpo_limpio_pasa_y_el_que_delata_al_proveedor_tira ... ok
+test operacion::pruebas::operacion_el_hash_de_la_semilla_es_el_de_la_unity ... ok
+test operacion::pruebas::operacion_el_barajado_es_uniforme ... ok
+test operacion::pruebas::operacion_la_comprobacion_cruzada_tira_si_el_cuerpo_incluye_la_respuesta_propia ... ok
+test operacion::pruebas::operacion_la_integridad_distingue_completo_truncado_e_indeterminado ... ok
+test operacion::pruebas::operacion_la_query_solo_conserva_model ... ok
+test operacion::pruebas::operacion_las_fugas_son_las_de_la_unity ... ok
+test operacion::pruebas::operacion_las_marcas_van_en_el_primer_blanco_despues_del_intervalo ... ok
+test operacion::pruebas::operacion_los_codigos_estables_siguen_el_orden_del_pool ... ok
+test operacion::pruebas::operacion_la_perdida_se_localiza_en_el_segmento_que_cambio ... ok
+test operacion::pruebas::operacion_los_prompts_de_operacion_son_los_de_la_unity ... ok
+test operacion::pruebas::operacion_los_terminos_se_tapan_por_punto_de_codigo ... ok
+test operacion::pruebas::operacion_terminos_token_y_conocidos_son_los_de_la_unity ... ok
+test operacion::pruebas::operacion_un_enlace_a_la_interfaz_del_proveedor_sigue_siendo_fuga ... ok
+test operacion::pruebas::operacion_una_fuente_de_docs_o_blog_de_un_proveedor_no_es_fuga ... ok
+test operacion::pruebas::operacion_un_marcador_dentro_de_la_pregunta_queda_literal ... ok
+test operacion::pruebas::operacion_los_cuerpos_son_los_de_la_unity ... ok
+test puerta::pruebas::operacion_sin_ronda_sin_pregunta_o_con_faltantes_se_niega_con_el_motivo_de_la_unity ... ok
+test puerta::pruebas::operacion_un_operador_fuera_del_pool_no_tiene_cuerpo ... ok
+test puerta::pruebas::operacion_una_ronda_sin_semilla_se_niega_y_no_escribe_sello ... ok
+test operacion::pruebas::operacion_cada_cuerpo_excluye_la_respuesta_de_su_operador ... ok
+el sello ya persistido para la ronda 00000000-0000-4000-8000-000000000003 no coincide con el que se acaba de calcular (la etiqueta "Modelo G" no coincide: persistido {codigoEstable:P6, panelSourceId:kimi, replyId:00000000-0000-4000-8000-000000000012, attemptId:00000000-0000-4000-8000-000000000012} vs calculado {codigoEstable:P6, panelSourceId:kimi, replyId:corregida, attemptId:corregida}) — posible cambio en las respuestas, la semilla o el orden del pool entre consolidaciones. No se escribió nada.
+test puerta::pruebas::operacion_con_el_sello_ya_escrito_una_respuesta_cambiada_se_niega_sin_escribir ... ok
+test puerta::pruebas::operacion_la_corrida_de_la_unity_da_los_mismos_sellos_y_prompts ... ok
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 1.17s
+$ cargo test --workspace
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 70 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.67s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+exit=0
+
+== Linea base D15 del paso B (codigo 1991c84+cdb7074), intentos 1 a 4; vale el 3
+D15: mediana 1006.7 Mciclos, dispersion 13.2 % (no vale, repetir)
+D15: mediana 1375.2 Mciclos, dispersion 23.9 % (no vale, repetir)
+D15: mediana 1179.5 Mciclos, dispersion 6.8 % (vale)
+D15: mediana 1010.0 Mciclos, dispersion 23.4 % (no vale, repetir)
+
+== Con el cambio del paso B, intentos 1 a 3
+D15: mediana 880.5 Mciclos, dispersión 2.2 % (vale)
+D15: mediana 652.2 Mciclos, dispersión 15.1 % (no vale, repetir)
+D15: mediana 644.9 Mciclos, dispersión 3.3 % (vale)
+
+== T3 final (b894080)
+> cargo test --release -p nucleo medicion -- --ignored --nocapture --test-threads=1
+test puerta::pruebas::operacion_medicion_con_las_respuestas_de_la_ronda_2026_11_10 ... respuestas: 7, unidades UTF-16: 137299
+corrida 1: siete operaciones 659.0 Mciclos, reloj 351.18 ms, CPU de la máquina 40.9 % (chatgpt 106.1 Mciclos 108.12 ms, gemini 94.9 Mciclos 43.93 ms, claude 94.2 Mciclos 41.44 ms, grok 87.8 Mciclos 37.97 ms, mistral 84.2 Mciclos 36.95 ms, kimi 87.7 Mciclos 38.14 ms, perplexity 83.8 Mciclos 36.13 ms)
+corrida 2: siete operaciones 628.8 Mciclos, reloj 337.74 ms, CPU de la máquina 27.5 % (chatgpt 105.0 Mciclos 107.74 ms, gemini 83.8 Mciclos 39.65 ms, claude 83.7 Mciclos 36.19 ms, grok 84.6 Mciclos 37.16 ms, mistral 84.8 Mciclos 36.58 ms, kimi 85.7 Mciclos 36.93 ms, perplexity 81.7 Mciclos 35.24 ms)
+corrida 3: siete operaciones 645.5 Mciclos, reloj 349.02 ms, CPU de la máquina 55.4 % (chatgpt 120.7 Mciclos 116.78 ms, gemini 91.0 Mciclos 44.31 ms, claude 89.0 Mciclos 38.46 ms, grok 82.1 Mciclos 35.24 ms, mistral 76.4 Mciclos 33.38 ms, kimi 84.6 Mciclos 36.92 ms, perplexity 81.8 Mciclos 35.59 ms)
+D15: mediana 645.5 Mciclos, dispersión 4.7 % (vale)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 72 filtered out; finished in 1.10s
+
+== Este lote (b894080)
+$ cargo fmt --all --check
+exit=0
+$ cargo clippy --workspace --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.31s
+exit=0
+$ cargo test --workspace
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 71 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.29s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+$ cargo test -p nucleo operacion
+test operacion::pruebas::operacion_caso_de_falla_claude_ai_new_bloquea_con_el_aviso_de_la_unity ... ok
+test operacion::pruebas::operacion_anonimizar_da_etiquetas_textos_sello_y_conteo_de_la_unity ... ok
+test operacion::pruebas::operacion_el_barajado_es_el_de_la_unity_y_no_toca_la_entrada ... ok
+test operacion::pruebas::operacion_el_cuerpo_con_fuentes_es_el_de_la_unity ... ok
+test operacion::pruebas::operacion_el_cuerpo_limpio_pasa_y_el_que_delata_al_proveedor_tira ... ok
+test operacion::pruebas::operacion_el_hash_de_la_semilla_es_el_de_la_unity ... ok
+test operacion::pruebas::operacion_el_barajado_es_uniforme ... ok
+test operacion::pruebas::operacion_la_integridad_distingue_completo_truncado_e_indeterminado ... ok
+test operacion::pruebas::operacion_la_comprobacion_cruzada_tira_si_el_cuerpo_incluye_la_respuesta_propia ... ok
+test operacion::pruebas::operacion_la_query_solo_conserva_model ... ok
+test operacion::pruebas::operacion_las_fugas_son_las_de_la_unity ... ok
+test operacion::pruebas::operacion_las_marcas_van_en_el_primer_blanco_despues_del_intervalo ... ok
+test operacion::pruebas::operacion_los_codigos_estables_siguen_el_orden_del_pool ... ok
+test operacion::pruebas::operacion_los_prompts_de_operacion_son_los_de_la_unity ... ok
+test operacion::pruebas::operacion_la_perdida_se_localiza_en_el_segmento_que_cambio ... ok
+test operacion::pruebas::operacion_los_terminos_se_tapan_por_punto_de_codigo ... ok
+test operacion::pruebas::operacion_terminos_token_y_conocidos_son_los_de_la_unity ... ok
+test operacion::pruebas::operacion_un_enlace_a_la_interfaz_del_proveedor_sigue_siendo_fuga ... ok
+test operacion::pruebas::operacion_un_marcador_dentro_de_la_pregunta_queda_literal ... ok
+test operacion::pruebas::operacion_una_fuente_de_docs_o_blog_de_un_proveedor_no_es_fuga ... ok
+test operacion::pruebas::operacion_los_cuerpos_son_los_de_la_unity ... ok
+test puerta::pruebas::operacion_medicion_con_las_respuestas_de_la_ronda_2026_11_10 ... ignored
+test puerta::pruebas::operacion_sin_ronda_sin_pregunta_o_con_faltantes_se_niega_con_el_motivo_de_la_unity ... ok
+test operacion::pruebas::operacion_cada_cuerpo_excluye_la_respuesta_de_su_operador ... ok
+test puerta::pruebas::operacion_un_operador_fuera_del_pool_no_tiene_cuerpo ... ok
+test puerta::pruebas::operacion_una_ronda_sin_semilla_se_niega_y_no_escribe_sello ... ok
+test puerta::pruebas::operacion_con_el_sello_ya_escrito_una_respuesta_cambiada_se_niega_sin_escribir ... ok
+test puerta::pruebas::operacion_la_corrida_de_la_unity_da_los_mismos_sellos_y_prompts ... ok
+test result: ok. 27 passed; 0 failed; 1 ignored; 0 measured; 45 filtered out; finished in 0.97s
+$ cargo tree -p nucleo -e normal
+nucleo v0.1.0 (C:\Users\Juan Fernández\Documents\Proyectos\ChatCouncil\crates\nucleo)
+$ cargo check -p nucleo --target aarch64-linux-android
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+
+== CI
+42876264759 (1991c84) success; 42903180138 (b894080) success, job rust success
+```

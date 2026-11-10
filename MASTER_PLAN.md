@@ -17,10 +17,10 @@
   - Outcome: Registro append-only en JSONL e importación de solo lectura
   - Evidence: recorded
 
-- [ ] Part 4: Read `plans/PART4_PLAN.ai.md`
+- [x] Part 4: Read `plans/PART4_PLAN.ai.md`
   - Scenario: SCN-004
   - Outcome: Operación con cuerpos, marcas, anonimización, barajado y control de fugas
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 5: Read `plans/PART5_PLAN.ai.md`
   - Scenario: SCN-005

@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART4_PLAN.ai.md
+Next: plans/PART5_PLAN.ai.md
 
 ## Parts
 
@@ -24,10 +24,10 @@ Next: plans/PART4_PLAN.ai.md
   - Outcome: Registro append-only en JSONL e importación de solo lectura
   - Evidence: recorded
 
-- [ ] Part 4: plans/PART4_PLAN.ai.md
+- [x] Part 4: plans/PART4_PLAN.ai.md
   - Scenario: SCN-004
   - Outcome: Operación con cuerpos, marcas, anonimización, barajado y control de fugas
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 5: plans/PART5_PLAN.ai.md
   - Scenario: SCN-005

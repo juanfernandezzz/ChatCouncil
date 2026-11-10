@@ -1,6 +1,12 @@
 //! Núcleo de ChatCouncil: lógica sin interfaz ni webviews.
 
 pub mod datos;
+pub mod dominio;
+pub mod importar;
+pub mod json;
+pub mod puerta;
+pub mod registro;
+pub mod texto;
 
 #[cfg(test)]
 mod pruebas {

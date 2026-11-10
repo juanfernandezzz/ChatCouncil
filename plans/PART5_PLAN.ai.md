@@ -4,7 +4,7 @@ ID=PART-005
 PH=E6_NUCLEO_RUST
 SCN=SCN-005
 OUT=Parseos de hallazgos, verificación, referencias y título
-DEP=[PART-002]
+DEP=[PART-002, PART-003]
 
 DICT:
 G=goal; CTX=context; C=constraint; F=file; T=task; AC=acceptance; V=verify; DONE=completion; S=stop
@@ -17,6 +17,7 @@ CTX:
 - phase: E6 (parte 5 de 10)
 - prior: PART-002
 - next: PART-006 prompts
+- depends: crates/nucleo/src/puerta.rs (PART-003), para REG-017 (D13)
 - spec: los requisitos de parseo en openspec/specs/captura, integrador, verificadores y redactor
 
 C:
@@ -33,6 +34,7 @@ T:
 AC:
 - Todos los requisitos de parseo tienen prueba y pasan.
 - Los vectores de parseo de la Unity pasan todos.
+- REG-017 (ronda nueva con respuestas copiadas: CopiadaDe y citas recalculadas con Citas.cs) tiene prueba y pasa, sobre puerta.rs (D13).
 - Caso de falla: una línea con una categoría desconocida no se cuenta como hallazgo, igual que en la Unity.
 
 V:

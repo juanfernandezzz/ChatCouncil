@@ -35,7 +35,7 @@ T:
 3 Pruebas con los vectores de registro y con un registro real copiado a una carpeta temporal.
 
 AC:
-- Todos los requisitos e invariantes de registro tienen prueba y pasan.
+- REG-001 a REG-016 y los invariantes de registro con prueba; REG-012 y REG-013 como funciones puras de dominio; REG-008 a REG-011 y REG-014 a REG-016 en puerta.rs; REG-017 pasa a la parte que porta Citas.cs.
 - Una línea escrita por el núcleo es igual, byte a byte, a la que escribe la Unity para el mismo hecho (vectores).
 - Caso de falla: un intento de modificar una línea existente se rechaza con error y el archivo queda igual (mismo sha256).
 

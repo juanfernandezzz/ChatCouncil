@@ -1,6 +1,6 @@
 # AGENTS.md · ChatCouncil
 
-ChatCouncil es un consejo de modelos de IA que investigan en las páginas web reales de cada proveedor, con las cuentas de Juan, y producen un informe trazable. Esquema 7-1-2-1: siete investigadores, un integrador, dos verificadores y un redactor. Este repo lo reconstruye en Rust, todo lo posible, con una interfaz Flutter: un solo código para Windows, Android e iOS, de escritorio y móvil.
+ChatCouncil es un consejo de modelos de IA que investigan en las páginas web reales de cada proveedor, con las cuentas de Juan, y producen un informe trazable. Esquema 7-1-2-1: siete investigadores, un integrador, dos verificadores y un redactor. Este repo lo reconstruye en Rust, todo lo posible, con una interfaz Slint: un solo código para Windows, macOS, Linux, Android e iOS, de escritorio, móvil y tableta (ADR-0004). Glosario: CONTEXT.md.
 
 La referencia de funciones es github.com/juanfernandezzz/ChatCouncil-Unity: todo lo que funciona ahí se mantiene, de la misma forma. Ninguna versión anterior es criterio de diseño de la interfaz.
 
@@ -51,8 +51,8 @@ La lista viva de gates vive en el CI (`.github/workflows/`). Un gate se mantiene
 | Línea base y mediciones | `ecc:benchmark`, `ecc:benchmark-optimization-loop` |
 | Prototipos | `mattpocock-skills:prototype`, `agent-skills:source-driven-development` |
 | Núcleo Rust | `ponytail:ponytail ultra` (cuestiona el cómo, nunca el qué), `andrej-karpathy-skills:karpathy-guidelines`, `ecc:rust-patterns`, `ecc:rust-testing`, `superpowers:test-driven-development`, `agent-skills:incremental-implementation` |
-| Interfaz Flutter | plugin `dart-flutter`, `ecc:dart-flutter-patterns`, `impeccable:impeccable`, `ecc:make-interfaces-feel-better`, `ecc:accessibility` |
-| Revisión de un lote | `ponytail:ponytail-review`, agentes `ecc:rust-reviewer` y `ecc:flutter-reviewer`, `agent-skills:code-review-and-quality` |
+| Interfaz Slint | `impeccable:impeccable`, `ecc:make-interfaces-feel-better`, `ecc:accessibility` |
+| Revisión de un lote | `ponytail:ponytail-review`, agente `ecc:rust-reviewer`, `agent-skills:code-review-and-quality` |
 | Cierre de una etapa | `ponytail:ponytail-audit` y la comparación contra la línea base |
 | CI y Release | `agent-skills:ci-cd-and-automation`, `agent-skills:git-workflow-and-versioning` |
 
@@ -68,4 +68,4 @@ Falta una credencial o una cuenta; la acción es irreversible; un hook o un gate
 
 ## Idioma y entorno
 
-Español latino neutro, con «tú». Las versiones de Rust y Flutter se fijan en E4 en sus archivos de configuración, que mandan sobre cualquier texto. Toda compilación de Flutter corre desde la unión C:\cc-repo, nunca desde la ruta con «á» (ADR-0002); la unión se borra solo con rmdir sin recursivo.
+Español latino neutro, con «tú». Versiones y medición: ADR-0007 (última estable; antes de medir, la app Claude minimizada y la CPU de la máquina en reposo bajo 10 %). Toda compilación corre desde la unión C:\cc-repo, nunca desde la ruta con «á» (ADR-0002); la unión se borra solo con rmdir sin recursivo.

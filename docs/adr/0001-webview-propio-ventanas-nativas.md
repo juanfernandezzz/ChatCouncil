@@ -1,6 +1,6 @@
 # ADR-0001 · Webview propio de ventanas nativas de WebView2
 
-- Estado: aceptado
+- Estado: reemplazado por ADR-0005 (2026-11-10)
 - Fecha: 2026-11-08
 - Decidió: Juan («1B»), con la evidencia de E3
 

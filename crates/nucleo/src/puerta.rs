@@ -405,7 +405,7 @@ impl Puerta {
 
     /// REG-010: escribe la Ronda con su semilla y, como condición suya, qué proveedores estaban
     /// cargados y quién integra.
-    pub fn abrir_ronda(&mut self, prompt: &str) -> io::Result<String> {
+    pub fn abrir_ronda(&mut self, prompt: impl Into<Texto>) -> io::Result<String> {
         self.asegurar_conversacion()?;
         let semilla = (self.nuevo_id)();
         let id = (self.nuevo_id)();
@@ -787,8 +787,7 @@ impl Puerta {
         if ultimas.is_empty() {
             return Ok("La ronda activa no tiene respuestas del pool para copiar.".into());
         }
-        let pregunta = pregunta.para_mostrar().into_owned();
-        let nueva = self.abrir_ronda(&pregunta)?;
+        let nueva = self.abrir_ronda(pregunta.clone())?;
         for r in &ultimas {
             let copia_id = (self.nuevo_id)();
             let mut campos: Vec<(&str, Valor)> = [
@@ -1636,6 +1635,28 @@ mod pruebas {
             (false, "Esta ronda todavía no tiene sello: pega primero la operación en algún panel («Pegar la operación aquí»).".to_string())
         );
         assert_eq!(lineas(&c.0, CONVERSACION_CORRIDA), antes);
+    }
+
+    #[test]
+    fn parseos_la_ronda_copiada_conserva_un_surrogate_suelto_de_la_pregunta() {
+        // revisión PART-005: Puerta.cs:753 pasa el string intacto a AbrirRonda.
+        let c = Carpeta::nueva("operacion-reuso-surrogate");
+        let pool = pool_puerta();
+        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
+        let mut corrida = lineas_corrida()[..=12].to_vec();
+        corrida[1] = corrida[1].replace("\"prompt\":\"¿Qué", "\"prompt\":\"\\ud800¿Qué");
+        let mut p = puerta_en_corrida(&c.0, &corrida);
+        p.ronda_nueva_con_respuestas_copiadas(&pool).unwrap();
+        let leido = p.leer_registro().unwrap();
+        let prompts: Vec<&Texto> = leido
+            .hechos
+            .iter()
+            .filter(|h| h.tipo() == "ronda")
+            .filter_map(|h| h.texto("prompt"))
+            .collect();
+        assert_eq!(prompts.len(), 2);
+        assert_eq!(prompts[0].a_utf16()[0], 0xD800);
+        assert_eq!(prompts[1], prompts[0]);
     }
 
     #[test]

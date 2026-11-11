@@ -3947,6 +3947,8 @@ mod pruebas {
     /// Una puerta con la ronda abierta y las siete respuestas de la investigación.
     fn con_investigacion(c: &Path, pregunta: &str) -> Puerta {
         let mut p = nueva_puerta(c);
+        // Sin esto el sello del nombre depende de la zona horaria de la máquina (0900 aquí, 1200 en el CI).
+        p.desfase_local = |_| -3 * 3600;
         p.abrir_ronda(pregunta).unwrap();
         p.registrar_capturas(
             &lote(&json_de("LotesOperacion"), "investigacion"),
@@ -4029,7 +4031,7 @@ mod pruebas {
         let largo = raiz.0.to_string_lossy().encode_utf16().count();
         let honda = raiz
             .0
-            .join("d".repeat(120usize.saturating_sub(largo).max(1)));
+            .join("d".repeat(150usize.saturating_sub(largo).max(1)));
         fs::create_dir_all(&honda).unwrap();
         let mut p = con_investigacion(
             &honda,

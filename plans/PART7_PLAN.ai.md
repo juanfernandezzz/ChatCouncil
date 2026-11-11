@@ -33,6 +33,8 @@ T:
 
 AC:
 - RON-001 a RON-017 e INV-RON-001 a INV-RON-003 tienen prueba y pasan.
+- Capturar en el núcleo (RegistrarCapturas de Puerta.cs; el paso de la interfaz que la dispara va en E7): CAP-004 a CAP-010, CAP-012, CAP-013, CAP-015, CAP-016, INV-CAP-001, RED-005, VER-003 y VER-004 tienen prueba y pasan (D18).
+- ESC-013 (solo una operación verificada se marca pegada) y ARR-003 (restaurar la ronda activa con su etapa; faltaba en PART-003) tienen prueba y pasan (D18).
 - La ronda de prueba llega de la pregunta al informe con los mismos roles por defecto que la Unity (diez proveedores; verificadores glm y qwen).
 - Caso de falla: un intento de avanzar sin la acción del usuario que la etapa exige se rechaza y el estado no cambia.
 - REG-016 completo: AbandonarRonda limpia también los prompts armados, y la Puerta recibe RolesElegidos y la lista del pool en vez del integrador y el largo del pool (D13; PART-003, decisión 6).

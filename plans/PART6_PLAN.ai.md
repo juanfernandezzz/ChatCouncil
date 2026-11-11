@@ -35,6 +35,8 @@ AC:
 - Los prompts armados son idénticos a los vectores de la Unity.
 - INT-001, INT-002, INT-003, VER-001, RED-001, RED-002, RED-003, RED-004, INV-INT-001, INV-VER-001 e INV-RED-001 tienen prueba y pasan.
 - INT-007, RED-006, RED-007 e INV-RED-002, que leen la tabla H## o el archivo del redactor armados en esta parte, tienen prueba y pasan (D14).
+- INT-006 (informe vigente), VER-007 (verificaciones vigentes en orden), ESC-010 (verificación de la operación escrita; faltaba en PART-004) y ESC-011 (prompt de rol verificado por igualdad) tienen prueba y pasan (D18).
+- DAT-001 y DAT-002 (faltaban en PART-002) tienen su prueba de hash nombrada en la tabla de requisito → prueba de esta parte (D18).
 - Caso de falla: un marcador presente dentro del texto sustituido no se vuelve a sustituir.
 
 V:

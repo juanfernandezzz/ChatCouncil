@@ -4027,7 +4027,9 @@ mod pruebas {
     fn informe_ninguna_ruta_pasa_de_259_caracteres() {
         let raiz = Carpeta::nueva("informe-rutas");
         let largo = raiz.0.to_string_lossy().encode_utf16().count();
-        let honda = raiz.0.join("d".repeat(150 - largo));
+        let honda = raiz
+            .0
+            .join("d".repeat(120usize.saturating_sub(largo).max(1)));
         fs::create_dir_all(&honda).unwrap();
         let mut p = con_investigacion(
             &honda,
@@ -4049,13 +4051,16 @@ mod pruebas {
         }
         assert_eq!(rutas.len(), 16);
         assert!(rutas.iter().all(|&n| n <= 259), "{rutas:?}");
+        let nombre = r
+            .ruta
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
         assert!(
-            r.ruta
-                .unwrap()
-                .file_name()
-                .unwrap()
-                .to_string_lossy()
-                .starts_with("2026-10-06 0900 - ¿Cuáles")
+            nombre.starts_with("2026-10-06 0900 - ¿Cuáles"),
+            "{nombre:?} en {honda:?}"
         );
     }
 

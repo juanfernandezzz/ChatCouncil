@@ -8,8 +8,9 @@ use crate::operacion::{self, EntradaSello, INTERVALO_MARCA, RespuestaParaOperar}
 use crate::parseos;
 use crate::prompts;
 use crate::registro::{self, Hecho, RegistroLeido};
+use crate::ronda::RolesElegidos;
 use crate::texto::Texto;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -63,14 +64,94 @@ pub struct Puerta {
     nuevo_id: Box<dyn FnMut() -> String>,
     reloj: Box<dyn Fn() -> SystemTime>,
     activos: Vec<String>,
-    integrador: Option<String>,
-    total_operadores: usize,
+    roles: RolesElegidos,
+    /// El pool de operadores en su orden fijo, de donde salen los P#.
+    pool: Vec<String>,
     indice_ronda: i64,
     conversacion_actual: Option<String>,
     ronda_actual: Option<String>,
     ultima_lectura: Option<(String, u64, SystemTime, Rc<RegistroLeido>)>,
     /// Segundos al este de UTC de la hora local en ese instante: la de los nombres de archivo.
     desfase_local: fn(SystemTime) -> i64,
+    // Lo último que se pegó en cada panel, en este proceso: es el promptCompleto de lo que se capture después.
+    prompt_operador: HashMap<String, Texto>,
+    prompt_integrador: Option<Texto>,
+    prompt_verificador: Option<Texto>,
+    prompt_redactor: Option<Texto>,
+    marcas_redactor: Option<(String, String)>,
+    sello_verificaciones: Option<Vec<(String, String)>>,
+    // El informe armado en este proceso: el paso pasa a abrir su carpeta en vez de armar otro.
+    informe_armado: Option<(String, PathBuf)>,
+}
+
+/// Lo que devuelve el script de página al leer un panel (Lectura de la Unity; los nombres son los
+/// del contrato con la página).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Lectura {
+    pub id: String,
+    pub text: Texto,
+    /// true generando, false terminado, None no observable.
+    pub generating: Option<bool>,
+    /// "element-gone" si el fin se observa, "quiescence" si se infiere; None si la lectura no lo dice.
+    pub completion_kind: Option<String>,
+    pub quiescence_ms: Option<i64>,
+    pub model_label: Option<Texto>,
+    pub user_text: Option<Texto>,
+    pub fuentes_href: Option<i64>,
+    pub html: Option<Texto>,
+    pub error: Option<Texto>,
+}
+
+impl Lectura {
+    pub fn con_error(&self, error: impl Into<Texto>) -> Lectura {
+        Lectura {
+            error: Some(error.into()),
+            ..self.clone()
+        }
+    }
+
+    /// El error, si no es nulo ni vacío (string.IsNullOrEmpty de la Unity).
+    fn fallo(&self) -> Option<&Texto> {
+        self.error.as_ref().filter(|e| !e.bytes().is_empty())
+    }
+}
+
+/// El único paso siguiente de la etapa, que decide el motor, y lo que Juan hace a mano en ese momento.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Paso {
+    /// pregunta, investigacion, operacion, integracion, verificacion, redaccion o informe.
+    pub etapa: &'static str,
+    pub accion: &'static str,
+    pub texto: &'static str,
+    pub recordatorio: &'static str,
+}
+
+fn paso(etapa: &'static str, accion: &'static str, texto: &'static str) -> Paso {
+    Paso {
+        etapa,
+        accion,
+        texto,
+        recordatorio: crate::ronda::recordatorio(etapa),
+    }
+}
+
+/// Por debajo de esto una lectura no es una respuesta observable (test-runner.ts): qwen llegó a
+/// devolver 3 caracteres como "terminado".
+pub const UMBRAL_LECTURA_MINIMO: usize = 20;
+/// La ronda de lo que se capturó sin haberlo enviado: el texto ya estaba en pantalla.
+pub const PROMPT_SIN_RONDA: &str =
+    "(capturado sin ronda de envio: el texto ya estaba en pantalla al presionar Leer/Capturar)";
+/// Lo que se registra como prompt cuando la app se reinició entre pegar y capturar.
+pub const PROMPT_NO_DISPONIBLE: &str = "(prompt no disponible: no se registró en este proceso — probablemente se reinició la app entre el envío y la captura)";
+// Medido en la ronda de cierre: Mistral dejó como respuesta solo el aviso del canvas. No bloquea: deja constancia.
+const RESPUESTA_CORTA: usize = 300;
+
+fn strs(v: &[String]) -> Vec<&str> {
+    v.iter().map(String::as_str).collect()
+}
+
+fn opcional(t: Option<&Texto>) -> Valor {
+    t.map_or(Valor::Nulo, |t| Valor::Texto(t.clone()))
 }
 
 /// Lo que se pega en el panel de un operador (Puerta.Operacion).
@@ -221,28 +302,43 @@ fn informe_vigente(leido: &RegistroLeido, ronda: &Hecho) -> io::Result<Texto> {
 }
 
 impl Puerta {
-    /// `integrador` es el de los roles elegidos; `total_operadores`, el largo del pool de operadores.
+    /// `pool` es el de operadores en su orden fijo, de donde salen los P#.
     pub fn new(
         carpeta: PathBuf,
         nuevo_id: Box<dyn FnMut() -> String>,
         reloj: Box<dyn Fn() -> SystemTime>,
         activos: Vec<String>,
-        integrador: Option<String>,
-        total_operadores: usize,
+        roles: RolesElegidos,
+        pool: Vec<String>,
     ) -> Puerta {
         Puerta {
             carpeta,
             nuevo_id,
             reloj,
             activos,
-            integrador,
-            total_operadores,
+            roles,
+            pool,
             indice_ronda: 0,
             conversacion_actual: None,
             ronda_actual: None,
             ultima_lectura: None,
             desfase_local: desfase_local_del_sistema,
+            prompt_operador: HashMap::new(),
+            prompt_integrador: None,
+            prompt_verificador: None,
+            prompt_redactor: None,
+            marcas_redactor: None,
+            sello_verificaciones: None,
+            informe_armado: None,
         }
+    }
+
+    /// La carpeta del informe de la ronda actual, si se armó en este proceso.
+    pub fn carpeta_informe_armado(&self) -> Option<&Path> {
+        self.informe_armado
+            .as_ref()
+            .filter(|(r, _)| self.ronda_actual.as_ref() == Some(r))
+            .map(|(_, c)| c.as_path())
     }
 
     pub fn conversacion_actual(&self) -> Option<&str> {
@@ -388,7 +484,7 @@ impl Puerta {
                     etapa: dominio::etapa_de_ronda(
                         hechos,
                         ronda_id.as_ref().unwrap_or(&Texto::default()),
-                        self.total_operadores,
+                        self.pool.len(),
                     ),
                     carpeta_informe: informes
                         .iter()
@@ -408,9 +504,16 @@ impl Puerta {
         rondas
     }
 
-    /// REG-016 (D13): vuelve a la etapa Pregunta sin escribir nada; la conversación sigue.
+    /// REG-016 (D13): vuelve a la etapa Pregunta sin escribir nada y olvida lo pegado en esta ronda;
+    /// la conversación sigue.
     pub fn abandonar_ronda(&mut self) {
         self.ronda_actual = None;
+        self.prompt_operador.clear();
+        self.prompt_integrador = None;
+        self.prompt_verificador = None;
+        self.prompt_redactor = None;
+        self.marcas_redactor = None;
+        self.sello_verificaciones = None;
     }
 
     /// REG-009: la conversación de la app nunca es de prueba.
@@ -470,9 +573,7 @@ impl Puerta {
                 ),
                 (
                     "integrador",
-                    self.integrador
-                        .as_deref()
-                        .map_or(Valor::Nulo, |i| Valor::Texto(i.into())),
+                    Valor::Texto(self.roles.integrador.as_str().into()),
                 ),
                 ("registradoEn", Valor::Texto(self.ahora().into())),
             ],
@@ -674,13 +775,13 @@ impl Puerta {
 
     /// OPE-013: la operación de un panel, pegada (el prompt entero con sus marcas) o con archivo (el
     /// prompt sin cuerpo, y el cuerpo con sus marcas en un .txt). Escribe el sello la primera vez.
-    /// `pool` es el de operadores en su orden fijo, de donde salen los P#.
     pub fn armar_operacion(
         &mut self,
-        pool: &[&str],
         operador_id: &str,
         con_archivo: bool,
     ) -> io::Result<Operacion> {
+        let pool = self.pool.clone();
+        let pool = &strs(&pool)[..];
         if !pool.contains(&operador_id) {
             return Err(falla(format!(
                 "\"{}\" no es un operador del pool: no tiene cuerpo que operar",
@@ -797,8 +898,9 @@ impl Puerta {
     }
 
     /// INT-003: el prompt del integrador con la tabla de hallazgos de la ronda.
-    pub fn armar_prompt_integrador(&mut self, pool: &[&str]) -> io::Result<Texto> {
-        let (_, _, pregunta, tabla) = self.tabla_de_ronda(pool, "integrador")?;
+    pub fn armar_prompt_integrador(&mut self) -> io::Result<Texto> {
+        let pool = self.pool.clone();
+        let (_, _, pregunta, tabla) = self.tabla_de_ronda(&strs(&pool), "integrador")?;
         Ok(prompts::armar_prompt_integrador(
             &pregunta,
             &tabla.para_prompt,
@@ -808,8 +910,9 @@ impl Puerta {
     /// VER-001, INT-006: la sección QUE CONVIENE RESCATAR del último informe del integrador, tal
     /// cual, y solo los H## que esa sección cita, en orden de primera aparición. Un H## que no está
     /// en la tabla no se inventa.
-    pub fn armar_prompt_verificador(&mut self, pool: &[&str]) -> io::Result<Texto> {
-        let (leido, ronda, pregunta, tabla) = self.tabla_de_ronda(pool, "verificador")?;
+    pub fn armar_prompt_verificador(&mut self) -> io::Result<Texto> {
+        let pool = self.pool.clone();
+        let (leido, ronda, pregunta, tabla) = self.tabla_de_ronda(&strs(&pool), "verificador")?;
         let crudo = informe_vigente(&leido, &ronda)?;
         let Some(rescate) =
             parseos::extraer_seccion_rescate(&parseos::extraer_titulo_del_informe(&crudo).1)
@@ -849,11 +952,11 @@ impl Puerta {
     /// RED-001 a RED-004: el archivo del redactor (informe, verificaciones anonimizadas, la tabla
     /// H## y las respuestas con sus P#, con marcas) y su prompt. Sin verificación se arma igual y
     /// se avisa. No escribe nada.
-    pub fn armar_redactor(
-        &mut self,
-        pool: &[&str],
-        verificadores: &[&str],
-    ) -> io::Result<ArchivoRedactor> {
+    pub fn armar_redactor(&mut self) -> io::Result<ArchivoRedactor> {
+        let pool = self.pool.clone();
+        let pool = &strs(&pool)[..];
+        let roles = self.roles.clone();
+        let verificadores = &roles.verificadores()[..];
         let (leido, ronda, pregunta, tabla) = self.tabla_de_ronda(pool, "redactor")?;
         let informe = informe_vigente(&leido, &ronda)?;
         let ronda_id = ronda.texto("id").cloned().unwrap_or_default();
@@ -964,7 +1067,9 @@ impl Puerta {
     /// REG-017: una ronda nueva con la misma pregunta y la última respuesta de cada proveedor del pool,
     /// copiada y marcada copiadaDe, con sus citas vueltas a derivar del mismo html. La ronda anterior
     /// queda intacta. Las negativas son mensajes, como en la Unity; un error es de escritura.
-    pub fn ronda_nueva_con_respuestas_copiadas(&mut self, pool: &[&str]) -> io::Result<String> {
+    pub fn ronda_nueva_con_respuestas_copiadas(&mut self) -> io::Result<String> {
+        let pool = self.pool.clone();
+        let pool = &strs(&pool)[..];
         let (Some(_), Some(ronda_id)) = (&self.conversacion_actual, self.ronda_actual.clone())
         else {
             return Ok("No hay una ronda activa de la que copiar.".into());
@@ -1052,11 +1157,9 @@ impl Puerta {
     /// OPE-016: reutilizar la operación de un operador desde la ronda de la que se copiaron las
     /// respuestas. Solo vale si todo lo que ese operador lee (el pool menos la suya) son copias sin
     /// cambios; los hallazgos se vuelven a derivar contra el sello de esta ronda.
-    pub fn reutilizar_operacion(
-        &mut self,
-        pool: &[&str],
-        operador_id: &str,
-    ) -> io::Result<(bool, String)> {
+    pub fn reutilizar_operacion(&mut self, operador_id: &str) -> io::Result<(bool, String)> {
+        let pool = self.pool.clone();
+        let pool = &strs(&pool)[..];
         let (Some(_), Some(ronda_id)) = (&self.conversacion_actual, self.ronda_actual.clone())
         else {
             return Ok((false, "no hay una ronda activa".into()));
@@ -1186,6 +1289,787 @@ impl Puerta {
     }
 }
 
+/// El contexto de cada lectura al capturar: la continuidad y el panel de ese proveedor.
+pub type Contexto<'a> = &'a dyn Fn(&str) -> (Option<String>, Option<String>);
+
+fn es_de(h: &Hecho, tipo: &str, ronda: &Texto) -> bool {
+    h.tipo() == tipo && h.texto("rondaId") == Some(ronda)
+}
+
+fn sin_formato_de_verificacion(l: &Lectura) -> io::Result<Option<&'static str>> {
+    let texto = parseos::texto_de_la_salida_verificador(&l.text, l.html.as_ref())?;
+    Ok(parseos::parsear_verificacion::<&str>(&texto, &[])
+        .correspondencias
+        .is_empty()
+        .then_some("la respuesta no trae ninguna línea de verificación en el formato pedido (¿investigación profunda?): repite la verificación de este panel con solo búsqueda web"))
+}
+
+impl Puerta {
+    /// CAP-001 a CAP-006 (RegistrarCapturas): guarda un lote de lecturas según la etapa de la ronda,
+    /// que dice el registro y nunca el contenido del panel. Sin ronda abierta abre una con el
+    /// marcador: lo que está en pantalla se guarda igual. Una lectura por debajo del umbral nunca se
+    /// guarda como respuesta buena. Devuelve la etapa y el aviso de los prompts.
+    pub fn registrar_capturas(
+        &mut self,
+        lecturas_crudas: &[Lectura],
+        contexto: Contexto,
+    ) -> io::Result<(&'static str, String)> {
+        let lecturas: Vec<Lectura> = lecturas_crudas
+            .iter()
+            .map(|l| {
+                let largo = l.text.largo_utf16();
+                if largo < UMBRAL_LECTURA_MINIMO && l.fallo().is_none() {
+                    l.con_error(format!("lectura por debajo del umbral ({largo} de {UMBRAL_LECTURA_MINIMO} caracteres): no genero una respuesta observable, no se guarda como valida"))
+                } else {
+                    l.clone()
+                }
+            })
+            .collect();
+        if self.ronda_actual.is_none() {
+            self.abrir_ronda(PROMPT_SIN_RONDA)?;
+        }
+        let ronda_id = self.ronda_actual.clone().unwrap_or_default();
+        let id = Texto::from(ronda_id.as_str());
+        let leido = self.leer_registro()?;
+        let hechos = &leido.hechos;
+        let etapa = dominio::etapa_de_ronda(hechos, &id, self.pool.len());
+        let sello: Vec<&Hecho> = hechos.iter().filter(|h| es_de(h, "sello", &id)).collect();
+        let pool = self.pool.clone();
+        let pool = strs(&pool);
+        let roles = self.roles.clone();
+        let verificadores = roles.verificadores();
+        let c = dominio::clasificar_lecturas_por_etapa(
+            &lecturas,
+            |l| l.id.as_str(),
+            etapa,
+            &pool,
+            &roles.integrador,
+            &verificadores,
+            &roles.redactor,
+        );
+        let (mut como_respuesta, mut operacion) = (c.como_respuesta, c.operacion);
+        // Sin sello la operación no está armada: capturar a un investigador recaptura su respuesta (la última gana).
+        let recaptura = etapa == "operacion" && sello.is_empty();
+        if recaptura {
+            como_respuesta.append(&mut operacion);
+        }
+        if !como_respuesta.is_empty() {
+            self.escribir_respuestas(&ronda_id, &como_respuesta, contexto)?;
+        }
+        if etapa == "investigacion" || recaptura {
+            for l in &como_respuesta {
+                if l.fallo().is_none() && l.text.largo_utf16() < RESPUESTA_CORTA {
+                    self.escribir_error_captura(
+                        &ronda_id,
+                        etapa,
+                        "respuesta",
+                        "respuesta sospechosamente corta: puede haber quedado fuera de la captura"
+                            .into(),
+                        Some(&l.id),
+                    )?;
+                }
+            }
+        }
+        // Un fallo al capturar una lectura nunca se adivina ni se descarta en silencio: queda como ErrorCaptura.
+        for l in operacion.iter().filter(|l| l.fallo().is_none()) {
+            match dominio::etiquetas_validas_del_operador(&l.id, &pool, &sello) {
+                Err(e) => self.escribir_error_captura(
+                    &ronda_id,
+                    etapa,
+                    "salida-operador",
+                    e.into(),
+                    None,
+                )?,
+                Ok(validas) => {
+                    let prompt = self
+                        .prompt_operador
+                        .get(&l.id)
+                        .cloned()
+                        .unwrap_or_else(|| PROMPT_NO_DISPONIBLE.into());
+                    self.procesar_salida_operador(
+                        &ronda_id,
+                        &l.id,
+                        Valor::Texto(prompt),
+                        &l.text,
+                        opcional(l.html.as_ref()),
+                        &validas,
+                        None,
+                    )?;
+                }
+            }
+        }
+        let no_disponible = || Valor::Texto(PROMPT_NO_DISPONIBLE.into());
+        match etapa {
+            "integracion" => {
+                let prompt = self
+                    .prompt_integrador
+                    .clone()
+                    .map_or_else(no_disponible, Valor::Texto);
+                self.rol(
+                    &ronda_id,
+                    etapa,
+                    c.integrador,
+                    ("informe-integrador", "integrador", &roles.integrador),
+                    |s, l| s.escribir_informe_integrador(&ronda_id, l, prompt),
+                )?;
+            }
+            "verificacion" => {
+                for (v, lectura) in verificadores.iter().zip(c.verificadores) {
+                    let sin_formato = match lectura {
+                        Some(l) if l.fallo().is_none() => {
+                            sin_formato_de_verificacion(l)?.map(|e| l.con_error(e))
+                        }
+                        _ => None,
+                    };
+                    let prompt = self
+                        .prompt_verificador
+                        .clone()
+                        .map_or_else(no_disponible, Valor::Texto);
+                    self.rol(
+                        &ronda_id,
+                        etapa,
+                        sin_formato.as_ref().or(lectura),
+                        ("salida-verificador", "verificador", v),
+                        |s, l| s.escribir_salida_verificador(&ronda_id, l, prompt),
+                    )?;
+                }
+            }
+            "redaccion" => {
+                let previo = hechos
+                    .iter()
+                    .rev()
+                    .find(|h| es_de(h, "respuesta-redactor", &id));
+                self.rol(
+                    &ronda_id,
+                    etapa,
+                    c.redactor,
+                    ("respuesta-redactor", "redactor", &roles.redactor),
+                    |s, l| s.escribir_respuesta_redactor(&ronda_id, l, previo),
+                )?;
+            }
+            _ => {}
+        }
+        Ok((
+            etapa,
+            aviso_prompts_de_captura(lecturas.iter().map(|l| l.user_text.as_ref()), etapa),
+        ))
+    }
+
+    /// La captura de un rol: sin su panel o con la lectura fallida queda un ErrorCaptura.
+    /// `quien` es (tipo de captura, nombre del rol, id del proveedor).
+    fn rol(
+        &mut self,
+        ronda_id: &str,
+        etapa: &str,
+        lectura: Option<&Lectura>,
+        (tipo, nombre_rol, id): (&str, &str, &str),
+        escribir: impl FnOnce(&mut Self, &Lectura) -> io::Result<()>,
+    ) -> io::Result<()> {
+        match lectura {
+            None => self.escribir_error_captura(
+                ronda_id,
+                etapa,
+                tipo,
+                format!("el panel del {nombre_rol} ({id}) no estaba abierto al capturar").into(),
+                Some(id),
+            ),
+            Some(l) => match l.fallo() {
+                Some(e) => {
+                    self.escribir_error_captura(ronda_id, etapa, tipo, e.clone(), Some(&l.id))
+                }
+                None => escribir(self, l),
+            },
+        }
+    }
+
+    fn escribir_respuestas(
+        &mut self,
+        ronda_id: &str,
+        lecturas: &[&Lectura],
+        contexto: Contexto,
+    ) -> io::Result<()> {
+        let ahora = self.ahora();
+        let coincide = prompt_coincide_en_pool(lecturas.iter().map(|l| l.user_text.as_ref()));
+        for l in lecturas {
+            let (continuidad, panel) = contexto(&l.id);
+            // metodoEscritura null: la escritura no informa con qué método entró el texto, y afirmarlo sería simular un dato.
+            let procedencia = dominio::derivar_procedencia(
+                l.model_label.as_ref(),
+                l.completion_kind.as_deref(),
+                l.quiescence_ms,
+                l.generating,
+                &ahora,
+                continuidad.as_deref(),
+                None,
+                panel.as_deref(),
+            );
+            let respuesta_id = (self.nuevo_id)();
+            let h = Hecho::nuevo(
+                "respuesta",
+                &[
+                    ("id", Valor::Texto(respuesta_id.as_str().into())),
+                    ("rondaId", Valor::Texto(ronda_id.into())),
+                    ("proveedorId", Valor::Texto(l.id.as_str().into())),
+                    ("textoOriginal", Valor::Texto(l.text.clone())),
+                    ("leidaEn", Valor::Texto(ahora.as_str().into())),
+                    ("error", opcional(l.error.as_ref())),
+                    ("procedencia", procedencia),
+                    ("promptUsuarioLeido", opcional(l.user_text.as_ref())),
+                    (
+                        "promptCoincideEnPool",
+                        coincide.map_or(Valor::Nulo, Valor::Bool),
+                    ),
+                    (
+                        "fuentesHref",
+                        l.fuentes_href.map_or(Valor::Nulo, Valor::Entero),
+                    ),
+                    ("html", opcional(l.html.as_ref())),
+                ],
+            )?;
+            self.escribir(&h)?;
+            // Las citas se derivan del html en la misma escritura: si la regla cambia, se re-derivan sin tocar la Respuesta.
+            if let Some(html) = &l.html {
+                let nuevo_id = &mut self.nuevo_id;
+                let citas = parseos::extraer_citas(html, &respuesta_id, &mut || nuevo_id())?;
+                for c in &citas.citas {
+                    self.escribir(c)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn escribir_error_captura(
+        &mut self,
+        ronda_id: &str,
+        etapa: &str,
+        tipo: &str,
+        detalle: Texto,
+        proveedor_id: Option<&str>,
+    ) -> io::Result<()> {
+        let h = Hecho::nuevo(
+            "error-captura",
+            &[
+                ("id", Valor::Texto((self.nuevo_id)().into())),
+                ("rondaId", Valor::Texto(ronda_id.into())),
+                ("etapaEsperada", Valor::Texto(etapa.into())),
+                ("tipoCapturaIntentado", Valor::Texto(tipo.into())),
+                (
+                    "proveedorId",
+                    proveedor_id
+                        .filter(|p| !p.is_empty())
+                        .map_or(Valor::Nulo, |p| Valor::Texto(p.into())),
+                ),
+                ("detalle", Valor::Texto(detalle)),
+                ("ocurridoEn", Valor::Texto(self.ahora().into())),
+            ],
+        )?;
+        self.escribir(&h)
+    }
+
+    fn escribir_informe_integrador(
+        &mut self,
+        ronda_id: &str,
+        l: &Lectura,
+        prompt: Valor,
+    ) -> io::Result<()> {
+        let id = (self.nuevo_id)();
+        let titulo = parseos::extraer_titulo_del_informe(&parseos::texto_del_informe_integrador(
+            &l.text,
+            l.html.as_ref(),
+        )?)
+        .0;
+        let h = Hecho::nuevo(
+            "informe-integrador",
+            &[
+                ("id", Valor::Texto(id.into())),
+                ("rondaId", Valor::Texto(ronda_id.into())),
+                ("operadorId", Valor::Texto(l.id.as_str().into())),
+                ("promptCompleto", prompt),
+                ("informeCrudo", Valor::Texto(l.text.clone())),
+                ("titulo", opcional(titulo.as_ref())),
+                ("recibidaEn", Valor::Texto(self.ahora().into())),
+                ("html", opcional(l.html.as_ref())),
+            ],
+        )?;
+        self.escribir(&h)
+    }
+
+    fn escribir_salida_verificador(
+        &mut self,
+        ronda_id: &str,
+        l: &Lectura,
+        prompt: Valor,
+    ) -> io::Result<()> {
+        let h = Hecho::nuevo(
+            "salida-verificador",
+            &[
+                ("id", Valor::Texto((self.nuevo_id)().into())),
+                ("rondaId", Valor::Texto(ronda_id.into())),
+                ("verificadorId", Valor::Texto(l.id.as_str().into())),
+                ("promptCompleto", prompt),
+                ("salidaCruda", Valor::Texto(l.text.clone())),
+                ("recibidaEn", Valor::Texto(self.ahora().into())),
+                ("html", opcional(l.html.as_ref())),
+            ],
+        )?;
+        self.escribir(&h)
+    }
+
+    /// Las marcas y el prompt pegados en este proceso, o los de la redacción anterior si la app se
+    /// reinició.
+    fn escribir_respuesta_redactor(
+        &mut self,
+        ronda_id: &str,
+        l: &Lectura,
+        previo: Option<&Hecho>,
+    ) -> io::Result<()> {
+        let no_vacia = |k: &str| {
+            previo
+                .and_then(|p| p.texto(k))
+                .filter(|t| !t.bytes().is_empty())
+                .cloned()
+        };
+        let (primera, ultima) = match &self.marcas_redactor {
+            Some((a, b)) => (
+                Valor::Texto(a.as_str().into()),
+                Valor::Texto(b.as_str().into()),
+            ),
+            None => match (no_vacia("marcaPrimera"), no_vacia("marcaUltima")) {
+                (Some(a), Some(b)) => (Valor::Texto(a), Valor::Texto(b)),
+                _ => (Valor::Nulo, Valor::Nulo),
+            },
+        };
+        let prompt = self
+            .prompt_redactor
+            .clone()
+            .or_else(|| previo.and_then(|p| p.texto("promptCompleto")).cloned())
+            .unwrap_or_else(|| PROMPT_NO_DISPONIBLE.into());
+        let sello = match &self.sello_verificaciones {
+            Some(s) => Valor::Lista(
+                s.iter()
+                    .map(|(e, v)| {
+                        Valor::Objeto(vec![
+                            ("etiqueta".into(), Valor::Texto(e.as_str().into())),
+                            ("verificadorId".into(), Valor::Texto(v.as_str().into())),
+                        ])
+                    })
+                    .collect(),
+            ),
+            None => previo.map_or(Valor::Nulo, |p| p.valor("selloVerificaciones").clone()),
+        };
+        let h = Hecho::nuevo(
+            "respuesta-redactor",
+            &[
+                ("id", Valor::Texto((self.nuevo_id)().into())),
+                ("rondaId", Valor::Texto(ronda_id.into())),
+                ("redactorId", Valor::Texto(l.id.as_str().into())),
+                ("promptCompleto", Valor::Texto(prompt)),
+                ("textoCrudo", Valor::Texto(l.text.clone())),
+                ("html", opcional(l.html.as_ref())),
+                ("marcaPrimera", primera),
+                ("marcaUltima", ultima),
+                ("selloVerificaciones", sello),
+                ("recibidaEn", Valor::Texto(self.ahora().into())),
+            ],
+        )?;
+        self.escribir(&h)
+    }
+
+    /// OPE-014: la operación de la ronda ya se armó (hay sello): desde ahí capturar a un operador
+    /// registra su operación.
+    pub fn operacion_armada(&mut self) -> io::Result<bool> {
+        let Some(ronda) = self.ronda_actual.clone() else {
+            return Ok(false);
+        };
+        let id = Texto::from(ronda.as_str());
+        Ok(self
+            .leer_registro()?
+            .hechos
+            .iter()
+            .any(|h| es_de(h, "sello", &id)))
+    }
+
+    /// La operación quedó pegada en su panel: lo que ese operador devuelva se registra con este prompt.
+    pub fn operacion_pegada(&mut self, operacion: &Operacion) {
+        self.prompt_operador.insert(
+            operacion.operador_id.clone(),
+            operacion.prompt_completo.clone(),
+        );
+    }
+
+    pub fn integrador_pegado(&mut self, prompt: Texto) {
+        self.prompt_integrador = Some(prompt);
+    }
+
+    pub fn verificador_pegado(&mut self, prompt: Texto) {
+        self.prompt_verificador = Some(prompt);
+    }
+
+    pub fn redactor_pegado(&mut self, archivo: &ArchivoRedactor) {
+        self.prompt_redactor = Some(archivo.prompt_completo.clone());
+        self.marcas_redactor = Some((archivo.marca_primera.clone(), archivo.marca_ultima.clone()));
+        self.sello_verificaciones = Some(archivo.sello_verificaciones.clone());
+    }
+
+    /// INT-005, VER-005: recapturar el integrador o el verificador sin mirar la etapa. Agrega un
+    /// hecho; el registro no se reescribe y todo usa el último de la ronda.
+    pub fn recapturar(&mut self, rol: &str, lectura: &Lectura) -> io::Result<(bool, String)> {
+        let (Some(_), Some(ronda_id)) = (&self.conversacion_actual, self.ronda_actual.clone())
+        else {
+            return Ok((false, "no hay una ronda activa".into()));
+        };
+        let leido = self.leer_registro()?;
+        let tipo = match rol {
+            "integrador" => "informe-integrador",
+            "verificador" => "salida-verificador",
+            _ => return Err(falla(format!("no se recaptura el rol \"{rol}\""))),
+        };
+        let largo = lectura.text.largo_utf16();
+        // Una lectura fallida o bajo el umbral nunca reemplaza a la buena: queda como ErrorCaptura, y el último bueno sigue siendo el que vale.
+        let error: Option<Texto> = match lectura.fallo() {
+            Some(e) => Some(e.clone()),
+            None if largo < UMBRAL_LECTURA_MINIMO => Some(
+                format!(
+                    "lectura por debajo del umbral ({largo} de {UMBRAL_LECTURA_MINIMO} caracteres)"
+                )
+                .into(),
+            ),
+            None if rol == "verificador" => sin_formato_de_verificacion(lectura)?.map(Texto::from),
+            None => None,
+        };
+        let id = Texto::from(ronda_id.as_str());
+        let nombre = dominio::nombre_proveedor(&lectura.id);
+        if let Some(e) = error {
+            let etapa = dominio::etapa_de_ronda(&leido.hechos, &id, self.pool.len());
+            let mensaje = format!("{nombre}: el {rol} no se recapturó ({})", e.para_mostrar());
+            self.escribir_error_captura(&ronda_id, etapa, tipo, e, Some(&lectura.id))?;
+            return Ok((false, mensaje));
+        }
+        let previos: Vec<&Hecho> = leido
+            .hechos
+            .iter()
+            .filter(|h| es_de(h, tipo, &id))
+            .collect();
+        let Some(ultimo) = previos.last() else {
+            return Ok((
+                false,
+                if rol == "integrador" {
+                    "No hay un informe de integrador en esta ronda todavía. Usa \"Pegar integrador\"."
+                } else {
+                    "No hay una verificación en esta ronda todavía. Usa \"Pegar verificación\"."
+                }
+                .into(),
+            ));
+        };
+        let pegado = if rol == "integrador" {
+            &self.prompt_integrador
+        } else {
+            &self.prompt_verificador
+        };
+        let prompt = pegado
+            .clone()
+            .map_or_else(|| ultimo.valor("promptCompleto").clone(), Valor::Texto);
+        if rol == "integrador" {
+            self.escribir_informe_integrador(&ronda_id, lectura, prompt)?;
+        } else {
+            self.escribir_salida_verificador(&ronda_id, lectura, prompt)?;
+        }
+        Ok((
+            true,
+            format!(
+                "{nombre}: {rol} recapturado, {largo} caracteres ({} en el registro; se usa el último)",
+                previos.len() + 1
+            ),
+        ))
+    }
+
+    /// REG-012: la pregunta real de una ronda capturada sin envío. La Ronda no se reescribe: se
+    /// agrega este hecho aparte, declarado por el usuario.
+    pub fn declarar_pregunta(&mut self, texto: impl Into<Texto>) -> io::Result<Hecho> {
+        let ronda_id = self
+            .ronda_actual
+            .clone()
+            .ok_or_else(|| falla("no hay una ronda activa a la que declararle la pregunta"))?;
+        let h = Hecho::nuevo(
+            "pregunta-declarada",
+            &[
+                ("id", Valor::Texto((self.nuevo_id)().into())),
+                ("rondaId", Valor::Texto(ronda_id.into())),
+                ("texto", Valor::Texto(texto.into())),
+                ("declaradaEn", Valor::Texto(self.ahora().into())),
+            ],
+        )?;
+        self.escribir(&h)?;
+        Ok(h)
+    }
+
+    /// RON-003 (PasoSiguiente): el único paso siguiente, que sale del registro y de lo pegado en
+    /// esta sesión; nunca de la interfaz.
+    pub fn paso_siguiente(&mut self) -> io::Result<Paso> {
+        let (Some(_), Some(ronda_id)) = (&self.conversacion_actual, self.ronda_actual.clone())
+        else {
+            return Ok(paso(
+                "pregunta",
+                "pegar-pregunta",
+                "Pegar la pregunta en los paneles",
+            ));
+        };
+        let leido = self.leer_registro()?;
+        let hechos = &leido.hechos;
+        let id = Texto::from(ronda_id.as_str());
+        let de = |tipo: &'static str, campo: &'static str| {
+            hechos
+                .iter()
+                .filter(move |h| es_de(h, tipo, &id))
+                .filter_map(move |h| h.texto(campo).and_then(Texto::como_str))
+        };
+        Ok(
+            match dominio::etapa_de_ronda(hechos, &Texto::from(ronda_id.as_str()), self.pool.len())
+            {
+                "investigacion" => {
+                    // Solo una respuesta válida completa al operador: una captura con error (0 caracteres) no cuenta.
+                    let capturados: HashSet<&str> = hechos
+                        .iter()
+                        .filter(|h| {
+                            es_de(h, "respuesta", &Texto::from(ronda_id.as_str()))
+                                && h.texto("error").is_none_or(|e| e.bytes().is_empty())
+                        })
+                        .filter_map(|h| h.texto("proveedorId").and_then(Texto::como_str))
+                        .collect();
+                    let ronda = hechos.iter().find(|h| {
+                        h.tipo() == "ronda"
+                            && h.texto("id") == Some(&Texto::from(ronda_id.as_str()))
+                    });
+                    if !self.pool.iter().all(|p| capturados.contains(p.as_str())) {
+                        paso("investigacion", "capturar", "Capturar los que terminaron")
+                    } else if ronda
+                        .is_none_or(|r| dominio::pregunta_efectiva_de_ronda(hechos, r).is_none())
+                    {
+                        paso(
+                            "investigacion",
+                            "declarar-pregunta",
+                            "Declarar la pregunta de esta ronda",
+                        )
+                    } else {
+                        paso(
+                            "operacion",
+                            "pegar-operacion",
+                            "Pegar la operación en los paneles",
+                        )
+                    }
+                }
+                "operacion" => {
+                    let con_salida: HashSet<&str> = de("salida-operador", "operadorId").collect();
+                    let falta_pegar = self.pool.iter().any(|op| {
+                        !con_salida.contains(op.as_str()) && !self.prompt_operador.contains_key(op)
+                    });
+                    if falta_pegar {
+                        paso(
+                            "operacion",
+                            "pegar-operacion",
+                            "Pegar la operación en los paneles",
+                        )
+                    } else {
+                        paso("operacion", "capturar", "Capturar los que terminaron")
+                    }
+                }
+                "integracion" if self.prompt_integrador.is_none() => paso(
+                    "integracion",
+                    "pegar-integrador",
+                    "Pegar el prompt del integrador",
+                ),
+                "integracion" => paso(
+                    "integracion",
+                    "capturar",
+                    "Capturar el informe del integrador",
+                ),
+                "verificacion" if self.prompt_verificador.is_none() => paso(
+                    "verificacion",
+                    "pegar-verificacion",
+                    "Pegar el prompt del verificador",
+                ),
+                "verificacion" => paso("verificacion", "capturar", "Capturar la verificación"),
+                _ if de("respuesta-redactor", "id").next().is_some() => {
+                    if self.carpeta_informe_armado().is_some() {
+                        paso("informe", "abrir-carpeta", "Abrir carpeta")
+                    } else {
+                        paso("informe", "armar-informe", "Armar el informe")
+                    }
+                }
+                _ if self.prompt_redactor.is_none() => paso(
+                    "redaccion",
+                    "pegar-redactor",
+                    "Pegar el prompt y el archivo del redactor",
+                ),
+                _ => paso(
+                    "redaccion",
+                    "capturar",
+                    "Capturar la respuesta del redactor",
+                ),
+            },
+        )
+    }
+
+    /// RON-004 (EstadoDePanel): el estado de un panel en la etapa actual. Lo que dice la página
+    /// (generando, cómo se supo el fin) entra como parámetro; lo demás sale del registro y de lo
+    /// pegado en esta sesión.
+    pub fn estado_de_panel(
+        &mut self,
+        proveedor_id: &str,
+        generando: Option<bool>,
+        fin: Option<&str>,
+    ) -> io::Result<&'static str> {
+        let (Some(_), Some(ronda_id)) = (&self.conversacion_actual, self.ronda_actual.clone())
+        else {
+            return Ok("por-pegar");
+        };
+        let leido = self.leer_registro()?;
+        let hechos = &leido.hechos;
+        let id = Texto::from(ronda_id.as_str());
+        let mut etapa = dominio::etapa_de_ronda(hechos, &id, self.pool.len());
+        // Con la investigación completa el paso ya es la operación, aunque el registro no tenga todavía sello:
+        // sin esto, cada operador seguía "capturado" por su respuesta y no había nada que pegar.
+        if etapa == "investigacion" && self.paso_siguiente()?.etapa == "operacion" {
+            etapa = "operacion";
+        }
+        let suyo = |h: &Hecho, tipo: &str, campo: &str| {
+            es_de(h, tipo, &id) && h.texto(campo).and_then(Texto::como_str) == Some(proveedor_id)
+        };
+        let hay = |tipo: &str, campo: &str| hechos.iter().any(|h| suyo(h, tipo, campo));
+        let (capturado, problema, pegado) = match etapa {
+            "investigacion" => {
+                let ultimo =
+                    |tipo: &str| hechos.iter().rev().find(|h| suyo(h, tipo, "proveedorId"));
+                let (intento, respuesta) = (ultimo("intento"), ultimo("respuesta"));
+                let con_error = |r: &Hecho| r.texto("error").is_some_and(|e| !e.bytes().is_empty());
+                let ok = |i: &Hecho| i.valor("ok") == &Valor::Bool(true);
+                (
+                    respuesta.is_some_and(|r| !con_error(r)),
+                    respuesta.map_or(intento.is_some_and(|i| !ok(i)), con_error),
+                    intento.is_some_and(ok),
+                )
+            }
+            "operacion" => (
+                hay("salida-operador", "operadorId"),
+                false,
+                self.prompt_operador.contains_key(proveedor_id),
+            ),
+            _ => {
+                let de_la_etapa = self.roles.de_la_etapa(etapa).contains(&proveedor_id);
+                // T22: quien no es el rol de esta etapa ya terminó lo suyo (un operador o un rol anterior): capturado si dejó su hecho.
+                let capturado = if de_la_etapa {
+                    etapa == "redaccion" && hay("respuesta-redactor", "redactorId")
+                } else {
+                    hay("salida-operador", "operadorId")
+                        || hay("informe-integrador", "operadorId")
+                        || hay("salida-verificador", "verificadorId")
+                };
+                let problema = hechos.iter().any(|h| {
+                    suyo(h, "error-captura", "proveedorId")
+                        && h.texto("etapaEsperada").and_then(Texto::como_str) == Some(etapa)
+                });
+                let pegado = de_la_etapa
+                    && match etapa {
+                        "integracion" => self.prompt_integrador.is_some(),
+                        "verificacion" => self.prompt_verificador.is_some(),
+                        _ => self.prompt_redactor.is_some(),
+                    };
+                (capturado, problema, pegado)
+            }
+        };
+        Ok(if capturado {
+            "capturado"
+        } else if problema {
+            "con-problema"
+        } else if generando == Some(true) {
+            "respondiendo"
+        } else if pegado && fin == Some("observado") {
+            "parece-terminado-observado"
+        } else if pegado && fin == Some("deducido") {
+            "parece-terminado-deducido"
+        } else if pegado {
+            "pegado-falta-enviar"
+        } else {
+            "por-pegar"
+        })
+    }
+}
+
+// El mismo prompt, no el mismo byte: espacios de más y mayúsculas no son la señal.
+fn normalizar_prompt(t: &Texto) -> Vec<u16> {
+    let u = t.a_utf16();
+    let mut plano = Vec::with_capacity(u.len());
+    let mut previo_blanco = false;
+    for &c in parseos::trim(&u) {
+        let blanco = char::from_u32(c as u32).is_some_and(registro::es_blanco);
+        if !blanco {
+            plano.push(c);
+        } else if !previo_blanco {
+            plano.push(b' ' as u16);
+        }
+        previo_blanco = blanco;
+    }
+    operacion::minusculas(&plano)
+}
+
+/// true si todos los prompts leídos son el mismo; false si hay dos distintos; None si hay menos de dos.
+fn prompt_coincide_en_pool<'a>(prompts: impl Iterator<Item = Option<&'a Texto>>) -> Option<bool> {
+    // Sin espacios y por contención: cada sitio agrega su texto ("Tú dijiste", "…Mostrar más") o pierde saltos (ronda 417be423).
+    let sin: Vec<Vec<u16>> = prompts
+        .flatten()
+        .filter(|t| !t.bytes().is_empty())
+        .map(|t| {
+            let mut n = normalizar_prompt(t);
+            n.retain(|&c| c != b' ' as u16);
+            n
+        })
+        .collect();
+    if sin.len() < 2 {
+        return None;
+    }
+    let corto = sin.iter().min_by_key(|t| t.len())?;
+    Some(
+        sin.iter()
+            .all(|t| corto.is_empty() || t.windows(corto.len()).any(|w| w == &corto[..])),
+    )
+}
+
+/// CAP-008 (AvisoPromptsDeCaptura): el aviso de "Capturar" sobre si los prompts coinciden. Solo en
+/// investigación, donde todos reciben la misma pregunta; en operación cada operador recibe a
+/// propósito un texto distinto. "" = sin aviso.
+pub fn aviso_prompts_de_captura<'a>(
+    prompts: impl IntoIterator<Item = Option<&'a Texto>>,
+    etapa: &str,
+) -> String {
+    if etapa != "investigacion" {
+        return String::new();
+    }
+    let con_prompt: Vec<&Texto> = prompts
+        .into_iter()
+        .flatten()
+        .filter(|t| !t.bytes().is_empty())
+        .collect();
+    if con_prompt.len() < 2 {
+        return String::new();
+    }
+    let distintos = con_prompt
+        .iter()
+        .map(|t| normalizar_prompt(t))
+        .collect::<HashSet<_>>()
+        .len();
+    if distintos > 1 {
+        format!(
+            "⚠ Los prompts de usuario capturados NO coinciden entre proveedores ({distintos} versiones distintas) — revisar antes de comparar respuestas."
+        )
+    } else {
+        format!(
+            "Prompt de usuario: coincide en los {} proveedores donde se pudo leer.",
+            con_prompt.len()
+        )
+    }
+}
+
 /// Corto: los primeros 8 caracteres (unidades UTF-16, como Substring) de un id.
 fn corto(id: &str) -> String {
     String::from_utf16_lossy(&id.encode_utf16().take(8).collect::<Vec<u16>>())
@@ -1278,9 +2162,12 @@ mod pruebas {
                 format!("00000000-0000-4000-8000-{n:012}")
             }),
             Box::new(|| UNIX_EPOCH + Duration::from_secs(1_791_288_000)),
-            POOL.iter().map(|s| s.to_string()).collect(),
-            Some("deepseek".into()),
-            POOL.len(),
+            crate::operacion::CONOCIDOS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            RolesElegidos::new("deepseek", "glm", "qwen", "deepseek"),
+            pool_puerta(),
         )
     }
 
@@ -1330,7 +2217,7 @@ mod pruebas {
         let esperado = [
             r#"{"tipo":"conversacion","esquema":1,"id":"00000000-0000-4000-8000-000000000001","creadaEn":"2026-10-06T12:00:00.000Z","titulo":null,"esPrueba":false}"#,
             r#"{"tipo":"ronda","esquema":1,"id":"00000000-0000-4000-8000-000000000003","conversacionId":"00000000-0000-4000-8000-000000000001","indice":0,"prompt":"¿Pregunta?","enviadaEn":"2026-10-06T12:00:00.000Z","semilla":"00000000-0000-4000-8000-000000000002"}"#,
-            r#"{"tipo":"condicion-proveedores-cargados","esquema":1,"id":"00000000-0000-4000-8000-000000000004","rondaId":"00000000-0000-4000-8000-000000000003","proveedores":["chatgpt","gemini","claude","grok","mistral","kimi","qwen"],"integrador":"deepseek","registradoEn":"2026-10-06T12:00:00.000Z"}"#,
+            r#"{"tipo":"condicion-proveedores-cargados","esquema":1,"id":"00000000-0000-4000-8000-000000000004","rondaId":"00000000-0000-4000-8000-000000000003","proveedores":["chatgpt","gemini","claude","grok","mistral","glm","kimi","qwen","deepseek","perplexity"],"integrador":"deepseek","registradoEn":"2026-10-06T12:00:00.000Z"}"#,
             "",
         ]
         .join("\n");
@@ -1713,7 +2600,7 @@ mod pruebas {
         let mut p = puerta_en_corrida(&c.0, &todas[..=12]);
         let mut operaciones = Vec::new();
         for op in &pool {
-            operaciones.push(p.armar_operacion(&pool, op, *op == "kimi").unwrap());
+            operaciones.push(p.armar_operacion(op, *op == "kimi").unwrap());
         }
         let escritas: Vec<String> = String::from_utf8(lineas(&c.0, CONVERSACION_CORRIDA))
             .unwrap()
@@ -1772,8 +2659,6 @@ mod pruebas {
     fn parseos_reuso_la_ronda_copiada_y_la_operacion_reutilizada_son_las_de_la_unity() {
         let c = Carpeta::nueva("operacion-reuso");
         let todas = lineas_corrida();
-        let pool = pool_puerta();
-        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
         let mut p = puerta_en_corrida(&c.0, &todas[..=59]);
         // Los cargados de la puerta de la Unity: los de la condición de la primera ronda (línea 2).
         let condicion = registro::leer(&format!(
@@ -1791,7 +2676,7 @@ mod pruebas {
             n += 1;
             format!("00000000-0000-4000-8000-{n:012}")
         });
-        let mensaje = p.ronda_nueva_con_respuestas_copiadas(&pool).unwrap();
+        let mensaje = p.ronda_nueva_con_respuestas_copiadas().unwrap();
         assert_eq!(
             mensaje,
             "Ronda nueva abierta (00000000) con 7 respuestas copiadas de la ronda 00000000. Recaptura con \"Capturar este panel\" lo que quieras corregir."
@@ -1809,9 +2694,9 @@ mod pruebas {
         );
         fs::write(&ruta, archivo).unwrap();
         (p.nuevo_id)();
-        p.armar_operacion(&pool, "chatgpt", false).unwrap();
-        let kimi = p.reutilizar_operacion(&pool, "kimi").unwrap();
-        let chatgpt = p.reutilizar_operacion(&pool, "chatgpt").unwrap();
+        p.armar_operacion("chatgpt", false).unwrap();
+        let kimi = p.reutilizar_operacion("kimi").unwrap();
+        let chatgpt = p.reutilizar_operacion("chatgpt").unwrap();
         let escritas: Vec<String> = String::from_utf8(lineas(&c.0, CONVERSACION_CORRIDA))
             .unwrap()
             .lines()
@@ -1830,25 +2715,23 @@ mod pruebas {
     #[test]
     fn parseos_reuso_sin_ronda_sin_sello_o_fuera_del_pool_se_niega_sin_escribir() {
         let c = Carpeta::nueva("operacion-reuso-negativas");
-        let pool = pool_puerta();
-        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
         let mut vacia = nueva_puerta(&c.0);
         assert_eq!(
-            vacia.ronda_nueva_con_respuestas_copiadas(&pool).unwrap(),
+            vacia.ronda_nueva_con_respuestas_copiadas().unwrap(),
             "No hay una ronda activa de la que copiar."
         );
         assert_eq!(
-            vacia.reutilizar_operacion(&pool, "kimi").unwrap(),
+            vacia.reutilizar_operacion("kimi").unwrap(),
             (false, "no hay una ronda activa".to_string())
         );
         let mut p = puerta_en_corrida(&c.0, &lineas_corrida()[..=12]);
         let antes = lineas(&c.0, CONVERSACION_CORRIDA);
         assert_eq!(
-            p.reutilizar_operacion(&pool, "glm").unwrap(),
+            p.reutilizar_operacion("glm").unwrap(),
             (false, "\"GLM\" no es un operador del pool.".to_string())
         );
         assert_eq!(
-            p.reutilizar_operacion(&pool, "kimi").unwrap(),
+            p.reutilizar_operacion("kimi").unwrap(),
             (false, "Esta ronda todavía no tiene sello: pega primero la operación en algún panel («Pegar la operación aquí»).".to_string())
         );
         assert_eq!(lineas(&c.0, CONVERSACION_CORRIDA), antes);
@@ -1858,12 +2741,10 @@ mod pruebas {
     fn parseos_la_ronda_copiada_conserva_un_surrogate_suelto_de_la_pregunta() {
         // revisión PART-005: Puerta.cs:753 pasa el string intacto a AbrirRonda.
         let c = Carpeta::nueva("operacion-reuso-surrogate");
-        let pool = pool_puerta();
-        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
         let mut corrida = lineas_corrida()[..=12].to_vec();
         corrida[1] = corrida[1].replace("\"prompt\":\"¿Qué", "\"prompt\":\"\\ud800¿Qué");
         let mut p = puerta_en_corrida(&c.0, &corrida);
-        p.ronda_nueva_con_respuestas_copiadas(&pool).unwrap();
+        p.ronda_nueva_con_respuestas_copiadas().unwrap();
         let leido = p.leer_registro().unwrap();
         let prompts: Vec<&Texto> = leido
             .hechos
@@ -1896,8 +2777,6 @@ mod pruebas {
     #[test]
     fn prompts_los_de_los_roles_en_la_corrida_son_los_de_la_unity() {
         let todas = lineas_corrida();
-        let pool = pool_puerta();
-        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
         let prompt_de = |i: usize| {
             hecho_de_corrida(&todas, i)
                 .texto("promptCompleto")
@@ -1907,11 +2786,11 @@ mod pruebas {
 
         let c = Carpeta::nueva("roles-integrador");
         let mut p = puerta_en_corrida(&c.0, &todas[..49]);
-        assert_eq!(p.armar_prompt_integrador(&pool).unwrap(), prompt_de(49));
+        assert_eq!(p.armar_prompt_integrador().unwrap(), prompt_de(49));
 
         let c = Carpeta::nueva("roles-verificador");
         let mut p = puerta_en_corrida(&c.0, &todas[..=50]);
-        let verificador = p.armar_prompt_verificador(&pool).unwrap();
+        let verificador = p.armar_prompt_verificador().unwrap();
         assert_eq!(verificador, prompt_de(51));
         assert_eq!(verificador, prompt_de(52));
 
@@ -1920,7 +2799,7 @@ mod pruebas {
         // Los ids de la Unity: siete del armado de cuerpos (111 a 117) y el token (118).
         ids_desde(&mut p, 111);
         let antes = lineas(&c.0, CONVERSACION_CORRIDA);
-        let r = p.armar_redactor(&pool, &["glm", "qwen"]).unwrap();
+        let r = p.armar_redactor().unwrap();
         let respuesta = hecho_de_corrida(&todas, 53);
         assert_eq!(r.prompt_completo, prompt_de(53));
         let texto = |k: &str| respuesta.texto(k).and_then(Texto::como_str).unwrap();
@@ -1954,15 +2833,11 @@ mod pruebas {
     #[test]
     fn prompts_los_roles_sin_ronda_semilla_o_pregunta_se_niegan_con_el_motivo_de_la_unity() {
         let todas = lineas_corrida();
-        let pool = pool_puerta();
-        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
         let errores = |p: &mut Puerta| {
             [
-                p.armar_prompt_integrador(&pool).unwrap_err().to_string(),
-                p.armar_prompt_verificador(&pool).unwrap_err().to_string(),
-                p.armar_redactor(&pool, &["glm", "qwen"])
-                    .unwrap_err()
-                    .to_string(),
+                p.armar_prompt_integrador().unwrap_err().to_string(),
+                p.armar_prompt_verificador().unwrap_err().to_string(),
+                p.armar_redactor().unwrap_err().to_string(),
             ]
         };
 
@@ -2004,24 +2879,20 @@ mod pruebas {
     #[test]
     fn prompts_el_verificador_sin_informe_o_sin_rescate_se_niega() {
         let todas = lineas_corrida();
-        let pool = pool_puerta();
-        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
         let c = Carpeta::nueva("roles-sin-informe");
         let mut p = puerta_en_corrida(&c.0, &todas[..49]);
         assert_eq!(
-            p.armar_prompt_verificador(&pool).unwrap_err().to_string(),
+            p.armar_prompt_verificador().unwrap_err().to_string(),
             "la ronda todavía no tiene un informe del integrador capturado"
         );
         assert_eq!(
-            p.armar_redactor(&pool, &["glm", "qwen"])
-                .unwrap_err()
-                .to_string(),
+            p.armar_redactor().unwrap_err().to_string(),
             "la ronda todavía no tiene un informe del integrador capturado"
         );
         let c = Carpeta::nueva("roles-sin-rescate");
         let mut p = puerta_en_corrida(&c.0, &todas[..=49]);
         assert_eq!(
-            p.armar_prompt_verificador(&pool).unwrap_err().to_string(),
+            p.armar_prompt_verificador().unwrap_err().to_string(),
             "el informe del integrador no tiene la seccion QUE CONVIENE RESCATAR. Se capturó (primeros 100 caracteres): \"TITULO: Informe a medias Texto incompleto [H1].\""
         );
     }
@@ -2030,11 +2901,9 @@ mod pruebas {
     #[test]
     fn prompts_el_redactor_sin_verificacion_se_arma_y_avisa() {
         let todas = lineas_corrida();
-        let pool = pool_puerta();
-        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
         let c = Carpeta::nueva("roles-sin-verificacion");
         let mut p = puerta_en_corrida(&c.0, &todas[..=50]);
-        let r = p.armar_redactor(&pool, &["glm", "qwen"]).unwrap();
+        let r = p.armar_redactor().unwrap();
         assert!(r.sello_verificaciones.is_empty());
         assert_eq!(
             r.aviso.as_deref(),
@@ -2056,13 +2925,7 @@ mod pruebas {
 
     #[test]
     fn operacion_sin_ronda_sin_pregunta_o_con_faltantes_se_niega_con_el_motivo_de_la_unity() {
-        let pool = pool_puerta();
-        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
-        let error = |p: &mut Puerta| {
-            p.armar_operacion(&pool, "chatgpt", false)
-                .unwrap_err()
-                .to_string()
-        };
+        let error = |p: &mut Puerta| p.armar_operacion("chatgpt", false).unwrap_err().to_string();
 
         let c = Carpeta::nueva("operacion-sin-ronda");
         assert_eq!(
@@ -2106,8 +2969,6 @@ mod pruebas {
         // INV-OPE-004
         let c = Carpeta::nueva("operacion-sin-semilla");
         let todas = lineas_corrida();
-        let pool = pool_puerta();
-        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
         let mut lineas_sin = todas[..=12].to_vec();
         lineas_sin[1] = lineas_sin[1].replace(
             "\"semilla\":\"00000000-0000-4000-8000-000000000002\"",
@@ -2117,9 +2978,7 @@ mod pruebas {
         let mut p = puerta_en_corrida(&c.0, &lineas_sin);
         let antes = lineas(&c.0, CONVERSACION_CORRIDA);
         assert_eq!(
-            p.armar_operacion(&pool, "chatgpt", false)
-                .unwrap_err()
-                .to_string(),
+            p.armar_operacion("chatgpt", false).unwrap_err().to_string(),
             format!(
                 "ronda {RONDA_CORRIDA} no tiene semilla persistida: no se puede armar un cuerpo anonimizado reproducible sobre una ronda sin semilla."
             )
@@ -2132,21 +2991,16 @@ mod pruebas {
         // PuertaPruebas:248: después del sello, kimi se recaptura con otra respuesta.
         let c = Carpeta::nueva("operacion-sello");
         let todas = lineas_corrida();
-        let pool = pool_puerta();
-        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
         let mut p = puerta_en_corrida(&c.0, &todas[..=12]);
-        p.armar_operacion(&pool, "chatgpt", false).unwrap();
-        let mismo = p.armar_operacion(&pool, "gemini", false);
+        p.armar_operacion("chatgpt", false).unwrap();
+        let mismo = p.armar_operacion("gemini", false);
         assert!(mismo.is_ok(), "el mismo sello recalculado coincide");
         let corregida = todas[10].replace("00000000-0000-4000-8000-000000000012", "corregida");
         assert_ne!(corregida, todas[10]);
         let hecho = registro::leer(&format!("{corregida}\n")).hechos.remove(0);
         registro::agregar(&c.0, CONVERSACION_CORRIDA, &hecho).unwrap();
         let antes = lineas(&c.0, CONVERSACION_CORRIDA);
-        let e = p
-            .armar_operacion(&pool, "claude", false)
-            .unwrap_err()
-            .to_string();
+        let e = p.armar_operacion("claude", false).unwrap_err().to_string();
         println!("{e}");
         assert!(e.starts_with(&format!(
             "el sello ya persistido para la ronda {RONDA_CORRIDA} no coincide con el que se acaba de calcular (la etiqueta \"Modelo G\" no coincide: persistido {{codigoEstable:P6, panelSourceId:kimi, replyId:00000000-0000-4000-8000-000000000012"
@@ -2162,20 +3016,16 @@ mod pruebas {
     #[test]
     fn operacion_un_operador_fuera_del_pool_no_tiene_cuerpo() {
         let c = Carpeta::nueva("operacion-fuera");
-        let pool = pool_puerta();
-        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
         let mut p = puerta_en_corrida(&c.0, &lineas_corrida()[..=12]);
         let antes = lineas(&c.0, CONVERSACION_CORRIDA);
         assert_eq!(
-            p.armar_operacion(&pool, "deepseek", false)
+            p.armar_operacion("deepseek", false)
                 .unwrap_err()
                 .to_string(),
             "\"DeepSeek\" no es un operador del pool: no tiene cuerpo que operar"
         );
         assert_eq!(
-            p.armar_operacion(&pool, "nuevo", false)
-                .unwrap_err()
-                .to_string(),
+            p.armar_operacion("nuevo", false).unwrap_err().to_string(),
             "\"Nuevo\" no es un operador del pool: no tiene cuerpo que operar"
         );
         assert_eq!(lineas(&c.0, CONVERSACION_CORRIDA), antes);
@@ -2284,7 +3134,7 @@ mod pruebas {
             let mut detalle = Vec::new();
             for op in &pool {
                 let (t, k) = (std::time::Instant::now(), ciclos_del_hilo().unwrap());
-                let o = p.armar_operacion(&pool, op, *op == "kimi").unwrap();
+                let o = p.armar_operacion(op, *op == "kimi").unwrap();
                 let ciclos = ciclos_del_hilo().unwrap() - k;
                 detalle.push(format!(
                     "{op} {:.1} Mciclos {:.2} ms",
@@ -2347,5 +3197,827 @@ mod pruebas {
             formatear_utc(UNIX_EPOCH - Duration::from_micros(1500)),
             "1969-12-31T23:59:59.998Z"
         );
+    }
+
+    // ------------------------------------------------------------ captura (PART-007)
+
+    fn confirmada(_: &str) -> (Option<String>, Option<String>) {
+        (Some("confirmada".into()), None)
+    }
+
+    fn indeterminada(_: &str) -> (Option<String>, Option<String>) {
+        (Some("indeterminada".into()), None)
+    }
+
+    /// Algunos vectores son un JSON dentro de un string (JsonEstricto.Leer de la Unity).
+    fn json_de(nombre: &str) -> Valor {
+        match crate::json::vector(nombre) {
+            Valor::Texto(t) => crate::json::leer(t.como_str().unwrap()).unwrap(),
+            v => v,
+        }
+    }
+
+    fn opt<'a>(v: &'a Valor, k: &str) -> Option<&'a Valor> {
+        match v {
+            Valor::Objeto(o) => o
+                .iter()
+                .find(|(n, _)| n.como_str() == Some(k))
+                .map(|(_, x)| x)
+                .filter(|x| **x != Valor::Nulo),
+            _ => None,
+        }
+    }
+
+    fn lectura(v: &Valor) -> Lectura {
+        let texto = |k| opt(v, k).map(|x| registro::pruebas::texto_de(x).clone());
+        let cadena = |k| opt(v, k).map(|x| registro::pruebas::str_de(x).to_string());
+        let entero = |k| match opt(v, k) {
+            Some(Valor::Entero(n)) => Some(*n),
+            _ => None,
+        };
+        Lectura {
+            id: cadena("id").unwrap(),
+            text: texto("text").unwrap_or_default(),
+            generating: match opt(v, "generating") {
+                Some(Valor::Bool(b)) => Some(*b),
+                _ => None,
+            },
+            completion_kind: cadena("completionKind"),
+            quiescence_ms: entero("quiescenceMs"),
+            model_label: texto("modelLabel"),
+            user_text: texto("userText"),
+            fuentes_href: entero("fuentesHref"),
+            html: texto("html"),
+            error: texto("error"),
+        }
+    }
+
+    fn lote(lotes: &Valor, nombre: &str) -> Vec<Lectura> {
+        registro::pruebas::lista(registro::pruebas::campo(lotes, nombre))
+            .iter()
+            .map(lectura)
+            .collect()
+    }
+
+    fn pregunta_operacion() -> String {
+        registro::pruebas::str_de(&crate::json::vector("PreguntaOperacion")).to_string()
+    }
+
+    fn lineas_de(c: &Path, p: &Puerta) -> Vec<String> {
+        String::from_utf8(lineas(c, p.conversacion_actual().unwrap()))
+            .unwrap()
+            .lines()
+            .map(String::from)
+            .collect()
+    }
+
+    fn hechos_de(c: &Path, p: &Puerta) -> Vec<Hecho> {
+        registro::leer_archivo(c, p.conversacion_actual().unwrap())
+            .unwrap()
+            .hechos
+    }
+
+    fn de_tipo<'a>(hechos: &'a [Hecho], tipo: &'a str) -> impl Iterator<Item = &'a Hecho> {
+        hechos.iter().filter(move |h| h.tipo() == tipo)
+    }
+
+    fn s<'a>(h: &'a Hecho, k: &str) -> Option<&'a str> {
+        h.texto(k).and_then(Texto::como_str)
+    }
+
+    /// La ronda hasta la integración: investigación, operación pegada y capturada en dos lotes.
+    fn ronda_hasta_la_integracion(c: &Path) -> (Puerta, Valor) {
+        let mut p = nueva_puerta(c);
+        let lotes = json_de("LotesOperacion");
+        p.abrir_ronda(pregunta_operacion()).unwrap();
+        p.registrar_capturas(&lote(&lotes, "investigacion"), &confirmada)
+            .unwrap();
+        for op in pool_puerta() {
+            let o = p.armar_operacion(&op, false).unwrap();
+            p.operacion_pegada(&o);
+        }
+        p.registrar_capturas(&lote(&lotes, "operadores1"), &confirmada)
+            .unwrap();
+        p.registrar_capturas(&lote(&lotes, "operadores2"), &confirmada)
+            .unwrap();
+        (p, lotes)
+    }
+
+    // Medido en la ronda real (2026-10-22): seis capturas de chatgpt en 0 caracteres cerraron la investigación con 6 de 7.
+    #[test]
+    fn ronda_una_captura_con_error_no_cierra_la_investigacion() {
+        let c = Carpeta::nueva("captura-error");
+        let mut p = nueva_puerta(&c.0);
+        let mut lecturas = lote(&json_de("LotesOperacion"), "investigacion");
+        let i = lecturas.iter().position(|l| l.id == "chatgpt").unwrap();
+        let original = std::mem::take(&mut lecturas[i].text);
+        p.abrir_ronda(pregunta_operacion()).unwrap();
+        p.registrar_capturas(&lecturas, &confirmada).unwrap();
+        let paso = p.paso_siguiente().unwrap();
+        assert_eq!((paso.etapa, paso.accion), ("investigacion", "capturar"));
+        assert_eq!(
+            p.estado_de_panel("chatgpt", None, None).unwrap(),
+            "con-problema"
+        );
+
+        lecturas[i].text = original;
+        p.registrar_capturas(&lecturas[i..=i], &confirmada).unwrap();
+        assert_eq!(
+            p.paso_siguiente().unwrap().etapa,
+            "operacion",
+            "con la recaptura válida, la investigación sí se cierra"
+        );
+    }
+
+    // Ronda 417be423: Qwen en investigación profunda devolvió un ensayo sin una sola línea de verificación.
+    #[test]
+    fn ronda_una_verificacion_sin_lineas_no_se_guarda_como_valida() {
+        let c = Carpeta::nueva("verificacion-sin-lineas");
+        let (mut p, lotes) = ronda_hasta_la_integracion(&c.0);
+        let prompt = p.armar_prompt_integrador().unwrap();
+        p.integrador_pegado(prompt);
+        p.registrar_capturas(&lote(&lotes, "integradorCorto"), &confirmada)
+            .unwrap();
+        p.recapturar(
+            "integrador",
+            &lectura(registro::pruebas::campo(&lotes, "integradorCompleto")),
+        )
+        .unwrap();
+        let prompt = p.armar_prompt_verificador().unwrap();
+        p.verificador_pegado(prompt);
+        let mut verificadores = lote(&lotes, "verificador");
+        let ensayo = verificadores.last_mut().unwrap();
+        ensayo.text = "Deep Research Completed\nResumen\nUn ensayo largo sobre las fuentes, sin ninguna línea en el formato pedido.".into();
+        ensayo.html = None;
+        let ensayo = ensayo.clone();
+        p.registrar_capturas(&verificadores, &confirmada).unwrap();
+        let hechos = hechos_de(&c.0, &p);
+        assert!(
+            !de_tipo(&hechos, "salida-verificador")
+                .any(|h| s(h, "verificadorId") == Some(&ensayo.id))
+        );
+        assert!(
+            de_tipo(&hechos, "error-captura").any(|h| s(h, "proveedorId") == Some(&ensayo.id)
+                && s(h, "detalle").unwrap().contains("formato pedido"))
+        );
+        assert!(
+            !p.recapturar("verificador", &ensayo).unwrap().0,
+            "recapturarlo tampoco lo guarda"
+        );
+    }
+
+    // Ronda 417be423: la investigación profunda de Claude se capturó a medias y la ronda ya estaba en la operación.
+    #[test]
+    fn ronda_antes_de_armar_la_operacion_capturar_recaptura_la_investigacion() {
+        let c = Carpeta::nueva("recaptura-investigacion");
+        let mut p = nueva_puerta(&c.0);
+        p.abrir_ronda(pregunta_operacion()).unwrap();
+        let investigacion = lote(&json_de("LotesOperacion"), "investigacion");
+        p.registrar_capturas(&investigacion, &confirmada).unwrap();
+        let mut nueva = investigacion[0].clone();
+        nueva
+            .text
+            .empujar_str("\n\nEl informe completo, que faltaba en la primera captura.");
+        p.registrar_capturas(std::slice::from_ref(&nueva), &confirmada)
+            .unwrap();
+        let hechos = hechos_de(&c.0, &p);
+        let suyas: Vec<&Hecho> = de_tipo(&hechos, "respuesta")
+            .filter(|h| s(h, "proveedorId") == Some(&nueva.id))
+            .collect();
+        assert_eq!(suyas.len(), 2);
+        assert!(
+            s(suyas[1], "textoOriginal")
+                .unwrap()
+                .ends_with("faltaba en la primera captura.")
+        );
+        assert_eq!(de_tipo(&hechos, "salida-operador").count(), 0);
+        assert!(!p.operacion_armada().unwrap());
+        p.armar_operacion(&pool_puerta()[0], false).unwrap();
+        assert!(
+            p.operacion_armada().unwrap(),
+            "con el sello, capturar vuelve a ser la operación"
+        );
+    }
+
+    /// Una ronda entera con las corridas de la Unity. Las líneas de url-comprobada (y sus 6 ids) son de
+    /// PART-009 y el informe de PART-008: aquí se saltan y el resto se compara byte a byte.
+    #[test]
+    fn ronda_entera_deja_los_mismos_hechos_que_la_unity() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+        let c = Carpeta::nueva("ronda-entera");
+        let contador = Rc::new(Cell::new(0u64));
+        let n = contador.clone();
+        let mut p = Puerta::new(
+            c.0.clone(),
+            Box::new(move || {
+                n.set(n.get() + 1);
+                format!("00000000-0000-4000-8000-{:012}", n.get())
+            }),
+            Box::new(|| UNIX_EPOCH + Duration::from_secs(1_791_288_000)),
+            crate::operacion::CONOCIDOS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            RolesElegidos::new("deepseek", "glm", "qwen", "deepseek"),
+            pool_puerta(),
+        );
+        p.desfase_local = |_| -3 * 3600;
+        let lotes = json_de("LotesOperacion");
+        let mut pasos = vec![p.paso_siguiente().unwrap().accion];
+        macro_rules! paso {
+            () => {
+                pasos.push(p.paso_siguiente().unwrap().accion)
+            };
+        }
+        p.abrir_ronda(pregunta_operacion()).unwrap();
+        paso!();
+        p.registrar_capturas(&lote(&lotes, "investigacion"), &confirmada)
+            .unwrap();
+        paso!();
+        let mut archivo_kimi = None;
+        for op in pool_puerta() {
+            let o = p.armar_operacion(&op, op == "kimi").unwrap();
+            p.operacion_pegada(&o);
+            if op == "kimi" {
+                archivo_kimi = o.nombre_archivo.clone();
+            }
+        }
+        paso!();
+        let estado = |p: &mut Puerta, id, g, f| p.estado_de_panel(id, g, f).unwrap();
+        assert_eq!(estado(&mut p, "chatgpt", None, None), "pegado-falta-enviar");
+        assert_eq!(estado(&mut p, "chatgpt", Some(true), None), "respondiendo");
+        assert_eq!(
+            estado(&mut p, "chatgpt", Some(false), Some("deducido")),
+            "parece-terminado-deducido"
+        );
+        p.registrar_capturas(&lote(&lotes, "operadores1"), &confirmada)
+            .unwrap();
+        paso!();
+        assert_eq!(
+            estado(&mut p, "chatgpt", Some(false), Some("observado")),
+            "capturado"
+        );
+        assert_eq!(
+            estado(&mut p, "claude", Some(false), Some("observado")),
+            "parece-terminado-observado"
+        );
+        p.registrar_capturas(&lote(&lotes, "operadores2"), &confirmada)
+            .unwrap();
+        paso!();
+        let prompt = p.armar_prompt_integrador().unwrap();
+        p.integrador_pegado(prompt);
+        paso!();
+        p.registrar_capturas(&lote(&lotes, "integradorCorto"), &confirmada)
+            .unwrap();
+        paso!();
+        let recaptura = p
+            .recapturar(
+                "integrador",
+                &lectura(registro::pruebas::campo(&lotes, "integradorCompleto")),
+            )
+            .unwrap();
+        let prompt = p.armar_prompt_verificador().unwrap();
+        p.verificador_pegado(prompt);
+        paso!();
+        p.registrar_capturas(&lote(&lotes, "verificador"), &confirmada)
+            .unwrap();
+        paso!();
+        let redactor = p.armar_redactor().unwrap();
+        p.redactor_pegado(&redactor);
+        paso!();
+        p.registrar_capturas(
+            &[lectura(&json_de("LecturaRedactorOperacion"))],
+            &confirmada,
+        )
+        .unwrap();
+        paso!();
+        let primera = Texto::from(p.ronda_actual().unwrap());
+        assert_eq!(
+            pasos,
+            [
+                "pegar-pregunta",
+                "capturar",
+                "pegar-operacion",
+                "capturar",
+                "capturar",
+                "pegar-integrador",
+                "capturar",
+                "pegar-verificacion",
+                "capturar",
+                "pegar-redactor",
+                "capturar",
+                "armar-informe",
+            ]
+        );
+        // Los ids que gasta ComprobarUrls en la Unity (PART-009).
+        contador.set(contador.get() + 6);
+        p.ronda_nueva_con_respuestas_copiadas().unwrap();
+        p.registrar_capturas(&lote(&lotes, "kimiNueva"), &confirmada)
+            .unwrap();
+        let o = p.armar_operacion("chatgpt", false).unwrap();
+        p.operacion_pegada(&o);
+        p.reutilizar_operacion("kimi").unwrap();
+        p.reutilizar_operacion("chatgpt").unwrap();
+
+        let todas = lineas_corrida();
+        let sin_urls: Vec<&String> = todas
+            .iter()
+            .filter(|l| !l.starts_with(r#"{"tipo":"url-comprobada""#))
+            .collect();
+        assert_eq!(todas.len() - sin_urls.len(), 6);
+        let escritas = lineas_de(&c.0, &p);
+        assert_eq!(escritas.len(), sin_urls.len());
+        for (i, (a, b)) in escritas.iter().zip(&sin_urls).enumerate() {
+            assert_eq!(a, *b, "línea {i}");
+        }
+        assert_eq!(
+            archivo_kimi.as_deref(),
+            Some(registro::pruebas::str_de(&crate::json::vector(
+                "ArchivoKimi"
+            )))
+        );
+        assert_eq!(
+            recaptura,
+            (
+                true,
+                registro::pruebas::str_de(&crate::json::vector("MensajeRecaptura")).to_string()
+            )
+        );
+        let hechos = hechos_de(&c.0, &p);
+        assert_eq!(
+            de_tipo(&hechos, "sello")
+                .filter(|h| h.texto("rondaId") == Some(&primera))
+                .count(),
+            7
+        );
+        assert_eq!(de_tipo(&hechos, "informe-integrador").count(), 2);
+        assert_eq!(
+            dominio::ultimo_informe_integrador(&hechos, &primera).and_then(|h| s(h, "titulo")),
+            Some("La dosis")
+        );
+    }
+
+    // T22: un operador que ya operó y un rol cuya etapa pasó están capturados; el rol de la etapa sigue su estado.
+    #[test]
+    fn ronda_en_las_etapas_de_los_roles_lo_ya_capturado_sigue_capturado() {
+        let c = Carpeta::nueva("roles-capturados");
+        let (mut p, lotes) = ronda_hasta_la_integracion(&c.0);
+        let estado = |p: &mut Puerta, id, g, f| p.estado_de_panel(id, g, f).unwrap();
+        assert_eq!(p.paso_siguiente().unwrap().etapa, "integracion");
+        assert_eq!(estado(&mut p, "chatgpt", None, None), "capturado");
+        assert_eq!(estado(&mut p, "deepseek", None, None), "por-pegar");
+        assert_eq!(estado(&mut p, "glm", None, None), "por-pegar");
+
+        let prompt = p.armar_prompt_integrador().unwrap();
+        p.integrador_pegado(prompt);
+        assert_eq!(
+            estado(&mut p, "deepseek", Some(false), Some("observado")),
+            "parece-terminado-observado"
+        );
+        p.registrar_capturas(
+            &[lectura(registro::pruebas::campo(
+                &lotes,
+                "integradorCompleto",
+            ))],
+            &confirmada,
+        )
+        .unwrap();
+        assert_eq!(p.paso_siguiente().unwrap().etapa, "verificacion");
+        assert_eq!(estado(&mut p, "chatgpt", None, None), "capturado");
+        assert_eq!(estado(&mut p, "glm", None, None), "por-pegar");
+        assert_eq!(estado(&mut p, "deepseek", None, None), "capturado");
+
+        let prompt = p.armar_prompt_verificador().unwrap();
+        p.verificador_pegado(prompt);
+        p.registrar_capturas(&lote(&lotes, "verificador"), &confirmada)
+            .unwrap();
+        assert_eq!(p.paso_siguiente().unwrap().etapa, "redaccion");
+        assert_eq!(estado(&mut p, "glm", None, None), "capturado");
+        assert_eq!(
+            estado(&mut p, "deepseek", None, None),
+            "por-pegar",
+            "el redactor es el integrador: su etapa vuelve a empezar"
+        );
+
+        let redactor = p.armar_redactor().unwrap();
+        p.redactor_pegado(&redactor);
+        p.registrar_capturas(
+            &[lectura(&json_de("LecturaRedactorOperacion"))],
+            &confirmada,
+        )
+        .unwrap();
+        assert_eq!(p.paso_siguiente().unwrap().etapa, "informe");
+        assert_eq!(estado(&mut p, "deepseek", None, None), "capturado");
+        assert_eq!(estado(&mut p, "chatgpt", None, None), "capturado");
+    }
+
+    // T22: una recaptura que falla o queda bajo el umbral no reemplaza al informe bueno.
+    #[test]
+    fn ronda_una_recaptura_fallida_queda_como_error_y_no_reemplaza() {
+        let c = Carpeta::nueva("recaptura-fallida");
+        let (mut p, lotes) = ronda_hasta_la_integracion(&c.0);
+        let prompt = p.armar_prompt_integrador().unwrap();
+        p.integrador_pegado(prompt);
+        p.registrar_capturas(
+            &[lectura(registro::pruebas::campo(
+                &lotes,
+                "integradorCompleto",
+            ))],
+            &confirmada,
+        )
+        .unwrap();
+        let deepseek = |text: &str| Lectura {
+            id: "deepseek".into(),
+            text: text.into(),
+            ..Lectura::default()
+        };
+        let fallida = p
+            .recapturar(
+                "integrador",
+                &deepseek("").con_error("el panel no está abierto"),
+            )
+            .unwrap();
+        let corta = p.recapturar("integrador", &deepseek("corto")).unwrap();
+        let hechos = hechos_de(&c.0, &p);
+        assert_eq!(
+            fallida,
+            (
+                false,
+                "DeepSeek: el integrador no se recapturó (el panel no está abierto)".into()
+            )
+        );
+        assert!(!corta.0);
+        assert_eq!(de_tipo(&hechos, "informe-integrador").count(), 1);
+        let ronda = Texto::from(p.ronda_actual().unwrap());
+        assert_eq!(
+            dominio::ultimo_informe_integrador(&hechos, &ronda).and_then(|h| s(h, "titulo")),
+            Some("La dosis")
+        );
+        let errores: Vec<Option<&str>> = de_tipo(&hechos, "error-captura")
+            .filter(|h| s(h, "tipoCapturaIntentado") == Some("informe-integrador"))
+            .map(|h| s(h, "proveedorId"))
+            .collect();
+        assert_eq!(errores, [Some("deepseek"), Some("deepseek")]);
+        assert!(
+            p.recapturar("redactor", &deepseek("x")).is_err(),
+            "otro rol no se recaptura"
+        );
+    }
+
+    fn registrar_intentos9(p: &mut Puerta) {
+        let intentos: Vec<(String, bool, Option<String>)> =
+            registro::pruebas::lista(&json_de("Intentos9"))
+                .iter()
+                .map(|i| {
+                    (
+                        registro::pruebas::str_de(registro::pruebas::campo(i, "id")).to_string(),
+                        opt(i, "ok") == Some(&Valor::Bool(true)),
+                        opt(i, "error").map(|e| registro::pruebas::str_de(e).to_string()),
+                    )
+                })
+                .collect();
+        let intentos: Vec<(&str, bool, Option<&str>)> = intentos
+            .iter()
+            .map(|(a, b, e)| (a.as_str(), *b, e.as_deref()))
+            .collect();
+        p.registrar_intentos(&intentos).unwrap();
+    }
+
+    fn contexto9(id: &str) -> (Option<String>, Option<String>) {
+        let c = json_de("Contexto9");
+        let de = opt(&c, id).unwrap();
+        let k = |k| opt(de, k).map(|v| registro::pruebas::str_de(v).to_string());
+        (k("continuidad"), k("panel"))
+    }
+
+    fn lecturas9() -> Vec<Lectura> {
+        registro::pruebas::lista(&json_de("Lecturas9"))
+            .iter()
+            .map(lectura)
+            .collect()
+    }
+
+    // Una respuesta guardada con error o un envío fallido es un panel con problema, no uno capturado.
+    #[test]
+    fn ronda_el_estado_de_cada_panel_sale_del_registro() {
+        let c = Carpeta::nueva("estado-panel");
+        let mut p = nueva_puerta(&c.0);
+        p.abrir_ronda("¿Pregunta de prueba?").unwrap();
+        let estado = |p: &mut Puerta, id, g, f| p.estado_de_panel(id, g, f).unwrap();
+        assert_eq!(estado(&mut p, "chatgpt", None, None), "por-pegar");
+        registrar_intentos9(&mut p);
+        assert_eq!(estado(&mut p, "chatgpt", None, None), "pegado-falta-enviar");
+        assert_eq!(estado(&mut p, "grok", None, None), "con-problema");
+        let (dos, resto): (Vec<Lectura>, Vec<Lectura>) = lecturas9()
+            .into_iter()
+            .partition(|l| l.id == "chatgpt" || l.id == "claude");
+        p.registrar_capturas(&dos, &contexto9).unwrap();
+        let obs = Some("observado");
+        assert_eq!(estado(&mut p, "chatgpt", Some(false), obs), "capturado");
+        assert_eq!(estado(&mut p, "claude", Some(false), obs), "con-problema");
+        // Todos los investigadores, no casi todos: con claude fallido la investigación no se cierra.
+        p.registrar_capturas(&resto, &contexto9).unwrap();
+        assert_eq!(p.paso_siguiente().unwrap().etapa, "investigacion");
+        assert_eq!(estado(&mut p, "chatgpt", Some(false), obs), "capturado");
+        assert_eq!(estado(&mut p, "claude", Some(false), obs), "con-problema");
+    }
+
+    fn x400(id: &str) -> Lectura {
+        Lectura {
+            id: id.into(),
+            text: "x".repeat(400).into(),
+            ..Lectura::default()
+        }
+    }
+
+    // T21: con la investigación completa el paso ya es la operación aunque no haya sello: el panel está por pegar.
+    #[test]
+    fn ronda_el_estado_del_panel_sigue_al_paso_cuando_empieza_la_operacion() {
+        let c = Carpeta::nueva("panel-sigue-paso");
+        let mut p = nueva_puerta(&c.0);
+        p.abrir_ronda("¿Pregunta de prueba?").unwrap();
+        let lecturas: Vec<Lectura> = pool_puerta().iter().map(|id| x400(id)).collect();
+        p.registrar_capturas(&lecturas, &indeterminada).unwrap();
+        assert_eq!(p.paso_siguiente().unwrap().etapa, "operacion");
+        let obs = Some("observado");
+        assert_eq!(
+            p.estado_de_panel("chatgpt", Some(false), obs).unwrap(),
+            "por-pegar"
+        );
+        let o = p.armar_operacion("chatgpt", false).unwrap();
+        // ESC-013: armada no es pegada; solo la que la interfaz verificó en el panel se marca.
+        assert_eq!(
+            p.estado_de_panel("chatgpt", Some(false), obs).unwrap(),
+            "por-pegar"
+        );
+        p.operacion_pegada(&o);
+        assert_eq!(
+            p.estado_de_panel("chatgpt", Some(false), obs).unwrap(),
+            "parece-terminado-observado"
+        );
+    }
+
+    // Caso de falla de PART-007: sin las respuestas del pool la operación se niega, no escribe y el paso sigue en capturar.
+    #[test]
+    fn ronda_sin_las_respuestas_del_pool_la_operacion_se_niega() {
+        let c = Carpeta::nueva("sin-pool");
+        let mut p = nueva_puerta(&c.0);
+        p.abrir_ronda("¿Pregunta?").unwrap();
+        p.registrar_capturas(&[x400("chatgpt")], &confirmada)
+            .unwrap();
+        let antes = lineas_de(&c.0, &p);
+        let e = p.armar_operacion("chatgpt", false).unwrap_err().to_string();
+        assert!(
+            e.starts_with("faltan respuestas capturadas en esta ronda: gemini, claude"),
+            "{e}"
+        );
+        assert_eq!(lineas_de(&c.0, &p), antes, "no se escribió nada");
+        assert_eq!(p.paso_siguiente().unwrap().accion, "capturar");
+    }
+
+    #[test]
+    fn ronda_el_umbral_de_lectura_es_el_de_la_unity() {
+        assert_eq!(UMBRAL_LECTURA_MINIMO, 20);
+    }
+
+    // La corrida simulada: nueve lecturas dejan los mismos hechos, byte a byte, que la Unity.
+    #[test]
+    fn ronda_la_corrida_de_nueve_lecturas_deja_los_mismos_hechos_que_la_unity() {
+        let c = Carpeta::nueva("corrida-nueve");
+        let mut p = nueva_puerta(&c.0);
+        p.abrir_ronda("¿Pregunta de prueba?").unwrap();
+        registrar_intentos9(&mut p);
+        let (etapa, aviso) = p.registrar_capturas(&lecturas9(), &contexto9).unwrap();
+        p.declarar_pregunta("Pregunta declarada de verdad").unwrap();
+        let esperadas = strs_del_vector("CorridaLineas");
+        let escritas = lineas_de(&c.0, &p);
+        assert_eq!(escritas.len(), esperadas.len());
+        for (i, (a, b)) in escritas.iter().zip(&esperadas).enumerate() {
+            assert_eq!(a, b, "línea {i}");
+        }
+        let vector = |n| registro::pruebas::str_de(&crate::json::vector(n)).to_string();
+        assert_eq!(etapa, vector("CorridaEtapa"));
+        assert_eq!(aviso, vector("CorridaAviso"));
+        let hechos = hechos_de(&c.0, &p);
+        let mut conteo = std::collections::BTreeMap::new();
+        for h in &hechos {
+            *conteo.entry(h.tipo().to_string()).or_insert(0) += 1;
+        }
+        let esperado: std::collections::BTreeMap<String, i32> = [
+            ("conversacion", 1),
+            ("ronda", 1),
+            ("condicion-proveedores-cargados", 1),
+            ("intento", 9),
+            ("respuesta", 9),
+            ("cita", 2),
+            ("error-captura", 2),
+            ("pregunta-declarada", 1),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
+        assert_eq!(conteo, esperado);
+    }
+
+    // Capturar sin haber enviado: se guarda en una ronda con el marcador y la pregunta declarada pasa a ser la efectiva.
+    #[test]
+    fn ronda_sin_abrir_la_captura_abre_una_con_el_marcador_y_la_pregunta_se_declara() {
+        let c = Carpeta::nueva("sin-ronda");
+        let mut p = nueva_puerta(&c.0);
+        p.registrar_capturas(&[x400("chatgpt")], &indeterminada)
+            .unwrap();
+        let hechos = hechos_de(&c.0, &p);
+        let rondas: Vec<&Hecho> = de_tipo(&hechos, "ronda").collect();
+        assert_eq!(rondas.len(), 1);
+        assert_eq!(s(rondas[0], "prompt"), Some(PROMPT_SIN_RONDA));
+        assert_eq!(
+            dominio::pregunta_efectiva_de_ronda(&hechos, rondas[0]),
+            None
+        );
+
+        p.declarar_pregunta("La pregunta real").unwrap();
+        let hechos = hechos_de(&c.0, &p);
+        let ronda = de_tipo(&hechos, "ronda").next().unwrap();
+        assert_eq!(
+            dominio::pregunta_efectiva_de_ronda(&hechos, ronda).and_then(Texto::como_str),
+            Some("La pregunta real")
+        );
+    }
+
+    // REG-016: abandonar vuelve a la Pregunta y olvida lo pegado; la ronda nueva no hereda prompts.
+    #[test]
+    fn ronda_abandonada_olvida_los_prompts_pegados() {
+        let c = Carpeta::nueva("abandonar-prompts");
+        let (mut p, _) = ronda_hasta_la_integracion(&c.0);
+        let prompt = p.armar_prompt_integrador().unwrap();
+        p.integrador_pegado(prompt);
+        assert_eq!(p.paso_siguiente().unwrap().accion, "capturar");
+        p.abandonar_ronda();
+        assert_eq!(p.paso_siguiente().unwrap().accion, "pegar-pregunta");
+        assert!(p.prompt_operador.is_empty());
+        assert_eq!(
+            (
+                &p.prompt_integrador,
+                &p.prompt_verificador,
+                &p.prompt_redactor,
+                &p.marcas_redactor,
+                &p.sello_verificaciones
+            ),
+            (&None, &None, &None, &None, &None)
+        );
+    }
+
+    // RON-015: el nombre visible de los diez conocidos; un id sin entrada sale con la inicial en mayúscula.
+    #[test]
+    fn ronda_el_nombre_visible_de_los_diez_conocidos() {
+        let nombres: Vec<String> = crate::operacion::CONOCIDOS
+            .iter()
+            .map(|id| dominio::nombre_proveedor(id))
+            .collect();
+        assert_eq!(
+            nombres,
+            [
+                "ChatGPT",
+                "Gemini",
+                "Claude",
+                "Grok",
+                "Mistral",
+                "GLM",
+                "Kimi",
+                "Qwen",
+                "DeepSeek",
+                "Perplexity"
+            ]
+        );
+    }
+
+    /// La ronda hasta la redacción: integrador y verificadores capturados, el redactor sin pegar.
+    fn ronda_hasta_la_redaccion(c: &Path) -> Puerta {
+        let (mut p, lotes) = ronda_hasta_la_integracion(c);
+        let prompt = p.armar_prompt_integrador().unwrap();
+        p.integrador_pegado(prompt);
+        p.registrar_capturas(
+            &[lectura(registro::pruebas::campo(
+                &lotes,
+                "integradorCompleto",
+            ))],
+            &confirmada,
+        )
+        .unwrap();
+        let prompt = p.armar_prompt_verificador().unwrap();
+        p.verificador_pegado(prompt);
+        p.registrar_capturas(&lote(&lotes, "verificador"), &confirmada)
+            .unwrap();
+        p
+    }
+
+    /// La app reabierta: otra Puerta sobre el mismo registro, sin nada pegado en este proceso.
+    fn reabierta(c: &Path) -> Puerta {
+        let mut q = puerta_con_ids_desde(c, 1000);
+        q.restaurar_ronda_activa();
+        q
+    }
+
+    // RED-005 y ARR-003: reabierta la app, la ronda vuelve con su etapa y el redactor usa las marcas,
+    // el prompt y el sello de la redacción anterior; sin redacción anterior quedan vacíos.
+    #[test]
+    fn ronda_reabierta_retoma_su_etapa_y_el_redactor_usa_las_marcas_anteriores() {
+        let redactor = || lectura(&json_de("LecturaRedactorOperacion"));
+        let campos = |h: &Hecho| {
+            [
+                "marcaPrimera",
+                "marcaUltima",
+                "promptCompleto",
+                "selloVerificaciones",
+            ]
+            .map(|k| h.valor(k).clone())
+        };
+
+        let c = Carpeta::nueva("reabierta-con-marcas");
+        let mut p = ronda_hasta_la_redaccion(&c.0);
+        let archivo = p.armar_redactor().unwrap();
+        p.redactor_pegado(&archivo);
+        p.registrar_capturas(&[redactor()], &confirmada).unwrap();
+        let mut q = reabierta(&c.0);
+        assert_eq!(q.ronda_actual(), p.ronda_actual());
+        let paso = q.paso_siguiente().unwrap();
+        assert_eq!((paso.etapa, paso.accion), ("informe", "armar-informe"));
+        q.registrar_capturas(&[redactor()], &confirmada).unwrap();
+        let hechos = hechos_de(&c.0, &q);
+        let r: Vec<&Hecho> = de_tipo(&hechos, "respuesta-redactor").collect();
+        assert_eq!(r.len(), 2);
+        assert_eq!(campos(r[1]), campos(r[0]));
+        assert!(s(r[0], "marcaUltima").is_some_and(|m| !m.is_empty()));
+
+        let c = Carpeta::nueva("reabierta-sin-marcas");
+        drop(ronda_hasta_la_redaccion(&c.0));
+        let mut q = reabierta(&c.0);
+        let paso = q.paso_siguiente().unwrap();
+        assert_eq!((paso.etapa, paso.accion), ("redaccion", "pegar-redactor"));
+        q.registrar_capturas(&[redactor()], &confirmada).unwrap();
+        let hechos = hechos_de(&c.0, &q);
+        let r = de_tipo(&hechos, "respuesta-redactor").next().unwrap();
+        assert_eq!(
+            campos(r),
+            [
+                Valor::Nulo,
+                Valor::Nulo,
+                Valor::Texto(PROMPT_NO_DISPONIBLE.into()),
+                Valor::Nulo
+            ]
+        );
+    }
+
+    // RON-016: una pregunta declarada en blanco no se escribe; un surrogate suelto no es blanco.
+    #[test]
+    fn ronda_la_pregunta_declarada_en_blanco_no_se_escribe() {
+        let c = Carpeta::nueva("declarar-blanco");
+        let mut p = nueva_puerta(&c.0);
+        p.abrir_ronda("¿Pregunta?").unwrap();
+        let antes = lineas_de(&c.0, &p);
+        for blanco in ["", "  \n\t\u{3000}"] {
+            assert_eq!(
+                crate::ronda::declarar(&mut p, &blanco.into()).unwrap(),
+                Err(crate::ronda::DECLARADA_VACIA)
+            );
+        }
+        assert_eq!(lineas_de(&c.0, &p), antes, "no se escribió nada");
+        let suelto = Texto::desde_utf16(&[0x20, 0xD800]);
+        assert_eq!(
+            crate::ronda::declarar(&mut p, &suelto).unwrap(),
+            Ok(crate::ronda::DECLARADA)
+        );
+        let hechos = hechos_de(&c.0, &p);
+        let declarada = de_tipo(&hechos, "pregunta-declarada").next().unwrap();
+        assert_eq!(declarada.texto("texto"), Some(&suelto));
+    }
+
+    #[test]
+    fn ronda_declarar_sin_ronda_abierta_se_niega() {
+        let c = Carpeta::nueva("declarar-sin-ronda");
+        assert!(nueva_puerta(&c.0).declarar_pregunta("x").is_err());
+    }
+
+    #[test]
+    fn ronda_el_aviso_de_prompts_es_el_de_la_unity() {
+        use crate::registro::pruebas::{campo, lista, str_de};
+        for caso in lista(&json_de("AvisosPrompts")) {
+            let textos: Vec<Option<Texto>> = lista(campo(caso, "textos"))
+                .iter()
+                .map(|t| match t {
+                    Valor::Texto(t) => Some(t.clone()),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(
+                aviso_prompts_de_captura(
+                    textos.iter().map(Option::as_ref),
+                    str_de(campo(caso, "etapa"))
+                ),
+                str_de(campo(caso, "aviso")),
+                "{textos:?}"
+            );
+        }
     }
 }

@@ -1,5 +1,6 @@
 //! Lo que se deriva de los hechos del registro, sin guardarlo nunca como campo (Dominio.cs de la Unity).
 
+use crate::json::Valor;
 use crate::registro::Hecho;
 use crate::texto::Texto;
 
@@ -229,15 +230,195 @@ pub fn etiquetas_validas_del_operador(
         .collect()
 }
 
+/// CAP-012 (Dominio.DerivarProcedencia): la procedencia de una lectura. Si el proveedor no dijo cómo
+/// terminó, el fin es INFERIDO: el valor por defecto es el conservador a propósito.
+#[allow(clippy::too_many_arguments)]
+pub fn derivar_procedencia(
+    model_label: Option<&Texto>,
+    completion_kind: Option<&str>,
+    quiescence_ms: Option<i64>,
+    generando: Option<bool>,
+    ahora: &str,
+    continuidad: Option<&str>,
+    metodo_escritura: Option<&str>,
+    panel: Option<&str>,
+) -> Valor {
+    let texto = |t: Option<&str>| t.map_or(Valor::Nulo, |t| Valor::Texto(t.into()));
+    let fin = if completion_kind == Some("element-gone") {
+        "observado"
+    } else {
+        "inferido"
+    };
+    Valor::Objeto(vec![
+        (
+            "modelLabel".into(),
+            model_label.map_or(Valor::Nulo, |t| Valor::Texto(t.clone())),
+        ),
+        (
+            "modelLabelLeidaEn".into(),
+            texto(model_label.map(|_| ahora)),
+        ),
+        ("finDe".into(), Valor::Texto(fin.into())),
+        (
+            "quiescenceMs".into(),
+            quiescence_ms.map_or(Valor::Nulo, Valor::Entero),
+        ),
+        (
+            "generandoAlLeer".into(),
+            generando.map_or(Valor::Nulo, Valor::Bool),
+        ),
+        ("continuidad".into(), texto(continuidad)),
+        ("metodoEscritura".into(), texto(metodo_escritura)),
+        ("panel".into(), texto(panel)),
+    ])
+}
+
+/// Qué se escribe como qué en un lote de lecturas (Dominio.ClasificacionLecturas).
+#[derive(Debug, PartialEq)]
+pub struct ClasificacionLecturas<T> {
+    pub operacion: Vec<T>,
+    pub integrador: Option<T>,
+    /// Una por verificador, en el orden de los ids; None si ese panel no vino en el lote.
+    pub verificadores: Vec<Option<T>>,
+    pub redactor: Option<T>,
+    pub como_respuesta: Vec<T>,
+}
+
+/// CAP-006 (Dominio.ClasificarLecturasPorEtapa): según la etapa, cada lectura va como respuesta,
+/// salida de operador, informe del integrador, salida de verificador o respuesta del redactor. En
+/// operación, un rol que no opera sigue siendo un investigador más.
+pub fn clasificar_lecturas_por_etapa<'a, T>(
+    lecturas: &'a [T],
+    id_de: impl Fn(&T) -> &str,
+    etapa: &str,
+    pool: &[&str],
+    integrador: &str,
+    verificadores: &[&str],
+    redactor: &str,
+) -> ClasificacionLecturas<&'a T> {
+    let buscar = |id: &str| lecturas.iter().find(|l| id_de(l) == id);
+    let mut c = ClasificacionLecturas {
+        operacion: Vec::new(),
+        integrador: None,
+        verificadores: Vec::new(),
+        redactor: None,
+        como_respuesta: Vec::new(),
+    };
+    match etapa {
+        "redaccion" => c.redactor = buscar(redactor),
+        "investigacion" => c.como_respuesta.extend(lecturas),
+        "operacion" => {
+            (c.operacion, c.como_respuesta) =
+                lecturas.iter().partition(|l| pool.contains(&id_de(l)));
+        }
+        "verificacion" => c.verificadores = verificadores.iter().map(|v| buscar(v)).collect(),
+        _ => c.integrador = buscar(integrador),
+    }
+    c
+}
+
 #[cfg(test)]
 mod pruebas {
     use super::*;
-    use crate::json::{Valor, vector};
+    use crate::json::vector;
     use crate::registro::leer;
     use crate::registro::pruebas::{campo, lista, str_de};
 
     fn r() -> Texto {
         "R".into()
+    }
+
+    fn opcion(v: &Valor) -> Option<&str> {
+        match v {
+            Valor::Nulo => None,
+            v => Some(str_de(v)),
+        }
+    }
+
+    #[test]
+    fn ronda_las_lecturas_se_clasifican_por_etapa() {
+        let lecturas = ["chatgpt", "gemini", "deepseek", "glm", "kimi", "qwen"];
+        let pool7 = [
+            "chatgpt", "gemini", "claude", "grok", "mistral", "kimi", "qwen",
+        ];
+        let casos = vector("Clasificaciones");
+        assert_eq!(lista(&casos).len(), 5);
+        for caso in lista(&casos) {
+            let etapa = str_de(campo(caso, "etapa"));
+            let c = clasificar_lecturas_por_etapa(
+                &lecturas,
+                |x| x,
+                etapa,
+                &pool7,
+                "deepseek",
+                &["qwen", "grok", "glm"],
+                "kimi",
+            );
+            fn ids(v: &Valor) -> Vec<&str> {
+                lista(v).iter().map(str_de).collect()
+            }
+            fn de<'a>(v: Vec<&&'a str>) -> Vec<&'a str> {
+                v.into_iter().copied().collect()
+            }
+            assert_eq!(de(c.operacion), ids(campo(caso, "operacion")), "{etapa}");
+            assert_eq!(c.integrador.copied(), opcion(campo(caso, "integrador")));
+            assert_eq!(
+                c.verificadores
+                    .iter()
+                    .map(|v| v.copied())
+                    .collect::<Vec<_>>(),
+                lista(campo(caso, "verificadores"))
+                    .iter()
+                    .map(opcion)
+                    .collect::<Vec<_>>(),
+                "{etapa}"
+            );
+            assert_eq!(c.redactor.copied(), opcion(campo(caso, "redactor")));
+            assert_eq!(de(c.como_respuesta), ids(campo(caso, "comoRespuesta")));
+        }
+    }
+
+    #[test]
+    fn ronda_la_procedencia_distingue_fin_observado_de_inferido() {
+        let casos = vector("Procedencias");
+        assert_eq!(lista(&casos).len(), 3);
+        let busca = |o: &Valor, k: &str| match o {
+            Valor::Objeto(o) => o
+                .iter()
+                .find(|(n, _)| n.como_str() == Some(k))
+                .map_or(Valor::Nulo, |(_, v)| v.clone()),
+            _ => Valor::Nulo,
+        };
+        let s = |o: &Valor, k: &str| match busca(o, k) {
+            Valor::Texto(t) => Some(t.para_mostrar().into_owned()),
+            _ => None,
+        };
+        for caso in lista(&casos) {
+            let l = crate::json::leer(str_de(campo(caso, "lectura"))).unwrap();
+            let x = crate::json::leer(str_de(campo(caso, "contexto"))).unwrap();
+            let modelo = busca(&l, "modelLabel");
+            let p = derivar_procedencia(
+                match &modelo {
+                    Valor::Texto(t) => Some(t),
+                    _ => None,
+                },
+                s(&l, "completionKind").as_deref(),
+                match busca(&l, "quiescenceMs") {
+                    Valor::Entero(n) => Some(n),
+                    _ => None,
+                },
+                match busca(&l, "generating") {
+                    Valor::Bool(b) => Some(b),
+                    _ => None,
+                },
+                &s(&x, "ahora").unwrap(),
+                s(&x, "continuidad").as_deref(),
+                s(&x, "metodoEscritura").as_deref(),
+                s(&x, "panel").as_deref(),
+            );
+            let esperado = crate::json::leer(str_de(campo(caso, "esperado"))).unwrap();
+            assert_eq!(p, esperado);
+        }
     }
 
     #[test]

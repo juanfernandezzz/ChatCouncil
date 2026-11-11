@@ -55,6 +55,11 @@ impl Texto {
         u
     }
 
+    /// El largo en unidades UTF-16 (string.Length de la Unity), sin armar el vector.
+    pub(crate) fn largo_utf16(&self) -> usize {
+        self.puntos().map(|c| 1 + (c >= 0x10000) as usize).sum()
+    }
+
     fn unidades(&self) -> impl Iterator<Item = u16> + '_ {
         self.puntos().flat_map(|c| {
             let par = if c >= 0x10000 {

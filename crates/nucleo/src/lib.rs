@@ -10,6 +10,7 @@ pub mod parseos;
 pub mod prompts;
 pub mod puerta;
 pub mod registro;
+pub mod ronda;
 pub mod texto;
 
 #[cfg(test)]

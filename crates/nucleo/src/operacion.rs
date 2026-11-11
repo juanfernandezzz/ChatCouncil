@@ -541,8 +541,10 @@ pub fn evaluar_integridad(respuesta: &Texto, marcas: &[String]) -> Integridad {
     let b = respuesta.bytes();
     let faltantes: Vec<usize> = (0..marcas.len())
         .filter(|&i| {
-            !b.windows(marcas[i].len())
-                .any(|w| w == marcas[i].as_bytes())
+            // Una marca vacía está siempre, como Contains("") en la Unity; windows(0) entraría en pánico.
+            !(marcas[i].is_empty()
+                || b.windows(marcas[i].len())
+                    .any(|w| w == marcas[i].as_bytes()))
         })
         .collect();
     let estado = if faltantes.is_empty() {
@@ -1349,5 +1351,13 @@ mod pruebas {
         let pregunta = texto_de(campo(&lista(&v)[1], "pregunta"));
         let prompt = armar_prompt_operacion(pregunta, &respuestas_etiquetadas());
         assert!(prompt.para_mostrar().contains(&*pregunta.para_mostrar()));
+    }
+
+    #[test]
+    fn una_marca_vacia_cuenta_como_presente_como_contains_de_la_unity() {
+        // revisión PART-004 (F5): Cuerpos.cs usa respuesta.Contains(marca), que da true con "".
+        let i = evaluar_integridad(&Texto::from("abc"), &["".to_string()]);
+        assert_eq!(i.estado, "completo");
+        assert_eq!(i.presentes, 1);
     }
 }

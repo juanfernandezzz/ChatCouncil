@@ -7,6 +7,7 @@ pub mod json;
 mod nfd;
 pub mod operacion;
 pub mod parseos;
+pub mod prompts;
 pub mod puerta;
 pub mod registro;
 pub mod texto;

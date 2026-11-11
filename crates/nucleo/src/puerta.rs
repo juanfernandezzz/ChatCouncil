@@ -6,6 +6,7 @@ use crate::dominio;
 use crate::json::Valor;
 use crate::operacion::{self, EntradaSello, INTERVALO_MARCA, RespuestaParaOperar};
 use crate::parseos;
+use crate::prompts;
 use crate::registro::{self, Hecho, RegistroLeido};
 use crate::texto::Texto;
 use std::collections::HashMap;
@@ -82,6 +83,23 @@ pub struct Operacion {
     pub nombre_archivo: Option<String>,
     pub marcas: Vec<String>,
     /// El prompt tal como lo lee el operador, con el archivo adjunto incluido.
+    pub prompt_completo: Texto,
+}
+
+/// El material de la ronda para el redactor, en un archivo con marcas, y el prompt que se pega
+/// (Puerta.ArchivoRedactor).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArchivoRedactor {
+    pub prompt: Texto,
+    pub cuerpo_archivo: Texto,
+    pub nombre_archivo: String,
+    pub marca_primera: String,
+    pub marca_ultima: String,
+    /// D62: qué verificador es A y cuál B en este archivo: (etiqueta, verificadorId).
+    pub sello_verificaciones: Vec<(String, String)>,
+    /// Sin verificación capturada se arma igual y se avisa.
+    pub aviso: Option<String>,
+    /// Lo que se registra como promptCompleto de la respuesta del redactor.
     pub prompt_completo: Texto,
 }
 
@@ -188,6 +206,19 @@ fn texto_de(h: &Hecho, campo: &str) -> Option<Texto> {
 
 /// Registro, ronda, pregunta efectiva y última respuesta de cada proveedor del pool.
 type RondaPreparada = (Rc<RegistroLeido>, Hecho, Texto, HashMap<String, Hecho>);
+// El registro leído, la ronda, la pregunta efectiva y la tabla H## de la ronda.
+type DatosDeRol = (Rc<RegistroLeido>, Hecho, Texto, prompts::TablaHallazgos);
+
+/// InformeIntegradorVigente: el texto del último informe del integrador de la ronda.
+fn informe_vigente(leido: &RegistroLeido, ronda: &Hecho) -> io::Result<Texto> {
+    let id = ronda.texto("id").cloned().unwrap_or_default();
+    let h = dominio::ultimo_informe_integrador(&leido.hechos, &id)
+        .ok_or_else(|| falla("la ronda todavía no tiene un informe del integrador capturado"))?;
+    parseos::texto_del_informe_integrador(
+        &h.texto("informeCrudo").cloned().unwrap_or_default(),
+        h.texto("html"),
+    )
+}
 
 impl Puerta {
     /// `integrador` es el de los roles elegidos; `total_operadores`, el largo del pool de operadores.
@@ -539,41 +570,7 @@ impl Puerta {
     ) -> io::Result<(Texto, operacion::CuerposPorOperador)> {
         let (leido, ronda, pregunta, ultimas) = self.preparar_ronda(pool)?;
         let ronda_id = ronda.texto("id").cloned().unwrap_or_default();
-        // Sin semilla no hay barajado que reproducir, y simular uno inventaría un dato.
-        let Some(semilla) = ronda.texto("semilla") else {
-            return Err(falla(format!(
-                "ronda {} no tiene semilla persistida: no se puede armar un cuerpo anonimizado reproducible sobre una ronda sin semilla.",
-                ronda_id.para_mostrar()
-            )));
-        };
-        let mut urls_por: HashMap<&Texto, Vec<Texto>> = HashMap::new();
-        for c in leido.hechos.iter().filter(|h| h.tipo() == "cita") {
-            if let (Some(r), Some(u)) = (c.texto("respuestaId"), c.texto("url")) {
-                urls_por.entry(r).or_default().push(u.clone());
-            }
-        }
-        let para_operar: Vec<RespuestaParaOperar> = pool
-            .iter()
-            .map(|p| {
-                let r = &ultimas[*p];
-                let id = r.texto("id").cloned().unwrap_or_default();
-                RespuestaParaOperar {
-                    proveedor_id: p.to_string(),
-                    urls_citadas: urls_por.get(&id).cloned().unwrap_or_default(),
-                    reply_id: id.clone(),
-                    attempt_id: id,
-                    texto: r.texto("textoOriginal").cloned().unwrap_or_default(),
-                }
-            })
-            .collect();
-        let nuevo_id = &mut self.nuevo_id;
-        let resultado = operacion::armar_cuerpos_por_operador(
-            &para_operar,
-            pool,
-            operacion::hash_semilla(semilla),
-            &mut || nuevo_id(),
-        )
-        .map_err(falla)?;
+        let resultado = self.cuerpos_de_ronda(&leido, &ronda, &ultimas, pool)?;
         let existente: Vec<&Hecho> = leido
             .hechos
             .iter()
@@ -610,6 +607,56 @@ impl Puerta {
             self.escribir(&h)?;
         }
         Ok((pregunta, resultado))
+    }
+
+    /// ArmarCuerposDeRonda: los cuerpos de todos los operadores con la semilla persistida de la
+    /// ronda, sin escribir nada.
+    fn cuerpos_de_ronda(
+        &mut self,
+        leido: &RegistroLeido,
+        ronda: &Hecho,
+        ultimas: &HashMap<String, Hecho>,
+        pool: &[&str],
+    ) -> io::Result<operacion::CuerposPorOperador> {
+        // Sin semilla no hay barajado que reproducir, y simular uno inventaría un dato.
+        let Some(semilla) = ronda.texto("semilla") else {
+            return Err(falla(format!(
+                "ronda {} no tiene semilla persistida: no se puede armar un cuerpo anonimizado reproducible sobre una ronda sin semilla.",
+                ronda
+                    .texto("id")
+                    .cloned()
+                    .unwrap_or_default()
+                    .para_mostrar()
+            )));
+        };
+        let mut urls_por: HashMap<&Texto, Vec<Texto>> = HashMap::new();
+        for c in leido.hechos.iter().filter(|h| h.tipo() == "cita") {
+            if let (Some(r), Some(u)) = (c.texto("respuestaId"), c.texto("url")) {
+                urls_por.entry(r).or_default().push(u.clone());
+            }
+        }
+        let para_operar: Vec<RespuestaParaOperar> = pool
+            .iter()
+            .map(|p| {
+                let r = &ultimas[*p];
+                let id = r.texto("id").cloned().unwrap_or_default();
+                RespuestaParaOperar {
+                    proveedor_id: p.to_string(),
+                    urls_citadas: urls_por.get(&id).cloned().unwrap_or_default(),
+                    reply_id: id.clone(),
+                    attempt_id: id,
+                    texto: r.texto("textoOriginal").cloned().unwrap_or_default(),
+                }
+            })
+            .collect();
+        let nuevo_id = &mut self.nuevo_id;
+        operacion::armar_cuerpos_por_operador(
+            &para_operar,
+            pool,
+            operacion::hash_semilla(semilla),
+            &mut || nuevo_id(),
+        )
+        .map_err(falla)
     }
 
     // "AAAA-MM-DD-HHMM" con la hora local, para los nombres de archivo que ve Juan.
@@ -692,6 +739,176 @@ impl Puerta {
             nombre_archivo: None,
             marcas,
             prompt_completo: completo,
+        })
+    }
+
+    /// TablaDeRonda (INT-001, INT-002): la tabla de hallazgos de la ronda tal como la ve el
+    /// integrador; el verificador y el redactor citan sus H##.
+    fn tabla_de_ronda(&mut self, pool: &[&str], rol: &str) -> io::Result<DatosDeRol> {
+        let (Some(_), Some(ronda_id)) = (&self.conversacion_actual, self.ronda_actual.clone())
+        else {
+            return Err(falla("no hay una ronda activa"));
+        };
+        let leido = self.leer_registro()?;
+        let id = Texto::from(ronda_id.as_str());
+        let ronda = leido
+            .hechos
+            .iter()
+            .find(|h| h.tipo() == "ronda" && h.texto("id") == Some(&id))
+            .ok_or_else(|| falla("no se encontró la ronda actual en el registro"))?
+            .clone();
+        let Some(semilla) = ronda.texto("semilla").map(operacion::hash_semilla) else {
+            return Err(falla("la ronda no tiene semilla persistida"));
+        };
+        let pregunta = dominio::pregunta_efectiva_de_ronda(&leido.hechos, &ronda)
+            .cloned()
+            .ok_or_else(|| {
+                falla(format!(
+                    "la ronda {ronda_id} no tiene pregunta registrada válida: declárala antes de pegar el {rol}"
+                ))
+            })?;
+        let cadena =
+            |t: Option<&Texto>| t.map(|t| t.para_mostrar().to_string()).unwrap_or_default();
+        let para_tabla: Vec<prompts::HallazgoParaTabla> =
+            dominio::salidas_vigentes_de_ronda(&leido.hechos, &id)
+                .iter()
+                .flat_map(|s| {
+                    s.hallazgos.iter().map(|h| prompts::HallazgoParaTabla {
+                        hallazgo_id_original: cadena(h.texto("id")),
+                        categoria: h.texto("categoria").cloned().unwrap_or_default(),
+                        eje: h.texto("eje").cloned(),
+                        etiquetas: match h.valor("etiquetas") {
+                            Valor::Lista(l) => l
+                                .iter()
+                                .filter_map(|v| match v {
+                                    Valor::Texto(t) => Some(t.clone()),
+                                    _ => None,
+                                })
+                                .collect(),
+                            _ => Vec::new(),
+                        },
+                        descripcion: h.texto("descripcion").cloned().unwrap_or_default(),
+                        operador_id_original: cadena(s.operador_id),
+                    })
+                })
+                .collect();
+        let tabla = prompts::armar_tabla_hallazgos(&para_tabla, pool, semilla).map_err(falla)?;
+        Ok((leido, ronda, pregunta, tabla))
+    }
+
+    /// INT-003: el prompt del integrador con la tabla de hallazgos de la ronda.
+    pub fn armar_prompt_integrador(&mut self, pool: &[&str]) -> io::Result<Texto> {
+        let (_, _, pregunta, tabla) = self.tabla_de_ronda(pool, "integrador")?;
+        Ok(prompts::armar_prompt_integrador(
+            &pregunta,
+            &tabla.para_prompt,
+        ))
+    }
+
+    /// VER-001, INT-006: la sección QUE CONVIENE RESCATAR del último informe del integrador, tal
+    /// cual, y solo los H## que esa sección cita, en orden de primera aparición. Un H## que no está
+    /// en la tabla no se inventa.
+    pub fn armar_prompt_verificador(&mut self, pool: &[&str]) -> io::Result<Texto> {
+        let (leido, ronda, pregunta, tabla) = self.tabla_de_ronda(pool, "verificador")?;
+        let crudo = informe_vigente(&leido, &ronda)?;
+        let Some(rescate) =
+            parseos::extraer_seccion_rescate(&parseos::extraer_titulo_del_informe(&crudo).1)
+        else {
+            let mut plano = Vec::new();
+            let mut previo_blanco = false;
+            for c in crudo.a_utf16() {
+                let blanco = char::from_u32(c as u32).is_some_and(registro::es_blanco);
+                if !blanco {
+                    plano.push(c);
+                } else if !previo_blanco {
+                    plano.push(b' ' as u16);
+                }
+                previo_blanco = blanco;
+            }
+            let inicio = parseos::trim(&plano);
+            return Err(falla(format!(
+                "el informe del integrador no tiene la seccion QUE CONVIENE RESCATAR. Se capturó (primeros 100 caracteres): \"{}\"",
+                Texto::desde_utf16(&inicio[..inicio.len().min(100)]).para_mostrar()
+            )));
+        };
+        let mut ids: Vec<String> = Vec::new();
+        for id in parseos::referencias_h(&rescate.a_utf16()) {
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+        let hallazgos: Vec<&prompts::HallazgoParaIntegrador> = ids
+            .iter()
+            .filter_map(|id| tabla.para_prompt.iter().find(|h| &h.id == id))
+            .collect();
+        Ok(prompts::armar_prompt_verificador(
+            &pregunta, &rescate, &hallazgos,
+        ))
+    }
+
+    /// RED-001 a RED-004: el archivo del redactor (informe, verificaciones anonimizadas, la tabla
+    /// H## y las respuestas con sus P#, con marcas) y su prompt. Sin verificación se arma igual y
+    /// se avisa. No escribe nada.
+    pub fn armar_redactor(
+        &mut self,
+        pool: &[&str],
+        verificadores: &[&str],
+    ) -> io::Result<ArchivoRedactor> {
+        let (leido, ronda, pregunta, tabla) = self.tabla_de_ronda(pool, "redactor")?;
+        let informe = informe_vigente(&leido, &ronda)?;
+        let ronda_id = ronda.texto("id").cloned().unwrap_or_default();
+        // D62 (revisada): las verificaciones vigentes, anonimizadas y barajadas con la semilla (A y B).
+        let salidas = dominio::verificaciones_vigentes(&leido.hechos, &ronda_id, verificadores)
+            .into_iter()
+            .map(|s| {
+                Ok((
+                    s.texto("verificadorId")
+                        .map(|t| t.para_mostrar().to_string())
+                        .unwrap_or_default(),
+                    parseos::texto_de_la_salida_verificador(
+                        &s.texto("salidaCruda").cloned().unwrap_or_default(),
+                        s.texto("html"),
+                    )?,
+                ))
+            })
+            .collect::<io::Result<Vec<_>>>()?;
+        let (verificaciones, sello) = operacion::anonimizar_verificaciones(
+            &salidas,
+            &ronda.texto("semilla").cloned().unwrap_or_default(),
+        );
+        let (leido, ronda, _, ultimas) = self.preparar_ronda(pool)?;
+        let respuestas = self
+            .cuerpos_de_ronda(&leido, &ronda, &ultimas, pool)?
+            .respuestas_todas;
+        let material = prompts::MaterialRedactor {
+            informe,
+            verificaciones,
+            tabla: prompts::tabla_de(&tabla.para_prompt),
+            respuestas,
+        };
+        let token = (self.nuevo_id)();
+        let (mut unidades, marcas) = operacion::marcas_intercaladas(
+            &prompts::armar_archivo_redactor(&material).a_utf16(),
+            &token,
+            INTERVALO_MARCA,
+        );
+        let marca_fin = format!("[[CC-MARCA-FIN-{token}]]");
+        unidades.extend(format!("\n{marca_fin}\n").encode_utf16());
+        let archivo = Texto::desde_utf16(&unidades);
+        let nombre = format!("redactor-{}.txt", self.sello_de_archivo());
+        let prompt = prompts::armar_prompt_redactor(&pregunta);
+        let cabecera = Texto::from(format!("\n\n=== ARCHIVO ADJUNTO: {nombre} ===\n"));
+        Ok(ArchivoRedactor {
+            prompt_completo: concatenar(&[&prompt, &cabecera, &archivo]),
+            prompt,
+            cuerpo_archivo: archivo,
+            nombre_archivo: nombre,
+            marca_primera: marcas.first().cloned().unwrap_or_else(|| marca_fin.clone()),
+            marca_ultima: marca_fin,
+            aviso: sello.is_empty().then(|| {
+                "No hay verificación capturada en esta ronda: el archivo lo dice y el redactor trabaja sin ella.".to_string()
+            }),
+            sello_verificaciones: sello,
         })
     }
 
@@ -1657,6 +1874,184 @@ mod pruebas {
         assert_eq!(prompts.len(), 2);
         assert_eq!(prompts[0].a_utf16()[0], 0xD800);
         assert_eq!(prompts[1], prompts[0]);
+    }
+
+    // ------------------------------------------------------------ roles (PART-006)
+
+    fn hecho_de_corrida(todas: &[String], i: usize) -> Hecho {
+        registro::leer(&format!("{}\n", todas[i])).hechos.remove(0)
+    }
+
+    fn ids_desde(p: &mut Puerta, primero: u64) {
+        let mut n = primero - 1;
+        p.nuevo_id = Box::new(move || {
+            n += 1;
+            format!("00000000-0000-4000-8000-{n:012}")
+        });
+    }
+
+    /// INT-003, VER-001 y RED-001 a RED-004 sobre la corrida de la Unity: cada prompt es el
+    /// promptCompleto que la Unity registró, byte a byte. Línea 49: informe sin rescate; 50: el
+    /// recapturado; 51 y 52: las verificaciones de glm y qwen; 53: la respuesta del redactor.
+    #[test]
+    fn prompts_los_de_los_roles_en_la_corrida_son_los_de_la_unity() {
+        let todas = lineas_corrida();
+        let pool = pool_puerta();
+        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
+        let prompt_de = |i: usize| {
+            hecho_de_corrida(&todas, i)
+                .texto("promptCompleto")
+                .cloned()
+                .unwrap()
+        };
+
+        let c = Carpeta::nueva("roles-integrador");
+        let mut p = puerta_en_corrida(&c.0, &todas[..49]);
+        assert_eq!(p.armar_prompt_integrador(&pool).unwrap(), prompt_de(49));
+
+        let c = Carpeta::nueva("roles-verificador");
+        let mut p = puerta_en_corrida(&c.0, &todas[..=50]);
+        let verificador = p.armar_prompt_verificador(&pool).unwrap();
+        assert_eq!(verificador, prompt_de(51));
+        assert_eq!(verificador, prompt_de(52));
+
+        let c = Carpeta::nueva("roles-redactor");
+        let mut p = puerta_en_corrida(&c.0, &todas[..=52]);
+        // Los ids de la Unity: siete del armado de cuerpos (111 a 117) y el token (118).
+        ids_desde(&mut p, 111);
+        let antes = lineas(&c.0, CONVERSACION_CORRIDA);
+        let r = p.armar_redactor(&pool, &["glm", "qwen"]).unwrap();
+        let respuesta = hecho_de_corrida(&todas, 53);
+        assert_eq!(r.prompt_completo, prompt_de(53));
+        let texto = |k: &str| respuesta.texto(k).and_then(Texto::como_str).unwrap();
+        assert_eq!(r.marca_primera, texto("marcaPrimera"));
+        assert_eq!(r.marca_ultima, texto("marcaUltima"));
+        let sello: Vec<(String, String)> =
+            crate::registro::pruebas::lista(respuesta.valor("selloVerificaciones"))
+                .iter()
+                .map(|s| {
+                    let campo = |k| {
+                        crate::registro::pruebas::str_de(crate::registro::pruebas::campo(s, k))
+                            .to_string()
+                    };
+                    (campo("etiqueta"), campo("verificadorId"))
+                })
+                .collect();
+        assert_eq!(r.sello_verificaciones, sello);
+        assert_eq!(
+            r.nombre_archivo,
+            crate::registro::pruebas::str_de(&crate::json::vector("ArchivoRedactor"))
+        );
+        assert_eq!(r.aviso, None);
+        assert_eq!(
+            lineas(&c.0, CONVERSACION_CORRIDA),
+            antes,
+            "armar los roles no escribe"
+        );
+    }
+
+    /// INT-002: sin ronda, sin semilla o sin pregunta válida, ningún rol se arma.
+    #[test]
+    fn prompts_los_roles_sin_ronda_semilla_o_pregunta_se_niegan_con_el_motivo_de_la_unity() {
+        let todas = lineas_corrida();
+        let pool = pool_puerta();
+        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
+        let errores = |p: &mut Puerta| {
+            [
+                p.armar_prompt_integrador(&pool).unwrap_err().to_string(),
+                p.armar_prompt_verificador(&pool).unwrap_err().to_string(),
+                p.armar_redactor(&pool, &["glm", "qwen"])
+                    .unwrap_err()
+                    .to_string(),
+            ]
+        };
+
+        let c = Carpeta::nueva("roles-sin-ronda");
+        assert_eq!(
+            errores(&mut nueva_puerta(&c.0)),
+            ["no hay una ronda activa"; 3]
+        );
+
+        let c = Carpeta::nueva("roles-sin-semilla");
+        let mut sin_semilla = todas[..=52].to_vec();
+        sin_semilla[1] = sin_semilla[1].replace(
+            "\"semilla\":\"00000000-0000-4000-8000-000000000002\"",
+            "\"semilla\":null",
+        );
+        assert_ne!(sin_semilla[1], todas[1]);
+        assert_eq!(
+            errores(&mut puerta_en_corrida(&c.0, &sin_semilla)),
+            ["la ronda no tiene semilla persistida"; 3]
+        );
+
+        let c = Carpeta::nueva("roles-sin-pregunta");
+        let mut sin_pregunta = todas[..=52].to_vec();
+        sin_pregunta[1] = sin_pregunta[1].replace(
+            "\"prompt\":\"¿Qué dice la evidencia sobre la dosis?\"",
+            "\"prompt\":\"\"",
+        );
+        assert_ne!(sin_pregunta[1], todas[1]);
+        assert_eq!(
+            errores(&mut puerta_en_corrida(&c.0, &sin_pregunta)),
+            ["integrador", "verificador", "redactor"].map(|rol| format!(
+                "la ronda {RONDA_CORRIDA} no tiene pregunta registrada válida: declárala antes de pegar el {rol}"
+            ))
+        );
+    }
+
+    /// INT-006: el verificador necesita un informe con la sección de rescate; sin ella, el error
+    /// muestra el comienzo de lo capturado.
+    #[test]
+    fn prompts_el_verificador_sin_informe_o_sin_rescate_se_niega() {
+        let todas = lineas_corrida();
+        let pool = pool_puerta();
+        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
+        let c = Carpeta::nueva("roles-sin-informe");
+        let mut p = puerta_en_corrida(&c.0, &todas[..49]);
+        assert_eq!(
+            p.armar_prompt_verificador(&pool).unwrap_err().to_string(),
+            "la ronda todavía no tiene un informe del integrador capturado"
+        );
+        assert_eq!(
+            p.armar_redactor(&pool, &["glm", "qwen"])
+                .unwrap_err()
+                .to_string(),
+            "la ronda todavía no tiene un informe del integrador capturado"
+        );
+        let c = Carpeta::nueva("roles-sin-rescate");
+        let mut p = puerta_en_corrida(&c.0, &todas[..=49]);
+        assert_eq!(
+            p.armar_prompt_verificador(&pool).unwrap_err().to_string(),
+            "el informe del integrador no tiene la seccion QUE CONVIENE RESCATAR. Se capturó (primeros 100 caracteres): \"TITULO: Informe a medias Texto incompleto [H1].\""
+        );
+    }
+
+    /// RED-003: sin verificación capturada el archivo se arma igual, lo dice, y se avisa.
+    #[test]
+    fn prompts_el_redactor_sin_verificacion_se_arma_y_avisa() {
+        let todas = lineas_corrida();
+        let pool = pool_puerta();
+        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
+        let c = Carpeta::nueva("roles-sin-verificacion");
+        let mut p = puerta_en_corrida(&c.0, &todas[..=50]);
+        let r = p.armar_redactor(&pool, &["glm", "qwen"]).unwrap();
+        assert!(r.sello_verificaciones.is_empty());
+        assert_eq!(
+            r.aviso.as_deref(),
+            Some(
+                "No hay verificación capturada en esta ronda: el archivo lo dice y el redactor trabaja sin ella."
+            )
+        );
+        assert!(
+            r.cuerpo_archivo
+                .para_mostrar()
+                .contains("===== VERIFICACION =====\n\n(sin verificacion capturada en esta ronda)")
+        );
+        assert!(
+            r.cuerpo_archivo
+                .para_mostrar()
+                .ends_with(&format!("\n{}\n", r.marca_ultima))
+        );
     }
 
     #[test]

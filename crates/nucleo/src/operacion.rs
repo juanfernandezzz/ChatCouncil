@@ -106,7 +106,7 @@ fn partir<'a>(t: &'a [u16], separador: &[u16]) -> Vec<&'a [u16]> {
 }
 
 /// Js.ToLowerCase: U+0130 da "i" + U+0307 y el signo Kelvin da "k"; lo demás, unidad por unidad.
-fn minusculas(t: &[u16]) -> Vec<u16> {
+pub(crate) fn minusculas(t: &[u16]) -> Vec<u16> {
     let mut s = Vec::with_capacity(t.len());
     for &c in t {
         match c {
@@ -728,7 +728,7 @@ pub fn armar_cuerpos_por_operador(
 // ------------------------------------------------------------------ prompt de operación
 
 // Partiendo y juntando, en una sola pasada: lo insertado no se vuelve a recorrer.
-fn sustituir(texto: &[u16], pares: &[(&str, &[u16])]) -> Vec<u16> {
+pub(crate) fn sustituir(texto: &[u16], pares: &[(&str, &[u16])]) -> Vec<u16> {
     let Some(((marcador, valor), resto)) = pares.split_first() else {
         return texto.to_vec();
     };
@@ -783,6 +783,147 @@ pub fn armar_prompt_operacion_con_archivo(
     (
         prompt_con_archivo(pregunta),
         Texto::desde_utf16(&cuerpo_de(respuestas)),
+    )
+}
+
+/// Las diez cadenas que tiene que contener el prompt de operación (REQUISITOS_PROMPT_OPERACION).
+pub const REQUISITOS_PROMPT_OPERACION: [&str; 10] = [
+    "CONVERGENCIA",
+    "DIVERGENCIA",
+    "TENSION",
+    "SINGULARIDAD",
+    "AUSENCIA",
+    "LIMITACION:CORPUS",
+    "LIMITACION:AMBIGUEDAD",
+    "LIMITACION:TAREA",
+    "LIMITACION:OTRA",
+    "LA PREGUNTA ORIGINAL FUE:",
+];
+
+const CR: u16 = b'\r' as u16;
+const LF: u16 = b'\n' as u16;
+
+/// \r\n → \n (sin solaparse).
+fn sin_cr(t: &[u16]) -> Vec<u16> {
+    let mut r = Vec::with_capacity(t.len());
+    for (i, &c) in t.iter().enumerate() {
+        if !(c == CR && t.get(i + 1) == Some(&LF)) {
+            r.push(c);
+        }
+    }
+    r
+}
+
+/// Cuerpos.Normalizar: \r\n → \n y el espacio duro a espacio.
+fn normalizar(t: &[u16]) -> Vec<u16> {
+    let mut r = sin_cr(t);
+    for c in &mut r {
+        if *c == 0xA0 {
+            *c = b' ' as u16;
+        }
+    }
+    r
+}
+
+/// MarcaConSaltos: \n\[\[CC-MARCA-[^\]\n]*\]\]\n? fuera.
+fn sin_marcas_con_saltos(t: &[u16]) -> Vec<u16> {
+    let inicio: Vec<u16> = "\n[[CC-MARCA-".encode_utf16().collect();
+    let mut r = Vec::with_capacity(t.len());
+    let mut i = 0;
+    while i < t.len() {
+        if t[i..].starts_with(&inicio) {
+            let j = i + inicio.len();
+            let k = j + t[j..]
+                .iter()
+                .take_while(|&&c| c != b']' as u16 && c != LF)
+                .count();
+            if t.get(k) == Some(&(b']' as u16)) && t.get(k + 1) == Some(&(b']' as u16)) {
+                i = k + 2 + usize::from(t.get(k + 2) == Some(&LF));
+                continue;
+            }
+        }
+        r.push(t[i]);
+        i += 1;
+    }
+    r
+}
+
+/// Cuerpos.VerificarEscritura (ESC-010, T21): el error de la operación escrita en el compositor, o
+/// None si quedó bien. Primero las diez cadenas, buscadas sin las marcas que pueden partirlas;
+/// después la igualdad.
+pub fn verificar_escritura(esperado: &Texto, leido: &Texto) -> Option<String> {
+    let sin_marcas = sin_marcas_con_saltos(&normalizar(&leido.a_utf16()));
+    let faltantes: Vec<&str> = REQUISITOS_PROMPT_OPERACION
+        .into_iter()
+        .filter(|r| {
+            let r: Vec<u16> = r.encode_utf16().collect();
+            !sin_marcas.windows(r.len()).any(|w| w == r)
+        })
+        .collect();
+    if !faltantes.is_empty() {
+        return Some(format!(
+            "prompt incompleto: faltan {}",
+            faltantes.join(", ")
+        ));
+    }
+    verificar_igualdad(esperado, leido)
+}
+
+/// Cuerpos.VerificarIgualdad (ESC-011, T22): la igualdad carácter por carácter con \r\n y el
+/// espacio duro normalizados; las cuentas son de unidades UTF-16, como string.Length.
+pub fn verificar_igualdad(esperado: &Texto, leido: &Texto) -> Option<String> {
+    let (esperado, leido) = (esperado.a_utf16(), leido.a_utf16());
+    let final_ = normalizar(&leido);
+    if final_ == normalizar(&esperado) {
+        return None;
+    }
+    let saltos = |t: &[u16]| t.iter().filter(|&&c| c == LF).count() + 1;
+    let lineas_prompt = saltos(&sin_cr(&esperado));
+    let lineas_compositor = if final_.is_empty() {
+        0
+    } else {
+        saltos(&final_)
+    };
+    Some(format!(
+        "el compositor no es igual al prompt: {lineas_compositor} de {lineas_prompt} líneas, {} de {} caracteres",
+        final_.len(),
+        esperado.len()
+    ))
+}
+
+/// Las verificaciones etiquetadas (A, B) y su sello (etiqueta, verificadorId).
+pub type VerificacionesAnonimas = (Vec<(String, Texto)>, Vec<(String, String)>);
+
+/// Anonimizacion.AnonimizarVerificaciones (D62, RED-002): las verificaciones para el redactor con
+/// los términos tapados y barajadas con una semilla derivada de la ronda, A y B. El sello es
+/// (etiqueta, verificadorId).
+pub fn anonimizar_verificaciones(
+    salidas: &[(String, Texto)],
+    semilla_ronda: &Texto,
+) -> VerificacionesAnonimas {
+    let respuestas: Vec<RespuestaParaOperar> = salidas
+        .iter()
+        .map(|(id, texto)| RespuestaParaOperar {
+            proveedor_id: id.clone(),
+            reply_id: Texto::default(),
+            attempt_id: Texto::default(),
+            texto: texto.clone(),
+            urls_citadas: Vec::new(),
+        })
+        .collect();
+    let mut semilla = semilla_ronda.clone();
+    semilla.empujar_str("|verificaciones");
+    let a = anonimizar_respuestas(&respuestas, hash_semilla(&semilla));
+    let etiqueta = |label: &str| label["Modelo ".len()..].to_string();
+    (
+        a.etiquetadas
+            .into_iter()
+            .map(|(l, t)| (etiqueta(&l), t))
+            .collect(),
+        a.sello
+            .into_iter()
+            .map(|s| (etiqueta(&s.label), s.panel_source_id))
+            .collect(),
     )
 }
 
@@ -1351,6 +1492,115 @@ mod pruebas {
         let pregunta = texto_de(campo(&lista(&v)[1], "pregunta"));
         let prompt = armar_prompt_operacion(pregunta, &respuestas_etiquetadas());
         assert!(prompt.para_mostrar().contains(&*pregunta.para_mostrar()));
+    }
+
+    fn reemplazar(x: &Texto, de: &str, a: &str) -> Texto {
+        Texto::from(x.como_str().expect("prompt sin surrogates").replace(de, a))
+    }
+
+    fn unidades(x: &Texto) -> usize {
+        x.a_utf16().len()
+    }
+
+    fn lineas(x: &Texto) -> usize {
+        x.a_utf16().iter().filter(|&&c| c == b'\n' as u16).count() + 1
+    }
+
+    // ESC-010 (T21): las diez cadenas sin las marcas, que pueden partirlas; después la igualdad
+    // carácter por carácter, con \r\n y el espacio duro normalizados.
+    #[test]
+    fn prompts_la_operacion_escrita_se_verifica_como_en_la_unity() {
+        let pregunta = t("¿La pregunta?");
+        let respuestas = respuestas_etiquetadas();
+        let (pegado, _) = insertar_marcas_intercaladas(
+            &armar_prompt_operacion(&pregunta, &respuestas),
+            "t",
+            INTERVALO_MARCA,
+        );
+        let (con_archivo, _) = armar_prompt_operacion_con_archivo(&pregunta, &respuestas);
+        assert_eq!(verificar_escritura(&pegado, &pegado), None);
+        assert_eq!(verificar_escritura(&con_archivo, &con_archivo), None);
+        let duro = reemplazar(&reemplazar(&pegado, "\n", "\r\n"), " ", "\u{A0}");
+        assert_eq!(verificar_escritura(&pegado, &duro), None);
+        let partido = reemplazar(
+            &pegado,
+            "LIMITACION:CORPUS",
+            "LIMITACION:\n[[CC-MARCA-099-t]]\nCORPUS",
+        );
+        assert_eq!(verificar_escritura(&partido, &partido), None);
+        assert_eq!(
+            verificar_escritura(&pegado, &reemplazar(&pegado, "DIVERGENCIA", "DIVERGENC1A")),
+            Some("prompt incompleto: faltan DIVERGENCIA".into())
+        );
+        let mut mas = pegado.clone();
+        mas.empujar_str("x");
+        let (l, n) = (lineas(&pegado), unidades(&pegado));
+        assert_eq!(
+            verificar_escritura(&pegado, &mas),
+            Some(format!(
+                "el compositor no es igual al prompt: {l} de {l} líneas, {} de {n} caracteres",
+                n + 1
+            ))
+        );
+    }
+
+    // ESC-011 (T22): el prompt de un rol se verifica solo por igualdad, con la misma normalización.
+    #[test]
+    fn prompts_el_de_un_rol_se_verifica_por_igualdad() {
+        let prompt = crate::prompts::armar_prompt_redactor(&t("¿La pregunta?"));
+        let duro = reemplazar(&reemplazar(&prompt, "\n", "\r\n"), " ", "\u{A0}");
+        assert_eq!(verificar_igualdad(&prompt, &duro), None);
+        let (l, n) = (lineas(&prompt), unidades(&prompt));
+        let sin_primero = Texto::desde_utf16(&prompt.a_utf16()[1..]);
+        assert_eq!(
+            verificar_igualdad(&prompt, &sin_primero),
+            Some(format!(
+                "el compositor no es igual al prompt: {l} de {l} líneas, {} de {n} caracteres",
+                n - 1
+            ))
+        );
+        assert_eq!(
+            verificar_igualdad(&prompt, &Texto::default()),
+            Some(format!(
+                "el compositor no es igual al prompt: 0 de {l} líneas, 0 de {n} caracteres"
+            ))
+        );
+    }
+
+    // D62 (RED-002): las verificaciones al redactor sin nombres, barajadas con la semilla de la
+    // ronda, A y B.
+    #[test]
+    fn prompts_las_verificaciones_se_anonimizan_como_en_la_unity() {
+        let v = vector("VerificacionesAnonimas");
+        assert!(!lista(&v).is_empty());
+        for caso in lista(&v) {
+            let entrada: Vec<(String, Texto)> = lista(&json_de(campo(caso, "salidas")))
+                .iter()
+                .map(|s| {
+                    (
+                        str_de(campo(s, "verificadorId")).to_string(),
+                        texto_de(campo(s, "texto")).clone(),
+                    )
+                })
+                .collect();
+            let semilla = texto_de(campo(caso, "semilla"));
+            let (verificaciones, sello) = anonimizar_verificaciones(&entrada, semilla);
+            let obtenido = obj(vec![
+                ("verificaciones", etiquetadas(&verificaciones)),
+                (
+                    "sello",
+                    Valor::Lista(
+                        sello
+                            .iter()
+                            .map(|(e, id)| {
+                                obj(vec![("etiqueta", vs(e)), ("verificadorId", vs(id))])
+                            })
+                            .collect(),
+                    ),
+                ),
+            ]);
+            assert_eq!(obtenido, json_de(campo(caso, "esperado")), "{semilla:?}");
+        }
     }
 
     #[test]

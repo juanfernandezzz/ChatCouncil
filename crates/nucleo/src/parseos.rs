@@ -29,11 +29,11 @@ fn b(c: u16) -> bool {
 }
 
 /// [A-Za-z0-9_]: el lado "palabra" de Js.Borde.
-fn pal(c: u16) -> bool {
+pub(crate) fn pal(c: u16) -> bool {
     c < 128 && ((c as u8).is_ascii_alphanumeric() || c == b'_' as u16)
 }
 
-fn digito(c: u16) -> bool {
+pub(crate) fn digito(c: u16) -> bool {
     (b'0' as u16..=b'9' as u16).contains(&c)
 }
 
@@ -45,17 +45,17 @@ fn texto(s: &U) -> Texto {
     Texto::desde_utf16(s)
 }
 
-fn es(s: &U, lit: &str) -> bool {
+pub(crate) fn es(s: &U, lit: &str) -> bool {
     s.iter().copied().eq(lit.encode_utf16())
 }
 
 /// El literal ASCII exacto en s[i..].
-fn en(s: &U, i: usize, lit: &str) -> bool {
+pub(crate) fn en(s: &U, i: usize, lit: &str) -> bool {
     s.len() >= i + lit.len() && s[i..].iter().zip(lit.bytes()).all(|(&c, x)| c == x as u16)
 }
 
 /// Js.Ci: el literal ASCII en s[i..], con la otra caja solo en las letras ASCII.
-fn ci(s: &U, i: usize, lit: &str) -> bool {
+pub(crate) fn ci(s: &U, i: usize, lit: &str) -> bool {
     s.len() >= i + lit.len()
         && s[i..]
             .iter()
@@ -63,7 +63,7 @@ fn ci(s: &U, i: usize, lit: &str) -> bool {
             .all(|(&c, x)| c < 128 && (c as u8).eq_ignore_ascii_case(&x))
 }
 
-fn saltar_blancos(s: &U, mut i: usize) -> usize {
+pub(crate) fn saltar_blancos(s: &U, mut i: usize) -> usize {
     while i < s.len() && b(s[i]) {
         i += 1;
     }
@@ -71,7 +71,7 @@ fn saltar_blancos(s: &U, mut i: usize) -> usize {
 }
 
 /// Js.Trim.
-fn trim(s: &U) -> &U {
+pub(crate) fn trim(s: &U) -> &U {
     let i = s.iter().position(|&c| !b(c)).unwrap_or(s.len());
     let j = s.iter().rposition(|&c| !b(c)).map_or(i, |j| j + 1);
     &s[i..j]
@@ -834,6 +834,199 @@ pub fn extraer_seccion_rescate(informe: &Texto) -> Option<Texto> {
     let cuerpo = unir(&ls[i + 1..]);
     let t = trim(&cuerpo);
     (!t.is_empty()).then(|| texto(t))
+}
+
+// ---------------------------------------------------------------- trazabilidad (INT-007)
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParrafoAnalizado {
+    pub indice: usize,
+    pub texto: Texto,
+    pub es_la_tabla_no_alcanza: bool,
+    pub es_titulo: bool,
+    pub referencias: Vec<String>,
+    pub sin_referencias: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReferenciaEnParrafo {
+    pub indice_parrafo: usize,
+    pub hallazgo_id: String,
+    pub referencia_invalida: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Trazabilidad {
+    pub parrafos: Vec<ParrafoAnalizado>,
+    pub referencias: Vec<ReferenciaEnParrafo>,
+    pub parrafos_sin_referencias: Vec<usize>,
+}
+
+/// Referencia: \[H[0-9]+\], sin los corchetes.
+pub(crate) fn referencias_h(s: &U) -> Vec<String> {
+    let mut r = Vec::new();
+    let mut i = 0;
+    while i < s.len() {
+        if en(s, i, "[H") {
+            let n = s[i + 2..].iter().take_while(|&&c| digito(c)).count();
+            if n > 0 && s.get(i + 2 + n) == Some(&(b']' as u16)) {
+                r.push(String::from_utf16_lossy(&s[i + 1..i + 2 + n]));
+                i += n + 3;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    r
+}
+
+/// SeparadorDeParrafos.Split (\r?\n[B]*\r?\n+): parte en cada tramo en blanco con dos saltos o más.
+/// Lo que el regex deja a cada lado del corte es blanco, y los párrafos se recortan después.
+fn parrafos(s: &U) -> Vec<&U> {
+    let mut r = Vec::new();
+    let (mut desde, mut i) = (0, 0);
+    while i < s.len() {
+        if b(s[i]) {
+            let fin = saltar_blancos(s, i);
+            if s[i..fin].iter().filter(|&&c| c == SALTO).count() >= 2 {
+                r.push(&s[desde..i]);
+                desde = fin;
+            }
+            i = fin;
+        } else {
+            i += 1;
+        }
+    }
+    r.push(&s[desde..]);
+    r
+}
+
+/// Parseos.ParsearReferenciasIntegrador: toda referencia [H##] se conserva aunque no exista en la
+/// tabla que recibió ESTE integrador; queda con referencia_invalida.
+pub fn parsear_referencias_integrador(informe: &Texto, ids_validos: &[&str]) -> Trazabilidad {
+    let s = informe.a_utf16();
+    let mut r = Trazabilidad::default();
+    let textos = parrafos(&s).into_iter().map(trim).filter(|p| !p.is_empty());
+    for (indice, p) in textos.enumerate() {
+        let no_alcanza = en(p, 0, "LA TABLA NO ALCANZA");
+        let es_titulo = indice == 0 && linea_titulo(lineas(p)[0]).is_some();
+        let ids = referencias_h(p);
+        for id in &ids {
+            r.referencias.push(ReferenciaEnParrafo {
+                indice_parrafo: indice,
+                hallazgo_id: id.clone(),
+                referencia_invalida: !ids_validos.contains(&id.as_str()),
+            });
+        }
+        let sin_referencias = ids.is_empty() && !no_alcanza && !es_titulo;
+        if sin_referencias {
+            r.parrafos_sin_referencias.push(indice);
+        }
+        r.parrafos.push(ParrafoAnalizado {
+            indice,
+            texto: texto(p),
+            es_la_tabla_no_alcanza: no_alcanza,
+            es_titulo,
+            referencias: ids,
+            sin_referencias,
+        });
+    }
+    r
+}
+
+// ---------------------------------------------------------------- nombre del informe
+
+const ESPACIO: u16 = b' ' as u16;
+const MAX_TITULO: usize = 80;
+
+/// TituloInforme.LimpiarTituloParaArchivo: sin prohibidos de Windows ni control, guiones largos a
+/// simples, blancos colapsados, max unidades UTF-16 y sin puntos ni espacios al final.
+pub fn limpiar_titulo_para_archivo(titulo: &Texto, max: usize) -> Texto {
+    let mut r = Vec::new();
+    let mut previo_blanco = false;
+    for c in titulo.a_utf16() {
+        let c = match c {
+            0x5C | 0x2F | 0x3A | 0x2A | 0x3F | 0x22 | 0x3C | 0x3E | 0x7C => ESPACIO,
+            0x2013 | 0x2014 => b'-' as u16,
+            0..=0x1F | 0x7F => ESPACIO,
+            c => c,
+        };
+        let blanco = b(c);
+        if !(blanco && previo_blanco) {
+            r.push(if blanco { ESPACIO } else { c });
+        }
+        previo_blanco = blanco;
+    }
+    let t = trim(&r);
+    let t = &t[..t.len().min(max)];
+    let fin = t
+        .iter()
+        .rposition(|&c| c != ESPACIO && c != b'.' as u16)
+        .map_or(0, |k| k + 1);
+    texto(&t[..fin])
+}
+
+/// TituloInforme.TituloDesdePregunta: las primeras seis palabras.
+pub fn titulo_desde_pregunta(pregunta: &Texto) -> Texto {
+    let s = pregunta.a_utf16();
+    let palabras: Vec<&U> = trim(&s)
+        .split(|&c| b(c))
+        .filter(|p| !p.is_empty())
+        .take(6)
+        .collect();
+    texto(&palabras.join(&ESPACIO))
+}
+
+/// TituloInforme.SelloFechaLocal: "AAAA-MM-DD HHMM" con la hora local que da quien llama.
+pub fn sello_fecha(anio: i32, mes: u32, dia: u32, hora: u32, minuto: u32) -> String {
+    format!("{anio}-{mes:02}-{dia:02} {hora:02}{minuto:02}")
+}
+
+/// TituloInforme.NombreBaseDeInforme: "sello - título" sin extensión; sin título del integrador,
+/// las seis primeras palabras de la pregunta, y sin eso "Informe de ronda".
+pub fn nombre_base_de_informe(
+    titulo: Option<&Texto>,
+    pregunta: &Texto,
+    sello: &str,
+    max: usize,
+) -> Texto {
+    let max = max.min(MAX_TITULO);
+    let del_integrador = titulo.map(|t| limpiar_titulo_para_archivo(t, max));
+    let elegido = del_integrador
+        .filter(|t| !t.bytes().is_empty())
+        .or_else(|| {
+            Some(limpiar_titulo_para_archivo(
+                &titulo_desde_pregunta(pregunta),
+                max,
+            ))
+            .filter(|t| !t.bytes().is_empty())
+        })
+        .unwrap_or_else(|| "Informe de ronda".into());
+    let mut r = Texto::from(format!("{sello} - "));
+    r.empujar_texto(&elegido);
+    r
+}
+
+/// TituloInforme.NombreLibreDeInforme: base, base (2)… hasta 999; nunca uno ocupado, porque
+/// sobrescribir un informe es perder un dato.
+pub fn nombre_libre_de_informe(
+    base: &Texto,
+    existe: impl Fn(&Texto) -> bool,
+) -> Result<Texto, String> {
+    if !existe(base) {
+        return Ok(base.clone());
+    }
+    for n in 2..=999 {
+        let mut candidato = base.clone();
+        candidato.empujar_str(&format!(" ({n})"));
+        if !existe(&candidato) {
+            return Ok(candidato);
+        }
+    }
+    Err(format!(
+        "no hay nombre libre para el informe \"{}\" despues de 999 intentos",
+        base.para_mostrar()
+    ))
 }
 
 // ---------------------------------------------------------------- texto desde html (INT-009, VER-006)
@@ -1756,6 +1949,128 @@ mod pruebas {
                 "{linea:?}"
             );
         }
+    }
+
+    const H1_A_H4: [&str; 4] = ["H1", "H2", "H3", "H4"];
+
+    fn trazabilidad_como_json(r: &Trazabilidad) -> Valor {
+        let n = |x: usize| Valor::Entero(x as i64);
+        let ids = |x: &[String]| Valor::Lista(x.iter().map(|s| Valor::Texto(t(s))).collect());
+        obj(vec![
+            (
+                "parrafos",
+                Valor::Lista(
+                    r.parrafos
+                        .iter()
+                        .map(|p| {
+                            obj(vec![
+                                ("indice", n(p.indice)),
+                                ("texto", vt(&p.texto)),
+                                ("esLaTablaNoAlcanza", Valor::Bool(p.es_la_tabla_no_alcanza)),
+                                ("esTitulo", Valor::Bool(p.es_titulo)),
+                                ("referencias", ids(&p.referencias)),
+                                ("sinReferencias", Valor::Bool(p.sin_referencias)),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
+            (
+                "referencias",
+                Valor::Lista(
+                    r.referencias
+                        .iter()
+                        .map(|x| {
+                            obj(vec![
+                                ("indiceParrafo", n(x.indice_parrafo)),
+                                ("hallazgoId", Valor::Texto(t(&x.hallazgo_id))),
+                                ("referenciaInvalida", Valor::Bool(x.referencia_invalida)),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
+            (
+                "parrafosSinReferencias",
+                Valor::Lista(r.parrafos_sin_referencias.iter().map(|&x| n(x)).collect()),
+            ),
+        ])
+    }
+
+    #[test]
+    fn prompts_la_trazabilidad_es_la_misma_que_en_la_unity() {
+        for caso in lista(&vector("Trazabilidades")) {
+            let informe = texto_de(campo(caso, "informe"));
+            let r = parsear_referencias_integrador(informe, &H1_A_H4);
+            assert_eq!(
+                trazabilidad_como_json(&r),
+                json_de(campo(caso, "esperado")),
+                "{informe:?}"
+            );
+        }
+    }
+
+    // guard:trazabilidad: 7 párrafos; falla el de la sección 5 sin referencias; TITULO y LA TABLA
+    // NO ALCANZA quedan exentos; H999 se conserva marcada sin perder su párrafo.
+    #[test]
+    fn prompts_el_informe_sembrado_de_guard_trazabilidad() {
+        let v = vector("Trazabilidades");
+        let r = parsear_referencias_integrador(texto_de(campo(&lista(&v)[0], "informe")), &H1_A_H4);
+        assert_eq!(r.parrafos.len(), 7);
+        assert_eq!(r.parrafos_sin_referencias, [4]);
+        assert!(r.parrafos[0].es_titulo);
+        assert!(r.parrafos[5].es_la_tabla_no_alcanza);
+        let h999: Vec<_> = r
+            .referencias
+            .iter()
+            .filter(|x| x.hallazgo_id == "H999")
+            .collect();
+        assert_eq!(h999.len(), 1);
+        assert!(h999[0].referencia_invalida);
+        assert!(!r.parrafos[6].sin_referencias);
+    }
+
+    #[test]
+    fn prompts_el_nombre_del_informe_es_el_mismo_que_en_la_unity() {
+        for caso in lista(&vector("LimpiezasTitulo")) {
+            let titulo = texto_de(campo(caso, "titulo"));
+            assert_eq!(
+                limpiar_titulo_para_archivo(titulo, 80),
+                *texto_de(campo(caso, "limpio")),
+                "{titulo:?}"
+            );
+        }
+        for caso in lista(&vector("TitulosDesdePregunta")) {
+            let pregunta = texto_de(campo(caso, "pregunta"));
+            assert_eq!(
+                titulo_desde_pregunta(pregunta),
+                *texto_de(campo(caso, "titulo")),
+                "{pregunta:?}"
+            );
+        }
+        let sello = sello_fecha(2026, 10, 6, 9, 5);
+        assert_eq!(sello, "2026-10-06 0905");
+        for caso in lista(&vector("NombresBase")) {
+            let titulo = match campo(caso, "titulo") {
+                Valor::Nulo => None,
+                v => Some(texto_de(v)),
+            };
+            let pregunta = texto_de(campo(caso, "pregunta"));
+            assert_eq!(
+                nombre_base_de_informe(titulo, pregunta, &sello, 80),
+                *texto_de(campo(caso, "nombre")),
+                "{pregunta:?}"
+            );
+        }
+        let ocupados = [t("base"), t("base (2)"), t("base (3)")];
+        assert_eq!(
+            nombre_libre_de_informe(&t("base"), |n| ocupados.contains(n)),
+            Ok(texto_de(&vector("NombreLibre")).clone())
+        );
+        assert_eq!(
+            nombre_libre_de_informe(&t("base"), |_| true),
+            Err("no hay nombre libre para el informe \"base\" despues de 999 intentos".into())
+        );
     }
 
     #[test]

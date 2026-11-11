@@ -95,6 +95,33 @@ pub fn ultimo_informe_integrador<'a>(hechos: &'a [Hecho], ronda_id: &Texto) -> O
     de_ronda(hechos, "informe-integrador", ronda_id).next_back()
 }
 
+/// Dominio.VerificacionesVigentes (D62): la última verificación de cada verificador, en el orden
+/// de los verificadores; la de un proveedor que ya no verifica va al final.
+pub fn verificaciones_vigentes<'a>(
+    hechos: &'a [Hecho],
+    ronda_id: &Texto,
+    verificadores: &[&str],
+) -> Vec<&'a Hecho> {
+    // GroupBy: los grupos en el orden de su primera aparición, y de cada uno el último.
+    let mut ultima: Vec<(Option<&Texto>, &Hecho)> = Vec::new();
+    for s in de_ronda(hechos, "salida-verificador", ronda_id) {
+        let v = s.texto("verificadorId");
+        match ultima.iter_mut().find(|(x, _)| *x == v) {
+            Some(par) => par.1 = s,
+            None => ultima.push((v, s)),
+        }
+    }
+    let posicion = |v: Option<&Texto>| {
+        verificadores
+            .iter()
+            .position(|id| v.and_then(Texto::como_str) == Some(*id))
+            .unwrap_or(verificadores.len())
+    };
+    // OrderBy es estable, como sort_by_key.
+    ultima.sort_by_key(|(v, _)| posicion(*v));
+    ultima.into_iter().map(|(_, s)| s).collect()
+}
+
 fn ultima_condicion<'a>(hechos: &'a [Hecho], ronda_id: &Texto) -> Option<&'a Hecho> {
     de_ronda(hechos, "condicion-proveedores-cargados", ronda_id).next_back()
 }
@@ -227,6 +254,36 @@ mod pruebas {
             );
         }
         assert_eq!(tipo_captura_de_etapa("otra"), None);
+    }
+
+    // D62: la última verificación de cada verificador, el 1 primero; la de un proveedor que ya no
+    // verifica, al final.
+    #[test]
+    fn prompts_las_verificaciones_vigentes_van_en_el_orden_de_los_verificadores() {
+        let s = |id: &str, verificador: &str, ronda: &str| {
+            Hecho::nuevo(
+                "salida-verificador",
+                &[
+                    ("id", Valor::Texto(id.into())),
+                    ("rondaId", Valor::Texto(ronda.into())),
+                    ("verificadorId", Valor::Texto(verificador.into())),
+                ],
+            )
+            .unwrap()
+        };
+        let hechos = [
+            s("a", "kimi", "r"),
+            s("b", "qwen", "r"),
+            s("c", "glm", "r"),
+            s("d", "qwen", "r"),
+            s("e", "glm", "otra"),
+        ];
+        let ids: Vec<_> = verificaciones_vigentes(&hechos, &"r".into(), &["glm", "qwen"])
+            .iter()
+            .map(|h| h.texto("id").unwrap().clone())
+            .collect();
+        assert_eq!(ids, ["c", "d", "a"].map(Texto::from));
+        assert!(verificaciones_vigentes(&hechos, &"nada".into(), &["glm", "qwen"]).is_empty());
     }
 
     #[test]

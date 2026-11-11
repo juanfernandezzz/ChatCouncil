@@ -1,0 +1,248 @@
+id	capacidad	destino_anterior	destino_nuevo	motivo
+AJU-001	ajustes	PART-010	PART-010	destino del plan (D14)
+AJU-002	ajustes	PART-010	PART-010	destino del plan (D14)
+AJU-003	ajustes	PART-010	PART-010	destino del plan (D14)
+AJU-004	ajustes	PART-010	PART-010	destino del plan (D14)
+AJU-005	ajustes	PART-010	PART-010	destino del plan (D14)
+AJU-006	ajustes	PART-010	PART-010	destino del plan (D14)
+AJU-007	ajustes	PART-010	PART-010	destino del plan (D14)
+AJU-008	ajustes	PART-010	PART-010	destino del plan (D14)
+AJU-009	ajustes	PART-010	PART-010	destino del plan (D14)
+AJU-010	ajustes	PART-010	PART-010	destino del plan (D14)
+INV-AJU-001	ajustes	PART-010	PART-010	destino del plan (D14)
+INV-AJU-002	ajustes	PART-010	PART-010	destino del plan (D14)
+ARR-001	arranque-actualizacion	sin parte	E7	arranque de la app (Aplicacion.cs)
+ARR-002	arranque-actualizacion	sin parte	E7	arranque de la app (Aplicacion.cs)
+ARR-003	arranque-actualizacion	sin parte	PART-007	faltaba en PART-003; restaurar la ronda activa con su etapa
+ARR-004	arranque-actualizacion	sin parte	E7	arranque de la app (Aplicacion.cs)
+ARR-005	arranque-actualizacion	sin parte	E7	arranque de la app (Aplicacion.cs)
+ARR-006	arranque-actualizacion	sin parte	E7	arranque de la app (Aplicacion.cs)
+ARR-007	arranque-actualizacion	sin parte	E7	arranque de la app (Aplicacion.cs)
+ARR-008	arranque-actualizacion	sin parte	E8	actualización e instalador: entrega
+ARR-009	arranque-actualizacion	sin parte	E8	actualización e instalador: entrega
+ARR-010	arranque-actualizacion	sin parte	segunda pasada	solo Android
+ARR-011	arranque-actualizacion	sin parte	E8	actualización e instalador: entrega
+ARR-012	arranque-actualizacion	sin parte	E8	actualización e instalador: entrega
+INV-ARR-001	arranque-actualizacion	sin parte	E8	actualización e instalador: entrega
+INV-ARR-002	arranque-actualizacion	sin parte	E8	actualización e instalador: entrega
+CAP-001	captura	sin parte	E7	lectura en la página o la interfaz
+CAP-002	captura	sin parte	E7	lectura en la página o la interfaz
+CAP-003	captura	sin parte	E7	lectura en la página o la interfaz
+CAP-004	captura	sin parte	PART-007	RegistrarCapturas: umbral mínimo
+CAP-005	captura	sin parte	PART-007	RegistrarCapturas: capturar sin ronda abre una
+CAP-006	captura	sin parte	PART-007	RegistrarCapturas: clasificación por etapa
+CAP-007	captura	sin parte	PART-007	RegistrarCapturas: recaptura antes del sello
+CAP-008	captura	sin parte	PART-007	RegistrarCapturas: respuesta corta señalada
+CAP-009	captura	sin parte	PART-007	RegistrarCapturas: un fallo nunca se adivina
+CAP-010	captura	sin parte	PART-007	RegistrarCapturas: dato crudo y citas
+CAP-011	captura	PART-005	PART-005	destino del plan (D14)
+CAP-012	captura	sin parte	PART-007	procedencia del fin de cada captura
+CAP-013	captura	sin parte	PART-007	aviso de prompts en investigación (Puerta.cs)
+CAP-014	captura	sin parte	E7	lectura en la página o la interfaz
+CAP-015	captura	sin parte	PART-007	estado de cada panel desde el registro y la etapa
+CAP-016	captura	sin parte	PART-007	recapturar integrador o verificadores
+INV-CAP-001	captura	sin parte	PART-007	una lectura fallida no reemplaza a la buena
+INV-CAP-002	captura	sin parte	E7	lectura en la página o la interfaz
+INV-CAP-003	captura	sin parte	E7	lectura en la página o la interfaz
+DAT-001	datos	sin parte	PART-006	faltaba en PART-002; hash de specs.json ya probado, se mapea la prueba
+DAT-002	datos	sin parte	PART-006	faltaba en PART-002; los literales que arma esta parte
+DIA-001	diagnosticos	PART-010	PART-010	destino del plan (D14)
+DIA-002	diagnosticos	PART-010	PART-010	destino del plan (D14)
+DIA-003	diagnosticos	PART-010	PART-010	destino del plan (D14)
+DIA-004	diagnosticos	PART-010	PART-010	destino del plan (D14)
+DIA-005	diagnosticos	PART-010	PART-010	destino del plan (D14)
+INV-DIA-001	diagnosticos	PART-010	PART-010	destino del plan (D14)
+ESC-001	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
+ESC-002	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
+ESC-003	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
+ESC-004	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
+ESC-005	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
+ESC-006	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
+ESC-007	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
+ESC-008	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
+ESC-009	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
+ESC-010	escritura-compositor	sin parte	PART-006	faltaba en PART-004; verificación pura de la operación escrita (Cuerpos.cs)
+ESC-011	escritura-compositor	sin parte	PART-006	verificación pura del prompt de rol por igualdad (Cuerpos.cs)
+ESC-012	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
+ESC-013	escritura-compositor	sin parte	PART-007	marcar pegada solo la operación verificada (Puerta.cs)
+INV-ESC-001	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
+INV-ESC-002	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
+INV-ESC-003	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
+INF-001	informe-final	PART-010	PART-010	destino del plan (D14)
+INF-002	informe-final	PART-008	PART-008	destino del plan (D14)
+INF-003	informe-final	PART-008	PART-008	destino del plan (D14)
+INF-004	informe-final	PART-008	PART-008	destino del plan (D14)
+INF-005	informe-final	PART-008	PART-008	destino del plan (D14)
+INF-006	informe-final	PART-008	PART-008	destino del plan (D14)
+INF-007	informe-final	PART-010	PART-010	destino del plan (D14)
+INF-008	informe-final	PART-008	PART-008	destino del plan (D14)
+INF-009	informe-final	PART-008	PART-008	destino del plan (D14)
+INF-010	informe-final	PART-008	PART-008	destino del plan (D14)
+INF-011	informe-final	PART-008	PART-008	destino del plan (D14)
+INF-012	informe-final	PART-008	PART-008	destino del plan (D14)
+INF-013	informe-final	PART-008	PART-008	destino del plan (D14)
+INF-014	informe-final	PART-008	PART-008	destino del plan (D14)
+INV-INF-001	informe-final	PART-008	PART-008	destino del plan (D14)
+INV-INF-002	informe-final	PART-008	PART-008	destino del plan (D14)
+INV-INF-003	informe-final	PART-008	PART-008	destino del plan (D14)
+INT-001	integrador	PART-006	PART-006	destino del plan (D14)
+INT-002	integrador	PART-006	PART-006	destino del plan (D14)
+INT-003	integrador	PART-006	PART-006	destino del plan (D14)
+INT-004	integrador	sin parte	E7	flujo de pegado en la interfaz
+INT-005	integrador	PART-005	PART-005	destino del plan (D14)
+INT-006	integrador	sin parte	PART-006	informe vigente que leen los prompts de verificador y redactor (Dominio.cs)
+INT-007	integrador	PART-006	PART-006	destino del plan (D14)
+INT-008	integrador	PART-005	PART-005	destino del plan (D14)
+INT-009	integrador	PART-005	PART-005	destino del plan (D14)
+INV-INT-001	integrador	PART-006	PART-006	destino del plan (D14)
+INV-INT-002	integrador	sin parte	E7	flujo de pegado en la interfaz
+IFZ-001	interfaz	sin parte	E7	interfaz
+IFZ-002	interfaz	sin parte	E7	interfaz
+IFZ-003	interfaz	sin parte	E7	interfaz
+IFZ-004	interfaz	sin parte	E7	interfaz
+IFZ-005	interfaz	sin parte	E7	interfaz
+IFZ-006	interfaz	sin parte	E7	interfaz
+IFZ-007	interfaz	sin parte	E7	interfaz
+IFZ-008	interfaz	sin parte	E7	interfaz
+IFZ-009	interfaz	sin parte	E7	interfaz
+IFZ-010	interfaz	sin parte	E7	interfaz
+IFZ-011	interfaz	sin parte	E7	interfaz
+IFZ-012	interfaz	sin parte	E7	interfaz
+IFZ-013	interfaz	sin parte	E7	interfaz
+IFZ-014	interfaz	sin parte	E7	interfaz
+IFZ-015	interfaz	sin parte	segunda pasada	solo Android
+IFZ-016	interfaz	sin parte	E7	interfaz
+IFZ-017	interfaz	sin parte	E7	interfaz
+IFZ-018	interfaz	sin parte	E7	interfaz
+IFZ-019	interfaz	sin parte	E7	interfaz
+IFZ-020	interfaz	sin parte	E7	interfaz
+IFZ-021	interfaz	sin parte	E7	interfaz
+IFZ-022	interfaz	sin parte	E7	interfaz
+IFZ-023	interfaz	sin parte	E7	interfaz
+IFZ-024	interfaz	sin parte	E7	interfaz
+INV-IFZ-001	interfaz	sin parte	E7	interfaz
+INV-IFZ-002	interfaz	sin parte	E7	interfaz
+INV-IFZ-003	interfaz	sin parte	E7	interfaz
+INV-IFZ-004	interfaz	sin parte	E7	interfaz
+INV-IFZ-005	interfaz	sin parte	E7	interfaz
+INV-IFZ-006	interfaz	sin parte	E7	interfaz
+INV-IFZ-007	interfaz	sin parte	E7	interfaz
+OPE-001	operacion	PART-004	PART-004	destino del plan (D14)
+OPE-002	operacion	PART-004	PART-004	destino del plan (D14)
+OPE-003	operacion	PART-004	PART-004	destino del plan (D14)
+OPE-004	operacion	PART-004	PART-004	destino del plan (D14)
+OPE-005	operacion	PART-004	PART-004	destino del plan (D14)
+OPE-006	operacion	PART-004	PART-004	destino del plan (D14)
+OPE-007	operacion	PART-004	PART-004	destino del plan (D14)
+OPE-008	operacion	PART-004	PART-004	destino del plan (D14)
+OPE-009	operacion	PART-004	PART-004	destino del plan (D14)
+OPE-010	operacion	PART-004	PART-004	destino del plan (D14)
+OPE-011	operacion	PART-004	PART-004	destino del plan (D14)
+OPE-012	operacion	PART-004	PART-004	destino del plan (D14)
+OPE-013	operacion	PART-004	PART-004	destino del plan (D14)
+OPE-014	operacion	PART-004	PART-004	destino del plan (D14)
+OPE-015	operacion	PART-005	PART-005	destino del plan (D14)
+OPE-016	operacion	PART-005	PART-005	destino del plan (D14)
+INV-OPE-001	operacion	PART-004	PART-004	destino del plan (D14)
+INV-OPE-002	operacion	PART-004	PART-004	destino del plan (D14)
+INV-OPE-003	operacion	PART-004	PART-004	destino del plan (D14)
+INV-OPE-004	operacion	PART-004	PART-004	destino del plan (D14)
+PAN-001	paneles-sesiones	sin parte	E7	paneles y webviews
+PAN-002	paneles-sesiones	sin parte	E7	paneles y webviews
+PAN-003	paneles-sesiones	sin parte	E7	paneles y webviews
+PAN-004	paneles-sesiones	sin parte	E7	paneles y webviews
+PAN-005	paneles-sesiones	sin parte	E7	paneles y webviews
+PAN-006	paneles-sesiones	sin parte	E7	paneles y webviews
+PAN-007	paneles-sesiones	sin parte	E7	paneles y webviews
+PAN-008	paneles-sesiones	sin parte	E7	paneles y webviews
+PAN-009	paneles-sesiones	sin parte	E7	paneles y webviews
+PAN-010	paneles-sesiones	sin parte	E7	paneles y webviews
+PAN-011	paneles-sesiones	sin parte	E7	paneles y webviews
+PAN-012	paneles-sesiones	sin parte	E7	paneles y webviews
+PAN-013	paneles-sesiones	sin parte	E7	paneles y webviews
+PAN-014	paneles-sesiones	sin parte	E7	paneles y webviews
+PAN-015	paneles-sesiones	sin parte	E7	paneles y webviews
+INV-PAN-001	paneles-sesiones	sin parte	E7	paneles y webviews
+INV-PAN-002	paneles-sesiones	sin parte	E7	paneles y webviews
+INV-PAN-003	paneles-sesiones	sin parte	E7	paneles y webviews
+PRU-001	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-002	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-003	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-004	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-005	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-006	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-007	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-008	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-009	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-010	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-011	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-012	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-013	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-014	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-015	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-016	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-017	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+PRU-018	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+INV-PRU-001	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+INV-PRU-002	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+INV-PRU-003	pruebas-internas	sin parte	E7	autopruebas de la app y los paneles
+RED-001	redactor	PART-006	PART-006	destino del plan (D14)
+RED-002	redactor	PART-006	PART-006	destino del plan (D14)
+RED-003	redactor	PART-006	PART-006	destino del plan (D14)
+RED-004	redactor	PART-006	PART-006	destino del plan (D14)
+RED-005	redactor	sin parte	PART-007	captura del redactor con sus marcas
+RED-006	redactor	PART-006	PART-006	destino del plan (D14)
+RED-007	redactor	PART-006	PART-006	destino del plan (D14)
+INV-RED-001	redactor	PART-006	PART-006	destino del plan (D14)
+INV-RED-002	redactor	PART-006	PART-006	destino del plan (D14)
+REG-001	registro	PART-003	PART-003	destino del plan (D14)
+REG-002	registro	PART-003	PART-003	destino del plan (D14)
+REG-003	registro	PART-003	PART-003	destino del plan (D14)
+REG-004	registro	PART-003	PART-003	destino del plan (D14)
+REG-005	registro	PART-003	PART-003	destino del plan (D14)
+REG-006	registro	PART-003	PART-003	destino del plan (D14)
+REG-007	registro	PART-003	PART-003	destino del plan (D14)
+REG-008	registro	PART-003	PART-003	destino del plan (D14)
+REG-009	registro	PART-003	PART-003	destino del plan (D14)
+REG-010	registro	PART-003	PART-003	destino del plan (D14)
+REG-011	registro	PART-003	PART-003	destino del plan (D14)
+REG-012	registro	PART-003	PART-003	destino del plan (D14)
+REG-013	registro	PART-003	PART-003	destino del plan (D14)
+REG-014	registro	PART-003	PART-003	destino del plan (D14)
+REG-015	registro	PART-003	PART-003	destino del plan (D14)
+REG-016	registro	PART-003,PART-007	PART-007	destino del plan (D13): PART-003 ya lo prueba sin los prompts; PART-007 completa el AC (AbandonarRonda limpia los prompts armados)
+REG-017	registro	PART-005	PART-005	destino del plan (D14)
+INV-REG-001	registro	PART-003	PART-003	destino del plan (D14)
+INV-REG-002	registro	PART-003	PART-003	destino del plan (D14)
+RON-001	ronda	PART-007	PART-007	destino del plan (D14)
+RON-002	ronda	PART-007	PART-007	destino del plan (D14)
+RON-003	ronda	PART-007	PART-007	destino del plan (D14)
+RON-004	ronda	PART-007	PART-007	destino del plan (D14)
+RON-005	ronda	PART-007	PART-007	destino del plan (D14)
+RON-006	ronda	PART-007	PART-007	destino del plan (D14)
+RON-007	ronda	PART-007	PART-007	destino del plan (D14)
+RON-008	ronda	PART-007	PART-007	destino del plan (D14)
+RON-009	ronda	PART-007	PART-007	destino del plan (D14)
+RON-010	ronda	PART-007	PART-007	destino del plan (D14)
+RON-011	ronda	PART-007	PART-007	destino del plan (D14)
+RON-012	ronda	PART-007	PART-007	destino del plan (D14)
+RON-013	ronda	PART-007	PART-007	destino del plan (D14)
+RON-014	ronda	PART-007	PART-007	destino del plan (D14)
+RON-015	ronda	PART-007	PART-007	destino del plan (D14)
+RON-016	ronda	PART-007	PART-007	destino del plan (D14)
+RON-017	ronda	PART-007	PART-007	destino del plan (D14)
+INV-RON-001	ronda	PART-007	PART-007	destino del plan (D14)
+INV-RON-002	ronda	PART-007	PART-007	destino del plan (D14)
+INV-RON-003	ronda	PART-007	PART-007	destino del plan (D14)
+VER-001	verificadores	PART-006	PART-006	destino del plan (D14)
+VER-002	verificadores	sin parte	E7	flujo de la interfaz
+VER-003	verificadores	sin parte	PART-007	captura conjunta de los verificadores
+VER-004	verificadores	sin parte	PART-007	sin líneas de verificación no es verificación
+VER-005	verificadores	PART-005	PART-005	destino del plan (D14)
+VER-006	verificadores	PART-005	PART-005	destino del plan (D14)
+VER-007	verificadores	sin parte	PART-006	verificaciones vigentes que lee el prompt del redactor (Dominio.cs)
+VER-008	verificadores	sin parte	E7	flujo de la interfaz
+VER-009	verificadores	PART-009	PART-009	destino del plan (D14)
+INV-VER-001	verificadores	PART-006	PART-006	destino del plan (D14)
+INV-VER-002	verificadores	PART-009	PART-009	destino del plan (D14)
+INV-VER-003	verificadores	PART-009	PART-009	destino del plan (D14)

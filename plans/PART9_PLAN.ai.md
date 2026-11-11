@@ -35,6 +35,7 @@ AC:
 - VER-009, INV-VER-002 e INV-VER-003 tienen prueba y pasan; INF-001 e INF-007 van en PART-010 (D14).
 - Una URL ya comprobada no genera una segunda petición.
 - Caso de falla: un tiempo agotado se informa igual que en la Unity, sin colgar la ronda.
+- El tope de 20 URL por verificación (RESUELTO VER-01, Puerta.cs:861 y 963) tiene prueba y pasa (trasladado desde PART-006).
 
 V:
 - cargo test -p nucleo urls, con su salida.

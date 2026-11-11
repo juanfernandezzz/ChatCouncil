@@ -22,10 +22,10 @@
   - Outcome: Operación con cuerpos, marcas, anonimización, barajado y control de fugas
   - Evidence: recorded
 
-- [ ] Part 5: Read `plans/PART5_PLAN.ai.md`
+- [x] Part 5: Read `plans/PART5_PLAN.ai.md`
   - Scenario: SCN-005
   - Outcome: Parseos de hallazgos, verificación, referencias y título
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 6: Read `plans/PART6_PLAN.ai.md`
   - Scenario: SCN-006

@@ -370,3 +370,75 @@ $ cargo check -p nucleo --target aarch64-linux-android
 == CI
 42876264759 (1991c84) success; 42903180138 (b894080) success, job rust success
 ```
+
+### PART-005
+
+Parseos de hallazgos, verificación, título, rescate, texto desde html y citas portados de la Unity con sus vectores; OPE-015/OPE-016/REG-017 en Puerta con las 83 líneas de la corrida idénticas; caso de falla rojo/verde; revisión: 1 corrección (surrogate en la ronda copiada) rojo/verde en 7bc1e44; gates y CI verdes
+
+Artifacts:
+- == Caso de falla rojo (sin la comprobación de prefijo exacto en la categoría)
+$ cargo test -p nucleo parseos_una_linea_con_categoria_desconocida
+test parseos::pruebas::parseos_una_linea_con_categoria_desconocida_no_se_cuenta_como_hallazgo ... FAILED
+thread 'parseos::pruebas::parseos_una_linea_con_categoria_desconocida_no_se_cuenta_como_hallazgo' (8880) panicked at crates\nucleo\src\parseos.rs:1630:9:
+assertion `left == right` failed
+  left: 2
+ right: 1
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 86 filtered out; finished in 0.00s
+== Verde (restaurada)
+test parseos::pruebas::parseos_una_linea_con_categoria_desconocida_no_se_cuenta_como_hallazgo ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 86 filtered out; finished in 0.00s
+== Revisión PART-005, hallazgo 1, rojo
+> cargo test -p nucleo parseos_la_ronda_copiada_conserva (antes de corregir)
+test puerta::pruebas::parseos_la_ronda_copiada_conserva_un_surrogate_suelto_de_la_pregunta ... FAILED
+thread 'puerta::pruebas::parseos_la_ronda_copiada_conserva_un_surrogate_suelto_de_la_pregunta' (13104) panicked at crates\nucleo\src\puerta.rs:1660:9:
+assertion `left == right` failed
+  left: "�¿Qué dice la evidencia sobre la dosis?"
+ right: "�¿Qué dice la evidencia sobre la dosis?"
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 90 filtered out; finished in 0.16s
+error: test failed, to rerun pass `-p nucleo --lib`
+== Revisión PART-005, hallazgo 1, verde
+> cargo test -p nucleo parseos_la_ronda_copiada_conserva (después de corregir)
+test puerta::pruebas::parseos_la_ronda_copiada_conserva_un_surrogate_suelto_de_la_pregunta ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 90 filtered out; finished in 0.22s
+== Gates (7bc1e44)
+$ cargo fmt --all --check
+exit=0
+$ cargo clippy --workspace --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.85s
+exit=0
+$ cargo test --workspace
+     Running unittests src\main.rs (C:/cc-target\debug\deps\app-cd3acd9fad645514.exe)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src\lib.rs (C:/cc-target\debug\deps\nucleo-53d05d404b816f44.exe)
+test result: ok. 89 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.27s
+     Running unittests src\main.rs (C:/cc-target\debug\deps\paneles-d348e8139be3bf52.exe)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+exit=0
+$ cargo tree -p nucleo -e normal
+nucleo v0.1.0 (C:\Users\Juan Fernández\Documents\Proyectos\ChatCouncil\crates\nucleo)
+$ cargo test -p nucleo parseos
+test dominio::pruebas::parseos_las_etiquetas_validas_salen_del_sello_sin_la_del_operador ... ok
+test parseos::pruebas::parseos_el_cuerpo_del_redactor_en_markdown_sin_los_controles_de_la_pagina ... ok
+test parseos::pruebas::parseos_el_titulo_y_la_seccion_de_rescate_son_los_mismos_que_en_la_unity ... ok
+test parseos::pruebas::parseos_el_texto_desde_html_es_el_mismo_que_en_la_unity ... ok
+test parseos::pruebas::parseos_la_verificacion_capturada_por_bloques_no_trae_el_razonamiento ... ok
+test parseos::pruebas::parseos_la_cita_del_verificador_sin_entidades_y_con_sus_comillas ... ok
+test parseos::pruebas::parseos_los_cuatro_descartes_y_el_chip_inline_contra_la_lista_de_fuentes ... ok
+test parseos::pruebas::parseos_la_verificacion_es_la_misma_que_en_la_unity ... ok
+test parseos::pruebas::parseos_los_hallazgos_son_los_mismos_que_en_la_unity ... ok
+test parseos::pruebas::parseos_nfd_descompone_ordena_y_deja_el_surrogate_suelto ... ok
+test parseos::pruebas::parseos_tension_se_lee_y_una_etiqueta_inexistente_queda_marcada ... ok
+test parseos::pruebas::parseos_un_punto_de_codigo_fuera_de_rango_tira_como_en_la_unity ... ok
+test parseos::pruebas::parseos_las_citas_son_las_mismas_que_en_la_unity ... ok
+test parseos::pruebas::parseos_una_linea_con_categoria_desconocida_no_se_cuenta_como_hallazgo ... ok
+test puerta::pruebas::parseos_reuso_sin_ronda_sin_sello_o_fuera_del_pool_se_niega_sin_escribir ... ok
+test puerta::pruebas::parseos_la_ronda_copiada_conserva_un_surrogate_suelto_de_la_pregunta ... ok
+test puerta::pruebas::parseos_reuso_la_ronda_copiada_y_la_operacion_reutilizada_son_las_de_la_unity ... ok
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 74 filtered out; finished in 0.63s
+$ cargo check -p nucleo --target aarch64-linux-android
+    Checking nucleo v0.1.0 (C:\Users\Juan Fernández\Documents\Proyectos\ChatCouncil\crates\nucleo)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.95s
+
+== CI
+42969722729 (7bc1e44) success, job rust success: https://github.com/juanfernandezzz/ChatCouncil/actions/runs/42969722729

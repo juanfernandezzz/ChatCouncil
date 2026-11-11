@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART5_PLAN.ai.md
+Next: plans/PART6_PLAN.ai.md
 
 ## Parts
 
@@ -29,10 +29,10 @@ Next: plans/PART5_PLAN.ai.md
   - Outcome: Operación con cuerpos, marcas, anonimización, barajado y control de fugas
   - Evidence: recorded
 
-- [ ] Part 5: plans/PART5_PLAN.ai.md
+- [x] Part 5: plans/PART5_PLAN.ai.md
   - Scenario: SCN-005
   - Outcome: Parseos de hallazgos, verificación, referencias y título
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 6: plans/PART6_PLAN.ai.md
   - Scenario: SCN-006

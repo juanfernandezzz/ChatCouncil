@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART6_PLAN.ai.md
+Next: plans/PART7_PLAN.ai.md
 
 ## Parts
 
@@ -34,10 +34,10 @@ Next: plans/PART6_PLAN.ai.md
   - Outcome: Parseos de hallazgos, verificación, referencias y título
   - Evidence: recorded
 
-- [ ] Part 6: plans/PART6_PLAN.ai.md
+- [x] Part 6: plans/PART6_PLAN.ai.md
   - Scenario: SCN-006
   - Outcome: Prompts del integrador, verificadores y redactor armados igual
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 7: plans/PART7_PLAN.ai.md
   - Scenario: SCN-007

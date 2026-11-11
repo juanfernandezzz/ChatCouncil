@@ -27,10 +27,10 @@
   - Outcome: Parseos de hallazgos, verificación, referencias y título
   - Evidence: recorded
 
-- [ ] Part 6: Read `plans/PART6_PLAN.ai.md`
+- [x] Part 6: Read `plans/PART6_PLAN.ai.md`
   - Scenario: SCN-006
   - Outcome: Prompts del integrador, verificadores y redactor armados igual
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 7: Read `plans/PART7_PLAN.ai.md`
   - Scenario: SCN-007

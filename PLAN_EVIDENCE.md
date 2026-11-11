@@ -442,3 +442,60 @@ $ cargo check -p nucleo --target aarch64-linux-android
 
 == CI
 42969722729 (7bc1e44) success, job rust success: https://github.com/juanfernandezzz/ChatCouncil/actions/runs/42969722729
+
+### PART-006
+
+Prompts del integrador, los verificadores y el redactor, archivo del redactor con marcas, ControlesRedaccion, trazabilidad (INT-006), verificaciones vigentes (VER-007), verificación de lo escrito (ESC-010, ESC-011) y nombre del informe, portados de la Unity e iguales a sus vectores carácter por carácter; sustitución de una sola pasada con caso de falla rojo/verde; DAT-001/DAT-002 mapeados a specs_json_coincide_con_dat_001 y prompts_coinciden_con_dat_002; el tope de 20 URL (VER-01) es de la verificación de URL (PART-009), no de los prompts; revisión aprobada sin correcciones; gates y CI verdes
+
+Artifacts:
+- == Caso de falla rojo (sustituir de varias pasadas, temporal)
+$ cargo test -p nucleo prompts
+test operacion::pruebas::operacion_los_prompts_de_operacion_son_los_de_la_unity ... FAILED
+test prompts::pruebas::prompts_los_de_los_roles_son_los_mismos_que_en_la_unity ... FAILED
+test prompts::pruebas::prompts_un_marcador_dentro_del_texto_sustituido_no_se_vuelve_a_sustituir ... FAILED
+thread 'prompts::pruebas::prompts_un_marcador_dentro_del_texto_sustituido_no_se_vuelve_a_sustituir' (9828) panicked at crates\nucleo\src\prompts.rs:659:9:
+assertion failed: contiene(&armar_prompt_integrador(&pregunta, &hallazgos), &pregunta)
+test result: FAILED. 17 passed; 3 failed; 0 ignored; 0 measured; 88 filtered out; finished in 0.69s
+== Verde (sustituir de una pasada restaurado)
+$ cargo test -p nucleo prompts
+test datos::pruebas::prompts_coinciden_con_dat_002 ... ok
+test dominio::pruebas::prompts_las_verificaciones_vigentes_van_en_el_orden_de_los_verificadores ... ok
+test operacion::pruebas::operacion_los_prompts_de_operacion_son_los_de_la_unity ... ok
+test operacion::pruebas::prompts_el_de_un_rol_se_verifica_por_igualdad ... ok
+test operacion::pruebas::prompts_las_verificaciones_se_anonimizan_como_en_la_unity ... ok
+test parseos::pruebas::prompts_el_informe_sembrado_de_guard_trazabilidad ... ok
+test parseos::pruebas::prompts_la_trazabilidad_es_la_misma_que_en_la_unity ... ok
+test parseos::pruebas::prompts_el_nombre_del_informe_es_el_mismo_que_en_la_unity ... ok
+test operacion::pruebas::prompts_la_operacion_escrita_se_verifica_como_en_la_unity ... ok
+test prompts::pruebas::prompts_el_archivo_del_redactor_es_el_mismo_que_en_la_unity ... ok
+test prompts::pruebas::prompts_la_tabla_de_hallazgos_es_la_misma_que_en_la_unity ... ok
+test prompts::pruebas::prompts_los_controles_del_redactor_son_los_mismos_que_en_la_unity ... ok
+test prompts::pruebas::prompts_un_dominio_del_material_enlazado_solo_no_cuenta_como_fuera_del_material ... ok
+test prompts::pruebas::prompts_los_de_los_roles_son_los_mismos_que_en_la_unity ... ok
+test prompts::pruebas::prompts_un_marcador_dentro_del_texto_sustituido_no_se_vuelve_a_sustituir ... ok
+test puerta::pruebas::prompts_el_verificador_sin_informe_o_sin_rescate_se_niega ... ok
+test puerta::pruebas::prompts_el_redactor_sin_verificacion_se_arma_y_avisa ... ok
+test puerta::pruebas::prompts_los_de_los_roles_en_la_corrida_son_los_de_la_unity ... ok
+test puerta::pruebas::prompts_los_roles_sin_ronda_semilla_o_pregunta_se_niegan_con_el_motivo_de_la_unity ... ok
+test puerta::pruebas::operacion_la_corrida_de_la_unity_da_los_mismos_sellos_y_prompts ... ok
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 88 filtered out; finished in 1.19s
+$ cargo fmt --all --check
+exit=0
+$ cargo clippy --workspace --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.31s
+$ cargo test --workspace
+     Running unittests src\main.rs (C:/cc-target\debug\deps\app-cd3acd9fad645514.exe)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src\lib.rs (C:/cc-target\debug\deps\nucleo-53d05d404b816f44.exe)
+test result: ok. 106 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.84s
+     Running unittests src\main.rs (C:/cc-target\debug\deps\paneles-d348e8139be3bf52.exe)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+exit=0
+$ cargo tree -p nucleo -e normal
+nucleo v0.1.0 (C:\Users\Juan Fernández\Documents\Proyectos\ChatCouncil\crates\nucleo)
+
+== Revisión ecc:rust-reviewer: aprobado, sin hallazgos de corrección ni de seguridad de datos; 2 de diseño y 3 de estilo reportados sin aplicar
+
+== CI
+42988568859 (3e34faf) success, job rust success: https://github.com/juanfernandezzz/ChatCouncil/actions/runs/42988568859

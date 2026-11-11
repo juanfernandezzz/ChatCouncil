@@ -178,6 +178,30 @@ pub fn pregunta_efectiva_de_ronda<'a>(hechos: &'a [Hecho], ronda: &'a Hecho) -> 
         .filter(|t| es_pregunta_valida(Some(t)))
 }
 
+/// OPE-015 (Dominio.EtiquetasValidasDelOperador): los P# válidos para UN operador, el código estable
+/// de cada proveedor del pool menos el suyo (exclusión de autoevaluación), desde el Sello persistido;
+/// si el sello repite un proveedor, gana la última entrada. Sin código para alguno, el error de la Unity.
+pub fn etiquetas_validas_del_operador(
+    operador_id: &str,
+    pool: &[&str],
+    sello: &[&Hecho],
+) -> Result<Vec<String>, String> {
+    pool.iter()
+        .filter(|id| **id != operador_id)
+        .map(|id| {
+            sello
+                .iter()
+                .rev()
+                .find(|s| s.texto("panelSourceId").and_then(Texto::como_str) == Some(id))
+                .and_then(|s| s.texto("codigoEstable"))
+                .filter(|c| !c.bytes().is_empty())
+                // Los códigos los genera la operación ("P1"…), nunca con surrogates.
+                .map(|c| c.para_mostrar().into_owned())
+                .ok_or_else(|| format!("no hay codigo estable de sello para el proveedor {id}"))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod pruebas {
     use super::*;
@@ -287,5 +311,39 @@ mod pruebas {
                 "{t:?}"
             );
         }
+    }
+
+    #[test]
+    fn parseos_las_etiquetas_validas_salen_del_sello_sin_la_del_operador() {
+        let pool_cuerpos = vector("PoolCuerpos");
+        let pool: Vec<&str> = lista(&pool_cuerpos)[..7].iter().map(str_de).collect();
+        let sello: Vec<Hecho> = pool
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                Hecho::nuevo(
+                    "sello",
+                    &[
+                        ("panelSourceId", Valor::Texto((*p).into())),
+                        ("codigoEstable", Valor::Texto(format!("P{}", i + 1).into())),
+                    ],
+                )
+                .unwrap()
+            })
+            .collect();
+        let refs: Vec<&Hecho> = sello.iter().collect();
+        for caso in lista(&vector("EtiquetasValidas")) {
+            let op = str_de(campo(caso, "operador"));
+            let esperadas: Vec<&str> = lista(campo(caso, "validas")).iter().map(str_de).collect();
+            assert_eq!(
+                etiquetas_validas_del_operador(op, &pool, &refs).unwrap(),
+                esperadas,
+                "{op}"
+            );
+        }
+        assert_eq!(
+            etiquetas_validas_del_operador("chatgpt", &pool, &refs[1..3]).unwrap_err(),
+            str_de(&vector("ErrorEtiquetas"))
+        );
     }
 }

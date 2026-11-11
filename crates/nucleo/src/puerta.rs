@@ -5,6 +5,7 @@
 use crate::dominio;
 use crate::json::Valor;
 use crate::operacion::{self, EntradaSello, INTERVALO_MARCA, RespuestaParaOperar};
+use crate::parseos;
 use crate::registro::{self, Hecho, RegistroLeido};
 use crate::texto::Texto;
 use std::collections::HashMap;
@@ -693,6 +694,285 @@ impl Puerta {
             prompt_completo: completo,
         })
     }
+
+    /// OPE-015 (ProcesarSalidaOperador): la salida del operador y un hecho por hallazgo, parseados
+    /// contra las etiquetas de ESTE operador.
+    #[allow(clippy::too_many_arguments)]
+    fn procesar_salida_operador(
+        &mut self,
+        ronda_id: &str,
+        operador_id: &str,
+        prompt: Valor,
+        salida_cruda: &Texto,
+        html: Valor,
+        validas: &[String],
+        copiada_de: Option<Valor>,
+    ) -> io::Result<parseos::Hallazgos> {
+        let salida_id = (self.nuevo_id)();
+        let mut campos = vec![
+            ("id", Valor::Texto(salida_id.as_str().into())),
+            ("rondaId", Valor::Texto(ronda_id.into())),
+            ("operadorId", Valor::Texto(operador_id.into())),
+            ("promptCompleto", prompt),
+            ("salidaCruda", Valor::Texto(salida_cruda.clone())),
+            ("recibidaEn", Valor::Texto(self.ahora().into())),
+            ("html", html),
+        ];
+        if let Some(c) = copiada_de {
+            campos.push(("copiadaDe", c));
+        }
+        self.escribir(&Hecho::nuevo("salida-operador", &campos)?)?;
+        let parseo = parseos::parsear_hallazgos(salida_cruda, validas);
+        for h in &parseo.hallazgos {
+            let hecho = Hecho::nuevo(
+                "hallazgo",
+                &[
+                    ("id", Valor::Texto((self.nuevo_id)().into())),
+                    ("salidaOperadorId", Valor::Texto(salida_id.as_str().into())),
+                    ("categoria", Valor::Texto(h.categoria.into())),
+                    ("eje", h.eje.clone().map_or(Valor::Nulo, Valor::Texto)),
+                    (
+                        "etiquetas",
+                        Valor::Lista(h.etiquetas.iter().cloned().map(Valor::Texto).collect()),
+                    ),
+                    ("descripcion", Valor::Texto(h.descripcion.clone())),
+                    ("etiquetaInvalida", Valor::Bool(h.etiqueta_invalida)),
+                ],
+            )?;
+            self.escribir(&hecho)?;
+        }
+        Ok(parseo)
+    }
+
+    /// REG-017: una ronda nueva con la misma pregunta y la última respuesta de cada proveedor del pool,
+    /// copiada y marcada copiadaDe, con sus citas vueltas a derivar del mismo html. La ronda anterior
+    /// queda intacta. Las negativas son mensajes, como en la Unity; un error es de escritura.
+    pub fn ronda_nueva_con_respuestas_copiadas(&mut self, pool: &[&str]) -> io::Result<String> {
+        let (Some(_), Some(ronda_id)) = (&self.conversacion_actual, self.ronda_actual.clone())
+        else {
+            return Ok("No hay una ronda activa de la que copiar.".into());
+        };
+        let leido = self.leer_registro()?;
+        let id = Texto::from(ronda_id.as_str());
+        let Some(anterior) = leido
+            .hechos
+            .iter()
+            .find(|h| h.tipo() == "ronda" && h.texto("id") == Some(&id))
+        else {
+            return Ok("No se encontró la ronda activa en el registro.".into());
+        };
+        let Some(pregunta) = dominio::pregunta_efectiva_de_ronda(&leido.hechos, anterior) else {
+            return Ok(
+                "La ronda activa no tiene una pregunta registrada válida: no se puede repetir."
+                    .into(),
+            );
+        };
+        // UltimaPorProveedor: la última de cada proveedor, en el orden de su primera captura.
+        let mut ultimas: Vec<&Hecho> = Vec::new();
+        for r in leido.hechos.iter().filter(|h| {
+            h.tipo() == "respuesta"
+                && h.texto("rondaId") == Some(&id)
+                && h.texto("proveedorId")
+                    .and_then(Texto::como_str)
+                    .is_some_and(|p| pool.contains(&p))
+        }) {
+            match ultimas
+                .iter_mut()
+                .find(|u| u.texto("proveedorId") == r.texto("proveedorId"))
+            {
+                Some(u) => *u = r,
+                None => ultimas.push(r),
+            }
+        }
+        if ultimas.is_empty() {
+            return Ok("La ronda activa no tiene respuestas del pool para copiar.".into());
+        }
+        let pregunta = pregunta.para_mostrar().into_owned();
+        let nueva = self.abrir_ronda(&pregunta)?;
+        for r in &ultimas {
+            let copia_id = (self.nuevo_id)();
+            let mut campos: Vec<(&str, Valor)> = [
+                "proveedorId",
+                "textoOriginal",
+                "leidaEn",
+                "error",
+                "procedencia",
+                "promptUsuarioLeido",
+                "promptCoincideEnPool",
+                "fuentesHref",
+                "html",
+            ]
+            .into_iter()
+            .map(|k| (k, r.valor(k).clone()))
+            .collect();
+            campos.extend([
+                ("id", Valor::Texto(copia_id.as_str().into())),
+                ("rondaId", Valor::Texto(nueva.as_str().into())),
+                (
+                    "copiadaDe",
+                    Valor::Objeto(vec![
+                        ("rondaId".into(), r.valor("rondaId").clone()),
+                        ("respuestaId".into(), r.valor("id").clone()),
+                    ]),
+                ),
+            ]);
+            self.escribir(&Hecho::nuevo("respuesta", &campos)?)?;
+            if let Some(html) = r.texto("html") {
+                let nuevo_id = &mut self.nuevo_id;
+                let citas = parseos::extraer_citas(html, &copia_id, &mut || nuevo_id())?;
+                for c in &citas.citas {
+                    self.escribir(c)?;
+                }
+            }
+        }
+        Ok(format!(
+            "Ronda nueva abierta ({}) con {} respuestas copiadas de la ronda {}. Recaptura con \"Capturar este panel\" lo que quieras corregir.",
+            corto(&nueva),
+            ultimas.len(),
+            corto(&ronda_id)
+        ))
+    }
+
+    /// OPE-016: reutilizar la operación de un operador desde la ronda de la que se copiaron las
+    /// respuestas. Solo vale si todo lo que ese operador lee (el pool menos la suya) son copias sin
+    /// cambios; los hallazgos se vuelven a derivar contra el sello de esta ronda.
+    pub fn reutilizar_operacion(
+        &mut self,
+        pool: &[&str],
+        operador_id: &str,
+    ) -> io::Result<(bool, String)> {
+        let (Some(_), Some(ronda_id)) = (&self.conversacion_actual, self.ronda_actual.clone())
+        else {
+            return Ok((false, "no hay una ronda activa".into()));
+        };
+        let nombre = dominio::nombre_proveedor(operador_id);
+        if !pool.contains(&operador_id) {
+            return Ok((false, format!("\"{nombre}\" no es un operador del pool.")));
+        }
+        let leido = self.leer_registro()?;
+        let id = Texto::from(ronda_id.as_str());
+        let sello: Vec<&Hecho> = leido
+            .hechos
+            .iter()
+            .filter(|h| h.tipo() == "sello" && h.texto("rondaId") == Some(&id))
+            .collect();
+        if sello.is_empty() {
+            return Ok((
+                false,
+                "Esta ronda todavía no tiene sello: pega primero la operación en algún panel («Pegar la operación aquí»).".into(),
+            ));
+        }
+        let mut vigentes: HashMap<&str, &Hecho> = HashMap::new();
+        for r in leido
+            .hechos
+            .iter()
+            .filter(|h| h.tipo() == "respuesta" && h.texto("rondaId") == Some(&id))
+        {
+            if let Some(p) = r.texto("proveedorId").and_then(Texto::como_str) {
+                vigentes.insert(p, r);
+            }
+        }
+        let leidas: Vec<&str> = pool.iter().copied().filter(|p| *p != operador_id).collect();
+        let copia = |p: &str| {
+            vigentes
+                .get(p)
+                .map(|r| r.valor("copiadaDe"))
+                .filter(|c| **c != Valor::Nulo)
+        };
+        let cambiadas: Vec<String> = leidas
+            .iter()
+            .filter(|p| copia(p).is_none())
+            .map(|p| dominio::nombre_proveedor(p))
+            .collect();
+        if !cambiadas.is_empty() {
+            return Ok((
+                false,
+                format!(
+                    "No se puede reutilizar: {nombre} lee respuestas que cambiaron en esta ronda ({}). Tiene que operar de nuevo.",
+                    cambiadas.join(", ")
+                ),
+            ));
+        }
+        let mut origenes: Vec<&Valor> = Vec::new();
+        for p in &leidas {
+            let Some(Valor::Objeto(c)) = copia(p) else {
+                continue;
+            };
+            let o = c
+                .iter()
+                .find(|(k, _)| k.como_str() == Some("rondaId"))
+                .map_or(&Valor::Nulo, |(_, v)| v);
+            if !origenes.contains(&o) {
+                origenes.push(o);
+            }
+        }
+        if origenes.len() != 1 {
+            return Ok((
+                false,
+                format!(
+                    "Las respuestas copiadas vienen de {} rondas distintas: no hay una operación anterior equivalente.",
+                    origenes.len()
+                ),
+            ));
+        }
+        let origen = origenes[0].clone();
+        let origen_corto = match &origen {
+            Valor::Texto(t) => corto(&t.para_mostrar()),
+            _ => String::new(),
+        };
+        let Some(vieja) = leido.hechos.iter().rev().find(|h| {
+            h.tipo() == "salida-operador"
+                && h.valor("rondaId") == &origen
+                && h.texto("operadorId").and_then(Texto::como_str) == Some(operador_id)
+        }) else {
+            return Ok((
+                false,
+                format!("No hay una operación de {nombre} en la ronda {origen_corto}."),
+            ));
+        };
+        let validas =
+            dominio::etiquetas_validas_del_operador(operador_id, pool, &sello).map_err(falla)?;
+        // ParsearHallazgos de la Unity con salidaCruda null tira: aquí, antes de escribir nada.
+        let salida = vieja
+            .texto("salidaCruda")
+            .cloned()
+            .ok_or_else(|| falla("la operación anterior no tiene salidaCruda"))?;
+        let copiada_de = Valor::Objeto(vec![
+            ("rondaId".into(), origen.clone()),
+            ("salidaOperadorId".into(), vieja.valor("id").clone()),
+        ]);
+        let hallazgos = self.procesar_salida_operador(
+            &ronda_id,
+            operador_id,
+            vieja.valor("promptCompleto").clone(),
+            &salida,
+            vieja.valor("html").clone(),
+            &validas,
+            Some(copiada_de),
+        )?;
+        let invalidas = hallazgos
+            .hallazgos
+            .iter()
+            .filter(|h| h.etiqueta_invalida)
+            .count();
+        let extra = if invalidas > 0 {
+            format!(", {invalidas} con etiqueta inválida")
+        } else {
+            String::new()
+        };
+        Ok((
+            true,
+            format!(
+                "{nombre}: se reutilizó su operación de la ronda {origen_corto} ({} hallazgos{extra}). No hace falta pegarle la operación de nuevo.",
+                hallazgos.hallazgos.len()
+            ),
+        ))
+    }
+}
+
+/// Corto: los primeros 8 caracteres (unidades UTF-16, como Substring) de un id.
+fn corto(id: &str) -> String {
+    String::from_utf16_lossy(&id.encode_utf16().take(8).collect::<Vec<u16>>())
 }
 
 fn discrepancia_de_sello(persistido: &[&Hecho], calculado: &[EntradaSello]) -> Option<String> {
@@ -1267,6 +1547,95 @@ mod pruebas {
                 .iter()
                 .all(|o| o.marcas.last().unwrap().starts_with("[[CC-MARCA-FIN-"))
         );
+    }
+
+    /// REG-017 y OPE-016 sobre la corrida de la Unity: ronda nueva con las respuestas copiadas (líneas
+    /// 60 a 70), kimi recapturada (71), la operación de chatgpt escribe el sello (72 a 78) y kimi
+    /// reutiliza la suya (79 a 82); chatgpt no puede, porque lee la de kimi, que cambió.
+    #[test]
+    fn parseos_reuso_la_ronda_copiada_y_la_operacion_reutilizada_son_las_de_la_unity() {
+        let c = Carpeta::nueva("operacion-reuso");
+        let todas = lineas_corrida();
+        let pool = pool_puerta();
+        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
+        let mut p = puerta_en_corrida(&c.0, &todas[..=59]);
+        // Los cargados de la puerta de la Unity: los de la condición de la primera ronda (línea 2).
+        let condicion = registro::leer(&format!(
+            "{}
+",
+            todas[2]
+        ))
+        .hechos;
+        p.activos = crate::registro::pruebas::lista(condicion[0].valor("proveedores"))
+            .iter()
+            .map(|v| crate::registro::pruebas::str_de(v).to_string())
+            .collect();
+        let mut n = 125u64;
+        p.nuevo_id = Box::new(move || {
+            n += 1;
+            format!("00000000-0000-4000-8000-{n:012}")
+        });
+        let mensaje = p.ronda_nueva_con_respuestas_copiadas(&pool).unwrap();
+        assert_eq!(
+            mensaje,
+            "Ronda nueva abierta (00000000) con 7 respuestas copiadas de la ronda 00000000. Recaptura con \"Capturar este panel\" lo que quieras corregir."
+        );
+        // La captura de kimi no es de esta parte: entra su línea tal cual y consume su id.
+        let ruta = registro::ruta_archivo(&c.0, CONVERSACION_CORRIDA);
+        let mut archivo = fs::read(&ruta).unwrap();
+        archivo.extend_from_slice(
+            format!(
+                "{}
+",
+                todas[71]
+            )
+            .as_bytes(),
+        );
+        fs::write(&ruta, archivo).unwrap();
+        (p.nuevo_id)();
+        p.armar_operacion(&pool, "chatgpt", false).unwrap();
+        let kimi = p.reutilizar_operacion(&pool, "kimi").unwrap();
+        let chatgpt = p.reutilizar_operacion(&pool, "chatgpt").unwrap();
+        let escritas: Vec<String> = String::from_utf8(lineas(&c.0, CONVERSACION_CORRIDA))
+            .unwrap()
+            .lines()
+            .map(String::from)
+            .collect();
+        assert_eq!(escritas.len(), todas.len());
+        for (i, (e, t)) in escritas.iter().zip(&todas).enumerate().skip(60) {
+            assert_eq!(e, t, "línea {i}");
+        }
+        let str_de =
+            |n: &str| crate::registro::pruebas::str_de(&crate::json::vector(n)).to_string();
+        assert_eq!(kimi, (true, str_de("MensajeReusoKimi")));
+        assert_eq!(chatgpt, (false, str_de("MensajeReusoChatgpt")));
+    }
+
+    #[test]
+    fn parseos_reuso_sin_ronda_sin_sello_o_fuera_del_pool_se_niega_sin_escribir() {
+        let c = Carpeta::nueva("operacion-reuso-negativas");
+        let pool = pool_puerta();
+        let pool: Vec<&str> = pool.iter().map(String::as_str).collect();
+        let mut vacia = nueva_puerta(&c.0);
+        assert_eq!(
+            vacia.ronda_nueva_con_respuestas_copiadas(&pool).unwrap(),
+            "No hay una ronda activa de la que copiar."
+        );
+        assert_eq!(
+            vacia.reutilizar_operacion(&pool, "kimi").unwrap(),
+            (false, "no hay una ronda activa".to_string())
+        );
+        let mut p = puerta_en_corrida(&c.0, &lineas_corrida()[..=12]);
+        let antes = lineas(&c.0, CONVERSACION_CORRIDA);
+        assert_eq!(
+            p.reutilizar_operacion(&pool, "glm").unwrap(),
+            (false, "\"GLM\" no es un operador del pool.".to_string())
+        );
+        assert_eq!(
+            p.reutilizar_operacion(&pool, "kimi").unwrap(),
+            (false, "Esta ronda todavía no tiene sello: pega primero la operación en algún panel («Pegar la operación aquí»).".to_string())
+        );
+        assert_eq!(lineas(&c.0, CONVERSACION_CORRIDA), antes);
     }
 
     #[test]

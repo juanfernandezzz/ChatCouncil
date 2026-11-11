@@ -3,6 +3,7 @@
 //! OPE-002, OPE-012, OPE-013); el resto de la Puerta llega con las partes que portan sus etapas.
 
 use crate::dominio;
+use crate::informe;
 use crate::json::Valor;
 use crate::operacion::{self, EntradaSello, INTERVALO_MARCA, RespuestaParaOperar};
 use crate::parseos;
@@ -289,6 +290,189 @@ fn texto_de(h: &Hecho, campo: &str) -> Option<Texto> {
 type RondaPreparada = (Rc<RegistroLeido>, Hecho, Texto, HashMap<String, Hecho>);
 // El registro leído, la ronda, la pregunta efectiva y la tabla H## de la ronda.
 type DatosDeRol = (Rc<RegistroLeido>, Hecho, Texto, prompts::TablaHallazgos);
+
+/// ParaTabla: los hallazgos vigentes de la ronda, de donde sale la tabla H##.
+fn para_tabla(hechos: &[Hecho], ronda_id: &Texto) -> Vec<prompts::HallazgoParaTabla> {
+    let cadena = |t: Option<&Texto>| t.map(|t| t.para_mostrar().to_string()).unwrap_or_default();
+    dominio::salidas_vigentes_de_ronda(hechos, ronda_id)
+        .iter()
+        .flat_map(|s| {
+            s.hallazgos.iter().map(|h| prompts::HallazgoParaTabla {
+                hallazgo_id_original: cadena(h.texto("id")),
+                categoria: h.texto("categoria").cloned().unwrap_or_default(),
+                eje: h.texto("eje").cloned(),
+                etiquetas: textos_de_lista(h.valor("etiquetas")),
+                descripcion: h.texto("descripcion").cloned().unwrap_or_default(),
+                operador_id_original: cadena(s.operador_id),
+            })
+        })
+        .collect()
+}
+
+fn textos_de_lista(v: &Valor) -> Vec<Texto> {
+    match v {
+        Valor::Lista(l) => l
+            .iter()
+            .filter_map(|v| match v {
+                Valor::Texto(t) => Some(t.clone()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Un campo de texto dentro de un objeto del hecho (procedencia, selloVerificaciones).
+fn texto_en<'a>(v: &'a Valor, nombre: &str) -> Option<&'a Texto> {
+    match v {
+        Valor::Objeto(o) => o.iter().find_map(|(n, v)| match v {
+            Valor::Texto(t) if n.como_str() == Some(nombre) => Some(t),
+            _ => None,
+        }),
+        _ => None,
+    }
+}
+
+fn cadena_de(t: Option<&Texto>) -> String {
+    t.map(|t| t.para_mostrar().into_owned()).unwrap_or_default()
+}
+
+/// Puerto PDF: imprime un Markdown a un PDF en la ruta dada; Err si no pudo (IPdf de la Unity).
+pub trait Pdf {
+    fn generar(&self, markdown: &Texto, ruta_pdf: &Path, titulo: &str) -> Result<(), String>;
+}
+
+/// Lo que devuelve ArmarInforme en la Unity.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InformeArmado {
+    pub ok: bool,
+    pub mensaje: String,
+    pub ruta: Option<PathBuf>,
+    pub completo: bool,
+}
+
+/// Las URLs que se comprueban por ronda, como mucho (D62).
+pub const TECHO_URLS_POR_RONDA: usize = 20;
+const NOMBRE_FALTANTES: &str = "FALTAN - respuestas sin PDF.txt";
+
+/// EscribirNuevo: nunca se sobrescribe un informe, que es un dato de investigación. UTF-8 sin BOM.
+fn escribir_nuevo(ruta: &Path, texto: &Texto) -> io::Result<()> {
+    use std::io::Write;
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(ruta)?
+        .write_all(texto.para_mostrar().as_bytes())
+}
+
+/// EntregarCarpeta: la carpeta del informe. Una respuesta cuyo .md o PDF falla no se omite en
+/// silencio: las demás se escriben igual y un archivo FALTAN las nombra (INF-008 a INF-010).
+fn entregar_carpeta(
+    dir_informes: &Path,
+    nombre_base: &str,
+    texto_informe: &Texto,
+    respuestas: &[(String, String, Texto)],
+    pdf: &dyn Pdf,
+) -> io::Result<InformeArmado> {
+    let carpeta_informe = dir_informes.join(nombre_base);
+    if carpeta_informe.exists() {
+        return Err(falla(format!(
+            "ya existe la carpeta {}",
+            carpeta_informe.display()
+        )));
+    }
+    fs::create_dir_all(&carpeta_informe)?;
+    let ruta_md = carpeta_informe.join(format!("{nombre_base}.md"));
+    escribir_nuevo(&ruta_md, texto_informe)?;
+    let fallo_informe = pdf
+        .generar(
+            texto_informe,
+            &carpeta_informe.join(format!("{nombre_base}.pdf")),
+            &format!("{nombre_base} — ChatCouncil"),
+        )
+        .err();
+
+    let mut faltantes: Vec<(String, String)> = Vec::new();
+    let mut fallo_subcarpeta = None;
+    let mut nota_escrita = false;
+    if !respuestas.is_empty() {
+        let dir = carpeta_informe.join(informe::SUBCARPETA_RESPUESTAS);
+        match fs::create_dir_all(&dir) {
+            Err(e) => fallo_subcarpeta = Some(e.to_string()),
+            Ok(()) => {
+                for (archivo, titulo, markdown) in respuestas {
+                    // El .md primero: es el texto, y otro modelo lo lee sin pasar por el PDF.
+                    if let Err(e) = escribir_nuevo(&dir.join(format!("{archivo}.md")), markdown) {
+                        faltantes
+                            .push((archivo.clone(), format!("no se pudo escribir el .md ({e})")));
+                    }
+                    if let Err(e) =
+                        pdf.generar(markdown, &dir.join(format!("{archivo}.pdf")), titulo)
+                    {
+                        faltantes
+                            .push((archivo.clone(), format!("no se pudo generar el PDF ({e})")));
+                    }
+                }
+                if !faltantes.is_empty() {
+                    let mut nota = String::from(
+                        "Estos archivos de respuesta de investigador no se pudieron escribir.\nEl texto de cada una sigue entero en el registro de la conversación.\n",
+                    );
+                    for (a, f) in &faltantes {
+                        nota.push_str(&format!("\n- {a}: {f}"));
+                    }
+                    nota.push('\n');
+                    // Si tampoco se puede escribir la nota, la cuenta igual va en el mensaje.
+                    nota_escrita =
+                        escribir_nuevo(&dir.join(NOMBRE_FALTANTES), &nota.into()).is_ok();
+                }
+            }
+        }
+    }
+
+    // Se cuentan RESPUESTAS con algún fallo, no archivos: una puede fallar en el .md y en el PDF.
+    let mut con_fallo: Vec<&str> = faltantes.iter().map(|(a, _)| a.as_str()).collect();
+    con_fallo.dedup();
+    let (total, con_fallo) = (respuestas.len(), con_fallo.len());
+    let completas = total - con_fallo;
+    let detalle = if total == 0 {
+        "Sin respuestas de investigador en el registro de esta ronda.".to_string()
+    } else if let Some(f) = &fallo_subcarpeta {
+        format!(
+            "NINGUNA de las {total} respuestas de investigador se escribió: no se pudo crear la subcarpeta \"{}\" ({f}). El texto de todas sigue entero en el registro.",
+            informe::SUBCARPETA_RESPUESTAS
+        )
+    } else if con_fallo == 0 {
+        format!("{completas} respuestas de investigador, cada una en .md y en PDF.")
+    } else {
+        format!(
+            "{completas} de {total} respuestas completas; {con_fallo} con archivos faltantes{}.",
+            if nota_escrita {
+                format!(" (nombrados en \"{NOMBRE_FALTANTES}\")")
+            } else {
+                ", y la nota que los nombra tampoco se pudo escribir".to_string()
+            }
+        )
+    };
+    let carpeta = carpeta_informe.display();
+    Ok(match fallo_informe {
+        Some(f) => InformeArmado {
+            ok: true,
+            mensaje: format!(
+                "Carpeta del informe: {carpeta}. El informe quedó solo en Markdown: no se pudo generar el PDF ({f}). {detalle}"
+            ),
+            ruta: Some(ruta_md),
+            completo: false,
+        },
+        None => InformeArmado {
+            ok: true,
+            mensaje: format!(
+                "Carpeta del informe: {carpeta}. El informe está en .md y en PDF. {detalle}"
+            ),
+            completo: faltantes.is_empty() && fallo_subcarpeta.is_none(),
+            ruta: Some(carpeta_informe),
+        },
+    })
+}
 
 /// InformeIntegradorVigente: el texto del último informe del integrador de la ronda.
 fn informe_vigente(leido: &RegistroLeido, ronda: &Hecho) -> io::Result<Texto> {
@@ -868,32 +1052,8 @@ impl Puerta {
                     "la ronda {ronda_id} no tiene pregunta registrada válida: declárala antes de pegar el {rol}"
                 ))
             })?;
-        let cadena =
-            |t: Option<&Texto>| t.map(|t| t.para_mostrar().to_string()).unwrap_or_default();
-        let para_tabla: Vec<prompts::HallazgoParaTabla> =
-            dominio::salidas_vigentes_de_ronda(&leido.hechos, &id)
-                .iter()
-                .flat_map(|s| {
-                    s.hallazgos.iter().map(|h| prompts::HallazgoParaTabla {
-                        hallazgo_id_original: cadena(h.texto("id")),
-                        categoria: h.texto("categoria").cloned().unwrap_or_default(),
-                        eje: h.texto("eje").cloned(),
-                        etiquetas: match h.valor("etiquetas") {
-                            Valor::Lista(l) => l
-                                .iter()
-                                .filter_map(|v| match v {
-                                    Valor::Texto(t) => Some(t.clone()),
-                                    _ => None,
-                                })
-                                .collect(),
-                            _ => Vec::new(),
-                        },
-                        descripcion: h.texto("descripcion").cloned().unwrap_or_default(),
-                        operador_id_original: cadena(s.operador_id),
-                    })
-                })
-                .collect();
-        let tabla = prompts::armar_tabla_hallazgos(&para_tabla, pool, semilla).map_err(falla)?;
+        let tabla = prompts::armar_tabla_hallazgos(&para_tabla(&leido.hechos, &id), pool, semilla)
+            .map_err(falla)?;
         Ok((leido, ronda, pregunta, tabla))
     }
 
@@ -1013,6 +1173,355 @@ impl Puerta {
             }),
             sello_verificaciones: sello,
         })
+    }
+
+    /// ArmarInforme (INF-002 a INF-011): el informe de la ronda y su carpeta en «informes»: el .md
+    /// y su PDF, y una subcarpeta con la respuesta de cada investigador. Las URLs salen de las
+    /// url-comprobada del registro: comprobarlas antes es INF-001.
+    pub fn armar_informe(&mut self, pdf: &dyn Pdf) -> InformeArmado {
+        self.armar_informe_o_fallar(pdf)
+            .unwrap_or_else(|e| InformeArmado {
+                ok: false,
+                mensaje: format!("No se pudo armar el informe final: {e}"),
+                ruta: None,
+                completo: false,
+            })
+    }
+
+    fn armar_informe_o_fallar(&mut self, pdf: &dyn Pdf) -> io::Result<InformeArmado> {
+        let sin_ronda = || InformeArmado {
+            ok: false,
+            mensaje: "No hay una ronda activa para armar el informe.".into(),
+            ruta: None,
+            completo: false,
+        };
+        let (Some(conversacion), Some(ronda_id)) =
+            (self.conversacion_actual.clone(), self.ronda_actual.clone())
+        else {
+            return Ok(sin_ronda());
+        };
+        let leido = self.leer_registro()?;
+        let hechos = &leido.hechos;
+        let id = Texto::from(ronda_id.as_str());
+        let Some(ronda) = hechos
+            .iter()
+            .find(|h| h.tipo() == "ronda" && h.texto("id") == Some(&id))
+        else {
+            return Ok(sin_ronda());
+        };
+        let pool_propio = self.pool.clone();
+        let pool = &strs(&pool_propio)[..];
+        let roles = self.roles.clone();
+
+        let semilla = ronda.texto("semilla").cloned().unwrap_or_default();
+        let sello: Vec<&Hecho> = hechos.iter().filter(|h| es_de(h, "sello", &id)).collect();
+        // UltimaPorProveedor: en el orden de la primera captura de cada uno; gana la última.
+        let mut del_pool: Vec<&Hecho> = Vec::new();
+        for r in hechos.iter().filter(|h| es_de(h, "respuesta", &id)) {
+            let p = r.texto("proveedorId");
+            if !p
+                .and_then(Texto::como_str)
+                .is_some_and(|p| pool.contains(&p))
+            {
+                continue;
+            }
+            match del_pool.iter_mut().find(|x| x.texto("proveedorId") == p) {
+                Some(x) => *x = r,
+                None => del_pool.push(r),
+            }
+        }
+        let ids_respuesta: HashSet<&Texto> =
+            del_pool.iter().filter_map(|r| r.texto("id")).collect();
+        let citas: Vec<&Hecho> = hechos
+            .iter()
+            .filter(|h| {
+                h.tipo() == "cita"
+                    && h.texto("respuestaId")
+                        .is_some_and(|r| ids_respuesta.contains(r))
+            })
+            .collect();
+        let citas_de = |r: &Hecho| {
+            citas
+                .iter()
+                .filter(|c| c.texto("respuestaId") == r.texto("id"))
+                .count()
+        };
+        let vigentes = dominio::salidas_vigentes_de_ronda(hechos, &id);
+        let tabla = prompts::armar_tabla_hallazgos(
+            &para_tabla(hechos, &id),
+            pool,
+            operacion::hash_semilla(&semilla),
+        )
+        .map_err(falla)?;
+        // Un operador nunca desaparece del informe por haber fallado o no dar hallazgos: los tres estados son hechos.
+        let participacion = pool
+            .iter()
+            .map(|op| {
+                let v = vigentes
+                    .iter()
+                    .find(|v| v.operador_id.and_then(Texto::como_str) == Some(*op));
+                let s = v.and_then(|v| {
+                    hechos
+                        .iter()
+                        .find(|h| h.tipo() == "salida-operador" && h.texto("id") == v.salida_id)
+                });
+                let (estado, detalle) = match (v, s) {
+                    (Some(v), Some(_)) if !v.hallazgos.is_empty() => {
+                        ("ok", format!("{} hallazgos", v.hallazgos.len()))
+                    }
+                    (Some(_), Some(s)) => {
+                        let descartadas = dominio::etiquetas_validas_del_operador(op, pool, &sello)
+                            .map_or(0, |e| {
+                                parseos::parsear_hallazgos(
+                                    &s.texto("salidaCruda").cloned().unwrap_or_default(),
+                                    &e,
+                                )
+                                .lineas_descartadas
+                            });
+                        (
+                            "sin-hallazgos",
+                            format!(
+                                "0 hallazgos parseables ({descartadas} líneas de la salida cruda descartadas)"
+                            ),
+                        )
+                    }
+                    _ => (
+                        "fallo",
+                        "no se capturó salida: no hay salida de operador en el registro".into(),
+                    ),
+                };
+                informe::ParticipacionOperador {
+                    operador_id: op.to_string(),
+                    estado: estado.into(),
+                    detalle,
+                }
+            })
+            .collect();
+
+        let informe_integrador = dominio::ultimo_informe_integrador(hechos, &id);
+        let pregunta = dominio::pregunta_efectiva_de_ronda(hechos, ronda)
+            .or(ronda.texto("prompt"))
+            .cloned()
+            .unwrap_or_default();
+        let salidas_verificador =
+            dominio::verificaciones_vigentes(hechos, &id, &roles.verificadores());
+        let urls: Vec<&Hecho> = hechos
+            .iter()
+            .filter(|h| es_de(h, "url-comprobada", &id))
+            .collect();
+
+        // Desanonimizar: P# → proveedor con el sello, O# → operador con la tabla.
+        let mut proveedor_de_codigo: HashMap<String, String> = HashMap::new();
+        let mut codigo_de_proveedor: HashMap<String, Option<String>> = HashMap::new();
+        for s in &sello {
+            let panel = cadena_de(s.texto("panelSourceId"));
+            let codigo = s.texto("codigoEstable").map(|t| cadena_de(Some(t)));
+            if let Some(c) = &codigo {
+                proveedor_de_codigo.insert(c.clone(), panel.clone());
+            }
+            codigo_de_proveedor.insert(panel, codigo);
+        }
+        let hallazgos: Vec<informe::HallazgoResuelto> = tabla
+            .filas
+            .iter()
+            .map(|f| informe::HallazgoResuelto {
+                codigo: f.codigo_hallazgo.clone(),
+                categoria: f.categoria.clone(),
+                eje: f.eje.clone(),
+                respuestas_reales: f
+                    .etiquetas
+                    .iter()
+                    .filter_map(|p| p.como_str().and_then(|p| proveedor_de_codigo.get(p)))
+                    .cloned()
+                    .collect(),
+                descripcion: f.descripcion.clone(),
+                operador_real: f.operador_id_original.clone(),
+            })
+            .collect();
+        let ids_validos: Vec<&str> = tabla
+            .filas
+            .iter()
+            .map(|f| f.codigo_hallazgo.as_str())
+            .collect();
+        let texto_integrador = informe_integrador
+            .map(|h| {
+                parseos::texto_del_informe_integrador(
+                    &h.texto("informeCrudo").cloned().unwrap_or_default(),
+                    h.texto("html"),
+                )
+            })
+            .transpose()?;
+        let redaccion = match hechos.iter().rfind(|h| es_de(h, "respuesta-redactor", &id)) {
+            None => None,
+            Some(r) => {
+                let urls_del_material: Vec<Texto> = citas
+                    .iter()
+                    .filter_map(|c| c.texto("url").cloned())
+                    .collect();
+                let c = prompts::controles_redaccion(
+                    &r.texto("textoCrudo").cloned().unwrap_or_default(),
+                    r.texto("html"),
+                    r.texto("marcaPrimera").and_then(Texto::como_str),
+                    r.texto("marcaUltima").and_then(Texto::como_str),
+                    &ids_validos,
+                    &urls_del_material,
+                )?;
+                Some(informe::RedaccionParaInforme {
+                    redactor_id: cadena_de(r.texto("redactorId")),
+                    controles: prompts::lineas_de_control(&c),
+                    cuerpo: c.cuerpo,
+                    sello_verificaciones: match r.valor("selloVerificaciones") {
+                        Valor::Lista(l) => l
+                            .iter()
+                            .map(|x| {
+                                (
+                                    cadena_de(texto_en(x, "etiqueta")),
+                                    cadena_de(texto_en(x, "verificadorId")),
+                                )
+                            })
+                            .collect(),
+                        _ => Vec::new(),
+                    },
+                })
+            }
+        };
+        let verificaciones = salidas_verificador
+            .iter()
+            .map(|s| {
+                informe::verificacion_para_informe(s, &urls, &hallazgos, Some(TECHO_URLS_POR_RONDA))
+            })
+            .collect::<io::Result<Vec<_>>>()?;
+        let cargados: Option<Vec<String>> = dominio::proveedores_cargados_de_ronda(hechos, &id)
+            .map(|v| {
+                textos_de_lista(v)
+                    .iter()
+                    .map(|t| cadena_de(Some(t)))
+                    .collect()
+            });
+        let texto = informe::armar(&informe::InformeFinalInput {
+            pregunta: pregunta.clone(),
+            fecha: self.ahora(),
+            conversacion_id: conversacion,
+            ronda_id: ronda_id.clone(),
+            referencias_en_orden: texto_integrador
+                .as_ref()
+                .map(|t| {
+                    parseos::parsear_referencias_integrador(t, &ids_validos)
+                        .referencias
+                        .into_iter()
+                        .map(|r| informe::ReferenciaResuelta {
+                            codigo: r.hallazgo_id,
+                            existe: !r.referencia_invalida,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            informe_integrador_crudo: texto_integrador.clone(),
+            hallazgos,
+            participacion_operadores: participacion,
+            condiciones: del_pool
+                .iter()
+                .map(|r| {
+                    let p = cadena_de(r.texto("proveedorId"));
+                    informe::CondicionProveedor {
+                        etiqueta_modelo: texto_en(r.valor("procedencia"), "modelLabel").cloned(),
+                        caracteres_respuesta: r
+                            .texto("textoOriginal")
+                            .map_or(0, Texto::largo_utf16),
+                        fuentes_citadas: citas_de(r),
+                        codigo_estable: codigo_de_proveedor.get(&p).cloned().flatten(),
+                        proveedor_id: p,
+                    }
+                })
+                .collect(),
+            integridad_entrega:
+                "no persistida en el registro (se informa en pantalla al pegar cada panel)".into(),
+            semilla,
+            proveedores_cargados_incompletos: cargados
+                .filter(|c| pool.iter().any(|p| !c.iter().any(|x| x == p))),
+            integrador: informe_integrador
+                .and_then(|h| h.texto("operadorId"))
+                .or_else(|| dominio::integrador_de_ronda(hechos, &id))
+                .map(|t| cadena_de(Some(t))),
+            verificaciones,
+            redaccion,
+        });
+
+        // El nombre: fecha y hora locales y el título del integrador (o las primeras palabras de la pregunta).
+        let dir = self.carpeta.join("informes");
+        fs::create_dir_all(&dir)?;
+        let titulo = match informe_integrador {
+            None => None,
+            Some(h) if h.texto("html").is_some_and(|t| !t.bytes().is_empty()) => texto_integrador
+                .as_ref()
+                .and_then(|t| parseos::extraer_titulo_del_informe(t).0),
+            Some(h) => h.texto("titulo").cloned().or_else(|| {
+                parseos::extraer_titulo_del_informe(
+                    &h.texto("informeCrudo").cloned().unwrap_or_default(),
+                )
+                .0
+            }),
+        };
+        // D47: ninguna ruta de la carpeta pasa de 259 caracteres (MAX_PATH). Las más largas son el PDF, que repite
+        // el nombre, y la nota de faltantes; se reservan " (999)" y "AAAA-MM-DD HHMM - ".
+        // shortcut: con la carpeta "informes" en más de ~168 caracteres no entra ningún título y va el de reserva, que puede
+        // dejar la nota de faltantes fuera del límite; mover la carpeta de datos más arriba si alguien la tiene tan honda.
+        let unidades = |s: &str| s.encode_utf16().count() as i64;
+        let libre = 259 - unidades(&std::path::absolute(&dir)?.to_string_lossy());
+        let nombre_max = ((libre - 6) / 2)
+            .min(libre - 3 - unidades(informe::SUBCARPETA_RESPUESTAS) - unidades(NOMBRE_FALTANTES))
+            - 6;
+        let s = self.sello_de_archivo();
+        let sello_local = format!("{} {}", &s[..10], &s[11..]);
+        let base = parseos::nombre_base_de_informe(
+            titulo.as_ref(),
+            &pregunta,
+            &sello_local,
+            (nombre_max - 18).max(0) as usize,
+        );
+        let nombre = parseos::nombre_libre_de_informe(&base, |n| {
+            let n = n.para_mostrar();
+            dir.join(&*n).is_dir()
+                || dir.join(format!("{n}.md")).is_file()
+                || dir.join(format!("{n}.pdf")).is_file()
+        })
+        .map_err(falla)?
+        .para_mostrar()
+        .into_owned();
+        // Las respuestas de los INVESTIGADORES a la pregunta, en el orden del pool; nunca las salidas de operador.
+        let mut respuestas = Vec::new();
+        for (i, op) in pool.iter().enumerate() {
+            let Some(r) = del_pool
+                .iter()
+                .find(|r| r.texto("proveedorId").and_then(Texto::como_str) == Some(*op))
+            else {
+                continue;
+            };
+            let procedencia = r.valor("procedencia");
+            respuestas.push((
+                informe::nombre_archivo_respuesta(i, op),
+                format!(
+                    "{} — respuesta de investigador",
+                    dominio::nombre_proveedor(op)
+                ),
+                informe::markdown_de_respuesta_investigador(
+                    &pregunta,
+                    &informe::RespuestaParaPdf {
+                        proveedor_id: op.to_string(),
+                        etiqueta_modelo: texto_en(procedencia, "modelLabel").cloned(),
+                        leida_en: cadena_de(r.texto("leidaEn")),
+                        texto_original: r.texto("textoOriginal").cloned().unwrap_or_default(),
+                        error: r.texto("error").cloned(),
+                        fuentes_citadas: citas_de(r),
+                        fuentes_href: r.entero("fuentesHref"),
+                        fin_de: texto_en(procedencia, "finDe").map(|t| cadena_de(Some(t))),
+                    },
+                ),
+            ));
+        }
+        let entrega = entregar_carpeta(&dir, &nombre, &texto, &respuestas, pdf)?;
+        self.informe_armado = Some((ronda_id, dir.join(&nombre)));
+        Ok(entrega)
     }
 
     /// OPE-015 (ProcesarSalidaOperador): la salida del operador y un hecho por hallazgo, parseados
@@ -2125,7 +2634,41 @@ fn discrepancia_de_sello(persistido: &[&Hecho], calculado: &[EntradaSello]) -> O
 #[cfg(test)]
 mod pruebas {
     use super::*;
+    use crate::registro::pruebas::str_de;
+    use std::cell::RefCell;
     use std::time::Duration;
+
+    /// Guarda los PDF pedidos; si se le dice, falla en uno (PdfFalso de la Unity).
+    #[derive(Default)]
+    struct PdfFalso {
+        pedidos: RefCell<Vec<(PathBuf, String)>>,
+        fallar_en: Option<&'static str>,
+    }
+
+    impl Pdf for PdfFalso {
+        fn generar(&self, _: &Texto, ruta: &Path, titulo: &str) -> Result<(), String> {
+            self.pedidos
+                .borrow_mut()
+                .push((ruta.to_path_buf(), titulo.to_string()));
+            if self
+                .fallar_en
+                .is_some_and(|f| ruta.to_string_lossy().contains(f))
+            {
+                return Err("la impresora de prueba falló".into());
+            }
+            fs::write(ruta, "%PDF falso").map_err(|e| e.to_string())
+        }
+    }
+
+    fn agregar_lineas(c: &Path, p: &Puerta, lineas: &str) {
+        use std::io::Write;
+        fs::OpenOptions::new()
+            .append(true)
+            .open(registro::ruta_archivo(c, p.conversacion_actual().unwrap()))
+            .unwrap()
+            .write_all(lineas.as_bytes())
+            .unwrap();
+    }
 
     const POOL: [&str; 7] = [
         "chatgpt", "gemini", "claude", "grok", "mistral", "kimi", "qwen",
@@ -3401,6 +3944,156 @@ mod pruebas {
 
     /// Una ronda entera con las corridas de la Unity. Las líneas de url-comprobada (y sus 6 ids) son de
     /// PART-009 y el informe de PART-008: aquí se saltan y el resto se compara byte a byte.
+    /// Una puerta con la ronda abierta y las siete respuestas de la investigación.
+    fn con_investigacion(c: &Path, pregunta: &str) -> Puerta {
+        let mut p = nueva_puerta(c);
+        p.abrir_ronda(pregunta).unwrap();
+        p.registrar_capturas(
+            &lote(&json_de("LotesOperacion"), "investigacion"),
+            &confirmada,
+        )
+        .unwrap();
+        p
+    }
+
+    // INF-009 e INF-010: una respuesta que no llega a PDF queda nombrada en la carpeta; si no, se
+    // lee como que ese proveedor no participó.
+    #[test]
+    fn informe_si_falla_el_pdf_de_una_respuesta_las_demas_se_escriben_y_faltan_la_nombra() {
+        let c = Carpeta::nueva("informe-pdf-falla");
+        let mut p = con_investigacion(&c.0, "¿Pregunta de prueba?");
+        let pdf = PdfFalso {
+            fallar_en: Some("4 - Grok.pdf"),
+            ..Default::default()
+        };
+        let r = p.armar_informe(&pdf);
+        let respuestas = r
+            .ruta
+            .as_ref()
+            .unwrap()
+            .join(informe::SUBCARPETA_RESPUESTAS);
+        let con = |ext: &str| {
+            fs::read_dir(&respuestas)
+                .unwrap()
+                .filter(|e| {
+                    e.as_ref()
+                        .unwrap()
+                        .path()
+                        .extension()
+                        .is_some_and(|x| x == ext)
+                })
+                .count()
+        };
+        assert_eq!((con("md"), con("pdf")), (7, 6));
+        assert!(
+            fs::read_to_string(respuestas.join("FALTAN - respuestas sin PDF.txt"))
+                .unwrap()
+                .contains("- 4 - Grok: no se pudo generar el PDF (la impresora de prueba falló)")
+        );
+        assert!(r.mensaje.ends_with(
+            "6 de 7 respuestas completas; 1 con archivos faltantes (nombrados en \"FALTAN - respuestas sin PDF.txt\")."
+        ), "{}", r.mensaje);
+        assert!(
+            !r.completo,
+            "un informe con archivos faltantes no está completo"
+        );
+    }
+
+    // INF-009: si falla el PDF del informe, queda el .md y se dice.
+    #[test]
+    fn informe_si_falla_el_pdf_del_informe_queda_el_md_y_se_dice() {
+        let c = Carpeta::nueva("informe-pdf-principal");
+        let mut p = con_investigacion(&c.0, "¿Pregunta de prueba?");
+        let pdf = PdfFalso {
+            fallar_en: Some("Pregunta de prueba.pdf"),
+            ..Default::default()
+        };
+        let r = p.armar_informe(&pdf);
+        assert!(r.ok && !r.completo);
+        assert!(
+            r.ruta
+                .as_ref()
+                .unwrap()
+                .extension()
+                .is_some_and(|x| x == "md")
+        );
+        assert!(r.mensaje.contains(
+            "El informe quedó solo en Markdown: no se pudo generar el PDF (la impresora de prueba falló)."
+        ), "{}", r.mensaje);
+    }
+
+    // D47: ninguna ruta de la carpeta pasa de 259 caracteres (MAX_PATH); el título se acorta, no se pierde.
+    #[test]
+    fn informe_ninguna_ruta_pasa_de_259_caracteres() {
+        let raiz = Carpeta::nueva("informe-rutas");
+        let largo = raiz.0.to_string_lossy().encode_utf16().count();
+        let honda = raiz.0.join("d".repeat(150 - largo));
+        fs::create_dir_all(&honda).unwrap();
+        let mut p = con_investigacion(
+            &honda,
+            "¿Cuáles investigaciones longitudinales comparables documentan efectos persistentes?",
+        );
+        let r = p.armar_informe(&PdfFalso::default());
+        assert!(r.ok && r.completo, "{}", r.mensaje);
+        let mut rutas = Vec::new();
+        let mut pendientes = vec![honda.join("informes")];
+        while let Some(d) = pendientes.pop() {
+            for e in fs::read_dir(d).unwrap() {
+                let e = e.unwrap().path();
+                if e.is_dir() {
+                    pendientes.push(e);
+                } else {
+                    rutas.push(e.to_string_lossy().encode_utf16().count());
+                }
+            }
+        }
+        assert_eq!(rutas.len(), 16);
+        assert!(rutas.iter().all(|&n| n <= 259), "{rutas:?}");
+        assert!(
+            r.ruta
+                .unwrap()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("2026-10-06 0900 - ¿Cuáles")
+        );
+    }
+
+    // INV-INF-001: un informe nunca se sobrescribe; armarlo otra vez usa el nombre libre siguiente.
+    #[test]
+    fn informe_nunca_se_sobrescribe() {
+        let c = Carpeta::nueva("informe-dos-veces");
+        let mut p = con_investigacion(&c.0, "¿Pregunta de prueba?");
+        let primera = p.armar_informe(&PdfFalso::default()).ruta.unwrap();
+        let md = primera.join(format!(
+            "{}.md",
+            primera.file_name().unwrap().to_string_lossy()
+        ));
+        fs::write(&md, "editado por Juan").unwrap();
+        let segunda = p.armar_informe(&PdfFalso::default());
+        assert!(segunda.ok, "{}", segunda.mensaje);
+        assert_eq!(
+            segunda.ruta.unwrap().file_name().unwrap().to_string_lossy(),
+            format!("{} (2)", primera.file_name().unwrap().to_string_lossy())
+        );
+        assert_eq!(fs::read_to_string(&md).unwrap(), "editado por Juan");
+    }
+
+    #[test]
+    fn informe_sin_ronda_activa_se_niega() {
+        let c = Carpeta::nueva("informe-sin-ronda");
+        let r = nueva_puerta(&c.0).armar_informe(&PdfFalso::default());
+        assert_eq!(
+            (r.ok, r.mensaje.as_str(), r.ruta),
+            (
+                false,
+                "No hay una ronda activa para armar el informe.",
+                None
+            )
+        );
+        assert!(!c.0.join("informes").exists());
+    }
+
     #[test]
     fn ronda_entera_deja_los_mismos_hechos_que_la_unity() {
         use std::cell::Cell;
@@ -3510,8 +4203,52 @@ mod pruebas {
                 "armar-informe",
             ]
         );
-        // Los ids que gasta ComprobarUrls en la Unity (PART-009).
+        // Las url-comprobada que escribe ComprobarUrls en la Unity (INF-001, PART-010), tal cual y
+        // con sus ids: el informe las lee del registro.
+        let todas = lineas_corrida();
+        let urls: String = todas
+            .iter()
+            .filter(|l| l.starts_with(r#"{"tipo":"url-comprobada""#))
+            .map(|l| format!("{l}\n"))
+            .collect();
+        agregar_lineas(&c.0, &p, &urls);
         contador.set(contador.get() + 6);
+        // T11: el informe con su carpeta (INF-002, INF-005, INF-008, INF-011).
+        let pdf = PdfFalso::default();
+        let informe = p.armar_informe(&pdf);
+        let nombre = str_de(&crate::json::vector("NombreBaseInforme")).to_string();
+        let carpeta_informe = c.0.join("informes").join(&nombre);
+        assert!(informe.ok && informe.completo, "{}", informe.mensaje);
+        assert_eq!(
+            fs::read_to_string(carpeta_informe.join(format!("{nombre}.md"))).unwrap(),
+            str_de(&crate::json::vector("InformeDeRonda"))
+        );
+        let respuestas = crate::json::vector("RespuestasDeCarpeta");
+        let subcarpeta = carpeta_informe.join(informe::SUBCARPETA_RESPUESTAS);
+        for r in registro::pruebas::lista(&respuestas) {
+            let archivo = str_de(registro::pruebas::campo(r, "archivo"));
+            assert_eq!(
+                fs::read_to_string(subcarpeta.join(format!("{archivo}.md"))).unwrap(),
+                str_de(registro::pruebas::campo(r, "markdown")),
+                "{archivo}"
+            );
+            assert!(pdf.pedidos.borrow().contains(&(
+                subcarpeta.join(format!("{archivo}.pdf")),
+                str_de(registro::pruebas::campo(r, "titulo")).to_string()
+            )));
+        }
+        // El motor no abre nada (D41): la carpeta la abre la interfaz.
+        assert_eq!(
+            informe.mensaje,
+            format!(
+                "Carpeta del informe: {}. El informe está en .md y en PDF. 7 respuestas de investigador, cada una en .md y en PDF.",
+                carpeta_informe.display()
+            )
+        );
+        // Armado el informe, el paso es abrir su carpeta, no armar otro.
+        paso!();
+        assert_eq!(pasos.last(), Some(&"abrir-carpeta"));
+        assert_eq!(p.carpeta_informe_armado(), Some(carpeta_informe.as_path()));
         p.ronda_nueva_con_respuestas_copiadas().unwrap();
         p.registrar_capturas(&lote(&lotes, "kimiNueva"), &confirmada)
             .unwrap();
@@ -3520,16 +4257,11 @@ mod pruebas {
         p.reutilizar_operacion("kimi").unwrap();
         p.reutilizar_operacion("chatgpt").unwrap();
 
-        let todas = lineas_corrida();
-        let sin_urls: Vec<&String> = todas
-            .iter()
-            .filter(|l| !l.starts_with(r#"{"tipo":"url-comprobada""#))
-            .collect();
-        assert_eq!(todas.len() - sin_urls.len(), 6);
+        assert_eq!(urls.lines().count(), 6);
         let escritas = lineas_de(&c.0, &p);
-        assert_eq!(escritas.len(), sin_urls.len());
-        for (i, (a, b)) in escritas.iter().zip(&sin_urls).enumerate() {
-            assert_eq!(a, *b, "línea {i}");
+        assert_eq!(escritas.len(), todas.len());
+        for (i, (a, b)) in escritas.iter().zip(&todas).enumerate() {
+            assert_eq!(a, b, "línea {i}");
         }
         assert_eq!(
             archivo_kimi.as_deref(),

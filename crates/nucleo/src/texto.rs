@@ -129,13 +129,19 @@ impl Texto {
 
     /// Agrega otro texto sin pasar por UTF-16; un bajo suelto al principio se une con un alto suelto al final.
     pub(crate) fn empujar_texto(&mut self, otro: &Texto) {
-        match otro.0.first() {
+        self.empujar_wtf8(&otro.0);
+    }
+
+    /// Como empujar_texto, con un tramo de un Texto cortado en un límite de punto de código.
+    pub(crate) fn empujar_wtf8(&mut self, otro: &[u8]) {
+        match otro.first() {
             // ED abre los puntos D000..DFFF, de 3 bytes: los surrogates sueltos están ahí.
             Some(0xED) => {
-                self.empujar(otro.puntos().next().unwrap());
-                self.0.extend_from_slice(&otro.0[3..]);
+                let p = 0xD000 | ((otro[1] as u32 & 0x3F) << 6) | (otro[2] as u32 & 0x3F);
+                self.empujar(p);
+                self.0.extend_from_slice(&otro[3..]);
             }
-            _ => self.0.extend_from_slice(&otro.0),
+            _ => self.0.extend_from_slice(otro),
         }
     }
 

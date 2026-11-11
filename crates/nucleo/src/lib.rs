@@ -3,6 +3,7 @@
 pub mod datos;
 pub mod dominio;
 pub mod importar;
+pub mod informe;
 pub mod json;
 mod nfd;
 pub mod operacion;

@@ -499,3 +499,10 @@ nucleo v0.1.0 (C:\Users\Juan Fernández\Documents\Proyectos\ChatCouncil\crates\n
 
 == CI
 42988568859 (3e34faf) success, job rust success: https://github.com/juanfernandezzz/ChatCouncil/actions/runs/42988568859
+
+### PART-007
+
+Máquina de la ronda portada: 38 pruebas ronda en verde (corrida entera y de nueve lecturas iguales a la Unity, umbral, aviso de prompts, reabierta con marcas del redactor, REG-016, RON-015/016, ESC-013); caso de falla sin pool: la operación se niega, no escribe y el paso sigue en capturar (rojo umbral→verde); gates fmt, clippy -D warnings, 133 pruebas workspace, nucleo sin dependencias; revisión ecc:rust-reviewer sin hallazgos de corrección; commit 39d44c6, CI https://github.com/juanfernandezzz/ChatCouncil/actions/runs/43060727695 success
+
+Artifacts:
+- cargo test -p nucleo ronda

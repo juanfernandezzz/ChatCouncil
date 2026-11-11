@@ -21,3 +21,14 @@ Una función pura del núcleo (sin interfaz, red ni disco en el tramo medido) se
 La regla del 10 % de CPU en reposo sigue rigiendo para todo tiempo de reloj, arranque, RAM y CPU de procesos, y para toda comparación entre apps (E8).
 
 Motivo: PART-004 no pudo medirse en 40 minutos de espera por carga ajena al trabajo (Defender 60 a 70 %, la app Unity instalada abierta).
+
+## Enmienda · 2026-11-10 · D16 · Corrige D15
+
+El supuesto de D15 falló. Medido en PART-004: los ciclos del hilo (QueryThreadCycleTime) siguen la carga de la máquina. Sobre el mismo código dieron 1590 Mciclos con 94 % de CPU y 898 con 38 %, y 7 de 13 intentos pasaron del 10 % de dispersión. QueryThreadCycleTime cuenta a ritmo de TSC, así que bajo carga pesan la frecuencia, la caché y el SMT.
+
+Regla vigente para funciones del núcleo:
+1. Una comparación antes/después vale si se mide en la misma sesión intercalando A y B (ABABAB, 3 corridas de cada uno), con dispersión de hasta 10 % en cada lado.
+2. Un número absoluto medido con más de 10 % de CPU en la máquina es orientativo y se anota junto a esa CPU.
+3. Toda afirmación absoluta de rendimiento va a E8, con la regla del 10 % de CPU en reposo.
+
+PART-004 queda cerrada con su T3 como orientativo (645,5 Mciclos, 338 a 351 ms las siete operaciones, dispersión 4,7 %). Su mejora de −25 % no se intercaló; ambos lados se midieron con carga parecida (67 a 77 %).

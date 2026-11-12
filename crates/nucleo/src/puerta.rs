@@ -12,6 +12,7 @@ use crate::registro::{self, Hecho, RegistroLeido};
 use crate::ronda::RolesElegidos;
 use crate::texto::Texto;
 use crate::urls::{self, Http};
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
@@ -74,9 +75,12 @@ pub struct Puerta {
     ronda_actual: Option<String>,
     ultima_lectura: Option<(String, u64, SystemTime, Rc<RegistroLeido>)>,
     // D21: lo escrito se asienta en el disco una vez por operación, al terminar la de más afuera.
-    sin_asentar: std::cell::Cell<bool>,
+    sin_asentar: Cell<bool>,
     profundidad: u32,
     veces_asentado: usize,
+    // D21: lo leído para el historial, por ruta, con su largo y su fecha; se relee solo lo que cambió.
+    historial: RefCell<HashMap<PathBuf, (u64, SystemTime, Leido)>>,
+    lecturas_historial: Cell<usize>,
     /// Segundos al este de UTC de la hora local en ese instante: la de los nombres de archivo.
     desfase_local: fn(SystemTime) -> i64,
     // Lo último que se pegó en cada panel, en este proceso: es el promptCompleto de lo que se capture después.
@@ -88,6 +92,13 @@ pub struct Puerta {
     sello_verificaciones: Option<Vec<(String, String)>>,
     // El informe armado en este proceso: el paso pasa a abrir su carpeta en vez de armar otro.
     informe_armado: Option<(String, PathBuf)>,
+}
+
+/// Un archivo leído para el historial: el texto de un informe o los hechos de un registro.
+#[derive(Clone)]
+enum Leido {
+    Informe(Rc<str>),
+    Registro(Rc<RegistroLeido>),
 }
 
 /// Lo que devuelve el script de página al leer un panel (Lectura de la Unity; los nombres son los
@@ -537,9 +548,11 @@ impl Puerta {
             conversacion_actual: None,
             ronda_actual: None,
             ultima_lectura: None,
-            sin_asentar: std::cell::Cell::new(false),
+            sin_asentar: Cell::new(false),
             profundidad: 0,
             veces_asentado: 0,
+            historial: RefCell::default(),
+            lecturas_historial: Cell::new(0),
             desfase_local: desfase_local_del_sistema,
             prompt_operador: HashMap::new(),
             prompt_integrador: None,
@@ -663,9 +676,29 @@ impl Puerta {
         self.indice_ronda = ronda.entero("indice").unwrap_or(0) + 1;
     }
 
+    /// Lo leído de `ruta` para el historial: de la memoria si el archivo no cambió de largo ni de
+    /// fecha, como leer_registro. Un archivo que no se puede leer no se recuerda.
+    fn recordado(&self, ruta: &Path, leer: impl FnOnce() -> io::Result<Leido>) -> Option<Leido> {
+        let meta = fs::metadata(ruta).ok()?;
+        let (largo, fecha) = (meta.len(), meta.modified().ok()?);
+        if let Some((l, f, v)) = self.historial.borrow().get(ruta)
+            && (*l, *f) == (largo, fecha)
+        {
+            return Some(v.clone());
+        }
+        // Se mide antes de leer: si el archivo crece en el medio, la próxima llamada ve otro largo y relee.
+        let v = leer().ok()?;
+        self.lecturas_historial
+            .set(self.lecturas_historial.get() + 1);
+        self.historial
+            .borrow_mut()
+            .insert(ruta.to_path_buf(), (largo, fecha, v.clone()));
+        Some(v)
+    }
+
     /// REG-015: las rondas de este aparato, la más nueva primero, sin las conversaciones de prueba.
     pub fn rondas_anteriores(&self) -> Vec<RondaAnterior> {
-        let mut informes: Vec<(PathBuf, String)> = Vec::new();
+        let mut informes: Vec<(PathBuf, Rc<str>)> = Vec::new();
         if let Ok(dir) = fs::read_dir(self.carpeta.join("informes")) {
             let mut carpetas: Vec<PathBuf> = dir
                 .filter_map(|e| e.ok().map(|e| e.path()))
@@ -678,14 +711,23 @@ impl Puerta {
                     c.file_name().unwrap_or_default().to_string_lossy()
                 ));
                 // Un .md que otro programa tiene abierto no bloquea a los demás.
-                if let Ok(b) = fs::read(&md) {
-                    informes.push((c, String::from_utf8_lossy(&b).replace("\r\n", "\n")));
+                let leido = self.recordado(&md, || {
+                    let b = fs::read(&md)?;
+                    Ok(Leido::Informe(
+                        String::from_utf8_lossy(&b).replace("\r\n", "\n").into(),
+                    ))
+                });
+                if let Some(Leido::Informe(t)) = leido {
+                    informes.push((c, t));
                 }
             }
         }
         let mut rondas = Vec::new();
         for id in archivos_de_conversacion(&self.carpeta) {
-            let Ok(leido) = registro::leer_archivo(&self.carpeta, &id) else {
+            let ruta = registro::ruta_archivo(&self.carpeta, &id);
+            let Some(Leido::Registro(leido)) = self.recordado(&ruta, || {
+                registro::leer_archivo(&self.carpeta, &id).map(|r| Leido::Registro(Rc::new(r)))
+            }) else {
                 continue;
             };
             let hechos = &leido.hechos;
@@ -3218,6 +3260,72 @@ mod pruebas {
         );
     }
 
+    // D21: el historial recuerda cada informe y cada registro por largo y fecha, y solo relee lo
+    // que cambió.
+    #[test]
+    fn historial_una_segunda_llamada_sin_cambios_no_relee() {
+        let c = Carpeta::nueva("historial-recordado");
+        let mut p = nueva_puerta(&c.0);
+        let primera = p.abrir_ronda("¿Primera pregunta?").unwrap();
+        let conversacion = p.conversacion_actual().unwrap().to_string();
+        let informe = crear_informe(&c.0, "informe-primera", &primera);
+        agregar(
+            &c.0,
+            "otra",
+            "conversacion",
+            &[("id", "otra"), ("creadaEn", "2026-10-07T12:00:00.000Z")],
+        );
+        agregar(
+            &c.0,
+            "otra",
+            "ronda",
+            &[
+                ("id", "r-otra"),
+                ("conversacionId", "otra"),
+                ("indice", "0"),
+                ("prompt", "¿Otra?"),
+                ("enviadaEn", "2026-10-07T12:00:00.000Z"),
+            ],
+        );
+        let ver = |p: &Puerta| -> Vec<(String, &str, Option<PathBuf>)> {
+            p.rondas_anteriores()
+                .into_iter()
+                .map(|r| {
+                    (
+                        r.ronda_id.unwrap().para_mostrar().into_owned(),
+                        r.etapa,
+                        r.carpeta_informe,
+                    )
+                })
+                .collect()
+        };
+        let esperado = vec![
+            ("r-otra".to_string(), "investigacion", None),
+            (primera.clone(), "investigacion", Some(informe.clone())),
+        ];
+        assert_eq!(ver(&p), esperado);
+        assert_eq!(p.lecturas_historial.get(), 3, "dos registros y un informe");
+        assert_eq!(ver(&p), esperado);
+        assert_eq!(p.lecturas_historial.get(), 3, "sin cambios no se relee");
+
+        // Un registro que cambió se relee, y solo ese.
+        agregar(
+            &c.0,
+            &conversacion,
+            "sello",
+            &[("id", "s"), ("rondaId", &primera)],
+        );
+        assert_eq!(ver(&p)[1].1, "operacion");
+        assert_eq!(p.lecturas_historial.get(), 4);
+
+        // Un informe que cambió se relee, y solo ese.
+        fs::write(informe.join("informe-primera.md"), "ya sin la marca").unwrap();
+        assert_eq!(ver(&p)[1].2, None);
+        assert_eq!(p.lecturas_historial.get(), 5);
+        assert_eq!(ver(&p)[1].2, None);
+        assert_eq!(p.lecturas_historial.get(), 5);
+    }
+
     #[cfg(windows)]
     #[test]
     fn un_archivo_ilegible_no_rompe_el_historial() {
@@ -3274,8 +3382,16 @@ mod pruebas {
         }
         {
             let _cerrado = bloquear(&archivo_primera);
-            assert_eq!(ids(&p), vec![("r-otra".into(), None)]);
+            // Quien nunca lo leyó lo salta; quien ya lo leyó y no cambió lo recuerda (D21).
             let mut q = nueva_puerta(&c.0);
+            assert_eq!(ids(&q), vec![("r-otra".into(), None)]);
+            assert_eq!(
+                ids(&p),
+                vec![
+                    ("r-otra".into(), None),
+                    (primera.clone(), Some(informe.clone()))
+                ]
+            );
             q.restaurar_ronda_activa();
             assert_eq!(q.ronda_actual(), Some("r-otra"));
         }

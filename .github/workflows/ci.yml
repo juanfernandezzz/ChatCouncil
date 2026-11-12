@@ -3,6 +3,11 @@ name: ci
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   rust:
@@ -10,6 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: rustup update stable && rustup component add rustfmt clippy
+      - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace -- -D warnings
       - run: cargo test --workspace

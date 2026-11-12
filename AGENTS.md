@@ -52,7 +52,7 @@ La lista viva de gates vive en el CI (`.github/workflows/`). Un gate se mantiene
 | Línea base y mediciones | `ecc:benchmark`, `ecc:benchmark-optimization-loop` |
 | Prototipos | `mattpocock-skills:prototype`, `agent-skills:source-driven-development` |
 | Núcleo Rust | `ponytail:ponytail ultra` (cuestiona el cómo, nunca el qué), `andrej-karpathy-skills:karpathy-guidelines`, `ecc:rust-patterns`, `ecc:rust-testing`, `superpowers:test-driven-development`, `agent-skills:incremental-implementation` |
-| Interfaz Slint | `impeccable:impeccable`, `ecc:make-interfaces-feel-better`, `ecc:accessibility` |
+| Interfaz Slint y paneles | `agent-skills:source-driven-development` (Slint, wry y webview2-com: se lee su documentación de la versión fijada antes de usar una API), `impeccable:impeccable`, `ecc:make-interfaces-feel-better`, `ecc:accessibility` |
 | Revisión de un lote | `ponytail:ponytail-review`, agente `ecc:rust-reviewer`, `agent-skills:code-review-and-quality` |
 | Cierre de una etapa | `ponytail:ponytail-audit` y la comparación contra la línea base |
 | CI y Release | `agent-skills:ci-cd-and-automation`, `agent-skills:git-workflow-and-versioning` |

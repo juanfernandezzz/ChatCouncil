@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: COMPLETE
+Next: plans/PART11_PLAN.ai.md
 
 ## Parts
 
@@ -58,6 +58,46 @@ Next: COMPLETE
   - Scenario: SCN-010
   - Outcome: Ajustes, diagnósticos y cierre medido del núcleo
   - Evidence: recorded
+
+- [ ] Part 11: plans/PART11_PLAN.ai.md
+  - Scenario: SCN-011
+  - Outcome: Esqueleto que camina: ventana Slint, un panel real, script de página, hilo del núcleo y autoprueba
+  - Evidence: pending
+
+- [ ] Part 12: plans/PART12_PLAN.ai.md
+  - Scenario: SCN-012
+  - Outcome: Paneles completos como el panel nativo de la Unity
+  - Evidence: pending
+
+- [ ] Part 13: plans/PART13_PLAN.ai.md
+  - Scenario: SCN-013
+  - Outcome: Script de página por el puente: escribir sin enviar, leer, estado y diagnóstico
+  - Evidence: pending
+
+- [ ] Part 14: plans/PART14_PLAN.ai.md
+  - Scenario: SCN-014
+  - Outcome: Secciones, Ajustes, primer arranque, historial y ayuda
+  - Evidence: pending
+
+- [ ] Part 15: plans/PART15_PLAN.ai.md
+  - Scenario: SCN-015
+  - Outcome: La Ronda en pantalla: pregunta e investigación
+  - Evidence: pending
+
+- [ ] Part 16: plans/PART16_PLAN.ai.md
+  - Scenario: SCN-016
+  - Outcome: La Ronda en pantalla: operación, roles e informe
+  - Evidence: pending
+
+- [ ] Part 17: plans/PART17_PLAN.ai.md
+  - Scenario: SCN-017
+  - Outcome: Menús, mantenimiento, teclado y lector de pantalla
+  - Evidence: pending
+
+- [ ] Part 18: plans/PART18_PLAN.ai.md
+  - Scenario: SCN-018
+  - Outcome: Cierre de E7: auditoría, pulido, cobertura y medición orientativa
+  - Evidence: pending
 
 ## Notes
 

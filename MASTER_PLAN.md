@@ -1,4 +1,4 @@
-# ChatCouncil · plan de E6 (núcleo Rust)
+# ChatCouncil · plan de E6 (núcleo Rust) y E7 (interfaz y paneles)
 
 ## Phase 1: E6 · Núcleo Rust
 
@@ -51,3 +51,45 @@
   - Scenario: SCN-010
   - Outcome: Ajustes, diagnósticos y cierre medido del núcleo
   - Evidence: recorded
+
+## Phase 2: E7 · Interfaz, paneles y pruebas internas
+
+- [ ] Part 11: Read `plans/PART11_PLAN.ai.md`
+  - Scenario: SCN-011
+  - Outcome: Esqueleto que camina: ventana Slint, un panel real, script de página, hilo del núcleo y autoprueba
+  - Evidence: pending
+
+- [ ] Part 12: Read `plans/PART12_PLAN.ai.md`
+  - Scenario: SCN-012
+  - Outcome: Paneles completos como el panel nativo de la Unity
+  - Evidence: pending
+
+- [ ] Part 13: Read `plans/PART13_PLAN.ai.md`
+  - Scenario: SCN-013
+  - Outcome: Script de página por el puente: escribir sin enviar, leer, estado y diagnóstico
+  - Evidence: pending
+
+- [ ] Part 14: Read `plans/PART14_PLAN.ai.md`
+  - Scenario: SCN-014
+  - Outcome: Secciones, Ajustes, primer arranque, historial y ayuda
+  - Evidence: pending
+
+- [ ] Part 15: Read `plans/PART15_PLAN.ai.md`
+  - Scenario: SCN-015
+  - Outcome: La Ronda en pantalla: pregunta e investigación
+  - Evidence: pending
+
+- [ ] Part 16: Read `plans/PART16_PLAN.ai.md`
+  - Scenario: SCN-016
+  - Outcome: La Ronda en pantalla: operación, roles e informe
+  - Evidence: pending
+
+- [ ] Part 17: Read `plans/PART17_PLAN.ai.md`
+  - Scenario: SCN-017
+  - Outcome: Menús, mantenimiento, teclado y lector de pantalla
+  - Evidence: pending
+
+- [ ] Part 18: Read `plans/PART18_PLAN.ai.md`
+  - Scenario: SCN-018
+  - Outcome: Cierre de E7: auditoría, pulido, cobertura y medición orientativa
+  - Evidence: pending

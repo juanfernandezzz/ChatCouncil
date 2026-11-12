@@ -1130,7 +1130,6 @@ dependencies = [
  "nucleo",
  "pulldown-cmark",
  "typst",
- "typst-assets",
  "typst-layout",
  "typst-pdf",
 ]

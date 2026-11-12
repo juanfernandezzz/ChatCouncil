@@ -19,15 +19,24 @@ use typst::utils::LazyHash;
 use typst::{Library, LibraryExt, World};
 
 /// Fuentes incrustadas: solo las que el informe usa. Libertinus Serif (SIL OFL 1.1) para el texto y DejaVu Sans Mono
-/// (licencia Bitstream Vera, redistribución libre) para el código. Los índices son los de `typst_assets::fonts()`.
-const FUENTES_USADAS: [usize; 10] = [0, 1, 2, 3, 4, 5, 13, 14, 15, 16];
+/// (licencia Bitstream Vera, redistribución libre) para el código. Copias idénticas de typst-assets 0.15.1, en su
+/// mismo orden, con sus licencias en `fuentes/` (D23).
+const FUENTES_USADAS: [&[u8]; 10] = [
+    include_bytes!("../fuentes/LibertinusSerif-Regular.otf"),
+    include_bytes!("../fuentes/LibertinusSerif-Bold.otf"),
+    include_bytes!("../fuentes/LibertinusSerif-Italic.otf"),
+    include_bytes!("../fuentes/LibertinusSerif-BoldItalic.otf"),
+    include_bytes!("../fuentes/LibertinusSerif-Semibold.otf"),
+    include_bytes!("../fuentes/LibertinusSerif-SemiboldItalic.otf"),
+    include_bytes!("../fuentes/DejaVuSansMono-Bold.ttf"),
+    include_bytes!("../fuentes/DejaVuSansMono-BoldOblique.ttf"),
+    include_bytes!("../fuentes/DejaVuSansMono-Oblique.ttf"),
+    include_bytes!("../fuentes/DejaVuSansMono.ttf"),
+];
 
 /// Cuántos bytes de fuentes incrusta (para medir el peso que suman al binario).
 pub fn bytes_de_fuentes() -> usize {
-    FUENTES_USADAS
-        .iter()
-        .map(|&i| typst_assets::fonts().nth(i).map_or(0, <[u8]>::len))
-        .sum()
+    FUENTES_USADAS.iter().map(|b| b.len()).sum()
 }
 
 struct Fijos {
@@ -41,8 +50,7 @@ fn fijos() -> &'static Fijos {
     F.get_or_init(|| {
         let fuentes: Vec<Font> = FUENTES_USADAS
             .iter()
-            .filter_map(|&i| typst_assets::fonts().nth(i))
-            .filter_map(|b| Font::new(Bytes::new(b), 0))
+            .filter_map(|&b| Font::new(Bytes::new(b), 0))
             .collect();
         Fijos {
             biblioteca: LazyHash::new(Library::default()),

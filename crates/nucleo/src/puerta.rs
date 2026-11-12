@@ -417,13 +417,15 @@ fn entregar_carpeta(
     pdf: &dyn Pdf,
 ) -> io::Result<InformeArmado> {
     let carpeta_informe = dir_informes.join(nombre_base);
-    if carpeta_informe.exists() {
-        return Err(falla(format!(
+    fs::create_dir_all(dir_informes)?;
+    // create_dir falla sola si ya existe: sin hueco entre preguntar y crear (D21).
+    fs::create_dir(&carpeta_informe).map_err(|e| match e.kind() {
+        io::ErrorKind::AlreadyExists => falla(format!(
             "ya existe la carpeta {}",
             carpeta_informe.display()
-        )));
-    }
-    fs::create_dir_all(&carpeta_informe)?;
+        )),
+        _ => e,
+    })?;
     let ruta_md = carpeta_informe.join(format!("{nombre_base}.md"));
     escribir_nuevo(&ruta_md, texto_informe)?;
     let fallo_informe = pdf
@@ -3258,6 +3260,36 @@ mod pruebas {
             rondas[1].enviada_en.as_ref().and_then(Texto::como_str),
             Some("2026-10-06T12:00:00.000Z")
         );
+    }
+
+    // D21: una carpeta de informe que ya existe da el mismo error de siempre y queda como estaba.
+    #[test]
+    fn informe_una_carpeta_que_ya_existe_no_se_toca() {
+        let c = Carpeta::nueva("carpeta-existente");
+        let dir = c.0.join("informes");
+        let existente = dir.join("2026-10-06 0900 informe");
+        fs::create_dir_all(&existente).unwrap();
+        fs::write(existente.join("anterior.md"), "anterior").unwrap();
+        let pdf = PdfFalso::default();
+        let e = entregar_carpeta(
+            &dir,
+            "2026-10-06 0900 informe",
+            &Texto::from("nuevo"),
+            &[],
+            &pdf,
+        )
+        .err()
+        .unwrap();
+        assert_eq!(
+            e.to_string(),
+            format!("ya existe la carpeta {}", existente.display())
+        );
+        assert_eq!(fs::read_dir(&existente).unwrap().count(), 1);
+        assert_eq!(
+            fs::read_to_string(existente.join("anterior.md")).unwrap(),
+            "anterior"
+        );
+        assert!(pdf.pedidos.borrow().is_empty());
     }
 
     // D21: el historial recuerda cada informe y cada registro por largo y fecha, y solo relee lo

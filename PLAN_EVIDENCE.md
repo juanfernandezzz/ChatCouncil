@@ -526,3 +526,10 @@ VER-009, INV-VER-002 e INV-VER-003 probados. nucleo/urls.rs decide que se pide (
 
 Artifacts:
 - cargo test -p nucleo urls: 5 passed (C:\cc-target\tmp\p009-gates.txt)
+
+### PART-010
+
+AJU-001..010, INV-AJU-001/002, DIA-002/003/005 e INV-DIA-001 probados en nucleo/ajustes.rs y nucleo/diagnosticos.rs, como la Unity; armar el informe comprueba primero las URL (INF-001, INF-007). Caso de falla en rojo y verde: con un perfil falso (Cookies y Local State) ningun tramo de 8 bytes llega al diagnostico ni al mensaje (p010-rojo.txt, p010-verde.txt). Tabla de cobertura bench/resultados/e6-cobertura.txt: 147 requisitos, 137 de E6, 0 sin prueba; anotados INF-013 y DIA-001 para E7 y DIA-004 para E8 (no se prueban sin interfaz ni paneles). Mediciones en bench/resultados/e6-nucleo.json: PDF de 70 paginas en frio mediana 926 ms (822/926/1061, CPU 23-42 %, orientativo; serie previa 690 ms con CPU 1-21 %), en caliente 119 ms, armar el .md 20,5 ms; medir.exe 46.036.480 bytes, binario de prueba del nucleo 4.521.984. Revision ecc:rust-reviewer: sin criticos; arreglado con rojo/verde el proveedor que sale de diagnosticos/ (p010-revision-rojo.txt, p010-revision-verde.txt); el resto reportado. Gates: fmt 0, clippy -D warnings 0, test --workspace 180 pasan 2 ignoradas, cargo tree -p nucleo -e normal sin dependencias. CI 163544e run 43175448458 success. Commit 163544e.
+
+Artifacts:
+- cargo test --workspace: nucleo 164 passed, informe-pdf 10, verificacion 6 (C:\cc-target\tmp\p010-gates.txt)

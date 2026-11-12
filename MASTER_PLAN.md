@@ -47,7 +47,7 @@
   - Outcome: Verificación de URL por HTTP como la Unity
   - Evidence: recorded
 
-- [ ] Part 10: Read `plans/PART10_PLAN.ai.md`
+- [x] Part 10: Read `plans/PART10_PLAN.ai.md`
   - Scenario: SCN-010
   - Outcome: Ajustes, diagnósticos y cierre medido del núcleo
-  - Evidence: pending
+  - Evidence: recorded

@@ -1,0 +1,10 @@
+[package]
+name = "verificacion"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+nucleo = { path = "../nucleo" }
+# Sin las funciones por defecto: ni cookies ni compresión; el cuerpo no se lee.
+ureq = { version = "3.5.1", default-features = false, features = ["rustls"] }

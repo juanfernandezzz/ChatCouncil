@@ -13,6 +13,7 @@ pub mod puerta;
 pub mod registro;
 pub mod ronda;
 pub mod texto;
+pub mod urls;
 
 #[cfg(test)]
 mod pruebas {

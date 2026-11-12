@@ -11,6 +11,7 @@ use crate::prompts;
 use crate::registro::{self, Hecho, RegistroLeido};
 use crate::ronda::RolesElegidos;
 use crate::texto::Texto;
+use crate::urls::{self, Http};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
@@ -353,6 +354,32 @@ pub struct InformeArmado {
 
 /// Las URLs que se comprueban por ronda, como mucho (D62).
 pub const TECHO_URLS_POR_RONDA: usize = 20;
+const TIEMPO_POR_URL: Duration = Duration::from_secs(10);
+
+/// Las URL distintas de la sección 1 que se piden, en su orden: las de una correspondencia
+/// NO_ENCONTRADA no cuentan, y a lo más TECHO_URLS_POR_RONDA por verificación (RESUELTO VER-01).
+fn urls_a_comprobar(correspondencias: Vec<parseos::Correspondencia>) -> Vec<Texto> {
+    let mut citadas: Vec<Texto> = Vec::new();
+    for v in correspondencias {
+        if let Some(u) = v.url
+            && v.correspondencia != "NO_ENCONTRADA"
+            && !citadas.contains(&u)
+            && citadas.len() < TECHO_URLS_POR_RONDA
+        {
+            citadas.push(u);
+        }
+    }
+    citadas
+}
+
+/// ResultadoUrls de la Unity: las url-comprobada de la ronda, y si ya estaban todas en el registro.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResultadoUrls {
+    pub ok: bool,
+    pub error: Option<String>,
+    pub urls: Vec<Hecho>,
+    pub ya_comprobadas: bool,
+}
 const NOMBRE_FALTANTES: &str = "FALTAN - respuestas sin PDF.txt";
 
 /// EscribirNuevo: nunca se sobrescribe un informe, que es un dato de investigación. UTF-8 sin BOM.
@@ -1173,6 +1200,104 @@ impl Puerta {
             }),
             sello_verificaciones: sello,
         })
+    }
+
+    /// ComprobarUrls (VER-009): comprueba las URLs de la sección 1 de la última verificación de cada
+    /// verificador de la ronda (D62: el 1 primero), una sola vez por verificación: las ya comprobadas
+    /// se devuelven sin salir a la red. Hasta 20 por verificación, todas a la vez, 10 s cada una.
+    pub fn comprobar_urls(&mut self, http: &dyn Http) -> io::Result<ResultadoUrls> {
+        let sin = |error: String| ResultadoUrls {
+            ok: false,
+            error: Some(error),
+            urls: Vec::new(),
+            ya_comprobadas: false,
+        };
+        let (Some(_), Some(ronda_id)) =
+            (self.conversacion_actual.clone(), self.ronda_actual.clone())
+        else {
+            return Ok(sin("no hay una ronda activa".into()));
+        };
+        let leido = self.leer_registro()?;
+        let hechos = &leido.hechos;
+        let id = Texto::from(ronda_id.as_str());
+        let roles = self.roles.clone();
+        let salidas = dominio::verificaciones_vigentes(hechos, &id, &roles.verificadores());
+        if salidas.is_empty() {
+            return Ok(sin(format!(
+                "la ronda {ronda_id} no tiene verificacion capturada"
+            )));
+        }
+        let mut todas = ResultadoUrls {
+            ok: true,
+            error: None,
+            urls: Vec::new(),
+            ya_comprobadas: true,
+        };
+        for salida in salidas {
+            let salida_id = salida.texto("id").cloned().unwrap_or_default();
+            let previas: Vec<Hecho> = hechos
+                .iter()
+                .filter(|h| {
+                    h.tipo() == "url-comprobada"
+                        && h.texto("salidaVerificadorId") == Some(&salida_id)
+                })
+                .cloned()
+                .collect();
+            if !previas.is_empty() {
+                todas.urls.extend(previas);
+                continue;
+            }
+            todas.ya_comprobadas = false;
+            let texto = parseos::texto_de_la_salida_verificador(
+                &salida.texto("salidaCruda").cloned().unwrap_or_default(),
+                salida.texto("html"),
+            )?;
+            let citadas = urls_a_comprobar(
+                parseos::parsear_verificacion::<&str>(&texto, &[]).correspondencias,
+            );
+            // Todas a la vez, como el Task.WhenAll de la Unity: a lo más 20 hilos, cada uno con su tiempo.
+            let resultados: Vec<(Option<i64>, Option<String>)> = std::thread::scope(|s| {
+                let hilos: Vec<_> = citadas
+                    .iter()
+                    .map(|u| {
+                        s.spawn(move || {
+                            // Una URL que no es texto válido no es http ni https: no se pide.
+                            urls::comprobar_url(u.como_str().unwrap_or(""), http, TIEMPO_POR_URL)
+                        })
+                    })
+                    .collect();
+                hilos
+                    .into_iter()
+                    .map(|h| {
+                        h.join().unwrap_or_else(|_| {
+                            (
+                                None,
+                                Some("la comprobación falló por un error interno".into()),
+                            )
+                        })
+                    })
+                    .collect()
+            });
+            for (url, (codigo, detalle)) in citadas.into_iter().zip(resultados) {
+                let mut valores = vec![
+                    ("id", Valor::Texto((self.nuevo_id)().into())),
+                    ("rondaId", Valor::Texto(id.clone())),
+                    ("salidaVerificadorId", Valor::Texto(salida_id.clone())),
+                    ("url", Valor::Texto(url)),
+                    ("comprobadaEn", Valor::Texto(self.ahora().into())),
+                ];
+                if let Some(c) = codigo {
+                    valores.push(("codigo", Valor::Entero(c)));
+                }
+                if let Some(d) = detalle {
+                    valores.push(("detalle", Valor::Texto(d.into())));
+                }
+                let h = Hecho::nuevo("url-comprobada", &valores)?;
+                self.escribir(&h)?;
+                todas.urls.push(h);
+            }
+        }
+        Ok(todas)
     }
 
     /// ArmarInforme (INF-002 a INF-011): el informe de la ronda y su carpeta en «informes»: el .md
@@ -2658,16 +2783,6 @@ mod pruebas {
             }
             fs::write(ruta, "%PDF falso").map_err(|e| e.to_string())
         }
-    }
-
-    fn agregar_lineas(c: &Path, p: &Puerta, lineas: &str) {
-        use std::io::Write;
-        fs::OpenOptions::new()
-            .append(true)
-            .open(registro::ruta_archivo(c, p.conversacion_actual().unwrap()))
-            .unwrap()
-            .write_all(lineas.as_bytes())
-            .unwrap();
     }
 
     const POOL: [&str; 7] = [
@@ -4210,16 +4325,20 @@ mod pruebas {
                 "armar-informe",
             ]
         );
-        // Las url-comprobada que escribe ComprobarUrls en la Unity (INF-001, PART-010), tal cual y
-        // con sus ids: el informe las lee del registro.
+        // T11 (VER-009): las URLs una sola vez por verificación. Las seis líneas url-comprobada que deja
+        // el núcleo son las de ComprobarUrls en la Unity: el registro entero se compara al final.
         let todas = lineas_corrida();
-        let urls: String = todas
-            .iter()
-            .filter(|l| l.starts_with(r#"{"tipo":"url-comprobada""#))
-            .map(|l| format!("{l}\n"))
-            .collect();
-        agregar_lineas(&c.0, &p, &urls);
-        contador.set(contador.get() + 6);
+        let http = crate::urls::pruebas::HttpFalso::default();
+        let pedidos = || http.pedidos.load(std::sync::atomic::Ordering::SeqCst);
+        let urls = p.comprobar_urls(&http).unwrap();
+        let (tras_primera, segunda) = (pedidos(), p.comprobar_urls(&http).unwrap());
+        assert!(urls.ok && !urls.ya_comprobadas && segunda.ya_comprobadas);
+        assert_eq!(segunda.urls, urls.urls);
+        assert_eq!(
+            pedidos(),
+            tras_primera,
+            "una URL ya comprobada no se pide otra vez"
+        );
         // T11: el informe con su carpeta (INF-002, INF-005, INF-008, INF-011).
         let pdf = PdfFalso::default();
         let informe = p.armar_informe(&pdf);
@@ -4264,7 +4383,7 @@ mod pruebas {
         p.reutilizar_operacion("kimi").unwrap();
         p.reutilizar_operacion("chatgpt").unwrap();
 
-        assert_eq!(urls.lines().count(), 6);
+        assert_eq!(urls.urls.len(), 6);
         let escritas = lineas_de(&c.0, &p);
         assert_eq!(escritas.len(), todas.len());
         for (i, (a, b)) in escritas.iter().zip(&todas).enumerate() {
@@ -4295,6 +4414,56 @@ mod pruebas {
             dominio::ultimo_informe_integrador(&hechos, &primera).and_then(|h| s(h, "titulo")),
             Some("La dosis")
         );
+    }
+
+    // VER-009, RESUELTO VER-01 (Puerta.cs:861 y 963): a lo más 20 URL distintas por verificación, en su
+    // orden; las repetidas y las de NO_ENCONTRADA no gastan el tope.
+    #[test]
+    fn urls_el_tope_es_de_20_por_verificacion() {
+        let cita = |correspondencia, url: &str| parseos::Correspondencia {
+            correspondencia,
+            tipos_fuente: Vec::new(),
+            tipos_no_reconocidos: Vec::new(),
+            hallazgo_id: "H01".into(),
+            url: Some(url.into()),
+            texto: Texto::default(),
+            hallazgo_invalido: false,
+            formato_anterior: false,
+        };
+        let mut citas = vec![
+            cita("NO_ENCONTRADA", "https://no.org"),
+            cita("CONFIRMA", "https://u0.org"),
+            cita("CONFIRMA", "https://u0.org"),
+        ];
+        citas.extend((1..25).map(|i| cita("CONFIRMA", &format!("https://u{i}.org"))));
+        let esperadas: Vec<Texto> = (0..20)
+            .map(|i| format!("https://u{i}.org").into())
+            .collect();
+        assert_eq!(urls_a_comprobar(citas), esperadas);
+    }
+
+    // VER-009: sin ronda o sin verificación capturada no hay nada que comprobar, y nada sale a la red.
+    #[test]
+    fn urls_sin_ronda_o_sin_verificacion_es_un_error_y_no_se_pide_nada() {
+        let c = Carpeta::nueva("urls-sin-ronda");
+        let mut p = nueva_puerta(&c.0);
+        let http = crate::urls::pruebas::HttpFalso::default();
+        let r = p.comprobar_urls(&http).unwrap();
+        assert_eq!(
+            (r.ok, r.error.as_deref()),
+            (false, Some("no hay una ronda activa"))
+        );
+        p.abrir_ronda("¿Pregunta?").unwrap();
+        let r = p.comprobar_urls(&http).unwrap();
+        let ronda = p.ronda_actual().unwrap().to_string();
+        assert_eq!(
+            (r.ok, r.error),
+            (
+                false,
+                Some(format!("la ronda {ronda} no tiene verificacion capturada"))
+            )
+        );
+        assert_eq!(http.pedidos.load(std::sync::atomic::Ordering::SeqCst), 0);
     }
 
     // T22: un operador que ya operó y un rol cuya etapa pasó están capturados; el rol de la etapa sigue su estado.

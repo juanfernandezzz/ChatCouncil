@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Autoprueba: cierre de sesión</title></head>
+<body>
+  <!-- Desde acá la autoprueba intenta ir a /logout y a /auth/sign-out: el panel tiene que cancelarlo. -->
+  <p>Si esta página sigue a la vista, la navegación a cierre de sesión se bloqueó.</p>
+  <!-- ?ir=RUTA: la página navega sola al cargar, sin gesto de la persona (como claude.ai /new → /logout). -->
+  <script>const ir = new URLSearchParams(location.search).get("ir"); if (ir) location.href = ir;</script>
+</body>
+</html>

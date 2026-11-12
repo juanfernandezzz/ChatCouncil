@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Autoprueba: informe en otro origen</title></head>
+<body>
+  <!-- Se sirve desde https://cc-otro.test/: como el informe de Deep Research, vive en un iframe about:blank adentro. -->
+  <iframe id="root"></iframe>
+  <script>
+    const d = document.getElementById("root").contentDocument;
+    d.open();
+    d.write('<div class="_reportPage_x9f">INFORME DE PRUEBA: contenido del iframe de otro origen.</div>');
+    d.close();
+  </script>
+</body>
+</html>

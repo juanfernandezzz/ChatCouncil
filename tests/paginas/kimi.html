@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Autoprueba: tipo Kimi</title></head>
+<body>
+  <!-- Imita la spec real de kimi: tarjetas de archivo que montan un iframe del mismo origen, un bloque excluido, y un editor que procesa el pegado él mismo. -->
+  <main>
+    <div class="chat-content-item chat-content-item-assistant">Respuesta de Kimi con dos archivos.
+      <div class="segment-assistant-actions">Copiar y compartir</div>
+      <div class="preview-card card-hover-animate"><span class="title">uno.md</span></div>
+      <div class="preview-card card-hover-animate"><span class="title">dos.md</span></div>
+    </div>
+  </main>
+  <!-- Lexical pone white-space: pre-wrap en su raíz (packages/lexical/src/LexicalEditor.ts, setRootElement). -->
+  <div class="chat-input-editor" contenteditable="true" style="white-space: pre-wrap"><p><br></p></div>
+  <script>
+    document.querySelectorAll(".preview-card").forEach((tarjeta, i) => tarjeta.addEventListener("click", () => {
+      let f = document.querySelector("iframe.vista");
+      if (!f) {
+        f = document.createElement("iframe");
+        f.className = "vista";
+        document.querySelector("main").appendChild(f);
+      }
+      f.src = "kimink/embed.html?f=" + (i + 1);
+    }));
+
+    // Como Lexical: el editor cancela el pegado nativo y arma sus párrafos. La primera línea sigue el párrafo actual.
+    const ed = document.querySelector(".chat-input-editor");
+    ed.addEventListener("paste", (e) => {
+      e.preventDefault();
+      Array.from(ed.childNodes).forEach((n) => { if (n.nodeName !== "P") n.remove(); });
+      let p = ed.lastElementChild;
+      if (!p) { p = document.createElement("p"); ed.appendChild(p); }
+      e.clipboardData.getData("text/plain").split("\n").forEach((linea, i) => {
+        if (i > 0) { p = document.createElement("p"); ed.appendChild(p); }
+        if (p.firstChild && p.firstChild.nodeName === "BR") p.firstChild.remove();
+        if (linea) p.appendChild(document.createTextNode(linea));
+        if (!p.firstChild) p.appendChild(document.createElement("br"));
+      });
+    });
+  </script>
+</body>
+</html>

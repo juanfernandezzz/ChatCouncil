@@ -6,6 +6,7 @@
 use crate::dominio::nombre_proveedor;
 use crate::json::{self, Valor};
 use crate::puerta::formatear_utc;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -55,7 +56,6 @@ pub fn guardar(
         return Err(mensaje_de_falla(proveedor, "proveedor inválido"));
     }
     let dir = carpeta_datos.join(CARPETA);
-    let ruta = dir.join(format!("{proveedor}-{sello}.json"));
     let documento = Valor::Objeto(vec![
         ("proveedor".into(), Valor::Texto(proveedor.into())),
         ("app".into(), Valor::Texto(version_app.into())),
@@ -63,9 +63,26 @@ pub fn guardar(
     ]);
     let mut bytes = Vec::new();
     con_sangria(&documento, 0, &mut bytes);
-    std::fs::create_dir_all(&dir)
-        .and_then(|()| std::fs::write(&ruta, bytes))
-        .map_err(|e| mensaje_de_falla(proveedor, &e.to_string()))?;
+    std::fs::create_dir_all(&dir).map_err(|e| mensaje_de_falla(proveedor, &e.to_string()))?;
+    // Nunca se pisa uno anterior: con el nombre ocupado en ese segundo, «-2», «-3» y así (D21).
+    let mut n = 1;
+    let ruta = loop {
+        let sufijo = if n == 1 {
+            String::new()
+        } else {
+            format!("-{n}")
+        };
+        let ruta = dir.join(format!("{proveedor}-{sello}{sufijo}.json"));
+        let abierto = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&ruta);
+        match abierto.and_then(|mut f| f.write_all(&bytes)) {
+            Ok(()) => break ruta,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => n += 1,
+            Err(e) => return Err(mensaje_de_falla(proveedor, &e.to_string())),
+        }
+    };
     let mensaje = format!(
         "Diagnóstico de {} guardado en {}. Mándalo junto con lo que pasó para que se corrijan los selectores.",
         nombre_proveedor(proveedor),
@@ -225,6 +242,33 @@ mod pruebas {
             assert!(e.ends_with("proveedor inválido"), "{malo}: {e}");
         }
         assert_eq!(fs::read_dir(&d).unwrap().count(), 0, "no se escribió nada");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    // D21: dos diagnósticos del mismo proveedor en el mismo segundo no se pisan.
+    #[test]
+    fn diagnosticos_dos_en_el_mismo_segundo_no_se_pisan() {
+        let d = carpeta("mismo-segundo");
+        let sello = "2026-10-06-090005";
+        let guardar_uno = |n: i64| {
+            guardar(&d, "glm", "0.1.0", &Valor::Entero(n), sello)
+                .unwrap()
+                .0
+        };
+        let rutas = [guardar_uno(1), guardar_uno(2), guardar_uno(3)];
+        let dir = d.join("diagnosticos");
+        assert_eq!(
+            rutas,
+            [
+                dir.join("glm-2026-10-06-090005.json"),
+                dir.join("glm-2026-10-06-090005-2.json"),
+                dir.join("glm-2026-10-06-090005-3.json"),
+            ]
+        );
+        for (ruta, n) in rutas.iter().zip(1..) {
+            let texto = fs::read_to_string(ruta).unwrap();
+            assert!(texto.contains(&format!("\"diagnostico\": {n}")), "{texto}");
+        }
         let _ = fs::remove_dir_all(&d);
     }
 

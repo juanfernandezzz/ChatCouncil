@@ -6,3 +6,9 @@ resolver = "3"
 version = "0.1.0"
 edition = "2024"
 publish = false
+
+# D20: achica el binario con typst. panic queda en unwind: informe-pdf usa catch_unwind.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"

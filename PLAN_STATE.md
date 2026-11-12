@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART9_PLAN.ai.md
+Next: plans/PART10_PLAN.ai.md
 
 ## Parts
 
@@ -49,10 +49,10 @@ Next: plans/PART9_PLAN.ai.md
   - Outcome: Informe final en .md y PDF Carta con typst, medido contra M4
   - Evidence: recorded
 
-- [ ] Part 9: plans/PART9_PLAN.ai.md
+- [x] Part 9: plans/PART9_PLAN.ai.md
   - Scenario: SCN-009
   - Outcome: Verificación de URL por HTTP como la Unity
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 10: plans/PART10_PLAN.ai.md
   - Scenario: SCN-010

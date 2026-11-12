@@ -519,3 +519,10 @@ Artifacts:
 - cargo test --workspace
 - cargo tree -p nucleo -e normal
 - cargo run --release -p informe-pdf --example medir
+
+### PART-009
+
+VER-009, INV-VER-002 e INV-VER-003 probados. nucleo/urls.rs decide que se pide (solo http/https, nunca local ni privada), HEAD con respaldo GET en un solo tiempo de 10 s, en paralelo, tope de 20 por verificacion, y una verificacion ya comprobada no vuelve a la red; el registro de la corrida entera queda igual byte a byte al de la Unity. Cliente en crates/verificacion (ureq 3.5.1 + rustls, sin tokio): sin cookies ni encabezados propios, 50 saltos, sin leer el cuerpo; 6 pruebas contra un servidor en 127.0.0.1 (200, 301, 404, HEAD rechazado, bucle de redirecciones, tiempo agotado, cuerpo sin leer). Caso de falla en rojo y verde: sin el tiempo el servidor mudo cuelga 5 s (p009-cliente-rojo.txt); tiempo agotado se informa 'sin respuesta en 10 s' como la Unity. Revision ecc:rust-reviewer: 10 hallazgos, 4 arreglados con rojo/verde (punto final en IPv4, IPv4 dentro de IPv6, host con % o controles, temporal ajeno del PDF); el resto reportado. Gates: fmt 0, clippy -D warnings 0, test --workspace 166 pasan 2 ignoradas, cargo tree -p nucleo -e normal sin dependencias. CI b0414f3 run 43155059278 success. Commits fa5d25d y b0414f3.
+
+Artifacts:
+- cargo test -p nucleo urls: 5 passed (C:\cc-target\tmp\p009-gates.txt)

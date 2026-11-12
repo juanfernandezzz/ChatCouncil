@@ -1301,10 +1301,10 @@ impl Puerta {
     }
 
     /// ArmarInforme (INF-002 a INF-011): el informe de la ronda y su carpeta en «informes»: el .md
-    /// y su PDF, y una subcarpeta con la respuesta de cada investigador. Las URLs salen de las
-    /// url-comprobada del registro: comprobarlas antes es INF-001.
-    pub fn armar_informe(&mut self, pdf: &dyn Pdf) -> InformeArmado {
-        self.armar_informe_o_fallar(pdf)
+    /// y su PDF, y una subcarpeta con la respuesta de cada investigador. Antes comprueba las URLs
+    /// de la verificación, si las hay y no se comprobaron (INF-001).
+    pub fn armar_informe(&mut self, http: &dyn Http, pdf: &dyn Pdf) -> InformeArmado {
+        self.armar_informe_o_fallar(http, pdf)
             .unwrap_or_else(|e| InformeArmado {
                 ok: false,
                 mensaje: format!("No se pudo armar el informe final: {e}"),
@@ -1313,7 +1313,11 @@ impl Puerta {
             })
     }
 
-    fn armar_informe_o_fallar(&mut self, pdf: &dyn Pdf) -> io::Result<InformeArmado> {
+    fn armar_informe_o_fallar(
+        &mut self,
+        http: &dyn Http,
+        pdf: &dyn Pdf,
+    ) -> io::Result<InformeArmado> {
         let sin_ronda = || InformeArmado {
             ok: false,
             mensaje: "No hay una ronda activa para armar el informe.".into(),
@@ -1430,10 +1434,12 @@ impl Puerta {
             .unwrap_or_default();
         let salidas_verificador =
             dominio::verificaciones_vigentes(hechos, &id, &roles.verificadores());
-        let urls: Vec<&Hecho> = hechos
-            .iter()
-            .filter(|h| es_de(h, "url-comprobada", &id))
-            .collect();
+        let comprobadas = if salidas_verificador.is_empty() {
+            Vec::new()
+        } else {
+            self.comprobar_urls(http)?.urls
+        };
+        let urls: Vec<&Hecho> = comprobadas.iter().collect();
 
         // Desanonimizar: P# → proveedor con el sello, O# → operador con la tabla.
         let mut proveedor_de_codigo: HashMap<String, String> = HashMap::new();
@@ -2760,6 +2766,7 @@ fn discrepancia_de_sello(persistido: &[&Hecho], calculado: &[EntradaSello]) -> O
 mod pruebas {
     use super::*;
     use crate::registro::pruebas::str_de;
+    use crate::urls::pruebas::HttpFalso;
     use std::cell::RefCell;
     use std::time::Duration;
 
@@ -4083,7 +4090,7 @@ mod pruebas {
             fallar_en: Some("4 - Grok.pdf"),
             ..Default::default()
         };
-        let r = p.armar_informe(&pdf);
+        let r = p.armar_informe(&HttpFalso::default(), &pdf);
         let respuestas = r
             .ruta
             .as_ref()
@@ -4125,7 +4132,7 @@ mod pruebas {
             fallar_en: Some("Pregunta de prueba.pdf"),
             ..Default::default()
         };
-        let r = p.armar_informe(&pdf);
+        let r = p.armar_informe(&HttpFalso::default(), &pdf);
         assert!(r.ok && !r.completo);
         assert!(
             r.ruta
@@ -4152,7 +4159,7 @@ mod pruebas {
             &honda,
             "¿Cuáles investigaciones longitudinales comparables documentan efectos persistentes?",
         );
-        let r = p.armar_informe(&PdfFalso::default());
+        let r = p.armar_informe(&HttpFalso::default(), &PdfFalso::default());
         assert!(r.ok && r.completo, "{}", r.mensaje);
         let mut rutas = Vec::new();
         let mut pendientes = vec![honda.join("informes")];
@@ -4186,13 +4193,16 @@ mod pruebas {
     fn informe_nunca_se_sobrescribe() {
         let c = Carpeta::nueva("informe-dos-veces");
         let mut p = con_investigacion(&c.0, "¿Pregunta de prueba?");
-        let primera = p.armar_informe(&PdfFalso::default()).ruta.unwrap();
+        let primera = p
+            .armar_informe(&HttpFalso::default(), &PdfFalso::default())
+            .ruta
+            .unwrap();
         let md = primera.join(format!(
             "{}.md",
             primera.file_name().unwrap().to_string_lossy()
         ));
         fs::write(&md, "editado por Juan").unwrap();
-        let segunda = p.armar_informe(&PdfFalso::default());
+        let segunda = p.armar_informe(&HttpFalso::default(), &PdfFalso::default());
         assert!(segunda.ok, "{}", segunda.mensaje);
         assert_eq!(
             segunda.ruta.unwrap().file_name().unwrap().to_string_lossy(),
@@ -4204,7 +4214,7 @@ mod pruebas {
     #[test]
     fn informe_sin_ronda_activa_se_niega() {
         let c = Carpeta::nueva("informe-sin-ronda");
-        let r = nueva_puerta(&c.0).armar_informe(&PdfFalso::default());
+        let r = nueva_puerta(&c.0).armar_informe(&HttpFalso::default(), &PdfFalso::default());
         assert_eq!(
             (r.ok, r.mensaje.as_str(), r.ruta),
             (
@@ -4330,18 +4340,24 @@ mod pruebas {
         let todas = lineas_corrida();
         let http = crate::urls::pruebas::HttpFalso::default();
         let pedidos = || http.pedidos.load(std::sync::atomic::Ordering::SeqCst);
-        let urls = p.comprobar_urls(&http).unwrap();
-        let (tras_primera, segunda) = (pedidos(), p.comprobar_urls(&http).unwrap());
-        assert!(urls.ok && !urls.ya_comprobadas && segunda.ya_comprobadas);
+        // T11: el informe con su carpeta (INF-002, INF-005, INF-008, INF-011). INF-001: armarlo
+        // comprueba las URLs, que nadie comprobó antes; INF-007: su estado sale en el informe.
+        let pdf = PdfFalso::default();
+        let informe = p.armar_informe(&http, &pdf);
+        let tras_el_informe = pedidos();
+        assert!(tras_el_informe > 0, "el informe comprobó las URLs");
+        let (urls, segunda) = (
+            p.comprobar_urls(&http).unwrap(),
+            p.comprobar_urls(&http).unwrap(),
+        );
+        assert!(urls.ok && urls.ya_comprobadas && segunda.ya_comprobadas);
         assert_eq!(segunda.urls, urls.urls);
+        assert_eq!(urls.urls.len(), 6);
         assert_eq!(
             pedidos(),
-            tras_primera,
+            tras_el_informe,
             "una URL ya comprobada no se pide otra vez"
         );
-        // T11: el informe con su carpeta (INF-002, INF-005, INF-008, INF-011).
-        let pdf = PdfFalso::default();
-        let informe = p.armar_informe(&pdf);
         let nombre = str_de(&crate::json::vector("NombreBaseInforme")).to_string();
         let carpeta_informe = c.0.join("informes").join(&nombre);
         assert!(informe.ok && informe.completo, "{}", informe.mensaje);

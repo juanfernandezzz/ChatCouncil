@@ -1,0 +1,84 @@
+{
+  "lote": "E6 cierre del núcleo (PART-010)",
+  "fecha": "2026-11-12",
+  "entorno": {
+    "maquina": "PC de Juan, Windows 10 Home 10.0.19045",
+    "compilacion": "desde C:\\cc-repo con CARGO_TARGET_DIR=C:\\cc-target (ADR-0002)",
+    "perfilRelease": "LTO, una unidad de generación, sin símbolos (commit 76cc656)",
+    "binariosMedidos": "los de release compilados en el paso B del lote D20 (2026-11-12 01:11 y 00:54); el código de informe-pdf y de armar el .md no cambió después salvo la escritura del archivo (b0414f3), que estas mediciones no ejercen"
+  },
+  "regla": "D16: una medición con la CPU de la máquina sobre 10 % es orientativa. La comparación con la Unity (M4: 3,74 s el PDF) queda para E8, con la CPU en reposo.",
+  "tamanos": {
+    "medirExeBytes": 46036480,
+    "medirMdExeBytes": 150528,
+    "binarioDePruebaDelNucleoDebugBytes": 4521984,
+    "nota": "medir.exe incrusta typst y 3.035.532 bytes de fuentes; medir_md.exe es solo el núcleo; el binario de prueba es C:\\cc-target\\debug\\deps\\nucleo-8ff295b4dd26a59a.exe, perfil de desarrollo"
+  },
+  "entrada": {
+    "md": "docs/investigacion/2026-11-10-alternativas-ui/2026-11-10 0036 - Alternativas Rust para diez webviews móviles.md",
+    "mdBytes": 168569,
+    "pdfBytes": 534396,
+    "pdfPaginas": 70
+  },
+  "mediciones": [
+    {
+      "que": "PDF de 70 páginas, primera corrida de un proceso nuevo (en frío)",
+      "comando": "C:\\cc-target\\release\\examples\\medir.exe <md>",
+      "serie": "PART-008",
+      "corridasMs": [690, 691, 687],
+      "medianaMs": 690,
+      "dispersionMs": 4,
+      "cpuAntesPct": 1,
+      "cpuDespuesPct": 21,
+      "validez": "orientativo (CPU después sobre 10 %)"
+    },
+    {
+      "que": "PDF de 70 páginas, primera corrida de un proceso nuevo (en frío)",
+      "comando": "C:\\cc-target\\release\\examples\\medir.exe <md>",
+      "serie": "PART-010",
+      "corridasMs": [822, 926, 1061],
+      "medianaMs": 926,
+      "dispersionMs": 239,
+      "cpuAntesPct": 23,
+      "cpuDespuesPct": 42,
+      "validez": "orientativo (CPU sobre 10 %)"
+    },
+    {
+      "que": "PDF de 70 páginas, corridas siguientes en el mismo proceso (en caliente), mediana de cada proceso",
+      "comando": "C:\\cc-target\\release\\examples\\medir.exe <md>",
+      "serie": "PART-010",
+      "corridasMs": [110, 119, 140],
+      "medianaMs": 119,
+      "dispersionMs": 30,
+      "cpuAntesPct": 23,
+      "cpuDespuesPct": 42,
+      "validez": "orientativo (CPU sobre 10 %)"
+    },
+    {
+      "que": "Armar el .md del informe (169.015 bytes), proceso entero con su arranque",
+      "comando": "C:\\cc-target\\release\\examples\\medir_md.exe <md>",
+      "serie": "PART-010",
+      "corridasMs": [192.0, 20.3, 20.5],
+      "medianaMs": 20.5,
+      "dispersionMs": 171.7,
+      "cpuAntesPct": 42,
+      "cpuDespuesPct": 29,
+      "validez": "orientativo (CPU sobre 10 %; la primera corrida carga el ejecutable del disco)"
+    }
+  ],
+  "pruebas": {
+    "comando": "cargo test --workspace",
+    "nucleo": { "pasan": 164, "fallan": 0, "ignoradas": 2 },
+    "informePdf": { "pasan": 10, "fallan": 0, "ignoradas": 0 },
+    "verificacion": { "pasan": 6, "fallan": 0, "ignoradas": 0 },
+    "dependenciasDeEjecucionDelNucleo": 0
+  },
+  "cobertura": {
+    "tabla": "bench/resultados/e6-cobertura.txt",
+    "requisitos": 147,
+    "deE6": 137,
+    "deE6SinPrueba": 0,
+    "anotados": ["INF-013 para E7", "DIA-001 para E7", "DIA-004 para E8"]
+  },
+  "salidaReal": "C:\\cc-target\\tmp\\p010-medicion.txt, p008-medicion.txt y p010-gates.txt"
+}

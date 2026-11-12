@@ -1,6 +1,8 @@
 //! Núcleo de ChatCouncil: lógica sin interfaz ni webviews.
 
+pub mod ajustes;
 pub mod datos;
+pub mod diagnosticos;
 pub mod dominio;
 pub mod importar;
 pub mod informe;

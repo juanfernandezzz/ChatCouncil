@@ -1,0 +1,148 @@
+capacidad | requisito | destino (D18) | título | prueba en cargo test
+datos | DAT-001 | PART-006 | specs.json idéntico | specs_json_coincide_con_dat_001
+datos | DAT-002 | PART-006 | Literales de los prompts idénticos | prompts_coinciden_con_dat_002
+registro | REG-001 | PART-003 | Un archivo por conversación | un_id_de_conversacion_no_sale_de_la_carpeta_del_registro, agregar_escribe_una_linea_al_final_sin_bom
+registro | REG-002 | PART-003 | Agregar es una línea al final | agregar_escribe_una_linea_al_final_sin_bom
+registro | REG-003 | PART-003 | Dieciséis tipos de hecho | cada_tipo_de_hecho_se_lee_y_se_reescribe_byte_a_byte
+registro | REG-004 | PART-003 | Serialización igual a JSON.stringify | cada_tipo_de_hecho_se_lee_y_se_reescribe_byte_a_byte
+registro | REG-005 | PART-003 | Fechas como texto | las_fechas_se_leen_como_texto_y_vuelven_identicas
+registro | REG-006 | PART-003 | Lectura tolerante a líneas rotas | leer_cuenta_las_ilegibles_y_detecta_la_ultima_linea_incompleta, ronda_las_lecturas_se_clasifican_por_etapa, lecturas9, ronda_la_corrida_de_nueve_lecturas_deja_los_mismos_hechos_que_la_unity
+registro | REG-007 | PART-003 | Un archivo con BOM se trata como ilegible | un_registro_con_bom_no_aporta_hechos
+registro | REG-008 | PART-003 | Caché de lectura por tamaño y fecha | el_registro_sin_cambios_no_se_vuelve_a_leer
+registro | REG-009 | PART-003 | Conversación real, nunca de prueba | abrir_ronda_escribe_conversacion_real_ronda_con_semilla_y_cargados
+registro | REG-010 | PART-003 | Abrir ronda escribe semilla y proveedores cargados | el_integrador_y_los_cargados_son_los_de_la_ultima_condicion, abrir_ronda_escribe_conversacion_real_ronda_con_semilla_y_cargados
+registro | REG-011 | PART-003 | Intentos registrados, también los fallidos | los_intentos_se_registran_tambien_los_fallidos_y_sin_ronda_es_error
+registro | REG-012 | PART-003 | Etapa derivada de los hechos | la_etapa_sale_de_los_hechos_y_cuenta_operadores_distintos, ronda_en_las_etapas_de_los_roles_lo_ya_capturado_sigue_capturado
+registro | REG-013 | PART-003 | Salidas vigentes: la última de cada operador | las_salidas_vigentes_son_la_ultima_de_cada_operador, prompts_las_verificaciones_vigentes_van_en_el_orden_de_los_verificadores
+registro | REG-014 | PART-003 | Restaurar la ronda activa al abrir | la_ronda_activa_se_restaura_del_registro
+registro | REG-015 | PART-003 | Rondas anteriores, la más nueva primero | las_rondas_anteriores_salen_del_registro_con_su_informe, un_archivo_ilegible_no_rompe_el_historial
+registro | REG-016 | PART-007 | Abandonar una ronda no escribe | ronda_abandonada_olvida_los_prompts_pegados
+registro | REG-017 | PART-005 | Ronda nueva con respuestas copiadas | parseos_reuso_la_ronda_copiada_y_la_operacion_reutilizada_son_las_de_la_unity
+registro | INV-REG-001 | PART-003 | El registro nunca se reescribe | modificar_una_linea_del_registro_se_rechaza_y_el_archivo_queda_igual
+registro | INV-REG-002 | PART-003 | Leer nunca escribe | abandonar_la_ronda_vuelve_a_la_pregunta_sin_tocar_el_registro
+operacion | OPE-001 | PART-004 | Requisitos para armar la operación | ronda_sin_las_respuestas_del_pool_la_operacion_se_niega
+operacion | OPE-002 | PART-004 | Semilla persistida obligatoria | normalizar, respuestas_de, pool_cuerpos, operacion_el_hash_de_la_semilla_es_el_de_la_unity, operacion_los_cuerpos_son_los_de_la_unity, armar_y_persistir_cuerpos, …
+operacion | OPE-003 | PART-004 | Hash de la semilla FNV-1a | operacion_el_hash_de_la_semilla_es_el_de_la_unity
+operacion | OPE-004 | PART-004 | Barajado Fisher-Yates con mulberry32 | operacion_el_barajado_es_uniforme
+operacion | OPE-005 | PART-004 | Etiquetas «Modelo A..» y términos tapados | operacion_anonimizar_da_etiquetas_textos_sello_y_conteo_de_la_unity, operacion_los_terminos_se_tapan_por_punto_de_codigo
+operacion | OPE-006 | PART-004 | Códigos estables P1..Pn | operacion_los_codigos_estables_siguen_el_orden_del_pool, codigos_entre_corchetes
+operacion | OPE-007 | PART-004 | Exclusión de autoevaluación | operacion_cada_cuerpo_excluye_la_respuesta_de_su_operador, operacion_la_comprobacion_cruzada_tira_si_el_cuerpo_incluye_la_respuesta_propia
+operacion | OPE-008 | PART-004 | Fuentes citadas con query limpia | operacion_la_query_solo_conserva_model
+operacion | OPE-009 | PART-004 | Control de fugas por URL | operacion_una_fuente_de_docs_o_blog_de_un_proveedor_no_es_fuga, operacion_un_enlace_a_la_interfaz_del_proveedor_sigue_siendo_fuga, fugas, unir_fugas, operacion_las_fugas_son_las_de_la_unity
+operacion | OPE-010 | PART-004 | Marcas de integridad cada 1.000 caracteres | operacion_las_marcas_van_en_el_primer_blanco_despues_del_intervalo
+operacion | OPE-011 | PART-004 | Integridad completa, truncada o indeterminada | operacion_la_integridad_distingue_completo_truncado_e_indeterminado, operacion_la_perdida_se_localiza_en_el_segmento_que_cambio
+operacion | OPE-012 | PART-004 | Sello idempotente | operacion_con_el_sello_ya_escrito_una_respuesta_cambiada_se_niega_sin_escribir, operacion_la_corrida_de_la_unity_da_los_mismos_sellos_y_prompts
+operacion | OPE-013 | PART-004 | Operación por archivo o pegada | pool_puerta
+operacion | OPE-014 | PART-004 | Sustitución literal de marcadores | operacion_un_marcador_dentro_de_la_pregunta_queda_literal
+operacion | OPE-015 | PART-005 | Hallazgos del operador | parseos_tension_se_lee_y_una_etiqueta_inexistente_queda_marcada
+operacion | OPE-016 | PART-005 | Reutilizar la operación anterior | parseos_reuso_la_ronda_copiada_y_la_operacion_reutilizada_son_las_de_la_unity
+operacion | INV-OPE-001 | PART-004 | El barajado nunca se recalcula distinto | operacion_el_barajado_es_el_de_la_unity_y_no_toca_la_entrada
+operacion | INV-OPE-002 | PART-004 | Ningún cuerpo delata al proveedor por URL | operacion_el_cuerpo_limpio_pasa_y_el_que_delata_al_proveedor_tira
+operacion | INV-OPE-003 | PART-004 | Un operador nunca se evalúa a sí mismo | operacion_cada_cuerpo_excluye_la_respuesta_de_su_operador
+operacion | INV-OPE-004 | PART-004 | Sin semilla no se simula un barajado | operacion_una_ronda_sin_semilla_se_niega_y_no_escribe_sello
+captura | CAP-001 | E7 | Leer la última respuesta con su HTML crudo | fuera de E6 (D18: E7)
+captura | CAP-002 | E7 | Informe en iframe | fuera de E6 (D18: E7)
+captura | CAP-003 | E7 | Capturar los seleccionados en paralelo | fuera de E6 (D18: E7)
+captura | CAP-004 | PART-007 | Umbral mínimo de lectura | ronda_el_umbral_de_lectura_es_el_de_la_unity
+captura | CAP-005 | PART-007 | Capturar sin ronda abre una con marcador | ronda_sin_abrir_la_captura_abre_una_con_el_marcador_y_la_pregunta_se_declara
+captura | CAP-006 | PART-007 | Clasificación por etapa | ronda_las_lecturas_se_clasifican_por_etapa
+captura | CAP-007 | PART-007 | Antes del sello, capturar recaptura la investigación | ronda_antes_de_armar_la_operacion_capturar_recaptura_la_investigacion
+captura | CAP-008 | PART-007 | Respuesta corta queda señalada | ronda_la_corrida_de_nueve_lecturas_deja_los_mismos_hechos_que_en_la_unity
+captura | CAP-009 | PART-007 | Un fallo nunca se adivina | ronda_una_captura_con_error_no_cierra_la_investigacion
+captura | CAP-010 | PART-007 | Dato crudo y citas al guardar una respuesta | citas_como_json, parseos_las_citas_son_las_mismas_que_en_la_unity
+captura | CAP-011 | PART-005 | Extracción de citas | parseos_las_citas_son_las_mismas_que_en_la_unity
+captura | CAP-012 | PART-007 | Procedencia del fin | ronda_la_procedencia_distingue_fin_observado_de_inferido
+captura | CAP-013 | PART-007 | Aviso de prompts en investigación | ronda_el_aviso_de_prompts_es_el_de_la_unity
+captura | CAP-014 | E7 | Estado de generación sin inventar | fuera de E6 (D18: E7)
+captura | CAP-015 | PART-007 | Estado de cada panel sale del registro | ronda_el_estado_de_cada_panel_sale_del_registro, ronda_el_estado_del_panel_sigue_al_paso_cuando_empieza_la_operacion, ronda_en_las_etapas_de_los_roles_lo_ya_capturado_sigue_capturado
+captura | CAP-016 | PART-007 | Recapturar integrador o verificadores | ronda_una_recaptura_fallida_queda_como_error_y_no_reemplaza
+captura | INV-CAP-001 | PART-007 | Una lectura fallida nunca reemplaza a la buena | ronda_una_recaptura_fallida_queda_como_error_y_no_reemplaza
+captura | INV-CAP-002 | E7 | Capturar lo decide la persona | fuera de E6 (D18: E7)
+captura | INV-CAP-003 | E7 | Sin dato de la página no se inventa estado | fuera de E6 (D18: E7)
+integrador | INT-001 | PART-006 | Tabla de hallazgos H## y O## | prompts_la_tabla_de_hallazgos_es_la_misma_que_en_la_unity
+integrador | INT-002 | PART-006 | Requisitos para armar el prompt del integrador | prompts_los_roles_sin_ronda_semilla_o_pregunta_se_niegan_con_el_motivo_de_la_unity
+integrador | INT-003 | PART-006 | Prompt del integrador desde la plantilla | prompts_los_de_los_roles_son_los_mismos_que_en_la_unity, prompts_los_de_los_roles_en_la_corrida_son_los_de_la_unity
+integrador | INT-004 | E7 | Pegar el prompt del integrador | fuera de E6 (D18: E7)
+integrador | INT-005 | PART-005 | Captura del informe con título | parseos_el_titulo_y_la_seccion_de_rescate_son_los_mismos_que_en_la_unity
+integrador | INT-006 | PART-006 | Informe vigente: el último capturado | prompts_el_verificador_sin_informe_o_sin_rescate_se_niega
+integrador | INT-007 | PART-006 | Trazabilidad por párrafo | prompts_el_informe_sembrado_de_guard_trazabilidad
+integrador | INT-008 | PART-005 | Sección de rescate | parseos_el_titulo_y_la_seccion_de_rescate_son_los_mismos_que_en_la_unity
+integrador | INT-009 | PART-005 | Texto del informe desde el HTML | parseos_el_texto_desde_html_es_el_mismo_que_en_la_unity
+integrador | INV-INT-001 | PART-006 | El integrador nunca sabe qué operador registró qué | prompts_la_tabla_de_hallazgos_es_la_misma_que_en_la_unity
+integrador | INV-INT-002 | E7 | Nunca se pega un prompt vacío | fuera de E6 (D18: E7)
+verificadores | VER-001 | PART-006 | Prompt del verificador desde la sección de rescate | prompts_los_de_los_roles_son_los_mismos_que_en_la_unity, prompts_los_de_los_roles_en_la_corrida_son_los_de_la_unity
+verificadores | VER-002 | E7 | El mismo prompt a los dos verificadores | fuera de E6 (D18: E7)
+verificadores | VER-003 | PART-007 | Los dos verificadores se capturan juntos | ronda_entera_deja_los_mismos_hechos_que_en_la_unity (el lote de los dos verificadores; el botón es de E7)
+verificadores | VER-004 | PART-007 | Sin líneas de verificación no es una verificación | ronda_una_verificacion_sin_lineas_no_se_guarda_como_valida
+verificadores | VER-005 | PART-005 | Parseo de la verificación | parseos_la_cita_del_verificador_sin_entidades_y_con_sus_comillas
+verificadores | VER-006 | PART-005 | Texto del verificador sin el razonamiento | parseos_la_verificacion_capturada_por_bloques_no_trae_el_razonamiento
+verificadores | VER-007 | PART-006 | Verificaciones vigentes en orden D62 | prompts_las_verificaciones_vigentes_van_en_el_orden_de_los_verificadores
+verificadores | VER-008 | E7 | Repetir la verificación de un panel | fuera de E6 (D18: E7)
+verificadores | VER-009 | PART-009 | Comprobación de URLs citadas | ronda_entera_deja_los_mismos_hechos_que_la_unity, urls_el_tope_es_de_20_por_verificacion, urls_sin_ronda_o_sin_verificacion_es_un_error_y_no_se_pide_nada, urls_cada_url_se_comprueba, http_pide_el_estado_y_sigue_las_redirecciones, http_el_cuerpo_no_se_lee
+verificadores | INV-VER-001 | PART-006 | Los verificadores nunca se ven entre sí | prompts_los_de_los_roles_son_los_mismos_que_en_la_unity
+verificadores | INV-VER-002 | PART-009 | Las URLs se comprueban sin la sesión de Juan | http_ningun_pedido_lleva_cookies_ni_credenciales
+verificadores | INV-VER-003 | PART-009 | Una dirección local nunca se pide | urls_las_locales_o_con_otro_esquema_no_se_piden, http_con_el_nucleo_lo_local_no_se_pide
+redactor | RED-001 | PART-006 | Archivo del redactor | prompts_el_archivo_del_redactor_es_el_mismo_que_en_la_unity, prompts_los_de_los_roles_en_la_corrida_son_los_de_la_unity
+redactor | RED-002 | PART-006 | Verificaciones anónimas A y B | prompts_las_verificaciones_se_anonimizan_como_en_la_unity, prompts_los_de_los_roles_en_la_corrida_son_los_de_la_unity
+redactor | RED-003 | PART-006 | Sin verificación se arma igual y avisa | prompts_los_de_los_roles_en_la_corrida_son_los_de_la_unity, prompts_el_redactor_sin_verificacion_se_arma_y_avisa
+redactor | RED-004 | PART-006 | Prompt del redactor y archivo adjunto | prompts_los_de_los_roles_son_los_mismos_que_en_la_unity, prompts_los_de_los_roles_en_la_corrida_son_los_de_la_unity
+redactor | RED-005 | PART-007 | Captura del redactor con sus marcas | ronda_reabierta_retoma_su_etapa_y_el_redactor_usa_las_marcas_anteriores
+redactor | RED-006 | PART-006 | Controles mecánicos de la redacción | prompts_los_controles_del_redactor_son_los_mismos_que_en_la_unity
+redactor | RED-007 | PART-006 | Cuerpo del redactor en Markdown | prompts_un_dominio_del_material_enlazado_solo_no_cuenta_como_fuera_del_material
+redactor | INV-RED-001 | PART-006 | El redactor nunca sabe qué verificador hizo cada verificación | prompts_las_verificaciones_se_anonimizan_como_en_la_unity
+redactor | INV-RED-002 | PART-006 | Los controles nunca juzgan el contenido | prompts_los_controles_del_redactor_son_los_mismos_que_en_la_unity
+ronda | RON-001 | PART-007 | Diez proveedores conocidos, en orden fijo | operacion_terminos_token_y_conocidos_son_los_de_la_unity, operacion_anonimizar_da_etiquetas_textos_sello_y_conteo_de_la_unity, ronda_el_nombre_visible_de_los_diez_conocidos, ronda_los_conocidos_son_los_de_typescript, ronda_los_roles_por_defecto_son_los_de_la_version_electron
+ronda | RON-002 | PART-007 | Roles por defecto | ajustes_sin_archivo_estan_los_diez_y_los_roles_por_defecto, ronda_los_roles_por_defecto_son_los_de_la_version_electron
+ronda | RON-003 | PART-007 | Pool = todos menos los roles | ronda_el_pool_son_todos_menos_los_roles
+ronda | RON-004 | PART-007 | La pregunta va solo a los operadores cargados | ronda_el_pool_son_todos_menos_los_roles (a qué panel se pega es de E7)
+ronda | RON-005 | PART-007 | Lectura de la selección guardada | ajustes_sin_archivo_estan_los_diez_y_los_roles_por_defecto
+ronda | RON-006 | PART-007 | Validación al guardar la selección | ronda_la_seleccion_se_valida_y_se_guarda_como_en_typescript
+ronda | RON-007 | PART-007 | Formato del archivo de selección | ronda_la_seleccion_se_escribe_con_el_formato_de_typescript
+ronda | RON-008 | PART-007 | Proveedores de cada etapa de rol | ronda_cada_etapa_tiene_sus_roles_y_su_recordatorio
+ronda | RON-009 | PART-007 | Siete etapas | la_etapa_sale_de_los_hechos_y_cuenta_operadores_distintos
+ronda | RON-010 | PART-007 | Un único paso siguiente | ronda_entera_deja_los_mismos_hechos_que_en_la_unity (la lista de pasos)
+ronda | RON-011 | PART-007 | Una captura con error no cuenta para avanzar | ronda_una_captura_con_error_no_cierra_la_investigacion
+ronda | RON-012 | PART-007 | Recordatorio por etapa | ronda_cada_etapa_tiene_sus_roles_y_su_recordatorio
+ronda | RON-013 | PART-007 | Pregunta válida y pregunta efectiva | la_pregunta_efectiva_rechaza_el_marcador_y_usa_la_ultima_declarada
+ronda | RON-014 | PART-007 | Declarar la pregunta exige ronda abierta | ronda_declarar_sin_ronda_abierta_se_niega
+ronda | RON-015 | PART-007 | Nombre visible del proveedor | informe_el_documento_de_cada_respuesta_es_el_mismo_que_en_la_unity, ronda_el_nombre_visible_de_los_diez_conocidos
+ronda | RON-016 | PART-007 | Diálogo para declarar la pregunta | ronda_la_pregunta_declarada_en_blanco_no_se_escribe
+ronda | RON-017 | PART-007 | Diálogo para abandonar la ronda | abandonar_la_ronda_vuelve_a_la_pregunta_sin_tocar_el_registro
+ronda | INV-RON-001 | PART-007 | Un rol nunca investiga | ronda_el_pool_son_todos_menos_los_roles
+ronda | INV-RON-002 | PART-007 | Los dos verificadores nunca son el mismo proveedor ni el integrador | ronda_la_seleccion_se_valida_y_se_guarda_como_en_typescript
+ronda | INV-RON-003 | PART-007 | El paso nunca sale de la interfaz | la_etapa_sale_de_los_hechos_y_cuenta_operadores_distintos
+informe-final | INF-001 | PART-010 | Armar el informe desde el registro | ronda_entera_deja_los_mismos_hechos_que_la_unity
+informe-final | INF-002 | PART-008 | Orden de las secciones | informe_final_es_el_mismo_que_arma_la_unity, informe_ninguna_seccion_queda_vacia, ronda_entera_deja_los_mismos_hechos_que_la_unity
+informe-final | INF-003 | PART-008 | Referencias marcadas | informe_marca_cada_referencia_y_publica_la_clave_de_los_p
+informe-final | INF-004 | PART-008 | Marcas de integridad quitadas y declaradas | informe_las_marcas_de_integridad_se_quitan_y_se_declaran
+informe-final | INF-005 | PART-008 | Participación de cada operador | informe_final_es_el_mismo_que_arma_la_unity, ronda_entera_deja_los_mismos_hechos_que_la_unity
+informe-final | INF-006 | PART-008 | Tabla de condiciones | informe_final_es_el_mismo_que_arma_la_unity, informe_marca_cada_referencia_y_publica_la_clave_de_los_p
+informe-final | INF-007 | PART-010 | Verificación en el informe | informe_la_verificacion_para_el_informe_es_la_misma_que_en_la_unity, ronda_entera_deja_los_mismos_hechos_que_la_unity
+informe-final | INF-008 | PART-008 | Nombre de la carpeta del informe | ronda_entera_deja_los_mismos_hechos_que_la_unity
+informe-final | INF-009 | PART-008 | Ninguna ruta pasa de 259 caracteres | informe_si_falla_el_pdf_de_una_respuesta_las_demas_se_escriben_y_faltan_la_nombra, informe_si_falla_el_pdf_del_informe_queda_el_md_y_se_dice
+informe-final | INF-010 | PART-008 | Carpeta con md, PDF y respuestas | informe_si_falla_el_pdf_de_una_respuesta_las_demas_se_escriben_y_faltan_la_nombra
+informe-final | INF-011 | PART-008 | Documento de cada respuesta de investigador | informe_el_documento_de_cada_respuesta_es_el_mismo_que_en_la_unity, ronda_entera_deja_los_mismos_hechos_que_la_unity
+informe-final | INF-012 | PART-008 | PDF Carta con marked en un panel oculto | informe_cada_pagina_es_carta (con typst, D14)
+informe-final | INF-013 | PART-008 | Se abre la carpeta al terminar | ANOTADO PARA E7: el núcleo devuelve la ruta (ronda_entera_deja_los_mismos_hechos_que_en_la_unity); abrir el explorador es de la interfaz
+informe-final | INF-014 | PART-008 | Páginas del PDF en tamaño Carta (612 x 792 pt) | informe_cada_pagina_es_carta
+informe-final | INV-INF-001 | PART-008 | Un informe nunca se sobrescribe | informe_un_pdf_existente_no_se_pisa, informe_nunca_se_sobrescribe
+informe-final | INV-INF-002 | PART-008 | El HTML de un modelo nunca se ejecuta en el PDF | informe_html_imagenes_y_codigo_typst_del_modelo_se_escriben
+informe-final | INV-INF-003 | PART-008 | Las salidas de operador nunca se publican como respuestas | informe_si_falla_el_pdf_de_una_respuesta_las_demas_se_escriben_y_faltan_la_nombra
+ajustes | AJU-001 | PART-010 | Proveedores y roles en Ajustes | ajustes_sin_archivo_estan_los_diez_y_los_roles_por_defecto
+ajustes | AJU-002 | PART-010 | Guardar la selección | ajustes_la_seleccion_se_guarda_y_se_aplica_al_reabrir, ajustes_una_seleccion_invalida_nunca_se_escribe
+ajustes | AJU-003 | PART-010 | Los cambios se aplican al reabrir | ajustes_la_seleccion_se_guarda_y_se_aplica_al_reabrir
+ajustes | AJU-004 | PART-010 | Guía de dos pasos | ajustes_la_guia_tiene_dos_pasos
+ajustes | AJU-005 | PART-010 | Tus cuentas | ajustes_la_seleccion_se_guarda_y_se_aplica_al_reabrir, ajustes_la_guia_tiene_dos_pasos
+ajustes | AJU-006 | PART-010 | Apariencia: tema y tamaño | ajustes_la_apariencia_se_guarda_al_elegir_y_se_conserva
+ajustes | AJU-007 | PART-010 | Apariencia ilegible nunca impide arrancar | ajustes_una_apariencia_ilegible_da_las_del_sistema
+ajustes | AJU-008 | PART-010 | Tema del sistema | ajustes_el_del_sistema_sigue_al_sistema
+ajustes | AJU-009 | PART-010 | Tus datos | ajustes_tus_datos_dice_lo_de_cada_aparato
+ajustes | AJU-010 | PART-010 | Tus datos en Android | solo Android (fuera de E6); el texto ya tiene prueba: ajustes_tus_datos_dice_lo_de_cada_aparato
+ajustes | INV-AJU-001 | PART-010 | La selección nunca va al registro | ajustes_nada_va_al_registro
+ajustes | INV-AJU-002 | PART-010 | Una selección inválida nunca se escribe | ajustes_una_seleccion_invalida_nunca_se_escribe
+diagnosticos | DIA-001 | PART-010 | Diagnóstico de selectores de solo lectura | ANOTADO PARA E7: el script de página vive con los paneles; el núcleo guarda lo que recibe (diagnosticos_el_archivo_queda_en_la_carpeta_de_datos)
+diagnosticos | DIA-002 | PART-010 | Archivo de diagnóstico en la carpeta de datos | diagnosticos_el_archivo_queda_en_la_carpeta_de_datos, diagnosticos_una_falla_al_guardar_se_informa
+diagnosticos | DIA-003 | PART-010 | Diagnóstico solo con la página abierta | diagnosticos_los_textos_del_panel_sin_pagina
+diagnosticos | DIA-004 | PART-010 | Acceso directo de depuración | ANOTADO PARA E8: es del instalador
+diagnosticos | DIA-005 | PART-010 | Errores de la página con instrucción | diagnosticos_los_textos_del_panel_sin_pagina
+diagnosticos | INV-DIA-001 | PART-010 | El diagnóstico nunca lee datos de la cuenta | diagnosticos_nada_del_perfil_llega_al_diagnostico

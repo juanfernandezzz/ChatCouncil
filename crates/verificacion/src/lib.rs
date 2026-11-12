@@ -184,7 +184,10 @@ impl Http for HttpSinCookies {
         // El cuerpo no se lee: la respuesta se suelta en cuanto llegan los encabezados.
         // shortcut: el proxy se elige por la URL pedida; una redirección a otro esquema o a una
         // excepción sigue por el mismo. Elegirlo por salto si aparece un proxy por esquema real.
-        let proxy = proxy_para(&self.proxy, url).and_then(|p| ureq::Proxy::new(&p).ok());
+        // Un proxy mal escrito es un error: el pedido no sale directo (revisión cierre E6).
+        let proxy = proxy_para(&self.proxy, url)
+            .map(|p| ureq::Proxy::new(&p).map_err(|e| format!("proxy inválido: {e}")))
+            .transpose()?;
         pedido
             .config()
             .timeout_global(Some(tiempo))
@@ -364,6 +367,18 @@ mod pruebas {
             pedidos,
             ["CONNECT ejemplo.invalid:80", "GET /por-proxy", "GET /404"]
         );
+    }
+
+    // Revisión cierre E6: un proxy del sistema mal escrito es un error; el pedido no sale directo.
+    #[test]
+    fn proxy_uno_invalido_no_se_salta() {
+        let (base, vistos) = servidor();
+        let http = HttpSinCookies::con_proxy(proxy("proxy corp:8080", ""));
+        let e = http
+            .pedir(&format!("{base}/404"), "GET", TIEMPO)
+            .unwrap_err();
+        assert!(e.starts_with("proxy inválido: "), "{e}");
+        assert!(vistos.lock().unwrap().is_empty());
     }
 
     // Lee el registro real, sin cambiarlo: se corre a mano y solo muestra números.

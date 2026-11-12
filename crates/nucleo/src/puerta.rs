@@ -609,6 +609,10 @@ impl Puerta {
             None => Ok(()),
         };
         self.veces_asentado += 1;
+        if asentado.is_err() {
+            // Sigue pendiente: la próxima operación lo reintenta (revisión cierre E6).
+            self.sin_asentar.set(true);
+        }
         r.and_then(|v| asentado.map(|()| v))
     }
 
@@ -3260,6 +3264,21 @@ mod pruebas {
             rondas[1].enviada_en.as_ref().and_then(Texto::como_str),
             Some("2026-10-06T12:00:00.000Z")
         );
+    }
+
+    // Revisión cierre E6: si asentar falla, lo escrito sigue pendiente y la próxima operación lo
+    // reintenta.
+    #[test]
+    fn registro_un_asentado_fallido_queda_pendiente() {
+        let c = Carpeta::nueva("asentar-falla");
+        let mut p = nueva_puerta(&c.0);
+        // Un id que no vale como nombre de archivo: asentar falla.
+        p.conversacion_actual = Some("a/b".into());
+        p.sin_asentar.set(true);
+        p.profundidad = 1;
+        assert!(p.asentar(Ok(())).is_err());
+        assert!(p.sin_asentar.get(), "sigue pendiente");
+        assert_eq!(p.profundidad, 0);
     }
 
     // D21: una carpeta de informe que ya existe da el mismo error de siempre y queda como estaba.

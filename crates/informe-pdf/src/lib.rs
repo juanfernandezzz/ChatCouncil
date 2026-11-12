@@ -121,6 +121,15 @@ fn texto(s: &str, fuera: &mut String) {
     literal(s, fuera);
 }
 
+/// Solo http, https y mailto son clicables en el PDF; cualquier otro esquema que escriba un modelo queda como
+/// texto (revisión PART-008).
+fn clicable(url: &str) -> bool {
+    let u = url.trim_start().to_ascii_lowercase();
+    ["http://", "https://", "mailto:"]
+        .iter()
+        .any(|p| u.starts_with(p))
+}
+
 /// Markdown a marcado typst. Los saltos simples son líneas sueltas, como en la Unity (`breaks: true`).
 pub fn a_typst(markdown: &str) -> String {
     let mut o = String::with_capacity(markdown.len() * 2 + 1024);
@@ -186,7 +195,7 @@ pub fn a_typst(markdown: &str) -> String {
                 Tag::Emphasis => o.push_str("#emph["),
                 Tag::Strong => o.push_str("#strong["),
                 Tag::Strikethrough => o.push_str("#strike["),
-                Tag::Link { dest_url, .. } if !dest_url.trim().is_empty() => {
+                Tag::Link { dest_url, .. } if clicable(&dest_url) => {
                     o.push_str("#link(");
                     literal(&dest_url, &mut o);
                     o.push_str(")[");
@@ -253,10 +262,56 @@ fn compilar(markdown: &Texto, titulo: &str) -> Result<typst_layout::PagedDocumen
         .map_err(|e| mensajes(&e))
 }
 
+/// Un pánico de typst se vuelve un error del informe: no tumba el proceso (revisión PART-008).
+fn protegido<T>(f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or_else(|p| {
+        let motivo = p
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| p.downcast_ref::<String>().cloned())
+            .unwrap_or_default();
+        Err(format!("typst falló al armar el PDF: {motivo}"))
+    })
+}
+
+/// Escribe a un temporal de la misma carpeta y le da el nombre final solo al terminar: una escritura que falla
+/// no deja un PDF parcial (revisión PART-008). El nombre final nunca se pisa (INV-INF-001): el enlace duro falla
+/// si ya existe. El temporal es corto para no pasar el tope de ruta (INF-009).
+fn escribir_sin_parcial(
+    ruta: &Path,
+    escribir: impl FnOnce(&mut std::fs::File) -> std::io::Result<()>,
+) -> Result<(), String> {
+    // shortcut: un temporal por proceso y carpeta; si se arman dos PDF a la vez en una carpeta, sumarle un contador.
+    let temporal = ruta.with_file_name(format!("~{}.tmp", std::process::id()));
+    let resultado = (|| {
+        if ruta.exists() {
+            return Err(std::io::ErrorKind::AlreadyExists.into());
+        }
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporal)?;
+        escribir(&mut f)?;
+        f.sync_all()?;
+        drop(f);
+        match std::fs::hard_link(&temporal, ruta) {
+            // Un volumen sin enlaces duros (FAT, exFAT): se renombra, que ahí es lo más cercano.
+            Err(e) if e.kind() != std::io::ErrorKind::AlreadyExists && !ruta.exists() => {
+                std::fs::rename(&temporal, ruta)
+            }
+            r => r,
+        }
+    })();
+    let _ = std::fs::remove_file(&temporal);
+    resultado.map_err(|e| format!("{}: {e}", ruta.display()))
+}
+
 /// El PDF del informe en memoria.
 pub fn pdf_bytes(markdown: &Texto, titulo: &str) -> Result<Vec<u8>, String> {
-    let documento = compilar(markdown, titulo)?;
-    typst_pdf::pdf(&documento, &typst_pdf::PdfOptions::default()).map_err(|e| mensajes(&e))
+    protegido(|| {
+        let documento = compilar(markdown, titulo)?;
+        typst_pdf::pdf(&documento, &typst_pdf::PdfOptions::default()).map_err(|e| mensajes(&e))
+    })
 }
 
 /// El puerto PDF del núcleo con typst. Un PDF que ya existe no se pisa: es un dato de investigación.
@@ -265,12 +320,7 @@ pub struct PdfTypst;
 impl Pdf for PdfTypst {
     fn generar(&self, markdown: &Texto, ruta_pdf: &Path, titulo: &str) -> Result<(), String> {
         let bytes = pdf_bytes(markdown, titulo)?;
-        let mut f = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(ruta_pdf)
-            .map_err(|e| format!("{}: {e}", ruta_pdf.display()))?;
-        f.write_all(&bytes).map_err(|e| e.to_string())
+        escribir_sin_parcial(ruta_pdf, |f| f.write_all(&bytes))
     }
 }
 
@@ -364,6 +414,52 @@ mod pruebas {
             .generar(&Texto::from("# hola".to_string()), &nuevo, "t")
             .unwrap();
         assert!(std::fs::read(&nuevo).unwrap().starts_with(b"%PDF-"));
+        assert_eq!(
+            std::fs::read_dir(&d).unwrap().count(),
+            2,
+            "no queda ningún temporal"
+        );
+    }
+
+    // Revisión PART-008: un pánico de typst es un error del informe, no la caída del proceso.
+    #[test]
+    fn informe_un_panico_de_typst_es_un_error_y_no_tumba_el_proceso() {
+        let r: Result<Vec<u8>, String> = protegido(|| panic!("typst reventó"));
+        assert!(r.unwrap_err().contains("typst reventó"));
+    }
+
+    // Revisión PART-008: una escritura que falla a medias no deja un PDF parcial con el nombre final.
+    #[test]
+    fn informe_una_escritura_fallida_no_deja_un_pdf_parcial() {
+        let d = carpeta("parcial");
+        let r = escribir_sin_parcial(&d.join("a.pdf"), |f| {
+            f.write_all(b"%PDF-mitad")?;
+            Err(std::io::Error::other("disco lleno"))
+        });
+        assert!(r.unwrap_err().contains("disco lleno"));
+        assert_eq!(
+            std::fs::read_dir(&d).unwrap().count(),
+            0,
+            "ni PDF parcial ni temporal"
+        );
+    }
+
+    // Revisión PART-008: solo http, https y mailto son clicables; lo demás queda como texto.
+    #[test]
+    fn informe_solo_http_https_y_mailto_son_clicables() {
+        let t = a_typst(
+            "[a](javascript:alert(1)) [b](file:///c:/x) [c](#ancla) [d](HTTPS://x.y/z) [e](http://x.y) [f](mailto:x@y.z) [g](ftp://x.y) [h](/ruta)",
+        );
+        assert_eq!(t.matches("#link(").count(), 3, "{t}");
+        for si in ["HTTPS://x.y/z", "http://x.y", "mailto:x@y.z"] {
+            assert!(t.contains(&format!("#link(\"{si}\")")), "{si}");
+        }
+        for letra in ["a", "b", "c", "g", "h"] {
+            assert!(
+                t.contains(&format!("#[#\"{letra}\"]")),
+                "el texto de {letra} se conserva"
+            );
+        }
     }
 
     // Revisión PART-008: los enlaces que escribe un modelo no deben tumbar el PDF entero.

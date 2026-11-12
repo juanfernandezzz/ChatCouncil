@@ -41,6 +41,7 @@ La lista viva de gates vive en el CI (`.github/workflows/`). Un gate se mantiene
 - `git add` por ruta; commits que explican por qué; push cuando está verificado.
 - Cambios grandes: rama y PR. Juan hace el merge.
 - Hooks: si GateGuard pide datos, los das y sigues. Si un hook bloquea (git-guardrails u otro), paras y reportas.
+- Relevo con el chat: al cerrar un lote escribes handoff.md, lo pones al final del informe y dejas el informe en el portapapeles (D19).
 
 ## Skills por etapa
 
@@ -68,4 +69,4 @@ Falta una credencial o una cuenta; la acción es irreversible; un hook o un gate
 
 ## Idioma y entorno
 
-Español latino neutro, con «tú». Versiones y medición: ADR-0007 (última estable; antes de medir, la app Claude minimizada y la CPU de la máquina en reposo bajo 10 %). Toda compilación corre desde la unión C:\cc-repo, nunca desde la ruta con «á» (ADR-0002); la unión se borra solo con rmdir sin recursivo.
+Español latino neutro, con «tú». Versiones y medición: ADR-0007 (última estable; medición según D16 en su enmienda: antes/después intercalado, un absoluto con CPU sobre 10 % es orientativo y toda comparación con la Unity va a E8). Toda compilación corre desde la unión C:\cc-repo, nunca desde la ruta con «á» (ADR-0002); la unión se borra solo con rmdir sin recursivo.

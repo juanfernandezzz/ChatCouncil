@@ -64,13 +64,53 @@
       "cpuAntesPct": 42,
       "cpuDespuesPct": 29,
       "validez": "orientativo (CPU sobre 10 %; la primera corrida carga el ejecutable del disco)"
+    },
+    {
+      "que": "D21 B3: dos registrar_capturas sobre la corrida de la Unity, sin sync (A) y con sync al final de cada operación (B); mediana de 20 rondas por proceso",
+      "comando": "binario de pruebas release del núcleo, medir_registrar_capturas --ignored; intercalado ABABAB",
+      "serie": "D21",
+      "corridasAntesMs": [19.652, 16.496, 19.483],
+      "corridasDespuesMs": [48.277, 80.872, 51.520],
+      "medianaAntesMs": 19.483,
+      "medianaDespuesMs": 51.520,
+      "dispersionAntesMs": 3.156,
+      "dispersionDespuesMs": 32.595,
+      "diferencia": "+32 ms por par de operaciones, unos +16 ms por operación",
+      "cpuAntesPct": 48,
+      "cpuDespuesPct": 59,
+      "validez": "la comparación intercalada es válida (las tres parejas van en el mismo sentido); los absolutos son orientativos (CPU sobre 10 %)"
+    },
+    {
+      "que": "D21 B6: dos llamadas seguidas a rondas_anteriores con 50 conversaciones (100 rondas) y 50 informes, sin memoria (A) y con memoria por largo y fecha (B); mediana de 5 puertas por proceso",
+      "comando": "binario de pruebas release del núcleo, medir_historial_con_50_rondas --ignored; intercalado ABABAB",
+      "serie": "D21",
+      "corridasAntesMs": [438.060, 480.275, 468.262],
+      "corridasDespuesMs": [272.716, 289.453, 246.927],
+      "medianaAntesMs": 468.262,
+      "medianaDespuesMs": 272.716,
+      "dispersionAntesMs": 42.215,
+      "dispersionDespuesMs": 42.526,
+      "diferencia": "-196 ms, -42 %",
+      "cpuAntesPct": 53,
+      "cpuDespuesPct": 61,
+      "validez": "la comparación intercalada es válida (las tres parejas van en el mismo sentido); los absolutos son orientativos (CPU sobre 10 %)"
     }
   ],
+  "bloat": {
+    "que": "D21 C: cargo-bloat 0.12.1 sobre el ejemplo medir de informe-pdf en release, para E8",
+    "salida": "bench/resultados/e6-bloat.txt",
+    "textBytesAprox": "21,5 MiB de 43,8 MiB del archivo",
+    "cratesMasPesados": ["typst_library 3,6 MiB", "std 3,5 MiB", "typst_layout 938 KiB", "serde_path_to_error 825 KiB", "citationberg 583 KiB", "wasmi 570 KiB", "hayagriva 552 KiB", "krilla 537 KiB", "hayro_interpret 508 KiB", "usvg 474 KiB"],
+    "fuentesIncrustadasBytes": 9947809,
+    "fuentesUsadasBytes": 3035532,
+    "featuresRecortadas": "ninguna: typst y typst-pdf 0.15.1 no declaran features; medir.exe queda igual",
+    "validez": "válida como tamaño (no depende de la CPU); cargo-bloat avisa que el reparto por crate es aproximado"
+  },
   "pruebas": {
     "comando": "cargo test --workspace",
-    "nucleo": { "pasan": 164, "fallan": 0, "ignoradas": 2 },
+    "nucleo": { "pasan": 172, "fallan": 0, "ignoradas": 4 },
     "informePdf": { "pasan": 10, "fallan": 0, "ignoradas": 0 },
-    "verificacion": { "pasan": 6, "fallan": 0, "ignoradas": 0 },
+    "verificacion": { "pasan": 10, "fallan": 0, "ignoradas": 1 },
     "dependenciasDeEjecucionDelNucleo": 0
   },
   "cobertura": {
@@ -80,5 +120,5 @@
     "deE6SinPrueba": 0,
     "anotados": ["INF-013 para E7", "DIA-001 para E7", "DIA-004 para E8"]
   },
-  "salidaReal": "C:\\cc-target\\tmp\\p010-medicion.txt, p008-medicion.txt y p010-gates.txt"
+  "salidaReal": "C:\\cc-target\\tmp\\p010-medicion.txt, p008-medicion.txt y p010-gates.txt; D21: d21-b3-medicion.txt, d21-b6-medicion.txt y d21-gates.txt"
 }

@@ -1,0 +1,96 @@
+cargo-bloat sobre el ejemplo medir de informe-pdf, release (D21, paso C, para E8)
+Fecha: 2026-11-12. 0.12.1. Perfil release del repo (LTO fat, una unidad) con CARGO_PROFILE_RELEASE_STRIP=none,
+porque cargo-bloat necesita los simbolos. medir.exe sin recortar simbolos: 45.950.464 bytes; recortado (D20): 46.036.480.
+El codigo (.text) es 21,5 MiB de 43,8 MiB; el resto son datos, entre ellos las fuentes de typst-assets:
+la feature fonts incrusta 31 archivos, 9.947.809 bytes; el informe usa 3.035.532.
+
+C2: typst 0.15.1, typst-pdf 0.15.1, typst-layout y typst-library no declaran ninguna feature (cargo metadata):
+no hay nada que recortar por features. Nada cambio en Cargo.toml.
+
+== cargo bloat --release -p informe-pdf --example medir --crates -n 40
+    Finished `release` profile [optimized + debuginfo] target(s) in 44m 37s
+    Analyzing C:\cc-target\release\examples\medir.exe
+
+ File  .text     Size Crate
+ 8.3%  16.8%   3.6MiB typst_library
+ 7.9%  16.1%   3.5MiB std
+ 2.1%   4.3% 938.2KiB typst_layout
+ 1.8%   3.7% 824.6KiB serde_path_to_error
+ 1.3%   2.6% 582.8KiB citationberg
+ 1.3%   2.6% 570.0KiB wasmi
+ 1.2%   2.5% 552.2KiB hayagriva
+ 1.2%   2.4% 536.9KiB krilla
+ 1.1%   2.3% 507.6KiB hayro_interpret
+ 1.1%   2.1% 474.3KiB usvg
+ 1.0%   1.9% 427.8KiB wasmparser
+ 0.9%   1.8% 403.9KiB regex_automata
+ 0.9%   1.8% 397.3KiB skrifa
+ 0.8%   1.7% 377.9KiB hayro_syntax
+ 0.8%   1.5% 338.7KiB typst_pdf
+ 0.7%   1.5% 320.2KiB serde_core
+ 0.6%   1.3% 278.4KiB image_webp
+ 0.6%   1.2% 265.0KiB typst_eval
+ 0.6%   1.2% 260.8KiB read_fonts
+ 0.6%   1.2% 259.4KiB moxcms
+ 0.6%   1.2% 259.3KiB zune_jpeg
+ 0.5%   1.1% 240.0KiB rustybuzz
+ 0.5%   0.9% 208.9KiB hayro_jbig2
+ 0.5%   0.9% 204.4KiB regex_syntax
+ 0.4%   0.9% 193.9KiB tiny_skia
+ 0.4%   0.9% 191.6KiB hashbrown
+ 0.4%   0.8% 178.2KiB serde_yaml
+ 0.4%   0.7% 159.9KiB hayro_jpeg2000
+ 0.3%   0.7% 156.8KiB typst_syntax
+ 0.3%   0.7% 154.3KiB toml_edit
+ 0.3%   0.6% 142.1KiB aho_corasick
+ 0.3%   0.6% 137.5KiB resvg
+ 0.3%   0.6% 129.5KiB biblatex
+ 0.3%   0.6% 127.0KiB syntect
+ 0.3%   0.6% 125.4KiB comemo
+ 0.3%   0.6% 125.0KiB ttf_parser
+ 0.3%   0.6% 124.0KiB write_fonts
+ 0.3%   0.5% 118.5KiB typst_html
+ 0.3%   0.5% 116.7KiB pulldown_cmark
+ 0.3%   0.5% 113.6KiB subsetter
+ 6.9%  14.0%   3.0MiB And 174 more crates. Use -n N to show more.
+49.2% 100.0%  21.5MiB .text section size, the file size is 43.8MiB
+
+Note: numbers above are a result of guesswork. They are not 100% correct and never will be.
+
+== cargo bloat --release -p informe-pdf --example medir -n 30
+    Finished `release` profile [optimized + debuginfo] target(s) in 1.15s
+    Analyzing C:\cc-target\release\examples\medir.exe
+
+ File  .text     Size               Crate Name
+ 0.3%   0.6% 125.1KiB               wasmi wasmi::engine::executor::instrs::execute_instrs
+ 0.2%   0.4%  89.1KiB            wasmi_ir wasmi_ir::enum::impl$5::fmt
+ 0.2%   0.3%  72.6KiB       typst_library typst_library::visualize::color::map
+ 0.2%   0.3%  72.1KiB           typst_pdf typst_pdf::convert::convert
+ 0.2%   0.3%  67.5KiB           hayagriva hayagriva::csl::BibliographyDriver<hayagriva::Entry>::finish<hayagriva::Entry>
+ 0.1%   0.3%  62.1KiB           typst_pdf typst_pdf::convert::handle_frame
+ 0.1%   0.3%  60.3KiB               resvg resvg::filter::apply_inner
+ 0.1%   0.3%  56.2KiB        citationberg citationberg::_::impl$0::deserialize::impl$2::visit_map<ciborium::de::Access<ref$<slice2$<u8> > > >
+ 0.1%   0.3%  56.1KiB              krilla krilla::text::cid::CIDFont::serialize
+ 0.1%   0.3%  55.3KiB           hayagriva hayagriva::interop::impl$6::try_from
+ 0.1%   0.2%  55.2KiB              krilla krilla::serialize::SerializeContext::finish
+ 0.1%   0.2%  53.9KiB serde_path_to_error serde_path_to_error::de::impl$2::visit_enum<citationberg::_::impl$0::deserialize::__Visitor,quick_xml::de::map::ElementDeserializer<quick_xml::de::SliceReader,quick_xml::de::resolver::PredefinedEntityResolver> >
+ 0.1%   0.2%  53.2KiB        typst_layout typst_layout::flow::layout_flow
+ 0.1%   0.2%  53.2KiB          serde_core serde_core::de::impl$5::deserialize<alloc::vec::Vec<enum2$<citationberg::NamesChild>,alloc::alloc::Global>,serde_path_to_error::de::Deserializer<quick_xml::de::map::MapValueDeserializer<quick_xml::de::SliceReader,quick_xml::de::resolver::PredefinedEntityResolver> > >
+ 0.1%   0.2%  53.1KiB                usvg usvg::text::layout::layout_text
+ 0.1%   0.2%  53.0KiB      regex_automata regex_automata::meta::strategy::new
+ 0.1%   0.2%  52.2KiB     hayro_interpret hayro_interpret::interpret::interpret<hayro_interpret::font::type3::Type3ShapeGlyphDevice<hayro_svg::SvgRenderer> >
+ 0.1%   0.2%  51.8KiB     hayro_interpret hayro_interpret::interpret::interpret<hayro_interpret::pattern::StencilPatternDevice<hayro_svg::SvgRenderer> >
+ 0.1%   0.2%  51.1KiB           hayro_svg hayro_svg::convert
+ 0.1%   0.2%  49.8KiB     hayro_interpret hayro_interpret::interpret::interpret<hayro_svg::SvgRenderer>
+ 0.1%   0.2%  49.1KiB        citationberg citationberg::_::impl$0::deserialize::impl$2::visit_map<ciborium::de::Access<ref$<slice2$<u8> > > >
+ 0.1%   0.2%  47.8KiB       typst_library typst_library::foundations::content::packed::Packed<typst_library::visualize::image::ImageElem>::decode
+ 0.1%   0.2%  45.2KiB           hayagriva hayagriva::impl$14::deserialize::_::impl$0::deserialize::impl$2::visit_map<ref_mut$<serde::private::de::content::MapRefDeserializer<serde_yaml::error::Error> > >
+ 0.1%   0.2%  44.8KiB        typst_layout typst_layout::inline::layout_inline_impl
+ 0.1%   0.2%  43.7KiB      hayro_jpeg2000 hayro_jpeg2000::Image::decode_into
+ 0.1%   0.2%  43.3KiB           typst_pdf typst_pdf::image::handle_image
+ 0.1%   0.2%  42.3KiB              skrifa skrifa::outline::glyf::hint::engine::Engine::run
+ 0.1%   0.2%  41.8KiB               typst typst::compile_impl<typst_layout::document::PagedDocument>
+ 0.1%   0.2%  41.8KiB       typst_library typst_library::model::bibliography::impl$11::generate_impl::closure$0
+ 0.1%   0.2%  39.7KiB         write_fonts write_fonts::graph::Graph::pack_objects
+45.0%  91.5%  19.7MiB                     And 23207 smaller methods. Use -n N to show more.
+49.2% 100.0%  21.5MiB                     .text section size, the file size is 43.8MiB

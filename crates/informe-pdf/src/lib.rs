@@ -283,6 +283,7 @@ fn escribir_sin_parcial(
 ) -> Result<(), String> {
     // shortcut: un temporal por proceso y carpeta; si se arman dos PDF a la vez en una carpeta, sumarle un contador.
     let temporal = ruta.with_file_name(format!("~{}.tmp", std::process::id()));
+    let mut creado = false;
     let resultado = (|| {
         if ruta.exists() {
             return Err(std::io::ErrorKind::AlreadyExists.into());
@@ -291,6 +292,7 @@ fn escribir_sin_parcial(
             .write(true)
             .create_new(true)
             .open(&temporal)?;
+        creado = true;
         escribir(&mut f)?;
         f.sync_all()?;
         drop(f);
@@ -302,7 +304,10 @@ fn escribir_sin_parcial(
             r => r,
         }
     })();
-    let _ = std::fs::remove_file(&temporal);
+    // Solo el temporal propio: el de otra escritura en curso no se toca.
+    if creado {
+        let _ = std::fs::remove_file(&temporal);
+    }
     resultado.map_err(|e| format!("{}: {e}", ruta.display()))
 }
 
@@ -506,6 +511,19 @@ mod pruebas {
             0,
             "ni PDF parcial ni temporal"
         );
+    }
+
+    // Revisión PART-009: el temporal de otra escritura en curso no se borra.
+    #[test]
+    fn informe_el_temporal_de_otra_escritura_no_se_borra() {
+        let d = carpeta("temporal-ajeno");
+        let ajeno = d.join(format!("~{}.tmp", std::process::id()));
+        std::fs::write(&ajeno, b"en curso").unwrap();
+        std::fs::write(d.join("a.pdf"), b"viejo").unwrap();
+        assert!(escribir_sin_parcial(&d.join("a.pdf"), |_| Ok(())).is_err());
+        assert!(escribir_sin_parcial(&d.join("b.pdf"), |_| Ok(())).is_err());
+        assert_eq!(std::fs::read(&ajeno).unwrap(), b"en curso");
+        assert!(!d.join("b.pdf").exists());
     }
 
     // Revisión PART-008: solo http, https y mailto son clicables; lo demás queda como texto.

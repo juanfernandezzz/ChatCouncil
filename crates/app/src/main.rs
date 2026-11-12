@@ -52,32 +52,50 @@ const PAGINA_DEL_ESQUELETO: &str = "https://cc-prueba.test/textarea.html";
 fn main() {
     let arranque = Instant::now();
     let args: Vec<String> = std::env::args().collect();
-    let codigo = match valor_de(&args, "-autoprueba") {
-        Some(salida) => con_autoprueba(PathBuf::from(salida), arranque),
-        None => {
-            match carpeta_de_datos(&args, std::env::var_os("LOCALAPPDATA").map(PathBuf::from)) {
-                Some(datos) => normal(datos),
-                None => {
-                    eprintln!("No se encontró la carpeta de datos: falta -datos y LOCALAPPDATA.");
-                    1
-                }
-            }
+    let codigo = match modo(&args, std::env::var_os("LOCALAPPDATA").map(PathBuf::from)) {
+        Ok(Modo::Autoprueba(salida)) => con_autoprueba(salida, arranque),
+        Ok(Modo::Normal(datos)) => normal(datos),
+        Err(e) => {
+            eprintln!("{e}");
+            1
         }
     };
     std::process::exit(codigo);
 }
 
-/// El valor que sigue a `nombre` en la línea de comandos.
-fn valor_de<'a>(args: &'a [String], nombre: &str) -> Option<&'a str> {
-    let i = args.iter().position(|a| a == nombre)?;
-    args.get(i + 1).map(String::as_str)
+#[derive(Debug, PartialEq)]
+enum Modo {
+    Autoprueba(PathBuf),
+    Normal(PathBuf),
+}
+
+fn modo(args: &[String], local: Option<PathBuf>) -> Result<Modo, String> {
+    let datos = carpeta_de_datos(args, local)?;
+    if let Some(salida) = valor_de(args, "-autoprueba")? {
+        return Ok(Modo::Autoprueba(PathBuf::from(salida)));
+    }
+    datos
+        .map(Modo::Normal)
+        .ok_or_else(|| "No se encontró la carpeta de datos: falta -datos y LOCALAPPDATA.".into())
+}
+
+/// El valor que sigue a `nombre` en la línea de comandos. Una bandera sin su valor es un error: caer
+/// al modo normal abriría la carpeta real (revisión PART-011).
+fn valor_de<'a>(args: &'a [String], nombre: &str) -> Result<Option<&'a str>, String> {
+    let Some(i) = args.iter().position(|a| a == nombre) else {
+        return Ok(None);
+    };
+    match args.get(i + 1) {
+        Some(v) if !v.starts_with('-') => Ok(Some(v)),
+        _ => Err(format!("Falta el valor de {nombre}.")),
+    }
 }
 
 /// ARR-001: la de `-datos` o, si no, `<LOCALAPPDATA>\ChatCouncil`.
-fn carpeta_de_datos(args: &[String], local: Option<PathBuf>) -> Option<PathBuf> {
-    valor_de(args, "-datos")
+fn carpeta_de_datos(args: &[String], local: Option<PathBuf>) -> Result<Option<PathBuf>, String> {
+    Ok(valor_de(args, "-datos")?
         .map(PathBuf::from)
-        .or_else(|| local.map(|l| l.join("ChatCouncil")))
+        .or_else(|| local.map(|l| l.join("ChatCouncil"))))
 }
 
 /// Un UUID v4 en minúsculas, como Guid.NewGuid() de la Unity.
@@ -234,8 +252,8 @@ mod pruebas {
         // ARR-001
         let a = args(&["ChatCouncilNueva.exe", "-datos", r"C:\x"]);
         assert_eq!(
-            carpeta_de_datos(&a, Some(r"C:\L".into())),
-            Some(PathBuf::from(r"C:\x"))
+            modo(&a, Some(r"C:\L".into())),
+            Ok(Modo::Normal(PathBuf::from(r"C:\x")))
         );
     }
 
@@ -243,19 +261,33 @@ mod pruebas {
     fn sin_menos_datos_es_la_de_appdata_local() {
         let a = args(&["ChatCouncilNueva.exe"]);
         assert_eq!(
-            carpeta_de_datos(&a, Some(r"C:\L".into())),
-            Some(PathBuf::from(r"C:\L\ChatCouncil"))
+            modo(&a, Some(r"C:\L".into())),
+            Ok(Modo::Normal(PathBuf::from(r"C:\L\ChatCouncil")))
         );
-        assert_eq!(carpeta_de_datos(&a, None), None);
+        assert!(modo(&a, None).is_err());
     }
 
     #[test]
     fn menos_autoprueba_da_la_ruta_de_salida() {
         assert_eq!(
-            valor_de(&args(&["x", "-autoprueba", "salida.txt"]), "-autoprueba"),
-            Some("salida.txt")
+            modo(&args(&["x", "-autoprueba", "salida.txt"]), None),
+            Ok(Modo::Autoprueba(PathBuf::from("salida.txt")))
         );
-        assert_eq!(valor_de(&args(&["x", "-autoprueba"]), "-autoprueba"), None);
+    }
+
+    #[test]
+    fn una_bandera_sin_su_valor_nunca_cae_a_la_carpeta_real() {
+        // Revisión PART-011: sin esto, «-autoprueba» o «-datos» solos abrían <LOCALAPPDATA>\ChatCouncil.
+        let local = Some(PathBuf::from(r"C:\L"));
+        for a in [
+            &["x", "-autoprueba"][..],
+            &["x", "-datos"],
+            &["x", "-datos", "-autoprueba", "salida.txt"],
+            &["x", "-autoprueba", "-datos", r"C:\x"],
+        ] {
+            let r = modo(&args(a), local.clone());
+            assert!(r.is_err(), "{a:?} dio {r:?}");
+        }
     }
 
     #[test]

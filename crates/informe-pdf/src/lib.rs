@@ -90,7 +90,7 @@ const PREAMBULO: &str = r##"#set page(paper: "us-letter", margin: 2cm, footer: c
   #set text(8pt, fill: rgb("#666666"))
   #align(center)[ChatCouncil · página #counter(page).display() de #counter(page).final().first()]
 ])
-#set text(font: "Libertinus Serif", size: 11pt, fill: rgb("#1a1a1a"), lang: "es")
+#set text(font: ("Libertinus Serif", "DejaVu Sans Mono"), size: 11pt, fill: rgb("#1a1a1a"), lang: "es")
 #set par(justify: true, leading: 0.65em)
 #show raw: set text(font: "DejaVu Sans Mono", size: 9pt)
 #show raw.where(block: true): it => block(width: 100%, fill: rgb("#f0f0f0"), inset: 6pt, it)
@@ -418,6 +418,70 @@ mod pruebas {
             std::fs::read_dir(&d).unwrap().count(),
             2,
             "no queda ningún temporal"
+        );
+    }
+
+    const FAMILIAS_DEL_TEXTO: &str = r#"font: ("Libertinus Serif", "DejaVu Sans Mono")"#;
+
+    /// Los caracteres de un Markdown sin glifo en las familias que su contexto declara: el texto, Libertinus Serif
+    /// y después DejaVu Sans Mono (que pone ✓ y ✗, ausentes en Libertinus); el código, DejaVu Sans Mono. typst no
+    /// avisa de un glifo ausente (lo reemplaza con la fuente que encuentre o lo deja en blanco), así que se mira
+    /// la cobertura en las fuentes mismas.
+    fn sin_glifo(md: &str) -> Vec<(char, &'static str)> {
+        let mut faltan = Vec::new();
+        let mut en_bloque = false;
+        for e in Parser::new_ext(md, Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH) {
+            let (t, familia) = match e {
+                Event::Start(Tag::CodeBlock(_)) => {
+                    en_bloque = true;
+                    continue;
+                }
+                Event::End(TagEnd::CodeBlock) => {
+                    en_bloque = false;
+                    continue;
+                }
+                Event::Code(t) => (t, "código"),
+                Event::Text(t) if en_bloque => (t, "código"),
+                Event::Text(t) | Event::Html(t) | Event::InlineHtml(t) => (t, "texto"),
+                _ => continue,
+            };
+            for c in t.chars().filter(|c| !c.is_whitespace() && !c.is_control()) {
+                let cubre = fijos()
+                    .fuentes
+                    .iter()
+                    .filter(|f| {
+                        f.info().family == "DejaVu Sans Mono"
+                            || (familia == "texto" && f.info().family == "Libertinus Serif")
+                    })
+                    .any(|f| f.info().coverage.contains(c as u32));
+                if !cubre && !faltan.contains(&(c, familia)) {
+                    faltan.push((c, familia));
+                }
+            }
+        }
+        faltan
+    }
+
+    // D20: las fuentes incrustadas cubren todo carácter del informe, en particular ✓ y ✗.
+    #[test]
+    fn informe_las_fuentes_cubren_todos_los_caracteres() {
+        let ruta =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/vectores/InformeDeRonda.json");
+        let Some(nucleo::json::Valor::Texto(vector)) =
+            nucleo::json::leer(&std::fs::read_to_string(ruta).unwrap())
+        else {
+            panic!("el vector InformeDeRonda es una cadena");
+        };
+        assert!(
+            PREAMBULO.contains(FAMILIAS_DEL_TEXTO),
+            "el texto declara sus familias"
+        );
+        assert_eq!(sin_glifo("✓ ✗ `✓ ✗`"), vec![], "los marcadores");
+        assert_eq!(sin_glifo(&vector.para_mostrar()), vec![], "el vector");
+        assert_eq!(
+            sin_glifo(&informe_real().para_mostrar()),
+            vec![],
+            "docs/investigacion"
         );
     }
 

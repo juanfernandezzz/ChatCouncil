@@ -564,6 +564,11 @@ fn abrir_para_agregar(ruta: &Path) -> io::Result<File> {
         .open(ruta)
 }
 
+/// D21: pide al disco que asiente lo agregado; la Puerta lo llama una vez por operación.
+pub fn asentar(carpeta: &Path, conversacion_id: &str) -> io::Result<()> {
+    abrir_para_agregar(&ruta_valida(carpeta, conversacion_id)?)?.sync_data()
+}
+
 /// El id es parte de la ruta: no puede salir de conversaciones/ (revisión PART-003).
 fn ruta_valida(carpeta: &Path, conversacion_id: &str) -> io::Result<PathBuf> {
     if conversacion_id.is_empty()

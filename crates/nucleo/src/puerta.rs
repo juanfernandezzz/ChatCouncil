@@ -73,6 +73,10 @@ pub struct Puerta {
     conversacion_actual: Option<String>,
     ronda_actual: Option<String>,
     ultima_lectura: Option<(String, u64, SystemTime, Rc<RegistroLeido>)>,
+    // D21: lo escrito se asienta en el disco una vez por operación, al terminar la de más afuera.
+    sin_asentar: std::cell::Cell<bool>,
+    profundidad: u32,
+    veces_asentado: usize,
     /// Segundos al este de UTC de la hora local en ese instante: la de los nombres de archivo.
     desfase_local: fn(SystemTime) -> i64,
     // Lo último que se pegó en cada panel, en este proceso: es el promptCompleto de lo que se capture después.
@@ -533,6 +537,9 @@ impl Puerta {
             conversacion_actual: None,
             ronda_actual: None,
             ultima_lectura: None,
+            sin_asentar: std::cell::Cell::new(false),
+            profundidad: 0,
+            veces_asentado: 0,
             desfase_local: desfase_local_del_sistema,
             prompt_operador: HashMap::new(),
             prompt_integrador: None,
@@ -565,6 +572,7 @@ impl Puerta {
     }
 
     fn escribir(&self, hecho: &Hecho) -> io::Result<()> {
+        self.sin_asentar.set(true);
         registro::agregar(
             &self.carpeta,
             self.conversacion_actual
@@ -572,6 +580,21 @@ impl Puerta {
                 .expect("sin conversación"),
             hecho,
         )
+    }
+
+    /// D21: cierra una operación; la de más afuera asienta en el disco lo que se escribió, una vez
+    /// (File::sync_data), y no una vez por línea. Si asentar falla, la operación falla.
+    fn asentar<T>(&mut self, r: io::Result<T>) -> io::Result<T> {
+        self.profundidad -= 1;
+        if self.profundidad > 0 || !self.sin_asentar.replace(false) {
+            return r;
+        }
+        let asentado = match &self.conversacion_actual {
+            Some(c) => registro::asentar(&self.carpeta, c),
+            None => Ok(()),
+        };
+        self.veces_asentado += 1;
+        r.and_then(|v| asentado.map(|()| v))
     }
 
     /// REG-008: el registro de la conversación en curso; se relee solo si el archivo cambió de largo o
@@ -745,53 +768,58 @@ impl Puerta {
         // y no se restaurarían (revisión PART-003; la Unity la fijaba antes de escribir).
         registro::agregar(&self.carpeta, &id, &h)?;
         self.conversacion_actual = Some(id);
+        self.sin_asentar.set(true);
         Ok(())
     }
 
     /// REG-010: escribe la Ronda con su semilla y, como condición suya, qué proveedores estaban
     /// cargados y quién integra.
     pub fn abrir_ronda(&mut self, prompt: impl Into<Texto>) -> io::Result<String> {
-        self.asegurar_conversacion()?;
-        let semilla = (self.nuevo_id)();
-        let id = (self.nuevo_id)();
-        let conversacion = self.conversacion_actual.clone().unwrap_or_default();
-        let ronda = Hecho::nuevo(
-            "ronda",
-            &[
-                ("id", Valor::Texto(id.as_str().into())),
-                ("conversacionId", Valor::Texto(conversacion.into())),
-                ("indice", Valor::Entero(self.indice_ronda)),
-                ("prompt", Valor::Texto(prompt.into())),
-                ("enviadaEn", Valor::Texto(self.ahora().into())),
-                ("semilla", Valor::Texto(semilla.into())),
-            ],
-        )?;
-        self.escribir(&ronda)?;
-        self.indice_ronda += 1;
-        let condicion = Hecho::nuevo(
-            "condicion-proveedores-cargados",
-            &[
-                ("id", Valor::Texto((self.nuevo_id)().into())),
-                ("rondaId", Valor::Texto(id.as_str().into())),
-                (
-                    "proveedores",
-                    Valor::Lista(
-                        self.activos
-                            .iter()
-                            .map(|a| Valor::Texto(a.as_str().into()))
-                            .collect(),
+        self.profundidad += 1;
+        let r = (|| -> io::Result<String> {
+            self.asegurar_conversacion()?;
+            let semilla = (self.nuevo_id)();
+            let id = (self.nuevo_id)();
+            let conversacion = self.conversacion_actual.clone().unwrap_or_default();
+            let ronda = Hecho::nuevo(
+                "ronda",
+                &[
+                    ("id", Valor::Texto(id.as_str().into())),
+                    ("conversacionId", Valor::Texto(conversacion.into())),
+                    ("indice", Valor::Entero(self.indice_ronda)),
+                    ("prompt", Valor::Texto(prompt.into())),
+                    ("enviadaEn", Valor::Texto(self.ahora().into())),
+                    ("semilla", Valor::Texto(semilla.into())),
+                ],
+            )?;
+            self.escribir(&ronda)?;
+            self.indice_ronda += 1;
+            let condicion = Hecho::nuevo(
+                "condicion-proveedores-cargados",
+                &[
+                    ("id", Valor::Texto((self.nuevo_id)().into())),
+                    ("rondaId", Valor::Texto(id.as_str().into())),
+                    (
+                        "proveedores",
+                        Valor::Lista(
+                            self.activos
+                                .iter()
+                                .map(|a| Valor::Texto(a.as_str().into()))
+                                .collect(),
+                        ),
                     ),
-                ),
-                (
-                    "integrador",
-                    Valor::Texto(self.roles.integrador.as_str().into()),
-                ),
-                ("registradoEn", Valor::Texto(self.ahora().into())),
-            ],
-        )?;
-        self.escribir(&condicion)?;
-        self.ronda_actual = Some(id.clone());
-        Ok(id)
+                    (
+                        "integrador",
+                        Valor::Texto(self.roles.integrador.as_str().into()),
+                    ),
+                    ("registradoEn", Valor::Texto(self.ahora().into())),
+                ],
+            )?;
+            self.escribir(&condicion)?;
+            self.ronda_actual = Some(id.clone());
+            Ok(id)
+        })();
+        self.asentar(r)
     }
 
     /// REG-011: un intento por proveedor, también los que fallaron. Sin ronda abierta es un error.
@@ -799,28 +827,32 @@ impl Puerta {
         &mut self,
         resultados: &[(&str, bool, Option<&str>)],
     ) -> io::Result<()> {
-        let ronda_id = self.ronda_actual.clone().ok_or_else(|| {
-            io::Error::other("no hay una ronda abierta para registrar los intentos")
-        })?;
-        let ahora = self.ahora();
-        for (proveedor, ok, error) in resultados {
-            let h = Hecho::nuevo(
-                "intento",
-                &[
-                    ("id", Valor::Texto((self.nuevo_id)().into())),
-                    ("rondaId", Valor::Texto(ronda_id.as_str().into())),
-                    ("proveedorId", Valor::Texto((*proveedor).into())),
-                    ("ok", Valor::Bool(*ok)),
-                    (
-                        "error",
-                        error.map_or(Valor::Nulo, |e| Valor::Texto(e.into())),
-                    ),
-                    ("enviadoEn", Valor::Texto(ahora.as_str().into())),
-                ],
-            )?;
-            self.escribir(&h)?;
-        }
-        Ok(())
+        self.profundidad += 1;
+        let r = (|| -> io::Result<()> {
+            let ronda_id = self.ronda_actual.clone().ok_or_else(|| {
+                io::Error::other("no hay una ronda abierta para registrar los intentos")
+            })?;
+            let ahora = self.ahora();
+            for (proveedor, ok, error) in resultados {
+                let h = Hecho::nuevo(
+                    "intento",
+                    &[
+                        ("id", Valor::Texto((self.nuevo_id)().into())),
+                        ("rondaId", Valor::Texto(ronda_id.as_str().into())),
+                        ("proveedorId", Valor::Texto((*proveedor).into())),
+                        ("ok", Valor::Bool(*ok)),
+                        (
+                            "error",
+                            error.map_or(Valor::Nulo, |e| Valor::Texto(e.into())),
+                        ),
+                        ("enviadoEn", Valor::Texto(ahora.as_str().into())),
+                    ],
+                )?;
+                self.escribir(&h)?;
+            }
+            Ok(())
+        })();
+        self.asentar(r)
     }
 
     /// OPE-001: la ronda en curso con su pregunta y la última respuesta de cada proveedor del pool; se
@@ -991,67 +1023,71 @@ impl Puerta {
         operador_id: &str,
         con_archivo: bool,
     ) -> io::Result<Operacion> {
-        let pool = self.pool.clone();
-        let pool = &strs(&pool)[..];
-        if !pool.contains(&operador_id) {
-            return Err(falla(format!(
-                "\"{}\" no es un operador del pool: no tiene cuerpo que operar",
-                dominio::nombre_proveedor(operador_id)
-            )));
-        }
-        let (pregunta, resultado) = self.armar_y_persistir_cuerpos(pool)?;
-        let cuerpo = resultado
-            .cuerpos
-            .iter()
-            .find(|c| c.operador_id == operador_id)
-            .expect("un cuerpo por operador del pool");
-        let token = (self.nuevo_id)();
-        let marca_fin = format!("[[CC-MARCA-FIN-{token}]]");
-        // Cuerpo y marcas siguen en UTF-16 hasta el final: un solo paso a Texto.
-        if con_archivo {
-            let codigo = &resultado
-                .sello
+        self.profundidad += 1;
+        let r = (|| -> io::Result<Operacion> {
+            let pool = self.pool.clone();
+            let pool = &strs(&pool)[..];
+            if !pool.contains(&operador_id) {
+                return Err(falla(format!(
+                    "\"{}\" no es un operador del pool: no tiene cuerpo que operar",
+                    dominio::nombre_proveedor(operador_id)
+                )));
+            }
+            let (pregunta, resultado) = self.armar_y_persistir_cuerpos(pool)?;
+            let cuerpo = resultado
+                .cuerpos
                 .iter()
-                .find(|s| s.panel_source_id == operador_id)
-                .expect("una entrada del sello por operador")
-                .codigo_estable;
-            let prompt = operacion::prompt_con_archivo(&pregunta);
+                .find(|c| c.operador_id == operador_id)
+                .expect("un cuerpo por operador del pool");
+            let token = (self.nuevo_id)();
+            let marca_fin = format!("[[CC-MARCA-FIN-{token}]]");
+            // Cuerpo y marcas siguen en UTF-16 hasta el final: un solo paso a Texto.
+            if con_archivo {
+                let codigo = &resultado
+                    .sello
+                    .iter()
+                    .find(|s| s.panel_source_id == operador_id)
+                    .expect("una entrada del sello por operador")
+                    .codigo_estable;
+                let prompt = operacion::prompt_con_archivo(&pregunta);
+                let (mut unidades, mut marcas) = operacion::marcas_intercaladas(
+                    &operacion::cuerpo_de(&cuerpo.respuestas_para_operador),
+                    &token,
+                    INTERVALO_MARCA,
+                );
+                unidades.extend(format!("\n{marca_fin}\n").encode_utf16());
+                marcas.push(marca_fin);
+                let archivo = Texto::desde_utf16(&unidades);
+                let nombre = format!("operacion-{codigo}-{}.txt", self.sello_de_archivo());
+                let cabecera = Texto::from(format!("\n\n=== ARCHIVO ADJUNTO: {nombre} ===\n"));
+                return Ok(Operacion {
+                    operador_id: operador_id.to_string(),
+                    prompt_completo: concatenar(&[&prompt, &cabecera, &archivo]),
+                    texto: prompt,
+                    cuerpo_archivo: Some(archivo),
+                    nombre_archivo: Some(nombre),
+                    marcas,
+                });
+            }
+            // Las marcas van sobre el texto ENTERO; sin salto final, que cada editor trata distinto.
             let (mut unidades, mut marcas) = operacion::marcas_intercaladas(
-                &operacion::cuerpo_de(&cuerpo.respuestas_para_operador),
+                &operacion::prompt_operacion_utf16(&pregunta, &cuerpo.respuestas_para_operador),
                 &token,
                 INTERVALO_MARCA,
             );
-            unidades.extend(format!("\n{marca_fin}\n").encode_utf16());
+            unidades.extend(format!("\n{marca_fin}").encode_utf16());
             marcas.push(marca_fin);
-            let archivo = Texto::desde_utf16(&unidades);
-            let nombre = format!("operacion-{codigo}-{}.txt", self.sello_de_archivo());
-            let cabecera = Texto::from(format!("\n\n=== ARCHIVO ADJUNTO: {nombre} ===\n"));
-            return Ok(Operacion {
+            let completo = Texto::desde_utf16(&unidades);
+            Ok(Operacion {
                 operador_id: operador_id.to_string(),
-                prompt_completo: concatenar(&[&prompt, &cabecera, &archivo]),
-                texto: prompt,
-                cuerpo_archivo: Some(archivo),
-                nombre_archivo: Some(nombre),
+                texto: completo.clone(),
+                cuerpo_archivo: None,
+                nombre_archivo: None,
                 marcas,
-            });
-        }
-        // Las marcas van sobre el texto ENTERO; sin salto final, que cada editor trata distinto.
-        let (mut unidades, mut marcas) = operacion::marcas_intercaladas(
-            &operacion::prompt_operacion_utf16(&pregunta, &cuerpo.respuestas_para_operador),
-            &token,
-            INTERVALO_MARCA,
-        );
-        unidades.extend(format!("\n{marca_fin}").encode_utf16());
-        marcas.push(marca_fin);
-        let completo = Texto::desde_utf16(&unidades);
-        Ok(Operacion {
-            operador_id: operador_id.to_string(),
-            texto: completo.clone(),
-            cuerpo_archivo: None,
-            nombre_archivo: None,
-            marcas,
-            prompt_completo: completo,
-        })
+                prompt_completo: completo,
+            })
+        })();
+        self.asentar(r)
     }
 
     /// TablaDeRonda (INT-001, INT-002): la tabla de hallazgos de la ronda tal como la ve el
@@ -1206,104 +1242,112 @@ impl Puerta {
     /// verificador de la ronda (D62: el 1 primero), una sola vez por verificación: las ya comprobadas
     /// se devuelven sin salir a la red. Hasta 20 por verificación, todas a la vez, 10 s cada una.
     pub fn comprobar_urls(&mut self, http: &dyn Http) -> io::Result<ResultadoUrls> {
-        let sin = |error: String| ResultadoUrls {
-            ok: false,
-            error: Some(error),
-            urls: Vec::new(),
-            ya_comprobadas: false,
-        };
-        let (Some(_), Some(ronda_id)) =
-            (self.conversacion_actual.clone(), self.ronda_actual.clone())
-        else {
-            return Ok(sin("no hay una ronda activa".into()));
-        };
-        let leido = self.leer_registro()?;
-        let hechos = &leido.hechos;
-        let id = Texto::from(ronda_id.as_str());
-        let roles = self.roles.clone();
-        let salidas = dominio::verificaciones_vigentes(hechos, &id, &roles.verificadores());
-        if salidas.is_empty() {
-            return Ok(sin(format!(
-                "la ronda {ronda_id} no tiene verificacion capturada"
-            )));
-        }
-        let mut todas = ResultadoUrls {
-            ok: true,
-            error: None,
-            urls: Vec::new(),
-            ya_comprobadas: true,
-        };
-        for salida in salidas {
-            let salida_id = salida.texto("id").cloned().unwrap_or_default();
-            let previas: Vec<Hecho> = hechos
-                .iter()
-                .filter(|h| {
-                    h.tipo() == "url-comprobada"
-                        && h.texto("salidaVerificadorId") == Some(&salida_id)
-                })
-                .cloned()
-                .collect();
-            let texto = parseos::texto_de_la_salida_verificador(
-                &salida.texto("salidaCruda").cloned().unwrap_or_default(),
-                salida.texto("html"),
-            )?;
-            // D21: comprobada solo si cada URL citada tiene su hecho; si una escritura falló a
-            // mitad, se piden las que faltan (la Unity la daba por comprobada con una sola).
-            let citadas: Vec<Texto> = urls_a_comprobar(
-                parseos::parsear_verificacion::<&str>(&texto, &[]).correspondencias,
-            )
-            .into_iter()
-            .filter(|u| !previas.iter().any(|h| h.texto("url") == Some(u)))
-            .collect();
-            let ya_comprobada = !previas.is_empty() && citadas.is_empty();
-            todas.urls.extend(previas);
-            if ya_comprobada {
-                continue;
+        self.profundidad += 1;
+        let r = (|| -> io::Result<ResultadoUrls> {
+            let sin = |error: String| ResultadoUrls {
+                ok: false,
+                error: Some(error),
+                urls: Vec::new(),
+                ya_comprobadas: false,
+            };
+            let (Some(_), Some(ronda_id)) =
+                (self.conversacion_actual.clone(), self.ronda_actual.clone())
+            else {
+                return Ok(sin("no hay una ronda activa".into()));
+            };
+            let leido = self.leer_registro()?;
+            let hechos = &leido.hechos;
+            let id = Texto::from(ronda_id.as_str());
+            let roles = self.roles.clone();
+            let salidas = dominio::verificaciones_vigentes(hechos, &id, &roles.verificadores());
+            if salidas.is_empty() {
+                return Ok(sin(format!(
+                    "la ronda {ronda_id} no tiene verificacion capturada"
+                )));
             }
-            todas.ya_comprobadas = false;
-            // Todas a la vez, como el Task.WhenAll de la Unity: a lo más 20 hilos, cada uno con su tiempo.
-            let resultados: Vec<(Option<i64>, Option<String>)> = std::thread::scope(|s| {
-                let hilos: Vec<_> = citadas
+            let mut todas = ResultadoUrls {
+                ok: true,
+                error: None,
+                urls: Vec::new(),
+                ya_comprobadas: true,
+            };
+            for salida in salidas {
+                let salida_id = salida.texto("id").cloned().unwrap_or_default();
+                let previas: Vec<Hecho> = hechos
                     .iter()
-                    .map(|u| {
-                        s.spawn(move || {
-                            // Una URL que no es texto válido no es http ni https: no se pide.
-                            urls::comprobar_url(u.como_str().unwrap_or(""), http, TIEMPO_POR_URL)
-                        })
+                    .filter(|h| {
+                        h.tipo() == "url-comprobada"
+                            && h.texto("salidaVerificadorId") == Some(&salida_id)
                     })
+                    .cloned()
                     .collect();
-                hilos
-                    .into_iter()
-                    .map(|h| {
-                        h.join().unwrap_or_else(|_| {
-                            (
-                                None,
-                                Some("la comprobación falló por un error interno".into()),
-                            )
+                let texto = parseos::texto_de_la_salida_verificador(
+                    &salida.texto("salidaCruda").cloned().unwrap_or_default(),
+                    salida.texto("html"),
+                )?;
+                // D21: comprobada solo si cada URL citada tiene su hecho; si una escritura falló a
+                // mitad, se piden las que faltan (la Unity la daba por comprobada con una sola).
+                let citadas: Vec<Texto> = urls_a_comprobar(
+                    parseos::parsear_verificacion::<&str>(&texto, &[]).correspondencias,
+                )
+                .into_iter()
+                .filter(|u| !previas.iter().any(|h| h.texto("url") == Some(u)))
+                .collect();
+                let ya_comprobada = !previas.is_empty() && citadas.is_empty();
+                todas.urls.extend(previas);
+                if ya_comprobada {
+                    continue;
+                }
+                todas.ya_comprobadas = false;
+                // Todas a la vez, como el Task.WhenAll de la Unity: a lo más 20 hilos, cada uno con su tiempo.
+                let resultados: Vec<(Option<i64>, Option<String>)> = std::thread::scope(|s| {
+                    let hilos: Vec<_> = citadas
+                        .iter()
+                        .map(|u| {
+                            s.spawn(move || {
+                                // Una URL que no es texto válido no es http ni https: no se pide.
+                                urls::comprobar_url(
+                                    u.como_str().unwrap_or(""),
+                                    http,
+                                    TIEMPO_POR_URL,
+                                )
+                            })
                         })
-                    })
-                    .collect()
-            });
-            for (url, (codigo, detalle)) in citadas.into_iter().zip(resultados) {
-                let mut valores = vec![
-                    ("id", Valor::Texto((self.nuevo_id)().into())),
-                    ("rondaId", Valor::Texto(id.clone())),
-                    ("salidaVerificadorId", Valor::Texto(salida_id.clone())),
-                    ("url", Valor::Texto(url)),
-                    ("comprobadaEn", Valor::Texto(self.ahora().into())),
-                ];
-                if let Some(c) = codigo {
-                    valores.push(("codigo", Valor::Entero(c)));
+                        .collect();
+                    hilos
+                        .into_iter()
+                        .map(|h| {
+                            h.join().unwrap_or_else(|_| {
+                                (
+                                    None,
+                                    Some("la comprobación falló por un error interno".into()),
+                                )
+                            })
+                        })
+                        .collect()
+                });
+                for (url, (codigo, detalle)) in citadas.into_iter().zip(resultados) {
+                    let mut valores = vec![
+                        ("id", Valor::Texto((self.nuevo_id)().into())),
+                        ("rondaId", Valor::Texto(id.clone())),
+                        ("salidaVerificadorId", Valor::Texto(salida_id.clone())),
+                        ("url", Valor::Texto(url)),
+                        ("comprobadaEn", Valor::Texto(self.ahora().into())),
+                    ];
+                    if let Some(c) = codigo {
+                        valores.push(("codigo", Valor::Entero(c)));
+                    }
+                    if let Some(d) = detalle {
+                        valores.push(("detalle", Valor::Texto(d.into())));
+                    }
+                    let h = Hecho::nuevo("url-comprobada", &valores)?;
+                    self.escribir(&h)?;
+                    todas.urls.push(h);
                 }
-                if let Some(d) = detalle {
-                    valores.push(("detalle", Valor::Texto(d.into())));
-                }
-                let h = Hecho::nuevo("url-comprobada", &valores)?;
-                self.escribir(&h)?;
-                todas.urls.push(h);
             }
-        }
-        Ok(todas)
+            Ok(todas)
+        })();
+        self.asentar(r)
     }
 
     /// ArmarInforme (INF-002 a INF-011): el informe de la ronda y su carpeta en «informes»: el .md
@@ -1324,72 +1368,74 @@ impl Puerta {
         http: &dyn Http,
         pdf: &dyn Pdf,
     ) -> io::Result<InformeArmado> {
-        let sin_ronda = || InformeArmado {
-            ok: false,
-            mensaje: "No hay una ronda activa para armar el informe.".into(),
-            ruta: None,
-            completo: false,
-        };
-        let (Some(conversacion), Some(ronda_id)) =
-            (self.conversacion_actual.clone(), self.ronda_actual.clone())
-        else {
-            return Ok(sin_ronda());
-        };
-        let leido = self.leer_registro()?;
-        let hechos = &leido.hechos;
-        let id = Texto::from(ronda_id.as_str());
-        let Some(ronda) = hechos
-            .iter()
-            .find(|h| h.tipo() == "ronda" && h.texto("id") == Some(&id))
-        else {
-            return Ok(sin_ronda());
-        };
-        let pool_propio = self.pool.clone();
-        let pool = &strs(&pool_propio)[..];
-        let roles = self.roles.clone();
-
-        let semilla = ronda.texto("semilla").cloned().unwrap_or_default();
-        let sello: Vec<&Hecho> = hechos.iter().filter(|h| es_de(h, "sello", &id)).collect();
-        // UltimaPorProveedor: en el orden de la primera captura de cada uno; gana la última.
-        let mut del_pool: Vec<&Hecho> = Vec::new();
-        for r in hechos.iter().filter(|h| es_de(h, "respuesta", &id)) {
-            let p = r.texto("proveedorId");
-            if !p
-                .and_then(Texto::como_str)
-                .is_some_and(|p| pool.contains(&p))
-            {
-                continue;
-            }
-            match del_pool.iter_mut().find(|x| x.texto("proveedorId") == p) {
-                Some(x) => *x = r,
-                None => del_pool.push(r),
-            }
-        }
-        let ids_respuesta: HashSet<&Texto> =
-            del_pool.iter().filter_map(|r| r.texto("id")).collect();
-        let citas: Vec<&Hecho> = hechos
-            .iter()
-            .filter(|h| {
-                h.tipo() == "cita"
-                    && h.texto("respuestaId")
-                        .is_some_and(|r| ids_respuesta.contains(r))
-            })
-            .collect();
-        let citas_de = |r: &Hecho| {
-            citas
+        self.profundidad += 1;
+        let r = (|| -> io::Result<InformeArmado> {
+            let sin_ronda = || InformeArmado {
+                ok: false,
+                mensaje: "No hay una ronda activa para armar el informe.".into(),
+                ruta: None,
+                completo: false,
+            };
+            let (Some(conversacion), Some(ronda_id)) =
+                (self.conversacion_actual.clone(), self.ronda_actual.clone())
+            else {
+                return Ok(sin_ronda());
+            };
+            let leido = self.leer_registro()?;
+            let hechos = &leido.hechos;
+            let id = Texto::from(ronda_id.as_str());
+            let Some(ronda) = hechos
                 .iter()
-                .filter(|c| c.texto("respuestaId") == r.texto("id"))
-                .count()
-        };
-        let vigentes = dominio::salidas_vigentes_de_ronda(hechos, &id);
-        let tabla = prompts::armar_tabla_hallazgos(
-            &para_tabla(hechos, &id),
-            pool,
-            operacion::hash_semilla(&semilla),
-        )
-        .map_err(falla)?;
-        // Un operador nunca desaparece del informe por haber fallado o no dar hallazgos: los tres estados son hechos.
-        let participacion = pool
+                .find(|h| h.tipo() == "ronda" && h.texto("id") == Some(&id))
+            else {
+                return Ok(sin_ronda());
+            };
+            let pool_propio = self.pool.clone();
+            let pool = &strs(&pool_propio)[..];
+            let roles = self.roles.clone();
+
+            let semilla = ronda.texto("semilla").cloned().unwrap_or_default();
+            let sello: Vec<&Hecho> = hechos.iter().filter(|h| es_de(h, "sello", &id)).collect();
+            // UltimaPorProveedor: en el orden de la primera captura de cada uno; gana la última.
+            let mut del_pool: Vec<&Hecho> = Vec::new();
+            for r in hechos.iter().filter(|h| es_de(h, "respuesta", &id)) {
+                let p = r.texto("proveedorId");
+                if !p
+                    .and_then(Texto::como_str)
+                    .is_some_and(|p| pool.contains(&p))
+                {
+                    continue;
+                }
+                match del_pool.iter_mut().find(|x| x.texto("proveedorId") == p) {
+                    Some(x) => *x = r,
+                    None => del_pool.push(r),
+                }
+            }
+            let ids_respuesta: HashSet<&Texto> =
+                del_pool.iter().filter_map(|r| r.texto("id")).collect();
+            let citas: Vec<&Hecho> = hechos
+                .iter()
+                .filter(|h| {
+                    h.tipo() == "cita"
+                        && h.texto("respuestaId")
+                            .is_some_and(|r| ids_respuesta.contains(r))
+                })
+                .collect();
+            let citas_de = |r: &Hecho| {
+                citas
+                    .iter()
+                    .filter(|c| c.texto("respuestaId") == r.texto("id"))
+                    .count()
+            };
+            let vigentes = dominio::salidas_vigentes_de_ronda(hechos, &id);
+            let tabla = prompts::armar_tabla_hallazgos(
+                &para_tabla(hechos, &id),
+                pool,
+                operacion::hash_semilla(&semilla),
+            )
+            .map_err(falla)?;
+            // Un operador nunca desaparece del informe por haber fallado o no dar hallazgos: los tres estados son hechos.
+            let participacion = pool
             .iter()
             .map(|op| {
                 let v = vigentes
@@ -1433,232 +1479,243 @@ impl Puerta {
             })
             .collect();
 
-        let informe_integrador = dominio::ultimo_informe_integrador(hechos, &id);
-        let pregunta = dominio::pregunta_efectiva_de_ronda(hechos, ronda)
-            .or(ronda.texto("prompt"))
-            .cloned()
-            .unwrap_or_default();
-        let salidas_verificador =
-            dominio::verificaciones_vigentes(hechos, &id, &roles.verificadores());
-        let comprobadas = if salidas_verificador.is_empty() {
-            Vec::new()
-        } else {
-            self.comprobar_urls(http)?.urls
-        };
-        let urls: Vec<&Hecho> = comprobadas.iter().collect();
-
-        // Desanonimizar: P# → proveedor con el sello, O# → operador con la tabla.
-        let mut proveedor_de_codigo: HashMap<String, String> = HashMap::new();
-        let mut codigo_de_proveedor: HashMap<String, Option<String>> = HashMap::new();
-        for s in &sello {
-            let panel = cadena_de(s.texto("panelSourceId"));
-            let codigo = s.texto("codigoEstable").map(|t| cadena_de(Some(t)));
-            if let Some(c) = &codigo {
-                proveedor_de_codigo.insert(c.clone(), panel.clone());
-            }
-            codigo_de_proveedor.insert(panel, codigo);
-        }
-        let hallazgos: Vec<informe::HallazgoResuelto> = tabla
-            .filas
-            .iter()
-            .map(|f| informe::HallazgoResuelto {
-                codigo: f.codigo_hallazgo.clone(),
-                categoria: f.categoria.clone(),
-                eje: f.eje.clone(),
-                respuestas_reales: f
-                    .etiquetas
-                    .iter()
-                    .filter_map(|p| p.como_str().and_then(|p| proveedor_de_codigo.get(p)))
-                    .cloned()
-                    .collect(),
-                descripcion: f.descripcion.clone(),
-                operador_real: f.operador_id_original.clone(),
-            })
-            .collect();
-        let ids_validos: Vec<&str> = tabla
-            .filas
-            .iter()
-            .map(|f| f.codigo_hallazgo.as_str())
-            .collect();
-        let texto_integrador = informe_integrador
-            .map(|h| {
-                parseos::texto_del_informe_integrador(
-                    &h.texto("informeCrudo").cloned().unwrap_or_default(),
-                    h.texto("html"),
-                )
-            })
-            .transpose()?;
-        let redaccion = match hechos.iter().rfind(|h| es_de(h, "respuesta-redactor", &id)) {
-            None => None,
-            Some(r) => {
-                let urls_del_material: Vec<Texto> = citas
-                    .iter()
-                    .filter_map(|c| c.texto("url").cloned())
-                    .collect();
-                let c = prompts::controles_redaccion(
-                    &r.texto("textoCrudo").cloned().unwrap_or_default(),
-                    r.texto("html"),
-                    r.texto("marcaPrimera").and_then(Texto::como_str),
-                    r.texto("marcaUltima").and_then(Texto::como_str),
-                    &ids_validos,
-                    &urls_del_material,
-                )?;
-                Some(informe::RedaccionParaInforme {
-                    redactor_id: cadena_de(r.texto("redactorId")),
-                    controles: prompts::lineas_de_control(&c),
-                    cuerpo: c.cuerpo,
-                    sello_verificaciones: match r.valor("selloVerificaciones") {
-                        Valor::Lista(l) => l
-                            .iter()
-                            .map(|x| {
-                                (
-                                    cadena_de(texto_en(x, "etiqueta")),
-                                    cadena_de(texto_en(x, "verificadorId")),
-                                )
-                            })
-                            .collect(),
-                        _ => Vec::new(),
-                    },
-                })
-            }
-        };
-        let verificaciones = salidas_verificador
-            .iter()
-            .map(|s| {
-                informe::verificacion_para_informe(s, &urls, &hallazgos, Some(TECHO_URLS_POR_RONDA))
-            })
-            .collect::<io::Result<Vec<_>>>()?;
-        let cargados: Option<Vec<String>> = dominio::proveedores_cargados_de_ronda(hechos, &id)
-            .map(|v| {
-                textos_de_lista(v)
-                    .iter()
-                    .map(|t| cadena_de(Some(t)))
-                    .collect()
-            });
-        let texto = informe::armar(&informe::InformeFinalInput {
-            pregunta: pregunta.clone(),
-            fecha: self.ahora(),
-            conversacion_id: conversacion,
-            ronda_id: ronda_id.clone(),
-            referencias_en_orden: texto_integrador
-                .as_ref()
-                .map(|t| {
-                    parseos::parsear_referencias_integrador(t, &ids_validos)
-                        .referencias
-                        .into_iter()
-                        .map(|r| informe::ReferenciaResuelta {
-                            codigo: r.hallazgo_id,
-                            existe: !r.referencia_invalida,
-                        })
-                        .collect()
-                })
-                .unwrap_or_default(),
-            informe_integrador_crudo: texto_integrador.clone(),
-            hallazgos,
-            participacion_operadores: participacion,
-            condiciones: del_pool
-                .iter()
-                .map(|r| {
-                    let p = cadena_de(r.texto("proveedorId"));
-                    informe::CondicionProveedor {
-                        etiqueta_modelo: texto_en(r.valor("procedencia"), "modelLabel").cloned(),
-                        caracteres_respuesta: r
-                            .texto("textoOriginal")
-                            .map_or(0, Texto::largo_utf16),
-                        fuentes_citadas: citas_de(r),
-                        codigo_estable: codigo_de_proveedor.get(&p).cloned().flatten(),
-                        proveedor_id: p,
-                    }
-                })
-                .collect(),
-            integridad_entrega:
-                "no persistida en el registro (se informa en pantalla al pegar cada panel)".into(),
-            semilla,
-            proveedores_cargados_incompletos: cargados
-                .filter(|c| pool.iter().any(|p| !c.iter().any(|x| x == p))),
-            integrador: informe_integrador
-                .and_then(|h| h.texto("operadorId"))
-                .or_else(|| dominio::integrador_de_ronda(hechos, &id))
-                .map(|t| cadena_de(Some(t))),
-            verificaciones,
-            redaccion,
-        });
-
-        // El nombre: fecha y hora locales y el título del integrador (o las primeras palabras de la pregunta).
-        let dir = self.carpeta.join("informes");
-        fs::create_dir_all(&dir)?;
-        let titulo = match informe_integrador {
-            None => None,
-            Some(h) if h.texto("html").is_some_and(|t| !t.bytes().is_empty()) => texto_integrador
-                .as_ref()
-                .and_then(|t| parseos::extraer_titulo_del_informe(t).0),
-            Some(h) => h.texto("titulo").cloned().or_else(|| {
-                parseos::extraer_titulo_del_informe(
-                    &h.texto("informeCrudo").cloned().unwrap_or_default(),
-                )
-                .0
-            }),
-        };
-        // D47: ninguna ruta de la carpeta pasa de 259 caracteres (MAX_PATH). Las más largas son el PDF, que repite
-        // el nombre, y la nota de faltantes; se reservan " (999)" y "AAAA-MM-DD HHMM - ".
-        // shortcut: con la carpeta "informes" en más de ~168 caracteres no entra ningún título y va el de reserva, que puede
-        // dejar la nota de faltantes fuera del límite; mover la carpeta de datos más arriba si alguien la tiene tan honda.
-        let unidades = |s: &str| s.encode_utf16().count() as i64;
-        let libre = 259 - unidades(&std::path::absolute(&dir)?.to_string_lossy());
-        let nombre_max = ((libre - 6) / 2)
-            .min(libre - 3 - unidades(informe::SUBCARPETA_RESPUESTAS) - unidades(NOMBRE_FALTANTES))
-            - 6;
-        let s = self.sello_de_archivo();
-        let sello_local = format!("{} {}", &s[..10], &s[11..]);
-        let base = parseos::nombre_base_de_informe(
-            titulo.as_ref(),
-            &pregunta,
-            &sello_local,
-            (nombre_max - 18).max(0) as usize,
-        );
-        let nombre = parseos::nombre_libre_de_informe(&base, |n| {
-            let n = n.para_mostrar();
-            dir.join(&*n).is_dir()
-                || dir.join(format!("{n}.md")).is_file()
-                || dir.join(format!("{n}.pdf")).is_file()
-        })
-        .map_err(falla)?
-        .para_mostrar()
-        .into_owned();
-        // Las respuestas de los INVESTIGADORES a la pregunta, en el orden del pool; nunca las salidas de operador.
-        let mut respuestas = Vec::new();
-        for (i, op) in pool.iter().enumerate() {
-            let Some(r) = del_pool
-                .iter()
-                .find(|r| r.texto("proveedorId").and_then(Texto::como_str) == Some(*op))
-            else {
-                continue;
+            let informe_integrador = dominio::ultimo_informe_integrador(hechos, &id);
+            let pregunta = dominio::pregunta_efectiva_de_ronda(hechos, ronda)
+                .or(ronda.texto("prompt"))
+                .cloned()
+                .unwrap_or_default();
+            let salidas_verificador =
+                dominio::verificaciones_vigentes(hechos, &id, &roles.verificadores());
+            let comprobadas = if salidas_verificador.is_empty() {
+                Vec::new()
+            } else {
+                self.comprobar_urls(http)?.urls
             };
-            let procedencia = r.valor("procedencia");
-            respuestas.push((
-                informe::nombre_archivo_respuesta(i, op),
-                format!(
-                    "{} — respuesta de investigador",
-                    dominio::nombre_proveedor(op)
-                ),
-                informe::markdown_de_respuesta_investigador(
-                    &pregunta,
-                    &informe::RespuestaParaPdf {
-                        proveedor_id: op.to_string(),
-                        etiqueta_modelo: texto_en(procedencia, "modelLabel").cloned(),
-                        leida_en: cadena_de(r.texto("leidaEn")),
-                        texto_original: r.texto("textoOriginal").cloned().unwrap_or_default(),
-                        error: r.texto("error").cloned(),
-                        fuentes_citadas: citas_de(r),
-                        fuentes_href: r.entero("fuentesHref"),
-                        fin_de: texto_en(procedencia, "finDe").map(|t| cadena_de(Some(t))),
-                    },
-                ),
-            ));
-        }
-        let entrega = entregar_carpeta(&dir, &nombre, &texto, &respuestas, pdf)?;
-        self.informe_armado = Some((ronda_id, dir.join(&nombre)));
-        Ok(entrega)
+            let urls: Vec<&Hecho> = comprobadas.iter().collect();
+
+            // Desanonimizar: P# → proveedor con el sello, O# → operador con la tabla.
+            let mut proveedor_de_codigo: HashMap<String, String> = HashMap::new();
+            let mut codigo_de_proveedor: HashMap<String, Option<String>> = HashMap::new();
+            for s in &sello {
+                let panel = cadena_de(s.texto("panelSourceId"));
+                let codigo = s.texto("codigoEstable").map(|t| cadena_de(Some(t)));
+                if let Some(c) = &codigo {
+                    proveedor_de_codigo.insert(c.clone(), panel.clone());
+                }
+                codigo_de_proveedor.insert(panel, codigo);
+            }
+            let hallazgos: Vec<informe::HallazgoResuelto> = tabla
+                .filas
+                .iter()
+                .map(|f| informe::HallazgoResuelto {
+                    codigo: f.codigo_hallazgo.clone(),
+                    categoria: f.categoria.clone(),
+                    eje: f.eje.clone(),
+                    respuestas_reales: f
+                        .etiquetas
+                        .iter()
+                        .filter_map(|p| p.como_str().and_then(|p| proveedor_de_codigo.get(p)))
+                        .cloned()
+                        .collect(),
+                    descripcion: f.descripcion.clone(),
+                    operador_real: f.operador_id_original.clone(),
+                })
+                .collect();
+            let ids_validos: Vec<&str> = tabla
+                .filas
+                .iter()
+                .map(|f| f.codigo_hallazgo.as_str())
+                .collect();
+            let texto_integrador = informe_integrador
+                .map(|h| {
+                    parseos::texto_del_informe_integrador(
+                        &h.texto("informeCrudo").cloned().unwrap_or_default(),
+                        h.texto("html"),
+                    )
+                })
+                .transpose()?;
+            let redaccion = match hechos.iter().rfind(|h| es_de(h, "respuesta-redactor", &id)) {
+                None => None,
+                Some(r) => {
+                    let urls_del_material: Vec<Texto> = citas
+                        .iter()
+                        .filter_map(|c| c.texto("url").cloned())
+                        .collect();
+                    let c = prompts::controles_redaccion(
+                        &r.texto("textoCrudo").cloned().unwrap_or_default(),
+                        r.texto("html"),
+                        r.texto("marcaPrimera").and_then(Texto::como_str),
+                        r.texto("marcaUltima").and_then(Texto::como_str),
+                        &ids_validos,
+                        &urls_del_material,
+                    )?;
+                    Some(informe::RedaccionParaInforme {
+                        redactor_id: cadena_de(r.texto("redactorId")),
+                        controles: prompts::lineas_de_control(&c),
+                        cuerpo: c.cuerpo,
+                        sello_verificaciones: match r.valor("selloVerificaciones") {
+                            Valor::Lista(l) => l
+                                .iter()
+                                .map(|x| {
+                                    (
+                                        cadena_de(texto_en(x, "etiqueta")),
+                                        cadena_de(texto_en(x, "verificadorId")),
+                                    )
+                                })
+                                .collect(),
+                            _ => Vec::new(),
+                        },
+                    })
+                }
+            };
+            let verificaciones = salidas_verificador
+                .iter()
+                .map(|s| {
+                    informe::verificacion_para_informe(
+                        s,
+                        &urls,
+                        &hallazgos,
+                        Some(TECHO_URLS_POR_RONDA),
+                    )
+                })
+                .collect::<io::Result<Vec<_>>>()?;
+            let cargados: Option<Vec<String>> = dominio::proveedores_cargados_de_ronda(hechos, &id)
+                .map(|v| {
+                    textos_de_lista(v)
+                        .iter()
+                        .map(|t| cadena_de(Some(t)))
+                        .collect()
+                });
+            let texto = informe::armar(&informe::InformeFinalInput {
+                pregunta: pregunta.clone(),
+                fecha: self.ahora(),
+                conversacion_id: conversacion,
+                ronda_id: ronda_id.clone(),
+                referencias_en_orden: texto_integrador
+                    .as_ref()
+                    .map(|t| {
+                        parseos::parsear_referencias_integrador(t, &ids_validos)
+                            .referencias
+                            .into_iter()
+                            .map(|r| informe::ReferenciaResuelta {
+                                codigo: r.hallazgo_id,
+                                existe: !r.referencia_invalida,
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                informe_integrador_crudo: texto_integrador.clone(),
+                hallazgos,
+                participacion_operadores: participacion,
+                condiciones: del_pool
+                    .iter()
+                    .map(|r| {
+                        let p = cadena_de(r.texto("proveedorId"));
+                        informe::CondicionProveedor {
+                            etiqueta_modelo: texto_en(r.valor("procedencia"), "modelLabel")
+                                .cloned(),
+                            caracteres_respuesta: r
+                                .texto("textoOriginal")
+                                .map_or(0, Texto::largo_utf16),
+                            fuentes_citadas: citas_de(r),
+                            codigo_estable: codigo_de_proveedor.get(&p).cloned().flatten(),
+                            proveedor_id: p,
+                        }
+                    })
+                    .collect(),
+                integridad_entrega:
+                    "no persistida en el registro (se informa en pantalla al pegar cada panel)"
+                        .into(),
+                semilla,
+                proveedores_cargados_incompletos: cargados
+                    .filter(|c| pool.iter().any(|p| !c.iter().any(|x| x == p))),
+                integrador: informe_integrador
+                    .and_then(|h| h.texto("operadorId"))
+                    .or_else(|| dominio::integrador_de_ronda(hechos, &id))
+                    .map(|t| cadena_de(Some(t))),
+                verificaciones,
+                redaccion,
+            });
+
+            // El nombre: fecha y hora locales y el título del integrador (o las primeras palabras de la pregunta).
+            let dir = self.carpeta.join("informes");
+            fs::create_dir_all(&dir)?;
+            let titulo = match informe_integrador {
+                None => None,
+                Some(h) if h.texto("html").is_some_and(|t| !t.bytes().is_empty()) => {
+                    texto_integrador
+                        .as_ref()
+                        .and_then(|t| parseos::extraer_titulo_del_informe(t).0)
+                }
+                Some(h) => h.texto("titulo").cloned().or_else(|| {
+                    parseos::extraer_titulo_del_informe(
+                        &h.texto("informeCrudo").cloned().unwrap_or_default(),
+                    )
+                    .0
+                }),
+            };
+            // D47: ninguna ruta de la carpeta pasa de 259 caracteres (MAX_PATH). Las más largas son el PDF, que repite
+            // el nombre, y la nota de faltantes; se reservan " (999)" y "AAAA-MM-DD HHMM - ".
+            // shortcut: con la carpeta "informes" en más de ~168 caracteres no entra ningún título y va el de reserva, que puede
+            // dejar la nota de faltantes fuera del límite; mover la carpeta de datos más arriba si alguien la tiene tan honda.
+            let unidades = |s: &str| s.encode_utf16().count() as i64;
+            let libre = 259 - unidades(&std::path::absolute(&dir)?.to_string_lossy());
+            let nombre_max = ((libre - 6) / 2).min(
+                libre - 3 - unidades(informe::SUBCARPETA_RESPUESTAS) - unidades(NOMBRE_FALTANTES),
+            ) - 6;
+            let s = self.sello_de_archivo();
+            let sello_local = format!("{} {}", &s[..10], &s[11..]);
+            let base = parseos::nombre_base_de_informe(
+                titulo.as_ref(),
+                &pregunta,
+                &sello_local,
+                (nombre_max - 18).max(0) as usize,
+            );
+            let nombre = parseos::nombre_libre_de_informe(&base, |n| {
+                let n = n.para_mostrar();
+                dir.join(&*n).is_dir()
+                    || dir.join(format!("{n}.md")).is_file()
+                    || dir.join(format!("{n}.pdf")).is_file()
+            })
+            .map_err(falla)?
+            .para_mostrar()
+            .into_owned();
+            // Las respuestas de los INVESTIGADORES a la pregunta, en el orden del pool; nunca las salidas de operador.
+            let mut respuestas = Vec::new();
+            for (i, op) in pool.iter().enumerate() {
+                let Some(r) = del_pool
+                    .iter()
+                    .find(|r| r.texto("proveedorId").and_then(Texto::como_str) == Some(*op))
+                else {
+                    continue;
+                };
+                let procedencia = r.valor("procedencia");
+                respuestas.push((
+                    informe::nombre_archivo_respuesta(i, op),
+                    format!(
+                        "{} — respuesta de investigador",
+                        dominio::nombre_proveedor(op)
+                    ),
+                    informe::markdown_de_respuesta_investigador(
+                        &pregunta,
+                        &informe::RespuestaParaPdf {
+                            proveedor_id: op.to_string(),
+                            etiqueta_modelo: texto_en(procedencia, "modelLabel").cloned(),
+                            leida_en: cadena_de(r.texto("leidaEn")),
+                            texto_original: r.texto("textoOriginal").cloned().unwrap_or_default(),
+                            error: r.texto("error").cloned(),
+                            fuentes_citadas: citas_de(r),
+                            fuentes_href: r.entero("fuentesHref"),
+                            fin_de: texto_en(procedencia, "finDe").map(|t| cadena_de(Some(t))),
+                        },
+                    ),
+                ));
+            }
+            let entrega = entregar_carpeta(&dir, &nombre, &texto, &respuestas, pdf)?;
+            self.informe_armado = Some((ronda_id, dir.join(&nombre)));
+            Ok(entrega)
+        })();
+        self.asentar(r)
     }
 
     /// OPE-015 (ProcesarSalidaOperador): la salida del operador y un hecho por hallazgo, parseados
@@ -1714,224 +1771,233 @@ impl Puerta {
     /// copiada y marcada copiadaDe, con sus citas vueltas a derivar del mismo html. La ronda anterior
     /// queda intacta. Las negativas son mensajes, como en la Unity; un error es de escritura.
     pub fn ronda_nueva_con_respuestas_copiadas(&mut self) -> io::Result<String> {
-        let pool = self.pool.clone();
-        let pool = &strs(&pool)[..];
-        let (Some(_), Some(ronda_id)) = (&self.conversacion_actual, self.ronda_actual.clone())
-        else {
-            return Ok("No hay una ronda activa de la que copiar.".into());
-        };
-        let leido = self.leer_registro()?;
-        let id = Texto::from(ronda_id.as_str());
-        let Some(anterior) = leido
-            .hechos
-            .iter()
-            .find(|h| h.tipo() == "ronda" && h.texto("id") == Some(&id))
-        else {
-            return Ok("No se encontró la ronda activa en el registro.".into());
-        };
-        let Some(pregunta) = dominio::pregunta_efectiva_de_ronda(&leido.hechos, anterior) else {
-            return Ok(
-                "La ronda activa no tiene una pregunta registrada válida: no se puede repetir."
-                    .into(),
-            );
-        };
-        // UltimaPorProveedor: la última de cada proveedor, en el orden de su primera captura.
-        let mut ultimas: Vec<&Hecho> = Vec::new();
-        for r in leido.hechos.iter().filter(|h| {
-            h.tipo() == "respuesta"
-                && h.texto("rondaId") == Some(&id)
-                && h.texto("proveedorId")
-                    .and_then(Texto::como_str)
-                    .is_some_and(|p| pool.contains(&p))
-        }) {
-            match ultimas
-                .iter_mut()
-                .find(|u| u.texto("proveedorId") == r.texto("proveedorId"))
-            {
-                Some(u) => *u = r,
-                None => ultimas.push(r),
-            }
-        }
-        if ultimas.is_empty() {
-            return Ok("La ronda activa no tiene respuestas del pool para copiar.".into());
-        }
-        let nueva = self.abrir_ronda(pregunta.clone())?;
-        for r in &ultimas {
-            let copia_id = (self.nuevo_id)();
-            let mut campos: Vec<(&str, Valor)> = [
-                "proveedorId",
-                "textoOriginal",
-                "leidaEn",
-                "error",
-                "procedencia",
-                "promptUsuarioLeido",
-                "promptCoincideEnPool",
-                "fuentesHref",
-                "html",
-            ]
-            .into_iter()
-            .map(|k| (k, r.valor(k).clone()))
-            .collect();
-            campos.extend([
-                ("id", Valor::Texto(copia_id.as_str().into())),
-                ("rondaId", Valor::Texto(nueva.as_str().into())),
-                (
-                    "copiadaDe",
-                    Valor::Objeto(vec![
-                        ("rondaId".into(), r.valor("rondaId").clone()),
-                        ("respuestaId".into(), r.valor("id").clone()),
-                    ]),
-                ),
-            ]);
-            self.escribir(&Hecho::nuevo("respuesta", &campos)?)?;
-            if let Some(html) = r.texto("html") {
-                let nuevo_id = &mut self.nuevo_id;
-                let citas = parseos::extraer_citas(html, &copia_id, &mut || nuevo_id())?;
-                for c in &citas.citas {
-                    self.escribir(c)?;
+        self.profundidad += 1;
+        let r = (|| -> io::Result<String> {
+            let pool = self.pool.clone();
+            let pool = &strs(&pool)[..];
+            let (Some(_), Some(ronda_id)) = (&self.conversacion_actual, self.ronda_actual.clone())
+            else {
+                return Ok("No hay una ronda activa de la que copiar.".into());
+            };
+            let leido = self.leer_registro()?;
+            let id = Texto::from(ronda_id.as_str());
+            let Some(anterior) = leido
+                .hechos
+                .iter()
+                .find(|h| h.tipo() == "ronda" && h.texto("id") == Some(&id))
+            else {
+                return Ok("No se encontró la ronda activa en el registro.".into());
+            };
+            let Some(pregunta) = dominio::pregunta_efectiva_de_ronda(&leido.hechos, anterior)
+            else {
+                return Ok(
+                    "La ronda activa no tiene una pregunta registrada válida: no se puede repetir."
+                        .into(),
+                );
+            };
+            // UltimaPorProveedor: la última de cada proveedor, en el orden de su primera captura.
+            let mut ultimas: Vec<&Hecho> = Vec::new();
+            for r in leido.hechos.iter().filter(|h| {
+                h.tipo() == "respuesta"
+                    && h.texto("rondaId") == Some(&id)
+                    && h.texto("proveedorId")
+                        .and_then(Texto::como_str)
+                        .is_some_and(|p| pool.contains(&p))
+            }) {
+                match ultimas
+                    .iter_mut()
+                    .find(|u| u.texto("proveedorId") == r.texto("proveedorId"))
+                {
+                    Some(u) => *u = r,
+                    None => ultimas.push(r),
                 }
             }
-        }
-        Ok(format!(
-            "Ronda nueva abierta ({}) con {} respuestas copiadas de la ronda {}. Recaptura con \"Capturar este panel\" lo que quieras corregir.",
-            corto(&nueva),
-            ultimas.len(),
-            corto(&ronda_id)
-        ))
+            if ultimas.is_empty() {
+                return Ok("La ronda activa no tiene respuestas del pool para copiar.".into());
+            }
+            let nueva = self.abrir_ronda(pregunta.clone())?;
+            for r in &ultimas {
+                let copia_id = (self.nuevo_id)();
+                let mut campos: Vec<(&str, Valor)> = [
+                    "proveedorId",
+                    "textoOriginal",
+                    "leidaEn",
+                    "error",
+                    "procedencia",
+                    "promptUsuarioLeido",
+                    "promptCoincideEnPool",
+                    "fuentesHref",
+                    "html",
+                ]
+                .into_iter()
+                .map(|k| (k, r.valor(k).clone()))
+                .collect();
+                campos.extend([
+                    ("id", Valor::Texto(copia_id.as_str().into())),
+                    ("rondaId", Valor::Texto(nueva.as_str().into())),
+                    (
+                        "copiadaDe",
+                        Valor::Objeto(vec![
+                            ("rondaId".into(), r.valor("rondaId").clone()),
+                            ("respuestaId".into(), r.valor("id").clone()),
+                        ]),
+                    ),
+                ]);
+                self.escribir(&Hecho::nuevo("respuesta", &campos)?)?;
+                if let Some(html) = r.texto("html") {
+                    let nuevo_id = &mut self.nuevo_id;
+                    let citas = parseos::extraer_citas(html, &copia_id, &mut || nuevo_id())?;
+                    for c in &citas.citas {
+                        self.escribir(c)?;
+                    }
+                }
+            }
+            Ok(format!(
+                "Ronda nueva abierta ({}) con {} respuestas copiadas de la ronda {}. Recaptura con \"Capturar este panel\" lo que quieras corregir.",
+                corto(&nueva),
+                ultimas.len(),
+                corto(&ronda_id)
+            ))
+        })();
+        self.asentar(r)
     }
 
     /// OPE-016: reutilizar la operación de un operador desde la ronda de la que se copiaron las
     /// respuestas. Solo vale si todo lo que ese operador lee (el pool menos la suya) son copias sin
     /// cambios; los hallazgos se vuelven a derivar contra el sello de esta ronda.
     pub fn reutilizar_operacion(&mut self, operador_id: &str) -> io::Result<(bool, String)> {
-        let pool = self.pool.clone();
-        let pool = &strs(&pool)[..];
-        let (Some(_), Some(ronda_id)) = (&self.conversacion_actual, self.ronda_actual.clone())
-        else {
-            return Ok((false, "no hay una ronda activa".into()));
-        };
-        let nombre = dominio::nombre_proveedor(operador_id);
-        if !pool.contains(&operador_id) {
-            return Ok((false, format!("\"{nombre}\" no es un operador del pool.")));
-        }
-        let leido = self.leer_registro()?;
-        let id = Texto::from(ronda_id.as_str());
-        let sello: Vec<&Hecho> = leido
-            .hechos
-            .iter()
-            .filter(|h| h.tipo() == "sello" && h.texto("rondaId") == Some(&id))
-            .collect();
-        if sello.is_empty() {
-            return Ok((
+        self.profundidad += 1;
+        let r = (|| -> io::Result<(bool, String)> {
+            let pool = self.pool.clone();
+            let pool = &strs(&pool)[..];
+            let (Some(_), Some(ronda_id)) = (&self.conversacion_actual, self.ronda_actual.clone())
+            else {
+                return Ok((false, "no hay una ronda activa".into()));
+            };
+            let nombre = dominio::nombre_proveedor(operador_id);
+            if !pool.contains(&operador_id) {
+                return Ok((false, format!("\"{nombre}\" no es un operador del pool.")));
+            }
+            let leido = self.leer_registro()?;
+            let id = Texto::from(ronda_id.as_str());
+            let sello: Vec<&Hecho> = leido
+                .hechos
+                .iter()
+                .filter(|h| h.tipo() == "sello" && h.texto("rondaId") == Some(&id))
+                .collect();
+            if sello.is_empty() {
+                return Ok((
                 false,
                 "Esta ronda todavía no tiene sello: pega primero la operación en algún panel («Pegar la operación aquí»).".into(),
             ));
-        }
-        let mut vigentes: HashMap<&str, &Hecho> = HashMap::new();
-        for r in leido
-            .hechos
-            .iter()
-            .filter(|h| h.tipo() == "respuesta" && h.texto("rondaId") == Some(&id))
-        {
-            if let Some(p) = r.texto("proveedorId").and_then(Texto::como_str) {
-                vigentes.insert(p, r);
             }
-        }
-        let leidas: Vec<&str> = pool.iter().copied().filter(|p| *p != operador_id).collect();
-        let copia = |p: &str| {
-            vigentes
-                .get(p)
-                .map(|r| r.valor("copiadaDe"))
-                .filter(|c| **c != Valor::Nulo)
-        };
-        let cambiadas: Vec<String> = leidas
-            .iter()
-            .filter(|p| copia(p).is_none())
-            .map(|p| dominio::nombre_proveedor(p))
-            .collect();
-        if !cambiadas.is_empty() {
-            return Ok((
-                false,
-                format!(
-                    "No se puede reutilizar: {nombre} lee respuestas que cambiaron en esta ronda ({}). Tiene que operar de nuevo.",
-                    cambiadas.join(", ")
-                ),
-            ));
-        }
-        let mut origenes: Vec<&Valor> = Vec::new();
-        for p in &leidas {
-            let Some(Valor::Objeto(c)) = copia(p) else {
-                continue;
-            };
-            let o = c
+            let mut vigentes: HashMap<&str, &Hecho> = HashMap::new();
+            for r in leido
+                .hechos
                 .iter()
-                .find(|(k, _)| k.como_str() == Some("rondaId"))
-                .map_or(&Valor::Nulo, |(_, v)| v);
-            if !origenes.contains(&o) {
-                origenes.push(o);
+                .filter(|h| h.tipo() == "respuesta" && h.texto("rondaId") == Some(&id))
+            {
+                if let Some(p) = r.texto("proveedorId").and_then(Texto::como_str) {
+                    vigentes.insert(p, r);
+                }
             }
-        }
-        if origenes.len() != 1 {
-            return Ok((
-                false,
+            let leidas: Vec<&str> = pool.iter().copied().filter(|p| *p != operador_id).collect();
+            let copia = |p: &str| {
+                vigentes
+                    .get(p)
+                    .map(|r| r.valor("copiadaDe"))
+                    .filter(|c| **c != Valor::Nulo)
+            };
+            let cambiadas: Vec<String> = leidas
+                .iter()
+                .filter(|p| copia(p).is_none())
+                .map(|p| dominio::nombre_proveedor(p))
+                .collect();
+            if !cambiadas.is_empty() {
+                return Ok((
+                    false,
+                    format!(
+                        "No se puede reutilizar: {nombre} lee respuestas que cambiaron en esta ronda ({}). Tiene que operar de nuevo.",
+                        cambiadas.join(", ")
+                    ),
+                ));
+            }
+            let mut origenes: Vec<&Valor> = Vec::new();
+            for p in &leidas {
+                let Some(Valor::Objeto(c)) = copia(p) else {
+                    continue;
+                };
+                let o = c
+                    .iter()
+                    .find(|(k, _)| k.como_str() == Some("rondaId"))
+                    .map_or(&Valor::Nulo, |(_, v)| v);
+                if !origenes.contains(&o) {
+                    origenes.push(o);
+                }
+            }
+            if origenes.len() != 1 {
+                return Ok((
+                    false,
+                    format!(
+                        "Las respuestas copiadas vienen de {} rondas distintas: no hay una operación anterior equivalente.",
+                        origenes.len()
+                    ),
+                ));
+            }
+            let origen = origenes[0].clone();
+            let origen_corto = match &origen {
+                Valor::Texto(t) => corto(&t.para_mostrar()),
+                _ => String::new(),
+            };
+            let Some(vieja) = leido.hechos.iter().rev().find(|h| {
+                h.tipo() == "salida-operador"
+                    && h.valor("rondaId") == &origen
+                    && h.texto("operadorId").and_then(Texto::como_str) == Some(operador_id)
+            }) else {
+                return Ok((
+                    false,
+                    format!("No hay una operación de {nombre} en la ronda {origen_corto}."),
+                ));
+            };
+            let validas = dominio::etiquetas_validas_del_operador(operador_id, pool, &sello)
+                .map_err(falla)?;
+            // ParsearHallazgos de la Unity con salidaCruda null tira: aquí, antes de escribir nada.
+            let salida = vieja
+                .texto("salidaCruda")
+                .cloned()
+                .ok_or_else(|| falla("la operación anterior no tiene salidaCruda"))?;
+            let copiada_de = Valor::Objeto(vec![
+                ("rondaId".into(), origen.clone()),
+                ("salidaOperadorId".into(), vieja.valor("id").clone()),
+            ]);
+            let hallazgos = self.procesar_salida_operador(
+                &ronda_id,
+                operador_id,
+                vieja.valor("promptCompleto").clone(),
+                &salida,
+                vieja.valor("html").clone(),
+                &validas,
+                Some(copiada_de),
+            )?;
+            let invalidas = hallazgos
+                .hallazgos
+                .iter()
+                .filter(|h| h.etiqueta_invalida)
+                .count();
+            let extra = if invalidas > 0 {
+                format!(", {invalidas} con etiqueta inválida")
+            } else {
+                String::new()
+            };
+            Ok((
+                true,
                 format!(
-                    "Las respuestas copiadas vienen de {} rondas distintas: no hay una operación anterior equivalente.",
-                    origenes.len()
+                    "{nombre}: se reutilizó su operación de la ronda {origen_corto} ({} hallazgos{extra}). No hace falta pegarle la operación de nuevo.",
+                    hallazgos.hallazgos.len()
                 ),
-            ));
-        }
-        let origen = origenes[0].clone();
-        let origen_corto = match &origen {
-            Valor::Texto(t) => corto(&t.para_mostrar()),
-            _ => String::new(),
-        };
-        let Some(vieja) = leido.hechos.iter().rev().find(|h| {
-            h.tipo() == "salida-operador"
-                && h.valor("rondaId") == &origen
-                && h.texto("operadorId").and_then(Texto::como_str) == Some(operador_id)
-        }) else {
-            return Ok((
-                false,
-                format!("No hay una operación de {nombre} en la ronda {origen_corto}."),
-            ));
-        };
-        let validas =
-            dominio::etiquetas_validas_del_operador(operador_id, pool, &sello).map_err(falla)?;
-        // ParsearHallazgos de la Unity con salidaCruda null tira: aquí, antes de escribir nada.
-        let salida = vieja
-            .texto("salidaCruda")
-            .cloned()
-            .ok_or_else(|| falla("la operación anterior no tiene salidaCruda"))?;
-        let copiada_de = Valor::Objeto(vec![
-            ("rondaId".into(), origen.clone()),
-            ("salidaOperadorId".into(), vieja.valor("id").clone()),
-        ]);
-        let hallazgos = self.procesar_salida_operador(
-            &ronda_id,
-            operador_id,
-            vieja.valor("promptCompleto").clone(),
-            &salida,
-            vieja.valor("html").clone(),
-            &validas,
-            Some(copiada_de),
-        )?;
-        let invalidas = hallazgos
-            .hallazgos
-            .iter()
-            .filter(|h| h.etiqueta_invalida)
-            .count();
-        let extra = if invalidas > 0 {
-            format!(", {invalidas} con etiqueta inválida")
-        } else {
-            String::new()
-        };
-        Ok((
-            true,
-            format!(
-                "{nombre}: se reutilizó su operación de la ronda {origen_corto} ({} hallazgos{extra}). No hace falta pegarle la operación de nuevo.",
-                hallazgos.hallazgos.len()
-            ),
-        ))
+            ))
+        })();
+        self.asentar(r)
     }
 }
 
@@ -1960,7 +2026,9 @@ impl Puerta {
         lecturas_crudas: &[Lectura],
         contexto: Contexto,
     ) -> io::Result<(&'static str, String)> {
-        let lecturas: Vec<Lectura> = lecturas_crudas
+        self.profundidad += 1;
+        let r = (|| -> io::Result<(&'static str, String)> {
+            let lecturas: Vec<Lectura> = lecturas_crudas
             .iter()
             .map(|l| {
                 let largo = l.text.largo_utf16();
@@ -1971,41 +2039,41 @@ impl Puerta {
                 }
             })
             .collect();
-        if self.ronda_actual.is_none() {
-            self.abrir_ronda(PROMPT_SIN_RONDA)?;
-        }
-        let ronda_id = self.ronda_actual.clone().unwrap_or_default();
-        let id = Texto::from(ronda_id.as_str());
-        let leido = self.leer_registro()?;
-        let hechos = &leido.hechos;
-        let etapa = dominio::etapa_de_ronda(hechos, &id, self.pool.len());
-        let sello: Vec<&Hecho> = hechos.iter().filter(|h| es_de(h, "sello", &id)).collect();
-        let pool = self.pool.clone();
-        let pool = strs(&pool);
-        let roles = self.roles.clone();
-        let verificadores = roles.verificadores();
-        let c = dominio::clasificar_lecturas_por_etapa(
-            &lecturas,
-            |l| l.id.as_str(),
-            etapa,
-            &pool,
-            &roles.integrador,
-            &verificadores,
-            &roles.redactor,
-        );
-        let (mut como_respuesta, mut operacion) = (c.como_respuesta, c.operacion);
-        // Sin sello la operación no está armada: capturar a un investigador recaptura su respuesta (la última gana).
-        let recaptura = etapa == "operacion" && sello.is_empty();
-        if recaptura {
-            como_respuesta.append(&mut operacion);
-        }
-        if !como_respuesta.is_empty() {
-            self.escribir_respuestas(&ronda_id, &como_respuesta, contexto)?;
-        }
-        if etapa == "investigacion" || recaptura {
-            for l in &como_respuesta {
-                if l.fallo().is_none() && l.text.largo_utf16() < RESPUESTA_CORTA {
-                    self.escribir_error_captura(
+            if self.ronda_actual.is_none() {
+                self.abrir_ronda(PROMPT_SIN_RONDA)?;
+            }
+            let ronda_id = self.ronda_actual.clone().unwrap_or_default();
+            let id = Texto::from(ronda_id.as_str());
+            let leido = self.leer_registro()?;
+            let hechos = &leido.hechos;
+            let etapa = dominio::etapa_de_ronda(hechos, &id, self.pool.len());
+            let sello: Vec<&Hecho> = hechos.iter().filter(|h| es_de(h, "sello", &id)).collect();
+            let pool = self.pool.clone();
+            let pool = strs(&pool);
+            let roles = self.roles.clone();
+            let verificadores = roles.verificadores();
+            let c = dominio::clasificar_lecturas_por_etapa(
+                &lecturas,
+                |l| l.id.as_str(),
+                etapa,
+                &pool,
+                &roles.integrador,
+                &verificadores,
+                &roles.redactor,
+            );
+            let (mut como_respuesta, mut operacion) = (c.como_respuesta, c.operacion);
+            // Sin sello la operación no está armada: capturar a un investigador recaptura su respuesta (la última gana).
+            let recaptura = etapa == "operacion" && sello.is_empty();
+            if recaptura {
+                como_respuesta.append(&mut operacion);
+            }
+            if !como_respuesta.is_empty() {
+                self.escribir_respuestas(&ronda_id, &como_respuesta, contexto)?;
+            }
+            if etapa == "investigacion" || recaptura {
+                for l in &como_respuesta {
+                    if l.fallo().is_none() && l.text.largo_utf16() < RESPUESTA_CORTA {
+                        self.escribir_error_captura(
                         &ronda_id,
                         etapa,
                         "respuesta",
@@ -2013,92 +2081,94 @@ impl Puerta {
                             .into(),
                         Some(&l.id),
                     )?;
+                    }
                 }
             }
-        }
-        // Un fallo al capturar una lectura nunca se adivina ni se descarta en silencio: queda como ErrorCaptura.
-        for l in operacion.iter().filter(|l| l.fallo().is_none()) {
-            match dominio::etiquetas_validas_del_operador(&l.id, &pool, &sello) {
-                Err(e) => self.escribir_error_captura(
-                    &ronda_id,
-                    etapa,
-                    "salida-operador",
-                    e.into(),
-                    None,
-                )?,
-                Ok(validas) => {
-                    let prompt = self
-                        .prompt_operador
-                        .get(&l.id)
-                        .cloned()
-                        .unwrap_or_else(|| PROMPT_NO_DISPONIBLE.into());
-                    self.procesar_salida_operador(
+            // Un fallo al capturar una lectura nunca se adivina ni se descarta en silencio: queda como ErrorCaptura.
+            for l in operacion.iter().filter(|l| l.fallo().is_none()) {
+                match dominio::etiquetas_validas_del_operador(&l.id, &pool, &sello) {
+                    Err(e) => self.escribir_error_captura(
                         &ronda_id,
-                        &l.id,
-                        Valor::Texto(prompt),
-                        &l.text,
-                        opcional(l.html.as_ref()),
-                        &validas,
+                        etapa,
+                        "salida-operador",
+                        e.into(),
                         None,
-                    )?;
+                    )?,
+                    Ok(validas) => {
+                        let prompt = self
+                            .prompt_operador
+                            .get(&l.id)
+                            .cloned()
+                            .unwrap_or_else(|| PROMPT_NO_DISPONIBLE.into());
+                        self.procesar_salida_operador(
+                            &ronda_id,
+                            &l.id,
+                            Valor::Texto(prompt),
+                            &l.text,
+                            opcional(l.html.as_ref()),
+                            &validas,
+                            None,
+                        )?;
+                    }
                 }
             }
-        }
-        let no_disponible = || Valor::Texto(PROMPT_NO_DISPONIBLE.into());
-        match etapa {
-            "integracion" => {
-                let prompt = self
-                    .prompt_integrador
-                    .clone()
-                    .map_or_else(no_disponible, Valor::Texto);
-                self.rol(
-                    &ronda_id,
-                    etapa,
-                    c.integrador,
-                    ("informe-integrador", "integrador", &roles.integrador),
-                    |s, l| s.escribir_informe_integrador(&ronda_id, l, prompt),
-                )?;
-            }
-            "verificacion" => {
-                for (v, lectura) in verificadores.iter().zip(c.verificadores) {
-                    let sin_formato = match lectura {
-                        Some(l) if l.fallo().is_none() => {
-                            sin_formato_de_verificacion(l)?.map(|e| l.con_error(e))
-                        }
-                        _ => None,
-                    };
+            let no_disponible = || Valor::Texto(PROMPT_NO_DISPONIBLE.into());
+            match etapa {
+                "integracion" => {
                     let prompt = self
-                        .prompt_verificador
+                        .prompt_integrador
                         .clone()
                         .map_or_else(no_disponible, Valor::Texto);
                     self.rol(
                         &ronda_id,
                         etapa,
-                        sin_formato.as_ref().or(lectura),
-                        ("salida-verificador", "verificador", v),
-                        |s, l| s.escribir_salida_verificador(&ronda_id, l, prompt),
+                        c.integrador,
+                        ("informe-integrador", "integrador", &roles.integrador),
+                        |s, l| s.escribir_informe_integrador(&ronda_id, l, prompt),
                     )?;
                 }
+                "verificacion" => {
+                    for (v, lectura) in verificadores.iter().zip(c.verificadores) {
+                        let sin_formato = match lectura {
+                            Some(l) if l.fallo().is_none() => {
+                                sin_formato_de_verificacion(l)?.map(|e| l.con_error(e))
+                            }
+                            _ => None,
+                        };
+                        let prompt = self
+                            .prompt_verificador
+                            .clone()
+                            .map_or_else(no_disponible, Valor::Texto);
+                        self.rol(
+                            &ronda_id,
+                            etapa,
+                            sin_formato.as_ref().or(lectura),
+                            ("salida-verificador", "verificador", v),
+                            |s, l| s.escribir_salida_verificador(&ronda_id, l, prompt),
+                        )?;
+                    }
+                }
+                "redaccion" => {
+                    let previo = hechos
+                        .iter()
+                        .rev()
+                        .find(|h| es_de(h, "respuesta-redactor", &id));
+                    self.rol(
+                        &ronda_id,
+                        etapa,
+                        c.redactor,
+                        ("respuesta-redactor", "redactor", &roles.redactor),
+                        |s, l| s.escribir_respuesta_redactor(&ronda_id, l, previo),
+                    )?;
+                }
+                _ => {}
             }
-            "redaccion" => {
-                let previo = hechos
-                    .iter()
-                    .rev()
-                    .find(|h| es_de(h, "respuesta-redactor", &id));
-                self.rol(
-                    &ronda_id,
-                    etapa,
-                    c.redactor,
-                    ("respuesta-redactor", "redactor", &roles.redactor),
-                    |s, l| s.escribir_respuesta_redactor(&ronda_id, l, previo),
-                )?;
-            }
-            _ => {}
-        }
-        Ok((
-            etapa,
-            aviso_prompts_de_captura(lecturas.iter().map(|l| l.user_text.as_ref()), etapa),
-        ))
+            Ok((
+                etapa,
+                aviso_prompts_de_captura(lecturas.iter().map(|l| l.user_text.as_ref()), etapa),
+            ))
+        })();
+        self.asentar(r)
     }
 
     /// La captura de un rol: sin su panel o con la lectura fallida queda un ErrorCaptura.
@@ -2361,19 +2431,21 @@ impl Puerta {
     /// INT-005, VER-005: recapturar el integrador o el verificador sin mirar la etapa. Agrega un
     /// hecho; el registro no se reescribe y todo usa el último de la ronda.
     pub fn recapturar(&mut self, rol: &str, lectura: &Lectura) -> io::Result<(bool, String)> {
-        let (Some(_), Some(ronda_id)) = (&self.conversacion_actual, self.ronda_actual.clone())
-        else {
-            return Ok((false, "no hay una ronda activa".into()));
-        };
-        let leido = self.leer_registro()?;
-        let tipo = match rol {
-            "integrador" => "informe-integrador",
-            "verificador" => "salida-verificador",
-            _ => return Err(falla(format!("no se recaptura el rol \"{rol}\""))),
-        };
-        let largo = lectura.text.largo_utf16();
-        // Una lectura fallida o bajo el umbral nunca reemplaza a la buena: queda como ErrorCaptura, y el último bueno sigue siendo el que vale.
-        let error: Option<Texto> = match lectura.fallo() {
+        self.profundidad += 1;
+        let r = (|| -> io::Result<(bool, String)> {
+            let (Some(_), Some(ronda_id)) = (&self.conversacion_actual, self.ronda_actual.clone())
+            else {
+                return Ok((false, "no hay una ronda activa".into()));
+            };
+            let leido = self.leer_registro()?;
+            let tipo = match rol {
+                "integrador" => "informe-integrador",
+                "verificador" => "salida-verificador",
+                _ => return Err(falla(format!("no se recaptura el rol \"{rol}\""))),
+            };
+            let largo = lectura.text.largo_utf16();
+            // Una lectura fallida o bajo el umbral nunca reemplaza a la buena: queda como ErrorCaptura, y el último bueno sigue siendo el que vale.
+            let error: Option<Texto> = match lectura.fallo() {
             Some(e) => Some(e.clone()),
             None if largo < UMBRAL_LECTURA_MINIMO => Some(
                 format!(
@@ -2384,21 +2456,21 @@ impl Puerta {
             None if rol == "verificador" => sin_formato_de_verificacion(lectura)?.map(Texto::from),
             None => None,
         };
-        let id = Texto::from(ronda_id.as_str());
-        let nombre = dominio::nombre_proveedor(&lectura.id);
-        if let Some(e) = error {
-            let etapa = dominio::etapa_de_ronda(&leido.hechos, &id, self.pool.len());
-            let mensaje = format!("{nombre}: el {rol} no se recapturó ({})", e.para_mostrar());
-            self.escribir_error_captura(&ronda_id, etapa, tipo, e, Some(&lectura.id))?;
-            return Ok((false, mensaje));
-        }
-        let previos: Vec<&Hecho> = leido
-            .hechos
-            .iter()
-            .filter(|h| es_de(h, tipo, &id))
-            .collect();
-        let Some(ultimo) = previos.last() else {
-            return Ok((
+            let id = Texto::from(ronda_id.as_str());
+            let nombre = dominio::nombre_proveedor(&lectura.id);
+            if let Some(e) = error {
+                let etapa = dominio::etapa_de_ronda(&leido.hechos, &id, self.pool.len());
+                let mensaje = format!("{nombre}: el {rol} no se recapturó ({})", e.para_mostrar());
+                self.escribir_error_captura(&ronda_id, etapa, tipo, e, Some(&lectura.id))?;
+                return Ok((false, mensaje));
+            }
+            let previos: Vec<&Hecho> = leido
+                .hechos
+                .iter()
+                .filter(|h| es_de(h, tipo, &id))
+                .collect();
+            let Some(ultimo) = previos.last() else {
+                return Ok((
                 false,
                 if rol == "integrador" {
                     "No hay un informe de integrador en esta ronda todavía. Usa \"Pegar integrador\"."
@@ -2407,47 +2479,53 @@ impl Puerta {
                 }
                 .into(),
             ));
-        };
-        let pegado = if rol == "integrador" {
-            &self.prompt_integrador
-        } else {
-            &self.prompt_verificador
-        };
-        let prompt = pegado
-            .clone()
-            .map_or_else(|| ultimo.valor("promptCompleto").clone(), Valor::Texto);
-        if rol == "integrador" {
-            self.escribir_informe_integrador(&ronda_id, lectura, prompt)?;
-        } else {
-            self.escribir_salida_verificador(&ronda_id, lectura, prompt)?;
-        }
-        Ok((
-            true,
-            format!(
-                "{nombre}: {rol} recapturado, {largo} caracteres ({} en el registro; se usa el último)",
-                previos.len() + 1
-            ),
-        ))
+            };
+            let pegado = if rol == "integrador" {
+                &self.prompt_integrador
+            } else {
+                &self.prompt_verificador
+            };
+            let prompt = pegado
+                .clone()
+                .map_or_else(|| ultimo.valor("promptCompleto").clone(), Valor::Texto);
+            if rol == "integrador" {
+                self.escribir_informe_integrador(&ronda_id, lectura, prompt)?;
+            } else {
+                self.escribir_salida_verificador(&ronda_id, lectura, prompt)?;
+            }
+            Ok((
+                true,
+                format!(
+                    "{nombre}: {rol} recapturado, {largo} caracteres ({} en el registro; se usa el último)",
+                    previos.len() + 1
+                ),
+            ))
+        })();
+        self.asentar(r)
     }
 
     /// REG-012: la pregunta real de una ronda capturada sin envío. La Ronda no se reescribe: se
     /// agrega este hecho aparte, declarado por el usuario.
     pub fn declarar_pregunta(&mut self, texto: impl Into<Texto>) -> io::Result<Hecho> {
-        let ronda_id = self
-            .ronda_actual
-            .clone()
-            .ok_or_else(|| falla("no hay una ronda activa a la que declararle la pregunta"))?;
-        let h = Hecho::nuevo(
-            "pregunta-declarada",
-            &[
-                ("id", Valor::Texto((self.nuevo_id)().into())),
-                ("rondaId", Valor::Texto(ronda_id.into())),
-                ("texto", Valor::Texto(texto.into())),
-                ("declaradaEn", Valor::Texto(self.ahora().into())),
-            ],
-        )?;
-        self.escribir(&h)?;
-        Ok(h)
+        self.profundidad += 1;
+        let r = (|| -> io::Result<Hecho> {
+            let ronda_id = self
+                .ronda_actual
+                .clone()
+                .ok_or_else(|| falla("no hay una ronda activa a la que declararle la pregunta"))?;
+            let h = Hecho::nuevo(
+                "pregunta-declarada",
+                &[
+                    ("id", Valor::Texto((self.nuevo_id)().into())),
+                    ("rondaId", Valor::Texto(ronda_id.into())),
+                    ("texto", Valor::Texto(texto.into())),
+                    ("declaradaEn", Valor::Texto(self.ahora().into())),
+                ],
+            )?;
+            self.escribir(&h)?;
+            Ok(h)
+        })();
+        self.asentar(r)
     }
 
     /// RON-003 (PasoSiguiente): el único paso siguiente, que sale del registro y de lo pegado en
@@ -4533,6 +4611,144 @@ mod pruebas {
         let r = p.comprobar_urls(&http).unwrap();
         assert!(r.ya_comprobadas);
         assert_eq!(http.0.lock().unwrap().len(), pedidas_antes + 5);
+    }
+
+    // D21, medición a mano (D16): registrar_capturas del integrador y de los verificadores sobre la
+    // corrida de la Unity, 20 rondas por proceso.
+    #[test]
+    #[ignore]
+    fn medir_registrar_capturas() {
+        let mut micros = Vec::new();
+        for i in 0..20 {
+            let c = Carpeta::nueva(&format!("medir-capturas-{i}"));
+            let (mut p, lotes) = ronda_hasta_la_integracion(&c.0);
+            let prompt = p.armar_prompt_integrador().unwrap();
+            p.integrador_pegado(prompt);
+            let integrador = [lectura(registro::pruebas::campo(
+                &lotes,
+                "integradorCompleto",
+            ))];
+            let t = std::time::Instant::now();
+            p.registrar_capturas(&integrador, &confirmada).unwrap();
+            let mut d = t.elapsed();
+            let prompt = p.armar_prompt_verificador().unwrap();
+            p.verificador_pegado(prompt);
+            let verificadores = lote(&lotes, "verificador");
+            let t = std::time::Instant::now();
+            p.registrar_capturas(&verificadores, &confirmada).unwrap();
+            d += t.elapsed();
+            micros.push(d.as_micros());
+        }
+        micros.sort();
+        println!(
+            "MEDIDA registrar_capturas (2 por ronda): mediana {} us; min {}; max {}",
+            micros[10], micros[0], micros[19]
+        );
+    }
+
+    // D21, medición a mano (D16): dos llamadas seguidas al historial con 50 rondas sintéticas (la
+    // corrida de la Unity en 50 conversaciones, cada una con su informe).
+    #[test]
+    #[ignore]
+    fn medir_historial_con_50_rondas() {
+        let c = Carpeta::nueva("medir-historial");
+        let corrida = lineas_corrida().join(
+            "
+",
+        ) + "
+";
+        // El id de la conversación es el nombre de su archivo.
+        let original = registro::leer(&corrida).hechos[0]
+            .texto("id")
+            .unwrap()
+            .para_mostrar()
+            .to_string();
+        fs::create_dir_all(c.0.join("conversaciones")).unwrap();
+        for i in 0..50 {
+            let id = format!("c{i:02}");
+            fs::write(
+                registro::ruta_archivo(&c.0, &id),
+                corrida.replace(&original, &id),
+            )
+            .unwrap();
+            let dir = c.0.join("informes").join(format!("informe {i:02}"));
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(
+                dir.join(format!("informe {i:02}.md")),
+                format!(
+                    "# Informe
+
+Ronda: r{i}
+
+{}",
+                    "texto del informe
+"
+                    .repeat(2000)
+                ),
+            )
+            .unwrap();
+        }
+        let mut micros = Vec::new();
+        let mut rondas = 0;
+        for _ in 0..5 {
+            let p = nueva_puerta(&c.0);
+            let t = std::time::Instant::now();
+            rondas = p.rondas_anteriores().len();
+            let n = p.rondas_anteriores().len();
+            micros.push(t.elapsed().as_micros());
+            assert_eq!(n, rondas);
+            assert!(rondas >= 50, "{rondas}");
+        }
+        micros.sort();
+        println!(
+            "MEDIDA historial (2 llamadas, {rondas} rondas): mediana {} us; min {}; max {}",
+            micros[2], micros[0], micros[4]
+        );
+    }
+
+    // D21: cada operación que escribe asienta el registro una sola vez, al terminar; una que no
+    // escribe, ninguna. Que los bytes no cambian lo prueba ronda_entera_deja_los_mismos_hechos_que_la_unity.
+    #[test]
+    fn registro_cada_operacion_que_escribe_se_asienta_una_vez() {
+        let c = Carpeta::nueva("asentar");
+        let mut p = nueva_puerta(&c.0);
+        let http = HttpFalso::default();
+        p.comprobar_urls(&http).unwrap();
+        assert_eq!(p.veces_asentado, 0, "sin ronda no se escribe nada");
+        // La conversación y la ronda: dos hechos o más, una vez.
+        p.abrir_ronda("¿Pregunta?").unwrap();
+        assert_eq!(p.veces_asentado, 1);
+        p.comprobar_urls(&http).unwrap();
+        assert_eq!(p.veces_asentado, 1, "sin verificación no se escribe nada");
+
+        let c = Carpeta::nueva("asentar-roles");
+        let (mut p, lotes) = ronda_hasta_la_integracion(&c.0);
+        let prompt = p.armar_prompt_integrador().unwrap();
+        p.integrador_pegado(prompt);
+        let n = p.veces_asentado;
+        p.registrar_capturas(
+            &[lectura(registro::pruebas::campo(
+                &lotes,
+                "integradorCompleto",
+            ))],
+            &confirmada,
+        )
+        .unwrap();
+        assert_eq!(p.veces_asentado, n + 1);
+        let prompt = p.armar_prompt_verificador().unwrap();
+        p.verificador_pegado(prompt);
+        // Dos verificadores, dos hechos, una vez.
+        p.registrar_capturas(&lote(&lotes, "verificador"), &confirmada)
+            .unwrap();
+        assert_eq!(p.veces_asentado, n + 2);
+        // Seis url-comprobada, una vez; ya comprobadas, ninguna.
+        assert_eq!(p.comprobar_urls(&http).unwrap().urls.len(), 6);
+        assert_eq!(p.veces_asentado, n + 3);
+        p.comprobar_urls(&http).unwrap();
+        assert_eq!(p.veces_asentado, n + 3);
+        // Una operación que llama a otra (abre la ronda y copia las respuestas): una vez.
+        p.ronda_nueva_con_respuestas_copiadas().unwrap();
+        assert_eq!(p.veces_asentado, n + 4);
     }
 
     // VER-009: sin ronda o sin verificación capturada no hay nada que comprobar, y nada sale a la red.

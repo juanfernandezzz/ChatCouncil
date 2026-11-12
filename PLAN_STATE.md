@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART11_PLAN.ai.md
+Next: plans/PART12_PLAN.ai.md
 
 ## Parts
 
@@ -59,10 +59,10 @@ Next: plans/PART11_PLAN.ai.md
   - Outcome: Ajustes, diagnósticos y cierre medido del núcleo
   - Evidence: recorded
 
-- [ ] Part 11: plans/PART11_PLAN.ai.md
+- [x] Part 11: plans/PART11_PLAN.ai.md
   - Scenario: SCN-011
   - Outcome: Esqueleto que camina: ventana Slint, un panel real, script de página, hilo del núcleo y autoprueba
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 12: plans/PART12_PLAN.ai.md
   - Scenario: SCN-012

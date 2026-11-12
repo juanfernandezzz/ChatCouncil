@@ -54,10 +54,10 @@
 
 ## Phase 2: E7 · Interfaz, paneles y pruebas internas
 
-- [ ] Part 11: Read `plans/PART11_PLAN.ai.md`
+- [x] Part 11: Read `plans/PART11_PLAN.ai.md`
   - Scenario: SCN-011
   - Outcome: Esqueleto que camina: ventana Slint, un panel real, script de página, hilo del núcleo y autoprueba
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 12: Read `plans/PART12_PLAN.ai.md`
   - Scenario: SCN-012

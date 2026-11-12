@@ -533,3 +533,15 @@ AJU-001..010, INV-AJU-001/002, DIA-002/003/005 e INV-DIA-001 probados en nucleo/
 
 Artifacts:
 - cargo test --workspace: nucleo 164 passed, informe-pdf 10, verificacion 6 (C:\cc-target\tmp\p010-gates.txt)
+
+### PART-011
+
+Esqueleto de E7 probado: ventana Slint y panel wry comparten ventana y bucle de eventos (ADR-0010). paneles como biblioteca (navegador en <datos>/navegador con tres switches, panel hijo, navegar, ejecutar, correr el script de pagina por pedido y consulta, cc-prueba.test); datos/pagina/pagina.js identico a la Unity (sha256 39b048ce...5161, prueba DAT-003); app ChatCouncilNueva con area que se reacomoda, carpeta de datos (-datos o LOCALAPPDATA), Puerta en su hilo y -autoprueba RUTA (PRU-001). Autoprueba 7/7 codigo 0 en local (WebView2 157.0.4341.46) y en CI (156.0.4314.58); caso de falla real: UA reducido dio 6/7 codigo 1, rojo a verde; paso de CI probado en rojo (sin archivo, codigo 1) y verde. Revision ecc:rust-reviewer: 11 hallazgos; arreglado con rojo/verde una bandera sin valor que caia a la carpeta real (5dbd7ff); el resto reportado. Mediciones orientativas (D16) en bench/resultados/e7-esqueleto.json: exe 10.822.144 B, ventana mediana 865 ms, RAM app 56 MB, WebView2 7 procesos 323 MB, CPU en reposo app 0 ms en 30 s. Gates: fmt 0, clippy --all-targets -D warnings 0, test --workspace (app 8, informe-pdf 10, nucleo 172 y 4 ign., paneles 3, verificacion 10 y 1 ign.), cargo tree -p nucleo -e normal solo nucleo. Commits 08ceeac, bbf5a47, 5dbd7ff, 9fca766; CI https://github.com/juanfernandezzz/ChatCouncil/actions/runs/43326911323 success.
+
+Artifacts:
+- cargo fmt --all --check: 0
+- cargo clippy --workspace --all-targets -- -D warnings: 0
+- cargo test --workspace: 203 passed, 5 ignored (C:\cc-target\tmp\p011-gates.txt)
+- cargo tree -p nucleo -e normal: nucleo v0.1.0 (C:\cc-repo\crates\nucleo)
+- ChatCouncilNueva.exe -autoprueba: Resultado 7/7, codigo 0 (local y CI run 43326911323)
+- medir-e7.ps1: bench/resultados/e7-esqueleto.json

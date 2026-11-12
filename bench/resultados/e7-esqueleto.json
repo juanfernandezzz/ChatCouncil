@@ -1,0 +1,87 @@
+{
+    "lote":  "E7 esqueleto (PART-011)",
+    "fecha":  "2026-11-12",
+    "entorno":  {
+                    "maquina":  "PC de Juan, Windows 10 Home 10.0.19045",
+                    "cpu":  "Intel(R) Core(TM) i5-4210U CPU @ 1.70GHz, 2 núcleos, 4 hilos",
+                    "webview2":  "157.0.4341.46",
+                    "compilacion":  "release desde C:\\cc-repo con CARGO_TARGET_DIR=C:\\cc-target (ADR-0002), commit 5dbd7ff",
+                    "script":  "C:\\cc-target\\tmp\\medir-e7.ps1: tres corridas con -datos en C:\\cc-target\\tmp\\cc-medir-e7-N, un panel con la página local textarea.html"
+                },
+    "regla":  "D16: con la CPU de la máquina sobre 10 % la medición es orientativa. Toda comparación con la Unity va a E8.",
+    "tamanos":  {
+                    "chatCouncilNuevaExeBytes":  10822144
+                },
+    "mediciones":  {
+                       "arranqueHastaLaVentanaMs":  {
+                                                        "corridas":  [
+                                                                         865,
+                                                                         1295,
+                                                                         173
+                                                                     ],
+                                                        "mediana":  865
+                                                    },
+                       "ramAppWorkingSetBytes":  {
+                                                     "corridas":  [
+                                                                      64688128,
+                                                                      56070144,
+                                                                      56315904
+                                                                  ],
+                                                     "mediana":  56315904
+                                                 },
+                       "ramAppPrivadaBytes":  {
+                                                  "corridas":  [
+                                                                   79441920,
+                                                                   84160512,
+                                                                   84066304
+                                                               ],
+                                                  "mediana":  84066304
+                                              },
+                       "ramWebView2WorkingSetBytes":  {
+                                                          "corridas":  [
+                                                                           321708032,
+                                                                           323620864,
+                                                                           325578752
+                                                                       ],
+                                                          "mediana":  323620864,
+                                                          "procesos":  7
+                                                      },
+                       "cpuEnReposo30sMs":  {
+                                                "app":  [
+                                                            0,
+                                                            0,
+                                                            0
+                                                        ],
+                                                "webView2":  [
+                                                                 0,
+                                                                 94,
+                                                                 31
+                                                             ]
+                                            },
+                       "cpuSistemaPct":  {
+                                             "antes":  [
+                                                           28,
+                                                           100,
+                                                           70
+                                                       ],
+                                             "despues":  [
+                                                             32,
+                                                             50,
+                                                             43
+                                                         ]
+                                         }
+                   },
+    "reacomodo":  {
+                      "despues":  {
+                                      "cliente":  "984x661",
+                                      "ventana":  "1000x700",
+                                      "panel":  "984x661"
+                                  },
+                      "antes":  {
+                                    "cliente":  "1280x800",
+                                    "ventana":  "1296x839",
+                                    "panel":  "1280x800"
+                                }
+                  },
+    "validez":  "orientativo (CPU del sistema entre 28 y 100 %)"
+}

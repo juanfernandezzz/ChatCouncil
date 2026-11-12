@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART8_PLAN.ai.md
+Next: plans/PART9_PLAN.ai.md
 
 ## Parts
 
@@ -44,10 +44,10 @@ Next: plans/PART8_PLAN.ai.md
   - Outcome: Máquina de etapas de la ronda con roles 7-1-2-1
   - Evidence: recorded
 
-- [ ] Part 8: plans/PART8_PLAN.ai.md
+- [x] Part 8: plans/PART8_PLAN.ai.md
   - Scenario: SCN-008
   - Outcome: Informe final en .md y PDF Carta con typst, medido contra M4
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 9: plans/PART9_PLAN.ai.md
   - Scenario: SCN-009

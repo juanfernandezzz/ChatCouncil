@@ -506,3 +506,16 @@ Máquina de la ronda portada: 38 pruebas ronda en verde (corrida entera y de nue
 
 Artifacts:
 - cargo test -p nucleo ronda
+
+### PART-008
+
+Informe final en .md igual al de la Unity (vector InformeDeRonda) y PDF Carta con typst 0.15.1 en el crate informe-pdf: 16 pruebas informe del nucleo y 9 de informe-pdf en verde (INF-002 a INF-006, INF-008 a INF-014, INV-INF-001 a 003; cada pagina 612 x 792 pt y una /MediaBox por pagina); caso de falla: hallazgo citado inexistente se informa como en la Unity (rojo a verde, p008-rojo-referencia.txt y p008-verde-referencia.txt); D20: catch_unwind, temporal y renombrado sin pisar, solo http/https/mailto clicables, cobertura de glifos declarada (rojo a verde en p008-c1-*.txt y p008-c2-*.txt); zona horaria: sondeo con +14 h y -11 h, 145 pruebas pasan (p008-c3-rojo.txt); gates fmt, clippy -D warnings, test --workspace (154 pasan, 2 ignoradas), nucleo sin dependencias (p008-gates-d20.txt); revision ecc:rust-reviewer sin hallazgos de correccion, menores 2, 3 y 7 aplicados; medicion orientativa (D16): PDF de 70 paginas en frio 690, 691, 687 ms, mediana 690 ms, CPU 1 % antes y 21 % despues (p008-medicion.txt); comparacion contra M4: E8 (D16); commits 8554feb, 1efb87e, 08a9a80, 21629f6, 99574dd; CI https://github.com/juanfernandezzz/ChatCouncil/actions/runs/43151537888 success
+
+Artifacts:
+- cargo test -p nucleo informe
+- cargo test -p informe-pdf
+- cargo fmt --all --check
+- cargo clippy --workspace -- -D warnings
+- cargo test --workspace
+- cargo tree -p nucleo -e normal
+- cargo run --release -p informe-pdf --example medir

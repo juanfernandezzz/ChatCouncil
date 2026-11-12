@@ -3,3 +3,15 @@ name = "paneles"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+
+# ADR-0005 y ADR-0007: wry en su última estable y webview2-com y windows en la versión exacta que trae wry.
+[dependencies]
+nucleo = { path = "../nucleo" }
+wry = "0.57.2"
+
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.39.1"
+windows = { version = "0.62.2", features = ["Wdk_System_Threading", "Win32_Foundation", "Win32_System_Threading"] }
+
+[dev-dependencies]
+sha2 = "0.11.1"

@@ -19,3 +19,14 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace -- -D warnings
       - run: cargo test --workspace
+      # PRU-001: la app compilada se prueba sola sobre una carpeta temporal; el paso falla si no sale con 0.
+      - name: autoprueba
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          cargo build -p app
+          $salida = Join-Path $env:RUNNER_TEMP 'autoprueba.txt'
+          $p = Start-Process .\target\debug\ChatCouncilNueva.exe -ArgumentList '-autoprueba', $salida -PassThru -Wait
+          if (Test-Path $salida) { Get-Content $salida -Encoding UTF8 } else { "No se escribió $salida" }
+          "Código de salida: $($p.ExitCode)"
+          exit $p.ExitCode

@@ -4,7 +4,7 @@
 
 use crate::json::{self, Valor};
 use crate::ronda::{self, RolesElegidos};
-use std::io;
+use std::io::{self, Write};
 use std::path::Path;
 
 // AJU-001: las cuatro listas de roles, en orden.
@@ -62,9 +62,33 @@ pub fn guardar_seleccion(
     guardado_en: &str,
 ) -> Result<(), String> {
     let contenido = ronda::guardar(conocidos, marcados, roles, guardado_en)?;
-    std::fs::create_dir_all(carpeta_datos)
-        .and_then(|()| std::fs::write(carpeta_datos.join(ronda::ARCHIVO_SELECCION), contenido))
-        .map_err(|e| format!("No se pudo guardar en la carpeta de datos: {e}"))
+    reemplazar(&carpeta_datos.join(ronda::ARCHIVO_SELECCION), |f| {
+        f.write_all(contenido.as_bytes())
+    })
+    .map_err(|e| format!("No se pudo guardar en la carpeta de datos: {e}"))
+}
+
+/// Crea la carpeta si falta, escribe a un temporal de esa carpeta y recién al terminar lo renombra
+/// sobre el archivo: un corte a mitad de la escritura deja el archivo anterior entero (D21).
+fn reemplazar(
+    ruta: &Path,
+    escribir: impl FnOnce(&mut std::fs::File) -> io::Result<()>,
+) -> io::Result<()> {
+    if let Some(carpeta) = ruta.parent() {
+        std::fs::create_dir_all(carpeta)?;
+    }
+    // shortcut: un temporal por archivo; si dos procesos guardan a la vez, sumarle el id del proceso.
+    let temporal = ruta.with_extension("tmp");
+    let r = std::fs::File::create(&temporal)
+        .and_then(|mut f| {
+            escribir(&mut f)?;
+            f.sync_all()
+        })
+        .and_then(|()| std::fs::rename(&temporal, ruta));
+    if r.is_err() {
+        let _ = std::fs::remove_file(&temporal);
+    }
+    r
 }
 
 /// AJU-009 y AJU-010: qué se guarda y cómo copiarlo, según el aparato.
@@ -149,10 +173,9 @@ pub fn leer_apariencia(contenido: Option<&str>) -> Apariencia {
 /// AJU-006: `apariencia.json`, en una línea como la Unity. Se aplica al elegir, sin Guardar; si no
 /// se puede escribir, la interfaz la aplica igual y la próxima vez vuelve la anterior.
 pub fn guardar_apariencia(carpeta_datos: &Path, a: Apariencia) -> io::Result<()> {
-    std::fs::write(
-        carpeta_datos.join(ARCHIVO_APARIENCIA),
-        format!("{{\"tema\":\"{}\",\"texto\":{}}}", a.tema, a.texto),
-    )
+    reemplazar(&carpeta_datos.join(ARCHIVO_APARIENCIA), |f| {
+        write!(f, "{{\"tema\":\"{}\",\"texto\":{}}}", a.tema, a.texto)
+    })
 }
 
 /// AJU-006 y AJU-008: oscuro si se eligió, o si se sigue al sistema y el sistema lo está.
@@ -305,6 +328,39 @@ mod pruebas {
         assert!(es_oscuro(elegida.tema, false));
         assert_eq!(escala(elegida.texto, 1.0), 1.5);
         let _ = fs::remove_dir_all(&d);
+    }
+
+    // D21: una escritura que falla a medias deja el archivo anterior entero, sin temporal suelto.
+    #[test]
+    fn ajustes_una_escritura_fallida_deja_el_archivo_anterior() {
+        let d = carpeta("temporal");
+        let ruta = d.join(ARCHIVO_APARIENCIA);
+        fs::write(&ruta, "anterior").unwrap();
+        let e = reemplazar(&ruta, |f| {
+            f.write_all(b"med")?;
+            Err(io::Error::other("se cortó"))
+        })
+        .unwrap_err();
+        assert_eq!(e.to_string(), "se cortó");
+        assert_eq!(fs::read_to_string(&ruta).unwrap(), "anterior");
+        assert_eq!(fs::read_dir(&d).unwrap().count(), 1, "sin temporal suelto");
+        // Y una que termina reemplaza el archivo entero.
+        reemplazar(&ruta, |f| f.write_all(b"nuevo")).unwrap();
+        assert_eq!(fs::read_to_string(&ruta).unwrap(), "nuevo");
+        assert_eq!(fs::read_dir(&d).unwrap().count(), 1);
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    // D21: guardar la apariencia crea la carpeta de datos si falta, como guardar la selección.
+    #[test]
+    fn ajustes_guardar_la_apariencia_crea_la_carpeta_de_datos() {
+        let d = carpeta("apariencia-sin-carpeta").join("datos");
+        guardar_apariencia(&d, Apariencia::default()).unwrap();
+        assert_eq!(
+            fs::read_to_string(d.join(ARCHIVO_APARIENCIA)).unwrap(),
+            r#"{"tema":"sistema","texto":0}"#
+        );
+        let _ = fs::remove_dir_all(d.parent().unwrap());
     }
 
     // AJU-007: una apariencia ilegible nunca impide arrancar.

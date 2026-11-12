@@ -1243,18 +1243,24 @@ impl Puerta {
                 })
                 .cloned()
                 .collect();
-            if !previas.is_empty() {
-                todas.urls.extend(previas);
-                continue;
-            }
-            todas.ya_comprobadas = false;
             let texto = parseos::texto_de_la_salida_verificador(
                 &salida.texto("salidaCruda").cloned().unwrap_or_default(),
                 salida.texto("html"),
             )?;
-            let citadas = urls_a_comprobar(
+            // D21: comprobada solo si cada URL citada tiene su hecho; si una escritura falló a
+            // mitad, se piden las que faltan (la Unity la daba por comprobada con una sola).
+            let citadas: Vec<Texto> = urls_a_comprobar(
                 parseos::parsear_verificacion::<&str>(&texto, &[]).correspondencias,
-            );
+            )
+            .into_iter()
+            .filter(|u| !previas.iter().any(|h| h.texto("url") == Some(u)))
+            .collect();
+            let ya_comprobada = !previas.is_empty() && citadas.is_empty();
+            todas.urls.extend(previas);
+            if ya_comprobada {
+                continue;
+            }
+            todas.ya_comprobadas = false;
             // Todas a la vez, como el Task.WhenAll de la Unity: a lo más 20 hilos, cada uno con su tiempo.
             let resultados: Vec<(Option<i64>, Option<String>)> = std::thread::scope(|s| {
                 let hilos: Vec<_> = citadas
@@ -4456,6 +4462,77 @@ mod pruebas {
             .map(|i| format!("https://u{i}.org").into())
             .collect();
         assert_eq!(urls_a_comprobar(citas), esperadas);
+    }
+
+    // D21: si una escritura falla a mitad, la verificación no queda por comprobada: la siguiente
+    // comprobación pide solo las URL que faltan, y cada una queda con un solo hecho.
+    #[test]
+    fn urls_una_comprobacion_a_medias_se_completa_pidiendo_solo_lo_que_falta() {
+        #[derive(Default)]
+        struct Anota(std::sync::Mutex<Vec<String>>);
+        impl Http for Anota {
+            fn pedir(&self, url: &str, _: &str, _: Duration) -> Result<u16, String> {
+                self.0.lock().unwrap().push(url.to_string());
+                Ok(200)
+            }
+        }
+        #[allow(clippy::permissions_set_readonly_false)] // el archivo es de la prueba
+        fn solo_lectura(ruta: &Path, si: bool) {
+            let mut permisos = fs::metadata(ruta).unwrap().permissions();
+            permisos.set_readonly(si);
+            fs::set_permissions(ruta, permisos).unwrap();
+        }
+        let c = Carpeta::nueva("urls-a-medias");
+        let mut p = ronda_hasta_la_redaccion(&c.0);
+        let conversacion = p.conversacion_actual.clone().unwrap();
+        let ruta = registro::ruta_archivo(&c.0, &conversacion);
+        let comprobadas = || {
+            let mut urls: Vec<String> = registro::leer_archivo(&c.0, &conversacion)
+                .unwrap()
+                .hechos
+                .iter()
+                .filter(|h| h.tipo() == "url-comprobada")
+                .map(|h| {
+                    let campo = |n| h.texto(n).unwrap().para_mostrar().to_string();
+                    format!("{} {}", campo("salidaVerificadorId"), campo("url"))
+                })
+                .collect();
+            urls.sort();
+            urls
+        };
+        // Al pedir el segundo id el registro queda de solo lectura: la segunda escritura falla.
+        let (mut n, r) = (0, ruta.clone());
+        p.nuevo_id = Box::new(move || {
+            n += 1;
+            if n == 2 {
+                solo_lectura(&r, true);
+            }
+            format!("00000000-0000-4000-8000-{:012}", 5000 + n)
+        });
+        let http = Anota::default();
+        assert!(p.comprobar_urls(&http).is_err());
+        solo_lectura(&ruta, false);
+        let primeras = comprobadas();
+        assert_eq!(primeras.len(), 1, "quedó una sola URL comprobada");
+        let pedidas_antes = http.0.lock().unwrap().len();
+
+        let r = p.comprobar_urls(&http).unwrap();
+        assert!(r.ok && !r.ya_comprobadas);
+        assert_eq!(r.urls.len(), 6);
+        let mut todas = comprobadas();
+        assert_eq!(todas.len(), 6);
+        todas.dedup();
+        assert_eq!(
+            todas.len(),
+            6,
+            "ninguna URL de una verificación quedó con dos hechos"
+        );
+        let nuevas = http.0.lock().unwrap()[pedidas_antes..].to_vec();
+        assert_eq!(nuevas.len(), 5, "solo las que faltaban: {nuevas:?}");
+
+        let r = p.comprobar_urls(&http).unwrap();
+        assert!(r.ya_comprobadas);
+        assert_eq!(http.0.lock().unwrap().len(), pedidas_antes + 5);
     }
 
     // VER-009: sin ronda o sin verificación capturada no hay nada que comprobar, y nada sale a la red.

@@ -69,10 +69,10 @@
   - Outcome: Script de página por el puente: escribir sin enviar, leer, estado y diagnóstico
   - Evidence: recorded
 
-- [ ] Part 14: Read `plans/PART14_PLAN.ai.md`
+- [x] Part 14: Read `plans/PART14_PLAN.ai.md`
   - Scenario: SCN-014
   - Outcome: Secciones, Ajustes, primer arranque, historial y ayuda
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 15: Read `plans/PART15_PLAN.ai.md`
   - Scenario: SCN-015

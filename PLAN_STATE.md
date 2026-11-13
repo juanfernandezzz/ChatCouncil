@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART14_PLAN.ai.md
+Next: plans/PART15_PLAN.ai.md
 
 ## Parts
 
@@ -74,10 +74,10 @@ Next: plans/PART14_PLAN.ai.md
   - Outcome: Script de página por el puente: escribir sin enviar, leer, estado y diagnóstico
   - Evidence: recorded
 
-- [ ] Part 14: plans/PART14_PLAN.ai.md
+- [x] Part 14: plans/PART14_PLAN.ai.md
   - Scenario: SCN-014
   - Outcome: Secciones, Ajustes, primer arranque, historial y ayuda
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 15: plans/PART15_PLAN.ai.md
   - Scenario: SCN-015

@@ -570,3 +570,16 @@ Artifacts:
 - cargo tree -p nucleo -e normal: nucleo v0.1.0
 - ChatCouncilNueva.exe -autoprueba: Resultado 61/61, codigo 0 (C:\cc-target\tmp\autoprueba-013-verde.txt; CI run 43372167011)
 - rojo: C:\cc-target\tmp\autoprueba-013-rojo.txt (60/61), inv-esc-001-rojo.txt, revision-013-rojo-json.txt, revision-013-rojo-lista.txt, revision-013-rojo-marco.txt
+
+### PART-014
+
+Interfaz Slint de las cuatro secciones (Ronda, Historial, Ajustes, Ayuda) con la estructura y los textos de Ronda.uxml y Configuracion.uxml: arranque guiado (ARR-002), Ajustes con consejo y apariencia guardados y validados (las seis combinaciones invalidas del consejo se rechazan con su texto y sin escribir el archivo: rojo 9/15 en pi-rojo con seis FALLA, verde despues), historial con la ronda sembrada (IFZ-014), cajon en la clase compacta (IFZ-013; rojo 3/4 en pi-d, verde), entrar en cada cuenta con sesion deducida (PAN-006, PAN-007), version y licencias (ARR-004, IFZ-016). -pruebainterfaz en tres fases (PRU-009, PRU-010, PRU-011): fase 1 16/16, fase 2 9/9, fase 3 4/4, codigo 0; fase 1 tres veces seguidas codigo 0 tras arreglar el cierre 0xC0000409 (hilo::SALIENDO). Autoprueba 62/62. Revision: doble Entrar (arreglado sin rojo, conjunto abriendo), leer_utc (rojo/verde), errores de abrir_paneles a la interfaz, apariencia solo si se guardo, generacion en comprobar, resultado de ShellExecuteW, debug_assert en titulo_de_etapa. Gates: fmt 0, clippy -D warnings 0, test --workspace 233 passed 5 ignored, cargo tree -p nucleo solo nucleo. Commit 7afd22b; CI https://github.com/juanfernandezzz/ChatCouncil/actions/runs/43446280087 success.
+
+Artifacts:
+- cargo fmt --all --check: 0
+- cargo clippy --workspace --all-targets -- -D warnings: 0
+- cargo test --workspace: 233 passed, 5 ignored
+- cargo tree -p nucleo -e normal: nucleo v0.1.0
+- ChatCouncilNueva.exe -pruebainterfaz fases 1/2/3: Resultado 16/16, 9/9, 4/4, codigo 0 (C:\cc-target\tmp\pi-g; CI run 43446280087)
+- ChatCouncilNueva.exe -autoprueba: Resultado 62/62, codigo 0 (C:\cc-target\tmp\auto-014.txt)
+- rojo: C:\cc-target\tmp\pi-rojo-f1.txt (9/15, seis FALLA del consejo), pi-d-f1.txt (cajon 3/4)

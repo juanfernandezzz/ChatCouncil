@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART12_PLAN.ai.md
+Next: plans/PART13_PLAN.ai.md
 
 ## Parts
 
@@ -64,10 +64,10 @@ Next: plans/PART12_PLAN.ai.md
   - Outcome: Esqueleto que camina: ventana Slint, un panel real, script de página, hilo del núcleo y autoprueba
   - Evidence: recorded
 
-- [ ] Part 12: plans/PART12_PLAN.ai.md
+- [x] Part 12: plans/PART12_PLAN.ai.md
   - Scenario: SCN-012
   - Outcome: Paneles completos como el panel nativo de la Unity
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 13: plans/PART13_PLAN.ai.md
   - Scenario: SCN-013

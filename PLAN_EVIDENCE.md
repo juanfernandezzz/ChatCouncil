@@ -545,3 +545,16 @@ Artifacts:
 - cargo tree -p nucleo -e normal: nucleo v0.1.0 (C:\cc-repo\crates\nucleo)
 - ChatCouncilNueva.exe -autoprueba: Resultado 7/7, codigo 0 (local y CI run 43326911323)
 - medir-e7.ps1: bench/resultados/e7-esqueleto.json
+
+### PART-012
+
+Paneles completos con paridad de panel.cpp: perfiles por proveedor, emergentes en el mismo perfil (registro hasta WM_CLOSE, una segunda no cierra la primera), foco y teclas (Tab y F1-F5 vuelven a la app, B2 con agent-desktop y capturas), cierres de sesion bloqueados, borrado por sitio con origen como Uri.GetLeftPart, borrar el perfil entero solo con paginas de prueba, adjuntar por DOM.setFileInputFiles (aviso si el archivo no existe), PAN-014 en informe-pdf. Autoprueba 35/35 codigo 0 en local (WebView2 157.0.4341.46) y en CI. Revision ecc:rust-reviewer: 8 hallazgos mas bajos; arreglados con rojo/verde origen (unit test), emergente liberada, segunda emergente, borrar perfil sin paginas de prueba, adjuntar inexistente (autoprueba 31/35 rojo -> 35/35); SendInput registrado, arreglado sin rojo; Tab/F en emergentes y adjuntar por arrastre van a Serie E (E1, E2). Gates: fmt 0, clippy -D warnings 0, test --workspace 214 passed 5 ignored, cargo tree -p nucleo solo nucleo. Commit fc22ac7; CI https://github.com/juanfernandezzz/ChatCouncil/actions/runs/43367294457 success.
+
+Artifacts:
+- cargo fmt --all --check: 0
+- cargo clippy --workspace --all-targets -- -D warnings: 0
+- cargo test --workspace: 214 passed, 5 ignored
+- cargo tree -p nucleo -e normal: nucleo v0.1.0
+- ChatCouncilNueva.exe -autoprueba: Resultado 35/35, codigo 0 (C:\cc-target\tmp\autoprueba-revision-012-verde.txt; CI run 43367294457)
+- rojo: C:\cc-target\tmp\autoprueba-revision-012-rojo.txt (31/35) y revision-012-rojo-origen.txt
+- B2: C:\cc-target\tmp\b2-log.txt, b2-antes.png, b2-despues-teclas.png

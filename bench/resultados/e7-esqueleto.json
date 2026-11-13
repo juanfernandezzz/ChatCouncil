@@ -171,5 +171,93 @@
             }
         },
         "validez": "orientativo (CPU del sistema entre 0 y 42 %)"
+    },
+    "PART-015": {
+        "lote": "E7 PART-014 y PART-015",
+        "fecha": "2026-11-13",
+        "entorno": {
+            "maquina": "PC de Juan, Windows 10 Home 10.0.19045",
+            "cpu": "Intel(R) Core(TM) i5-4210U CPU @ 1.70GHz, 2 núcleos, 4 hilos",
+            "webview2": "157.0.4341.46",
+            "compilacion": "release desde C:\\cc-repo con CARGO_TARGET_DIR=C:\\cc-target (ADR-0002), commit e204f7a",
+            "script": "C:\\cc-target\\tmp\\medir-015.ps1 -paginasdeprueba: medir-e7.ps1 con una carpeta -datos nueva por corrida (C:\\cc-target\\tmp\\cc-medir-015-N) y el consejo por defecto guardado, porque desde PART-014 una carpeta vacía abre la guía sin paneles; siete paneles con las páginas locales de prueba"
+        },
+        "tamanos": {
+            "chatCouncilNuevaExeBytes": 54620672
+        },
+        "mediciones": {
+            "arranqueHastaLaVentanaMs": {
+                "corridas": [
+                    1016,
+                    136,
+                    145
+                ],
+                "mediana": 145
+            },
+            "ramAppWorkingSetBytes": {
+                "corridas": [
+                    119316480,
+                    110833664,
+                    112234496
+                ],
+                "mediana": 112234496
+            },
+            "ramAppPrivadaBytes": {
+                "corridas": [
+                    103583744,
+                    108412928,
+                    108249088
+                ],
+                "mediana": 108249088
+            },
+            "ramWebView2WorkingSetBytes": {
+                "corridas": [
+                    829292544,
+                    876605440,
+                    818159616
+                ],
+                "mediana": 829292544,
+                "procesos": 14
+            },
+            "cpuEn30sMs": {
+                "app": [
+                    78,
+                    109,
+                    281
+                ],
+                "webView2": [
+                    422,
+                    391,
+                    484
+                ],
+                "nota": "la Ronda a la vista sondea los siete paneles cada 1500 ms; las páginas genéricas de prueba no tienen el compositor de las specs"
+            },
+            "cpuSistemaPct": {
+                "antes": [
+                    24,
+                    7,
+                    0
+                ],
+                "despues": [
+                    5,
+                    24,
+                    62
+                ]
+            }
+        },
+        "reacomodo": {
+            "despues": {
+                "cliente": "984x661",
+                "ventana": "1000x700",
+                "panel": "552x357,552x357,552x357,552x357,552x357,552x357,552x357"
+            },
+            "antes": {
+                "cliente": "1280x800",
+                "ventana": "1296x839",
+                "panel": "848x496,848x496,848x496,848x496,848x496,848x496,848x496"
+            }
+        },
+        "nota": "el panel es más chico que en PART-013 porque la Ronda ahora tiene la guía, el campo, la lista y la cabecera alrededor de la página",
+        "validez": "orientativo (CPU del sistema entre 0 y 62 %)"
     }
 }

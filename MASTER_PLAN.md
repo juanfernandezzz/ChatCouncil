@@ -74,10 +74,10 @@
   - Outcome: Secciones, Ajustes, primer arranque, historial y ayuda
   - Evidence: recorded
 
-- [ ] Part 15: Read `plans/PART15_PLAN.ai.md`
+- [x] Part 15: Read `plans/PART15_PLAN.ai.md`
   - Scenario: SCN-015
   - Outcome: La Ronda en pantalla: pregunta e investigación
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 16: Read `plans/PART16_PLAN.ai.md`
   - Scenario: SCN-016

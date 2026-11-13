@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART15_PLAN.ai.md
+Next: plans/PART16_PLAN.ai.md
 
 ## Parts
 
@@ -79,10 +79,10 @@ Next: plans/PART15_PLAN.ai.md
   - Outcome: Secciones, Ajustes, primer arranque, historial y ayuda
   - Evidence: recorded
 
-- [ ] Part 15: plans/PART15_PLAN.ai.md
+- [x] Part 15: plans/PART15_PLAN.ai.md
   - Scenario: SCN-015
   - Outcome: La Ronda en pantalla: pregunta e investigación
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 16: plans/PART16_PLAN.ai.md
   - Scenario: SCN-016

@@ -583,3 +583,17 @@ Artifacts:
 - ChatCouncilNueva.exe -pruebainterfaz fases 1/2/3: Resultado 16/16, 9/9, 4/4, codigo 0 (C:\cc-target\tmp\pi-g; CI run 43446280087)
 - ChatCouncilNueva.exe -autoprueba: Resultado 62/62, codigo 0 (C:\cc-target\tmp\auto-014.txt)
 - rojo: C:\cc-target\tmp\pi-rojo-f1.txt (9/15, seis FALLA del consejo), pi-d-f1.txt (cajon 3/4)
+
+### PART-015
+
+Ronda de las etapas Pregunta e Investigacion con el estado del nucleo (situacion_de_panel, ADR-0010 p.6): guia de siete etapas y barra, lista con simbolo dibujado y palabra (IconoEstado), cabecera, selector, contadores, boton del paso deshabilitado con (0); campo de la pregunta con su asa (48 a 600); dialogo propio con Cancelar que no deja su accion; pegar en todos en paralelo (techo 60 s) y repegar en uno sin ronda ni intento nuevos; capturar los terminados en paralelo solo a pedido; abandonar la ronda y declarar la pregunta. El sondeo corre solo con la Ronda a la vista y nunca captura. -pruebaronda (PRU-012, PRU-013, PRU-016) porta PruebaRonda.cs hasta «fin de la investigacion» mas dialogo, abandonar, capturar sin pegar y declarar: Resultado 28/28, codigo 0, local y en el CI. Caso de falla INV-CAP-002: con una captura sola inyectada en el sondeo, FALLA sin captura sola (5 respuestas), 23/25; sin ella, OK con 0 respuestas. Revision: doble clic en capturar escribia diez Respuestas (rojo 26/28 con el codigo previo, verde 28/28 con la guardia tomada antes del primer await). Gates: fmt 0, clippy -D warnings 0, test --workspace 236 passed 5 ignored, cargo tree -p nucleo solo nucleo. Commit e204f7a; CI https://github.com/juanfernandezzz/ChatCouncil/actions/runs/43455745138 success.
+
+Artifacts:
+- cargo fmt --all --check: 0
+- cargo clippy --workspace --all-targets -- -D warnings: 0
+- cargo test --workspace: 236 passed, 5 ignored
+- cargo tree -p nucleo -e normal: nucleo v0.1.0
+- ChatCouncilNueva.exe -pruebaronda: Resultado 28/28, codigo 0 (C:\cc-target\tmp\pruebaronda-015.txt; CI run 43455745138)
+- ChatCouncilNueva.exe -pruebainterfaz fases 1/2/3: 16/16, 9/9, 4/4, codigo 0 (C:\cc-target\tmp\pi15c-*.txt)
+- ChatCouncilNueva.exe -autoprueba: Resultado 62/62, codigo 0 (C:\cc-target\tmp\ap15b.txt)
+- rojo INV-CAP-002: C:\cc-target\tmp\pr-rojo\s.txt (23/25); rojo doble clic: C:\cc-target\tmp\pr-rojo2\s.txt (26/28)

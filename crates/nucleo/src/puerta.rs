@@ -299,6 +299,20 @@ fn opcional(t: Option<&Texto>) -> Valor {
     t.map_or(Valor::Nulo, |t| Valor::Texto(t.clone()))
 }
 
+/// La acción del panel que repega la pregunta (PantallaRonda.cs:45).
+pub const PEGAR_AQUI: &str = "Pegar la pregunta aquí";
+/// La acción del panel que lo captura solo (PantallaRonda.cs:46); la interfaz le agrega la fase.
+pub const CAPTURAR_ESTE: &str = "Capturar este panel";
+
+/// Qué pasó y qué hacer con un panel (D9): el detalle de la cabecera, la línea corta del selector (H7)
+/// y la acción que corresponde a su estado (D6).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Situacion {
+    pub problema: Option<String>,
+    pub corto: Option<&'static str>,
+    pub accion: Option<&'static str>,
+}
+
 /// Lo que se pega en el panel de un operador (Puerta.Operacion).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Operacion {
@@ -2811,6 +2825,94 @@ impl Puerta {
         )
     }
 
+    /// La pregunta de la ronda abierta, para repegarla en un panel (PantallaRonda.PegarEnEste).
+    pub fn pregunta_de_la_ronda(&mut self) -> io::Result<Option<Texto>> {
+        let Some(id) = self.ronda_actual.clone() else {
+            return Ok(None);
+        };
+        let leido = self.leer_registro()?;
+        let id = Texto::from(id.as_str());
+        Ok(leido
+            .hechos
+            .iter()
+            .find(|h| h.tipo() == "ronda" && h.texto("id") == Some(&id))
+            .and_then(|r| dominio::pregunta_efectiva_de_ronda(&leido.hechos, r))
+            .cloned())
+    }
+
+    /// PantallaRonda.Situacion en la investigación: qué pasó con el panel y qué hacer, del registro.
+    /// `termino` dice si la página informa un fin. La operación y los roles se suman en PART-016.
+    pub fn situacion_de_panel(
+        &mut self,
+        id: &str,
+        etapa: &str,
+        estado: &str,
+        termino: bool,
+    ) -> io::Result<Situacion> {
+        let accion = |a| Situacion {
+            accion: Some(a),
+            ..Default::default()
+        };
+        if etapa != "investigacion" {
+            return Ok(Situacion::default());
+        }
+        if estado == "por-pegar" {
+            return Ok(accion(PEGAR_AQUI));
+        }
+        if estado.starts_with("parece-terminado") {
+            return Ok(accion(CAPTURAR_ESTE));
+        }
+        if estado != "con-problema" {
+            return Ok(Situacion::default());
+        }
+        let Some(ronda) = self.ronda_actual.clone() else {
+            return Ok(Situacion::default());
+        };
+        let leido = self.leer_registro()?;
+        let ronda = Texto::from(ronda.as_str());
+        let ultimo = |tipo: &str| {
+            leido.hechos.iter().rev().find(|h| {
+                es_de(h, tipo, &ronda)
+                    && h.texto("proveedorId").and_then(Texto::como_str) == Some(id)
+            })
+        };
+        // Como la interpolación de C#: un error nulo queda vacío.
+        let error = |h: &Hecho| {
+            h.texto("error")
+                .map(|e| e.para_mostrar().into_owned())
+                .unwrap_or_default()
+        };
+        if let Some(r) = ultimo("respuesta") {
+            return Ok(Situacion {
+                problema: Some(format!(
+                    "La captura no sirvió: {}. Revisa la página y vuelve a capturar.",
+                    error(r)
+                )),
+                corto: Some("La captura no sirvió: captura otra vez desde «Más…»."),
+                accion: Some(CAPTURAR_ESTE),
+            });
+        }
+        let intento = ultimo("intento").map(error).unwrap_or_default();
+        // El intento fallido no se borra: si después se pegó aquí y la página ya terminó, corresponde capturar.
+        Ok(if termino {
+            Situacion {
+                problema: Some(format!(
+                    "La pregunta no se pegó con los demás ({intento}), pero la página ya respondió: captúrala."
+                )),
+                corto: Some("Ya respondió: captúrala desde «Más…»."),
+                accion: Some(CAPTURAR_ESTE),
+            }
+        } else {
+            Situacion {
+                problema: Some(format!(
+                    "La pregunta no se pegó: {intento}. Revisa el compositor y vuelve a pegarla."
+                )),
+                corto: Some("No se pegó: pégala otra vez desde «Más…»."),
+                accion: Some(PEGAR_AQUI),
+            }
+        })
+    }
+
     /// RON-004 (EstadoDePanel): el estado de un panel en la etapa actual. Lo que dice la página
     /// (generando, cómo se supo el fin) entra como parámetro; lo demás sale del registro y de lo
     /// pegado en esta sesión.
@@ -3237,6 +3339,88 @@ mod pruebas {
         assert_eq!(
             dominio::integrador_de_ronda(&hechos, &r).and_then(Texto::como_str),
             Some("deepseek")
+        );
+    }
+
+    #[test]
+    fn la_situacion_de_un_panel_dice_que_paso_y_que_hacer() {
+        let c = Carpeta::nueva("situacion");
+        let mut p = nueva_puerta(&c.0);
+        assert_eq!(p.pregunta_de_la_ronda().unwrap(), None);
+        p.abrir_ronda("¿Pregunta?").unwrap();
+        assert_eq!(
+            p.pregunta_de_la_ronda().unwrap(),
+            Some(Texto::from("¿Pregunta?"))
+        );
+        p.registrar_intentos(&[
+            ("chatgpt", true, None),
+            ("grok", false, Some("el compositor ya tenía texto")),
+        ])
+        .unwrap();
+        let s = |p: &mut Puerta, id: &str, etapa: &str, estado: &str, termino: bool| {
+            p.situacion_de_panel(id, etapa, estado, termino).unwrap()
+        };
+        assert_eq!(
+            s(&mut p, "chatgpt", "investigacion", "por-pegar", false),
+            Situacion {
+                accion: Some(PEGAR_AQUI),
+                ..Default::default()
+            }
+        );
+        assert_eq!(
+            s(
+                &mut p,
+                "chatgpt",
+                "investigacion",
+                "parece-terminado-deducido",
+                false
+            )
+            .accion,
+            Some(CAPTURAR_ESTE)
+        );
+        assert_eq!(
+            s(&mut p, "chatgpt", "investigacion", "respondiendo", false),
+            Situacion::default()
+        );
+        let g = s(&mut p, "grok", "investigacion", "con-problema", false);
+        assert_eq!(
+            g.problema.as_deref(),
+            Some(
+                "La pregunta no se pegó: el compositor ya tenía texto. Revisa el compositor y vuelve a pegarla."
+            )
+        );
+        assert_eq!(g.corto, Some("No se pegó: pégala otra vez desde «Más…»."));
+        assert_eq!(g.accion, Some(PEGAR_AQUI));
+        let g = s(&mut p, "grok", "investigacion", "con-problema", true);
+        assert_eq!(
+            g.problema.as_deref(),
+            Some(
+                "La pregunta no se pegó con los demás (el compositor ya tenía texto), pero la página ya respondió: captúrala."
+            )
+        );
+        assert_eq!(g.corto, Some("Ya respondió: captúrala desde «Más…»."));
+        assert_eq!(g.accion, Some(CAPTURAR_ESTE));
+        let fallida = Lectura {
+            id: "chatgpt".into(),
+            text: Texto::from("x"),
+            error: Some(Texto::from("se cortó")),
+            ..Default::default()
+        };
+        p.registrar_capturas(&[fallida], &|_| (None, None)).unwrap();
+        let r = s(&mut p, "chatgpt", "investigacion", "con-problema", false);
+        assert_eq!(
+            r.problema.as_deref(),
+            Some("La captura no sirvió: se cortó. Revisa la página y vuelve a capturar.")
+        );
+        assert_eq!(
+            r.corto,
+            Some("La captura no sirvió: captura otra vez desde «Más…».")
+        );
+        assert_eq!(r.accion, Some(CAPTURAR_ESTE));
+        // Fuera de la investigación la situación es de PART-016 (operación y roles).
+        assert_eq!(
+            s(&mut p, "chatgpt", "pregunta", "por-pegar", false),
+            Situacion::default()
         );
     }
 

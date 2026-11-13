@@ -3,7 +3,7 @@
 //! interfaz.rs; acá quedan los literales del uxml.
 
 slint::slint! {
-    import { Button, CheckBox, ComboBox, LineEdit, ScrollView, AboutSlint, Palette } from "std-widgets.slint";
+    import { Button, CheckBox, ComboBox, LineEdit, ScrollView, TextEdit, AboutSlint, Palette } from "std-widgets.slint";
 
     // ADR-0010, punto 11: «ChatCouncil (nueva)» hasta el relevo (E9).
     // ARR-007: con -autoprueba no se arma la interfaz; el panel va en una ventana sola.
@@ -15,7 +15,7 @@ slint::slint! {
 
     export struct Marca { id: string, nombre: string, marcado: bool }
     export struct Cuenta { id: string, nombre: string, estado: string }
-    export struct Fila { id: string, nombre: string, estado: string, rol: bool, visible: bool, actual: bool }
+    export struct Fila { id: string, nombre: string, estado: string, icono: string, rol: bool, visible: bool, actual: bool }
     export struct Anterior { id: string, pregunta: string, detalle: string, carpeta: string }
 
     // El foco visible de todos los controles: un borde de 2 px en #3A79E0 (WCAG 2.4.7).
@@ -31,6 +31,8 @@ slint::slint! {
         in property <string> text;
         in property <bool> primario;
         in property <bool> habilitado: true;
+        // El nombre para el lector cuando el texto es un signo (‹ ›).
+        in property <string> etiqueta;
         callback clicked;
         min-height: 48px;
         min-width: max(48px, b.min-width);
@@ -43,6 +45,7 @@ slint::slint! {
             text: root.text;
             primary: root.primario;
             enabled: root.habilitado;
+            accessible-label: root.etiqueta != "" ? root.etiqueta : root.text;
             clicked => { root.clicked(); }
         }
         Anillo { foco: b.has-focus; }
@@ -100,6 +103,90 @@ slint::slint! {
         color: Palette.foreground;
     }
 
+    // IFZ-023 (IconoEstado.cs): una forma por estado, así se distingue sin color (WCAG 1.4.1). Va siempre
+    // junto a la palabra del estado, que es lo que lee el lector.
+    component Icono inherits Rectangle {
+        in property <string> estado;
+        property <brush> tinta: Palette.foreground;
+        property <brush> fondo: Palette.background;
+        width: 16px;
+        height: 16px;
+        if root.estado != "problema" && root.estado != "" : Rectangle {
+            width: 14px;
+            height: 14px;
+            border-radius: 7px;
+            border-width: 2px;
+            border-color: root.tinta;
+            background: (root.estado == "terminado" || root.estado == "capturado") ? root.tinta : transparent;
+        }
+        if root.estado == "falta-enviar" : Rectangle { width: 5px; height: 5px; border-radius: 2.5px; background: root.tinta; }
+        if root.estado == "respondiendo" : Path {
+            width: 16px; height: 16px; viewbox-width: 16; viewbox-height: 16;
+            fill: root.tinta;
+            commands: "M 8 1 A 7 7 0 0 0 8 15 Z";
+        }
+        if root.estado == "capturado" : Path {
+            width: 16px; height: 16px; viewbox-width: 16; viewbox-height: 16;
+            stroke: root.fondo; stroke-width: 2px;
+            commands: "M 4.8 8 L 7.3 10.5 L 11.2 5.5";
+        }
+        if root.estado == "problema" : Path {
+            width: 16px; height: 16px; viewbox-width: 16; viewbox-height: 16;
+            fill: root.tinta;
+            commands: "M 8 1 L 15 15 L 1 15 Z";
+        }
+        if root.estado == "problema" : Path {
+            width: 16px; height: 16px; viewbox-width: 16; viewbox-height: 16;
+            stroke: root.fondo; stroke-width: 2px;
+            commands: "M 8 6 L 8 10.5 M 8 12 L 8 13.5";
+        }
+    }
+
+    // ESC-005 e IFZ-012: «Tu pregunta» con un asa debajo para fijar su alto arrastrando (Aplicacion.Asa).
+    component CampoPregunta inherits VerticalLayout {
+        in-out property <string> texto;
+        in-out property <length> alto;
+        property <length> alto-al-tomar;
+        property <length> y-al-tomar;
+        spacing: 2px;
+        Text { text: "Tu pregunta"; color: Palette.foreground; }
+        Rectangle {
+            height: root.alto;
+            campo := TextEdit {
+                width: parent.width;
+                height: parent.height;
+                text <=> root.texto;
+                wrap: word-wrap;
+                accessible-label: "Tu pregunta";
+            }
+            Anillo { foco: campo.has-focus; }
+        }
+        Rectangle {
+            height: 12px;
+            Rectangle { width: 32px; height: 4px; border-radius: 2px; background: Palette.border; }
+            ta := TouchArea {
+                mouse-cursor: ns-resize;
+                pointer-event(e) => {
+                    if (e.kind == PointerEventKind.down) {
+                        root.alto-al-tomar = root.alto;
+                        root.y-al-tomar = self.absolute-position.y + self.mouse-y;
+                    }
+                }
+                moved => {
+                    if (self.pressed) {
+                        root.alto = clamp(root.alto-al-tomar + self.absolute-position.y + self.mouse-y - root.y-al-tomar, 48px, 600px);
+                    }
+                }
+            }
+        }
+        Secundario {
+            text: "Arrastra para cambiar el alto del campo";
+            font-size: 0.85rem;
+            visible: ta.has-hover || ta.pressed;
+            height: (ta.has-hover || ta.pressed) ? self.preferred-height : 0px;
+        }
+    }
+
     // Una fila de la lista de paneles: enfocable y con Enter, como un botón (WCAG 2.1.1).
     component FilaPanel inherits Rectangle {
         in property <Fila> fila;
@@ -122,6 +209,7 @@ slint::slint! {
             padding-left: 12px;
             padding-right: 12px;
             spacing: 8px;
+            VerticalLayout { alignment: center; Icono { estado: fila.icono; } }
             Text { text: fila.nombre; font-weight: 600; vertical-alignment: center; color: Palette.foreground; }
             Text { text: fila.estado; vertical-alignment: center; horizontal-alignment: right; wrap: word-wrap; color: Palette.foreground.transparentize(35%); }
         }
@@ -166,6 +254,32 @@ slint::slint! {
         in property <string> resultado;
         in property <bool> resultado-problema;
         in property <string> cabecera-titulo;
+        // ESC-005: la pregunta, en la guía (ancha) o abajo (angosta), solo en su etapa (D32).
+        in-out property <string> pregunta;
+        in property <bool> etapa-pregunta;
+        // IFZ-012: el alto del campo, que fija el asa entre 48 y 600.
+        in-out property <length> alto-pregunta: 96px;
+        // IFZ-005 y IFZ-023: el panel a la vista.
+        in property <string> icono-visible;
+        in property <string> cabecera-problema;
+        in property <string> selector-texto;
+        in property <string> selector-problema;
+        in property <string> accion-texto;
+        in property <bool> ocupado;
+        callback accion-panel();
+        callback mover(int);
+        // IFZ-024: el diálogo propio, con la página apartada mientras está abierto.
+        in-out property <bool> capa-abierta;
+        changed capa-abierta => { root.area-cambio(); }
+        in property <string> dialogo-titulo;
+        in property <string> dialogo-texto;
+        in property <bool> dialogo-con-campo;
+        in-out property <string> dialogo-campo;
+        in property <string> dialogo-casilla-texto;
+        in-out property <bool> dialogo-casilla;
+        in property <string> dialogo-aceptar-texto;
+        callback dialogo-aceptar();
+        callback dialogo-cancelar();
         callback paso();
         callback seleccionar(string);
         out property <length> area-x: pagina.absolute-position.x;
@@ -313,13 +427,18 @@ slint::slint! {
                                     Rectangle { height: 4px; background: i <= root.etapa-actual ? #3A79E0 : Palette.border; }
                                 }
                             }
+                            if root.etapa-pregunta && root.ancha : CampoPregunta {
+                                texto <=> root.pregunta;
+                                alto <=> root.alto-pregunta;
+                            }
                             HorizontalLayout {
                                 spacing: 12px;
-                                paso-ancha := Boton { text: root.paso-texto; primario: true; habilitado: root.paso-habilitado; clicked => { root.paso(); } }
+                                paso-ancha := Boton { text: root.paso-texto; primario: true; habilitado: root.paso-habilitado && !root.ocupado; clicked => { root.paso(); } }
                                 VerticalLayout {
                                     Parrafo { text: root.frase; }
                                     Secundario { text: root.contadores; }
-                                    Parrafo { text: root.resultado; color: root.resultado-problema ? #C42B1C : Palette.foreground; }
+                                    // IFZ-007: el resultado se anuncia sin mover el foco (WCAG 4.1.3).
+                                    Parrafo { text: root.resultado; color: root.resultado-problema ? #C42B1C : Palette.foreground; accessible-role: text; accessible-label: self.text; accessible-live-region: polite; }
                                 }
                             }
                         }
@@ -352,7 +471,19 @@ slint::slint! {
                             }
                             VerticalLayout {
                                 spacing: 4px;
-                                Text { text: root.cabecera-titulo; font-weight: 600; color: Palette.foreground; height: root.ancha ? 32px : 0px; visible: root.ancha; }
+                                HorizontalLayout {
+                                    visible: root.ancha;
+                                    height: root.ancha ? max(48px, self.preferred-height) : 0px;
+                                    spacing: 8px;
+                                    VerticalLayout { alignment: center; Icono { estado: root.icono-visible; } }
+                                    VerticalLayout {
+                                        alignment: center;
+                                        horizontal-stretch: 1;
+                                        Text { text: root.cabecera-titulo; font-weight: 600; wrap: word-wrap; color: Palette.foreground; }
+                                        if root.cabecera-problema != "" : Text { text: root.cabecera-problema; wrap: word-wrap; color: #C42B1C; }
+                                    }
+                                    if root.accion-texto != "" : Boton { text: root.accion-texto; habilitado: !root.ocupado; clicked => { root.accion-panel(); } }
+                                }
                                 // La página del proveedor (vista nativa) va encima de este rectángulo.
                                 pagina := Rectangle {
                                     border-width: 1px;
@@ -369,8 +500,28 @@ slint::slint! {
                             visible: !root.ancha;
                             height: root.ancha ? 0px : self.preferred-height;
                             spacing: 4px;
-                            paso-angosta := Boton { text: root.paso-texto; primario: true; habilitado: root.paso-habilitado; horizontal-stretch: 1; clicked => { root.paso(); } }
-                            Parrafo { text: root.resultado; }
+                            // El selector: el problema del panel va dentro (H7).
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Boton { text: "‹"; etiqueta: "Panel anterior"; clicked => { root.mover(-1); } }
+                                VerticalLayout {
+                                    alignment: center;
+                                    horizontal-stretch: 1;
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        VerticalLayout { alignment: center; Icono { estado: root.icono-visible; } }
+                                        Text { text: root.selector-texto; font-weight: 600; wrap: word-wrap; color: Palette.foreground; horizontal-stretch: 1; }
+                                    }
+                                    if root.selector-problema != "" : Text { text: root.selector-problema; wrap: word-wrap; color: #C42B1C; }
+                                }
+                                Boton { text: "›"; etiqueta: "Panel siguiente"; clicked => { root.mover(1); } }
+                            }
+                            if root.etapa-pregunta && !root.ancha : CampoPregunta {
+                                texto <=> root.pregunta;
+                                alto <=> root.alto-pregunta;
+                            }
+                            paso-angosta := Boton { text: root.paso-texto; primario: true; habilitado: root.paso-habilitado && !root.ocupado; horizontal-stretch: 1; clicked => { root.paso(); } }
+                            Parrafo { text: root.resultado; color: root.resultado-problema ? #C42B1C : Palette.foreground; accessible-role: text; accessible-label: self.text; accessible-live-region: polite; }
                             Parrafo { text: root.frase; }
                             Secundario { text: root.contadores-angosta; }
                         }
@@ -589,6 +740,50 @@ slint::slint! {
                         Boton { text: "Historial"; clicked => { root.ir("historial"); } }
                         Boton { text: "Ajustes"; clicked => { root.ir("ajustes"); } }
                         Boton { text: "Ayuda"; clicked => { root.ir("ayuda"); } }
+                    }
+                }
+            }
+
+            // IFZ-024: el diálogo de la ronda. «Cancelar» o tocar el fondo lo cierran sin hacer nada.
+            if root.capa-abierta : Rectangle {
+                background: #00000080;
+                // Como AbrirDialogo: el foco va al campo si lo hay; si no, al botón de aceptar.
+                init => {
+                    if (root.dialogo-con-campo) { dialogo-campo-edit.focus(); } else { dialogo-aceptar-boton.focus(); }
+                }
+                TouchArea { clicked => { root.dialogo-cancelar(); } }
+                Rectangle {
+                    width: min(560px, parent.width - 32px);
+                    height: min(self.preferred-height, parent.height - 32px);
+                    background: Palette.background;
+                    border-radius: 8px;
+                    accessible-role: groupbox;
+                    accessible-label: root.dialogo-titulo;
+                    TouchArea { }
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 12px;
+                        TituloBloque { text: root.dialogo-titulo; }
+                        Parrafo { text: root.dialogo-texto; }
+                        Rectangle {
+                            visible: root.dialogo-con-campo;
+                            height: root.dialogo-con-campo ? 96px : 0px;
+                            dialogo-campo-edit := TextEdit {
+                                width: parent.width;
+                                height: parent.height;
+                                text <=> root.dialogo-campo;
+                                wrap: word-wrap;
+                                accessible-label: root.dialogo-titulo;
+                            }
+                            Anillo { foco: dialogo-campo-edit.has-focus; }
+                        }
+                        if root.dialogo-casilla-texto != "" : Marcar { text: root.dialogo-casilla-texto; checked <=> root.dialogo-casilla; }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            dialogo-aceptar-boton := Boton { text: root.dialogo-aceptar-texto; primario: true; clicked => { root.dialogo-aceptar(); } }
+                            Boton { text: "Cancelar"; clicked => { root.dialogo-cancelar(); } }
+                        }
                     }
                 }
             }

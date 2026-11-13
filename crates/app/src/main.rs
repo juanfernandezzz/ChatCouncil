@@ -2,6 +2,7 @@ mod autoprueba;
 mod hilo;
 mod interfaz;
 mod pruebainterfaz;
+mod pruebaronda;
 mod ventana;
 
 use std::cell::Cell;
@@ -90,6 +91,7 @@ fn main() {
             salida,
             fase,
         }) => con_pruebainterfaz(datos, salida, fase),
+        Ok(Modo::PruebaRonda { datos, salida }) => con_pruebaronda(datos, salida),
         Ok(Modo::Normal {
             datos,
             paginas_de_prueba,
@@ -112,6 +114,11 @@ enum Modo {
         datos: PathBuf,
         salida: PathBuf,
         fase: u32,
+    },
+    /// PRU-012: también siempre con -datos.
+    PruebaRonda {
+        datos: PathBuf,
+        salida: PathBuf,
     },
     Normal {
         datos: PathBuf,
@@ -137,6 +144,14 @@ fn modo(args: &[String], local: Option<PathBuf>) -> Result<Modo, String> {
             datos: PathBuf::from(datos),
             salida: PathBuf::from(salida),
             fase,
+        });
+    }
+    if let Some(salida) = valor_de(args, "-pruebaronda")? {
+        let datos = valor_de(args, "-datos")?
+            .ok_or("-pruebaronda va solo con -datos sobre una carpeta temporal.")?;
+        return Ok(Modo::PruebaRonda {
+            datos: PathBuf::from(datos),
+            salida: PathBuf::from(salida),
         });
     }
     let explicita = valor_de(args, "-datos")?.is_some();
@@ -327,11 +342,27 @@ fn con_pruebainterfaz(datos: PathBuf, salida: PathBuf, fase: u32) -> i32 {
         datos,
         prueba: true,
         paginas_de_prueba: false,
+        prueba_ronda: false,
     };
     con_interfaz(
         o,
         Some(Box::new(move |i| {
             Box::pin(async move { pruebainterfaz::correr(i, &salida, fase).await })
+        })),
+    )
+}
+
+fn con_pruebaronda(datos: PathBuf, salida: PathBuf) -> i32 {
+    let o = interfaz::Opciones {
+        datos,
+        prueba: true,
+        paginas_de_prueba: false,
+        prueba_ronda: true,
+    };
+    con_interfaz(
+        o,
+        Some(Box::new(move |i| {
+            Box::pin(async move { pruebaronda::correr(i, &salida).await })
         })),
     )
 }
@@ -347,6 +378,7 @@ fn normal(datos: PathBuf, paginas_de_prueba: bool, importar: Option<PathBuf>) ->
             datos,
             prueba: false,
             paginas_de_prueba,
+            prueba_ronda: false,
         },
         None,
     )
@@ -477,6 +509,22 @@ mod pruebas {
                 datos: PathBuf::from(r"C:	"),
                 salida: PathBuf::from("s.txt"),
                 fase: 2,
+            })
+        );
+    }
+
+    #[test]
+    fn la_prueba_de_la_ronda_va_solo_con_menos_datos() {
+        let local = Some(PathBuf::from(r"C:\L"));
+        assert!(modo(&args(&["x", "-pruebaronda", "s.txt"]), local.clone()).is_err());
+        assert_eq!(
+            modo(
+                &args(&["x", "-pruebaronda", "s.txt", "-datos", r"C:\t"]),
+                local
+            ),
+            Ok(Modo::PruebaRonda {
+                datos: PathBuf::from(r"C:\t"),
+                salida: PathBuf::from("s.txt"),
             })
         );
     }

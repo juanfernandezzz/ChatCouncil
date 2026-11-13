@@ -44,3 +44,15 @@ jobs:
             "Código de salida de la fase ${fase}: $($p.ExitCode)"
             if ($p.ExitCode -ne 0) { exit $p.ExitCode }
           }
+      # PRU-012, PRU-013 y PRU-016: la Ronda con páginas locales, hasta el fin de la investigación.
+      - name: pruebaronda
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $datos = Join-Path $env:RUNNER_TEMP 'pruebaronda'
+          New-Item -ItemType Directory $datos | Out-Null
+          $salida = Join-Path $env:RUNNER_TEMP 'pruebaronda.txt'
+          $p = Start-Process .\target\debug\ChatCouncilNueva.exe -ArgumentList '-pruebaronda', $salida, '-datos', $datos -PassThru -Wait
+          if (Test-Path $salida) { Get-Content $salida -Encoding UTF8 } else { "No se escribió $salida" }
+          "Código de salida: $($p.ExitCode)"
+          exit $p.ExitCode

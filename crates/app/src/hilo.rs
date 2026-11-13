@@ -15,6 +15,8 @@ type Orden = Box<dyn FnOnce(&mut Puerta) + Send>;
 pub struct HiloNucleo {
     ordenes: Option<mpsc::Sender<Orden>>,
     hilo: Option<JoinHandle<()>>,
+    /// Por qué no se pudo crear el hilo; cada orden responde con esto.
+    error: String,
 }
 
 impl HiloNucleo {
@@ -38,11 +40,18 @@ impl HiloNucleo {
                 for orden in recibir {
                     orden(&mut puerta);
                 }
-            })
-            .ok();
-        HiloNucleo {
-            ordenes: hilo.is_some().then_some(ordenes),
-            hilo,
+            });
+        match hilo {
+            Ok(hilo) => HiloNucleo {
+                ordenes: Some(ordenes),
+                hilo: Some(hilo),
+                error: String::new(),
+            },
+            Err(e) => HiloNucleo {
+                ordenes: None,
+                hilo: None,
+                error: format!("no se pudo crear el hilo del núcleo: {e}"),
+            },
         }
     }
 
@@ -52,8 +61,12 @@ impl HiloNucleo {
         orden: impl FnOnce(&mut Puerta) -> T + Send + 'static,
     ) -> Respuesta<T> {
         let (enviar, respuesta) = canal();
-        if let Some(ordenes) = &self.ordenes {
-            let _ = ordenes.send(Box::new(move |p| enviar.enviar(orden(p))));
+        match &self.ordenes {
+            // Si el hilo ya terminó, la orden se suelta sin correr y la respuesta llega como error.
+            Some(ordenes) => {
+                let _ = ordenes.send(Box::new(move |p| enviar.enviar(orden(p))));
+            }
+            None => enviar.fallar(self.error.clone()),
         }
         respuesta
     }
@@ -63,7 +76,10 @@ impl Drop for HiloNucleo {
     fn drop(&mut self) {
         self.ordenes.take();
         if let Some(h) = self.hilo.take() {
-            let _ = h.join();
+            // Desde el propio hilo no se espera a sí mismo: termina solo al salir de la orden en curso.
+            if h.thread().id() != std::thread::current().id() {
+                let _ = h.join();
+            }
         }
     }
 }
@@ -90,6 +106,27 @@ mod pruebas {
                 Poll::Pending => std::thread::park(),
             }
         }
+    }
+
+    #[test]
+    fn soltar_el_hilo_desde_el_mismo_hilo_no_lo_traba() {
+        // Revisión PART-011, hallazgo 8: el join sobre sí mismo esperaba para siempre.
+        let datos = std::env::temp_dir().join(format!("cc-hilo-drop-{}", std::process::id()));
+        let compartido = Arc::new(std::sync::Mutex::new(Some(HiloNucleo::iniciar(
+            datos.clone(),
+        ))));
+        let adentro = compartido.clone();
+        let orden = compartido
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .pedir(move |_| {
+                drop(adentro.lock().unwrap().take());
+            });
+        let r = esperar(orden.con_techo(std::time::Duration::from_secs(5), "se trabó".into()));
+        assert_eq!(r, Ok(()));
+        let _ = std::fs::remove_dir_all(&datos);
     }
 
     #[test]

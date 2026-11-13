@@ -2,10 +2,10 @@
 //! el esqueleto ya puede hacer. Todo en una carpeta temporal nueva (INV-PRU-001).
 
 use std::path::Path;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use nucleo::json::Valor;
-use paneles::{Navegador, Panel, SWITCHES};
+use paneles::{ESPERA_CORRER, Navegador, Panel, SWITCHES};
 
 use crate::hilo::HiloNucleo;
 
@@ -62,13 +62,32 @@ pub async fn correr(ventana: &slint::Window, salida: &Path, arranque: Instant) -
         std::env::consts::OS,
         env!("CARGO_PKG_VERSION")
     ));
-    if let Err(e) = cuerpo(&mut a, ventana, arranque).await {
+    let datos = std::env::temp_dir().join(format!(
+        "cc-autoprueba-{}",
+        crate::nuevo_id().replace('-', "")
+    ));
+    if let Err(e) = cuerpo(&mut a, ventana, &datos, arranque).await {
         a.anotar(
             false,
             "autoprueba",
             &format!("se cortó con una excepción: {e}"),
         );
     }
+    // Revisión PART-011, hallazgo 10: la carpeta temporal no queda. Los paneles ya se soltaron con cuerpo;
+    // el proceso del navegador tarda un poco en soltar sus archivos.
+    let mut borrada = Err(String::new());
+    for _ in 0..100 {
+        borrada = std::fs::remove_dir_all(&datos).map_err(|e| e.to_string());
+        if borrada.is_ok() || !datos.exists() {
+            break;
+        }
+        let _ = paneles::dormir(Duration::from_millis(100)).await;
+    }
+    a.anotar(
+        !datos.exists(),
+        "carpeta temporal borrada",
+        &format!("{}: {borrada:?}", datos.display()),
+    );
     let (texto, codigo) = a.cerrar();
     match std::fs::write(salida, texto) {
         Ok(()) => codigo,
@@ -82,17 +101,23 @@ pub async fn correr(ventana: &slint::Window, salida: &Path, arranque: Instant) -
 async fn cuerpo(
     a: &mut Anotador,
     ventana: &slint::Window,
+    datos: &Path,
     arranque: Instant,
 ) -> Result<(), String> {
-    let datos = std::env::temp_dir().join(format!(
-        "cc-autoprueba-{}",
-        crate::nuevo_id().replace('-', "")
-    ));
-    let paginas = crate::escribir_paginas_de_prueba(&datos)?;
-    let mut navegador = Navegador::new(&datos, Some(paginas));
-    let panel = crate::crear_panel(&mut navegador, ventana, (0.0, 0.0, 800.0, 600.0)).await?;
+    let paginas = crate::escribir_paginas_de_prueba(datos)?;
+    let navegador = Navegador::new(datos, Some(paginas));
+    let panel =
+        crate::crear_panel(&navegador, ventana, "prueba-a", (0.0, 0.0, 800.0, 600.0)).await?;
     let version = panel.version_del_navegador()?;
     a.anotar(true, "entorno", &format!("WebView2 {version}"));
+    // ARR-006: la escala de la ventana de Slint es la que Windows da a su monitor; no se toca la configuración.
+    let escala = ventana.scale_factor();
+    let ppp = crate::ppp_de_la_ventana(ventana)?;
+    a.anotar(
+        (f64::from(escala) - f64::from(ppp) / 96.0).abs() < 0.001,
+        "escala de la ventana",
+        &format!("Slint {escala}, Windows {ppp} ppp"),
+    );
     panel
         .navegar("https://cc-prueba.test/textarea.html")
         .await?;
@@ -103,8 +128,10 @@ async fn cuerpo(
 
     let r = panel_basico(a, &panel, &version).await;
     a.grupo("panel", r);
-    let r = nucleo(a, &datos).await;
+    let r = nucleo(a, datos).await;
     a.grupo("núcleo", r);
+    let r = techo_externo(a, &panel, &navegador, ventana).await;
+    a.grupo("techo externo", r);
     Ok(())
 }
 
@@ -135,12 +162,30 @@ async fn panel_basico(a: &mut Anotador, p: &Panel, version: &str) -> Result<(), 
         &ua,
     );
 
+    // Revisión PART-011, hallazgo 9: la carga que termina es la de esta navegación, no la de una anterior.
+    let anterior = p.navegar("https://cc-prueba.test/cierre.html");
+    let propia = p.navegar("https://cc-prueba.test/textarea.html").await;
+    drop(anterior);
+    let donde = p
+        .ejecutar("location.pathname + '|' + document.readyState")
+        .await?;
+    a.anotar(
+        propia.is_ok() && donde == "\"/textarea.html|complete\"",
+        "una navegación espera su propia carga",
+        &format!("{propia:?}, al volver: {donde}"),
+    );
+
     // Escribir y leer por pedido y consulta, con saltos de línea.
     let texto = "Primera línea con ñ y acentos: áéíóú\nSegunda línea\n\nCuarta, tras una vacía";
-    let escrito = p.correr("escribir", SPEC_TEXTAREA, Some(texto)).await?;
+    let escrito = p
+        .correr("escribir", SPEC_TEXTAREA, Some(texto), ESPERA_CORRER)
+        .await?;
     let ok = matches!(&escrito, Valor::Objeto(o) if o.iter().any(|(k, v)| k.como_str() == Some("ok") && *v == Valor::Bool(true)));
     a.anotar(ok, "escribir", &format!("{escrito:?}"));
-    let leido = match p.correr("leerCompositor", SPEC_TEXTAREA, None).await? {
+    let leido = match p
+        .correr("leerCompositor", SPEC_TEXTAREA, None, ESPERA_CORRER)
+        .await?
+    {
         Valor::Texto(t) => t.para_mostrar().into_owned(),
         otro => format!("{otro:?}"),
     };
@@ -150,11 +195,61 @@ async fn panel_basico(a: &mut Anotador, p: &Panel, version: &str) -> Result<(), 
         format!("leyó: {leido}")
     };
     a.anotar(leido == texto, "leer el compositor", &detalle);
-    let vacio = p.correr("chatVacio", SPEC_TEXTAREA, None).await?;
+    let vacio = p
+        .correr("chatVacio", SPEC_TEXTAREA, None, ESPERA_CORRER)
+        .await?;
     a.anotar(
         vacio == Valor::Bool(true),
         "chat vacío",
         &format!("{vacio:?}"),
+    );
+    Ok(())
+}
+
+/// Una página colgada a propósito (15 s de bucle) en otro perfil: el techo la corta sin bloquear a los demás.
+async fn techo_externo(
+    a: &mut Anotador,
+    p: &Panel,
+    navegador: &Navegador,
+    ventana: &slint::Window,
+) -> Result<(), String> {
+    let c = crate::crear_panel(navegador, ventana, "prueba-c", (0.0, 0.0, 800.0, 600.0)).await?;
+    c.navegar("https://cc-prueba.test/textarea.html").await?;
+    let reloj = Instant::now();
+    let colgada = c.ejecutar_con_techo(
+        "const hasta = Date.now() + 15000; while (Date.now() < hasta) {} 'fin'",
+        Duration::from_secs(3),
+    );
+    paneles::dormir(Duration::from_millis(300)).await?;
+    let otro = Instant::now();
+    let respuesta = p.ejecutar("'responde'").await?;
+    let ms_otro = otro.elapsed().as_millis();
+    let corte = colgada.await;
+    let ms_techo = reloj.elapsed().as_millis();
+    a.anotar(
+        corte.is_err() && (2_900..6_000).contains(&ms_techo),
+        "techo externo sobre una página colgada",
+        &format!(
+            "cortó a los {ms_techo} ms: {}",
+            corte.err().unwrap_or_else(|| "no cortó".into())
+        ),
+    );
+    a.anotar(
+        respuesta == "\"responde\"" && ms_otro < 1_500,
+        "un panel colgado no bloquea a los demás",
+        &format!("el otro panel respondió en {ms_otro} ms"),
+    );
+
+    // Revisión PART-011, hallazgo 3: el techo de correr se cumple aunque el ejecutar de adentro no vuelva.
+    let antes = Instant::now();
+    let r = c
+        .correr("chatVacio", SPEC_TEXTAREA, None, Duration::from_secs(3))
+        .await;
+    let ms = antes.elapsed().as_millis();
+    a.anotar(
+        r.is_err() && (2_900..6_000).contains(&ms),
+        "techo de una operación sobre una página colgada",
+        &format!("cortó a los {ms} ms: {r:?}"),
     );
     Ok(())
 }

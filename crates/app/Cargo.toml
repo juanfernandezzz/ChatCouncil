@@ -14,6 +14,6 @@ nucleo = { path = "../nucleo" }
 paneles = { path = "../paneles" }
 slint = { version = "1.18.1", features = ["raw-window-handle-06"] }
 
-# La misma versión de windows que trae wry; solo para la hora local de la autoprueba.
+# La misma versión de windows que trae wry; para la hora local y los ppp de la ventana en la autoprueba.
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62.2", features = ["Win32_System_SystemInformation"] }
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_System_SystemInformation", "Win32_UI_HiDpi"] }

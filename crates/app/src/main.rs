@@ -40,21 +40,73 @@ slint::slint! {
 
 /// Las páginas de prueba viajan dentro del ejecutable (ADR-0010, consecuencias) y se escriben en la
 /// carpeta de datos que se esté usando, para servirlas como cc-prueba.test.
-const PAGINAS_DE_PRUEBA: [(&str, &[u8]); 1] = [(
-    "textarea.html",
-    include_bytes!("../../../tests/paginas/textarea.html"),
-)];
+const PAGINAS_DE_PRUEBA: [(&str, &[u8]); 11] = [
+    (
+        "chatgpt.html",
+        include_bytes!("../../../tests/paginas/chatgpt.html"),
+    ),
+    (
+        "cierre.html",
+        include_bytes!("../../../tests/paginas/cierre.html"),
+    ),
+    (
+        "emergente.html",
+        include_bytes!("../../../tests/paginas/emergente.html"),
+    ),
+    (
+        "informe.html",
+        include_bytes!("../../../tests/paginas/informe.html"),
+    ),
+    (
+        "kimi.html",
+        include_bytes!("../../../tests/paginas/kimi.html"),
+    ),
+    (
+        "kimink/embed.html",
+        include_bytes!("../../../tests/paginas/kimink/embed.html"),
+    ),
+    (
+        "mistral.html",
+        include_bytes!("../../../tests/paginas/mistral.html"),
+    ),
+    (
+        "popup.html",
+        include_bytes!("../../../tests/paginas/popup.html"),
+    ),
+    (
+        "recorte.html",
+        include_bytes!("../../../tests/paginas/recorte.html"),
+    ),
+    (
+        "ronda.html",
+        include_bytes!("../../../tests/paginas/ronda.html"),
+    ),
+    (
+        "textarea.html",
+        include_bytes!("../../../tests/paginas/textarea.html"),
+    ),
+];
 
-/// La página que abre el panel fuera de la autoprueba.
-// shortcut: el esqueleto abre la página local de prueba; desde PART-012 los paneles abren los proveedores del consejo.
-const PAGINA_DEL_ESQUELETO: &str = "https://cc-prueba.test/textarea.html";
+/// Las siete páginas locales que abre `-paginasdeprueba`, una por investigador del consejo.
+const PAGINAS_LOCALES: [&str; 7] = [
+    "textarea.html",
+    "chatgpt.html",
+    "mistral.html",
+    "kimi.html",
+    "recorte.html",
+    "ronda.html",
+    "informe.html",
+];
 
 fn main() {
     let arranque = Instant::now();
     let args: Vec<String> = std::env::args().collect();
     let codigo = match modo(&args, std::env::var_os("LOCALAPPDATA").map(PathBuf::from)) {
         Ok(Modo::Autoprueba(salida)) => con_autoprueba(salida, arranque),
-        Ok(Modo::Normal(datos)) => normal(datos),
+        Ok(Modo::Normal {
+            datos,
+            paginas_de_prueba,
+        }) => normal(datos, paginas_de_prueba),
         Err(e) => {
             eprintln!("{e}");
             1
@@ -66,7 +118,10 @@ fn main() {
 #[derive(Debug, PartialEq)]
 enum Modo {
     Autoprueba(PathBuf),
-    Normal(PathBuf),
+    Normal {
+        datos: PathBuf,
+        paginas_de_prueba: bool,
+    },
 }
 
 fn modo(args: &[String], local: Option<PathBuf>) -> Result<Modo, String> {
@@ -74,8 +129,16 @@ fn modo(args: &[String], local: Option<PathBuf>) -> Result<Modo, String> {
     if let Some(salida) = valor_de(args, "-autoprueba")? {
         return Ok(Modo::Autoprueba(PathBuf::from(salida)));
     }
+    // Las páginas de prueba nunca van a la carpeta real: solo con una -datos explícita.
+    let paginas_de_prueba = args.iter().any(|a| a == "-paginasdeprueba");
+    if paginas_de_prueba && valor_de(args, "-datos")?.is_none() {
+        return Err("-paginasdeprueba va solo con -datos sobre una carpeta temporal.".into());
+    }
     datos
-        .map(Modo::Normal)
+        .map(|datos| Modo::Normal {
+            datos,
+            paginas_de_prueba,
+        })
         .ok_or_else(|| "No se encontró la carpeta de datos: falta -datos y LOCALAPPDATA.".into())
 }
 
@@ -121,6 +184,7 @@ fn nuevo_id() -> String {
 
 /// La fecha y hora local, como `DateTime.Now:yyyy-MM-dd HH:mm:ss`.
 fn ahora_local() -> String {
+    // SAFETY: GetLocalTime no toma punteros y siempre devuelve un SYSTEMTIME válido (revisión PART-011, hallazgo 11).
     let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
     format!(
         "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
@@ -128,12 +192,29 @@ fn ahora_local() -> String {
     )
 }
 
+/// Los puntos por pulgada que Windows da al monitor de la ventana (GetDpiForWindow).
+fn ppp_de_la_ventana(ventana: &slint::Window) -> Result<u32, String> {
+    use paneles::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let manija = ventana.window_handle();
+    let RawWindowHandle::Win32(w) = manija.window_handle().map_err(|e| e.to_string())?.as_raw()
+    else {
+        return Err("la ventana no es de Win32".into());
+    };
+    let hwnd = windows::Win32::Foundation::HWND(w.hwnd.get() as *mut _);
+    // SAFETY: el HWND es el de la ventana de Slint, que está viva mientras dura esta llamada.
+    Ok(unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) })
+}
+
 fn escribir_paginas_de_prueba(datos: &Path) -> Result<PathBuf, String> {
     let carpeta =
         std::path::absolute(datos.join("paginas-de-prueba")).map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&carpeta).map_err(|e| e.to_string())?;
     for (nombre, bytes) in PAGINAS_DE_PRUEBA {
-        std::fs::write(carpeta.join(nombre), bytes).map_err(|e| e.to_string())?;
+        let ruta = carpeta.join(nombre);
+        if let Some(padre) = ruta.parent() {
+            std::fs::create_dir_all(padre).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(ruta, bytes).map_err(|e| e.to_string())?;
     }
     Ok(carpeta)
 }
@@ -141,13 +222,14 @@ fn escribir_paginas_de_prueba(datos: &Path) -> Result<PathBuf, String> {
 /// Crea el panel en cuanto la ventana existe: su handle aparece recién después de una vuelta del
 /// bucle tras show() (documentación de slint::Window::window_handle, 1.18).
 async fn crear_panel(
-    navegador: &mut Navegador,
+    navegador: &Navegador,
     ventana: &slint::Window,
+    perfil: &str,
     rect: (f64, f64, f64, f64),
 ) -> Result<Panel, String> {
     let mut ultimo = String::new();
     for _ in 0..200 {
-        match navegador.crear_panel(&ventana.window_handle(), rect) {
+        match navegador.crear_panel(&ventana.window_handle(), perfil, rect) {
             Ok(p) => return Ok(p),
             Err(e) => ultimo = e,
         }
@@ -190,7 +272,23 @@ fn area(ui: &Ventana) -> (f64, f64, f64, f64) {
     )
 }
 
-fn normal(datos: PathBuf) -> i32 {
+/// El primer panel ocupa el área; los demás van fuera de la ventana con su tamaño, no a 0×0, para que
+/// una SPA siga montando (PantallaRonda.Ubicar).
+fn ubicar(ui: &Ventana, paneles: &[Panel]) {
+    let (x, y, ancho, alto) = area(ui);
+    for (i, p) in paneles.iter().enumerate() {
+        let r = if i == 0 {
+            p.rect(x, y, ancho, alto)
+        } else {
+            p.rect(-ancho - 100.0, 0.0, ancho, alto)
+        };
+        if let Err(e) = r {
+            eprintln!("No se pudo reacomodar el panel: {e}");
+        }
+    }
+}
+
+fn normal(datos: PathBuf, paginas_de_prueba: bool) -> i32 {
     let ui = match Ventana::new() {
         Ok(ui) => ui,
         Err(e) => {
@@ -199,33 +297,49 @@ fn normal(datos: PathBuf) -> i32 {
         }
     };
     let _nucleo = HiloNucleo::iniciar(datos.clone());
-    // El navegador vive mientras viva su panel.
-    let abierto: Rc<RefCell<Option<(Navegador, Panel)>>> = Rc::default();
+    let abiertos: Rc<RefCell<Vec<Panel>>> = Rc::default();
 
-    let (w, a) = (ui.as_weak(), abierto.clone());
+    let (w, a) = (ui.as_weak(), abiertos.clone());
     ui.on_area_cambio(move || {
-        if let (Some(ui), Some((_, panel))) = (w.upgrade(), a.borrow().as_ref()) {
-            let (x, y, ancho, alto) = area(&ui);
-            if let Err(e) = panel.rect(x, y, ancho, alto) {
-                eprintln!("No se pudo reacomodar el panel: {e}");
-            }
+        if let Some(ui) = w.upgrade() {
+            ubicar(&ui, &a.borrow());
         }
     });
 
-    let (w, a) = (ui.as_weak(), abierto.clone());
+    let (w, a) = (ui.as_weak(), abiertos.clone());
     let apertura = slint::spawn_local(async move {
         let Some(ui) = w.upgrade() else { return };
         let r = async {
-            let paginas = escribir_paginas_de_prueba(&datos)?;
-            let mut navegador = Navegador::new(&datos, Some(paginas));
-            let panel = crear_panel(&mut navegador, ui.window(), area(&ui)).await?;
-            panel.navegar(PAGINA_DEL_ESQUELETO).await?;
-            Ok::<_, String>((navegador, panel))
+            // Revisión PART-011, hallazgo 4: solo con -paginasdeprueba se escriben y se sirven las páginas de prueba.
+            let (navegador, urls) = if paginas_de_prueba {
+                let carpeta = escribir_paginas_de_prueba(&datos)?;
+                let urls = PAGINAS_LOCALES.map(|p| format!("https://cc-prueba.test/{p}"));
+                (Navegador::new(&datos, Some(carpeta)), urls.to_vec())
+            } else {
+                // shortcut: un panel en blanco; desde PART-014 los paneles abren los proveedores del consejo.
+                (
+                    Navegador::new(&datos, None),
+                    vec!["about:blank".to_string()],
+                )
+            };
+            let mut cargas = Vec::new();
+            for url in &urls {
+                let panel = crear_panel(&navegador, ui.window(), "proveedores", area(&ui)).await?;
+                cargas.push(panel.navegar(url));
+                a.borrow_mut().push(panel);
+                ubicar(&ui, &a.borrow());
+            }
+            // Como Paneles.EsperarCarga: una página que tarda no descarta su panel.
+            for (carga, url) in cargas.into_iter().zip(&urls) {
+                if let Err(e) = carga.await {
+                    eprintln!("{url}: {e}");
+                }
+            }
+            Ok::<_, String>(())
         }
         .await;
-        match r {
-            Ok(par) => *a.borrow_mut() = Some(par),
-            Err(e) => eprintln!("No se pudo abrir el panel: {e}"),
+        if let Err(e) = r {
+            eprintln!("No se pudieron abrir los paneles: {e}");
         }
     });
     if let Err(e) = apertura
@@ -253,7 +367,10 @@ mod pruebas {
         let a = args(&["ChatCouncilNueva.exe", "-datos", r"C:\x"]);
         assert_eq!(
             modo(&a, Some(r"C:\L".into())),
-            Ok(Modo::Normal(PathBuf::from(r"C:\x")))
+            Ok(Modo::Normal {
+                datos: PathBuf::from(r"C:\x"),
+                paginas_de_prueba: false
+            })
         );
     }
 
@@ -262,7 +379,10 @@ mod pruebas {
         let a = args(&["ChatCouncilNueva.exe"]);
         assert_eq!(
             modo(&a, Some(r"C:\L".into())),
-            Ok(Modo::Normal(PathBuf::from(r"C:\L\ChatCouncil")))
+            Ok(Modo::Normal {
+                datos: PathBuf::from(r"C:\L\ChatCouncil"),
+                paginas_de_prueba: false
+            })
         );
         assert!(modo(&a, None).is_err());
     }
@@ -288,6 +408,20 @@ mod pruebas {
             let r = modo(&args(a), local.clone());
             assert!(r.is_err(), "{a:?} dio {r:?}");
         }
+    }
+
+    #[test]
+    fn las_paginas_de_prueba_van_solo_con_una_carpeta_de_datos_explicita() {
+        // Revisión PART-011, hallazgo 4.
+        let local = Some(PathBuf::from(r"C:\L"));
+        assert!(modo(&args(&["x", "-paginasdeprueba"]), local.clone()).is_err());
+        assert_eq!(
+            modo(&args(&["x", "-datos", r"C:\t", "-paginasdeprueba"]), local),
+            Ok(Modo::Normal {
+                datos: PathBuf::from(r"C:\t"),
+                paginas_de_prueba: true
+            })
+        );
     }
 
     #[test]

@@ -64,10 +64,10 @@
   - Outcome: Paneles completos como el panel nativo de la Unity
   - Evidence: recorded
 
-- [ ] Part 13: Read `plans/PART13_PLAN.ai.md`
+- [x] Part 13: Read `plans/PART13_PLAN.ai.md`
   - Scenario: SCN-013
   - Outcome: Script de página por el puente: escribir sin enviar, leer, estado y diagnóstico
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 14: Read `plans/PART14_PLAN.ai.md`
   - Scenario: SCN-014

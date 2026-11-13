@@ -558,3 +558,15 @@ Artifacts:
 - ChatCouncilNueva.exe -autoprueba: Resultado 35/35, codigo 0 (C:\cc-target\tmp\autoprueba-revision-012-verde.txt; CI run 43367294457)
 - rojo: C:\cc-target\tmp\autoprueba-revision-012-rojo.txt (31/35) y revision-012-rojo-origen.txt
 - B2: C:\cc-target\tmp\b2-log.txt, b2-antes.png, b2-despues-teclas.png
+
+### PART-013
+
+Script de pagina por el puente tipado (paridad PantallaRonda/pagina.js de la Unity): OPERACIONES con lista permitida (nunca enviar), escribir Ok solo con ok:true y sin pisar un borrador, leer_compositor, chat_vacio, estado (EstadoPagina), diagnostico, leer con iframe de otro origen via ICoreWebView2Frame2 (techo 90 s), sondeo de estado cada 1500 ms con techo 5 s, json::escribir y Texto UTF-16 sin perdida. Autoprueba 61/61 codigo 0 en local y en CI; caso de falla borrador de Juan rojo 60/61 -> verde 61/61. Revision ecc:rust-reviewer: reales no finitos -> null (unit test rojo/verde), lista permitida robusta (rojo/verde), patron de iframe vacio rechazado (rojo/verde), marcos muertos podados y sondeo de main con lista Weak solo con paginas de prueba (arreglados sin rojo); leer sin burbuja en error de iframe se mantiene como la Unity. Gates: fmt 0, clippy -D warnings 0, test --workspace 218 passed 5 ignored, cargo tree -p nucleo solo nucleo. Commit 8ac7bea; CI https://github.com/juanfernandezzz/ChatCouncil/actions/runs/43372167011 success.
+
+Artifacts:
+- cargo fmt --all --check: 0
+- cargo clippy --workspace --all-targets -- -D warnings: 0
+- cargo test --workspace: 218 passed, 5 ignored
+- cargo tree -p nucleo -e normal: nucleo v0.1.0
+- ChatCouncilNueva.exe -autoprueba: Resultado 61/61, codigo 0 (C:\cc-target\tmp\autoprueba-013-verde.txt; CI run 43372167011)
+- rojo: C:\cc-target\tmp\autoprueba-013-rojo.txt (60/61), inv-esc-001-rojo.txt, revision-013-rojo-json.txt, revision-013-rojo-lista.txt, revision-013-rojo-marco.txt

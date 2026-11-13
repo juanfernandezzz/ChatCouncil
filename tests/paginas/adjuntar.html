@@ -2,14 +2,16 @@
 <html lang="es">
 <head><meta charset="utf-8"><title>Autoprueba: adjuntar</title></head>
 <body>
-  <!-- Un compositor con su <input type=file>: la página informa nombre y tamaño de lo que se adjuntó. -->
+  <!-- Un compositor sin <input type=file>, como Gemini y Mistral antes de abrir su menú (Paneles.Adjuntar, D25):
+       solo un arrastre soltado encima adjunta. La página informa nombre y tamaño de lo que se soltó. -->
   <main id="chat"></main>
   <textarea id="compositor" rows="6" cols="60"></textarea>
-  <input type="file" id="archivo" accept=".txt,text/plain">
   <p id="adjunto"></p>
   <script>
-    document.getElementById("archivo").addEventListener("change", (e) => {
-      const f = e.target.files[0];
+    document.addEventListener("dragover", (e) => e.preventDefault());
+    document.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const f = e.dataTransfer.files[0];
       document.getElementById("adjunto").textContent = f ? f.name + "|" + f.size : "";
     });
   </script>

@@ -31,3 +31,7 @@ El núcleo es síncrono y su Puerta no se puede mover entre hilos. Armar el info
 ## Qué la revisaría
 
 Que el esqueleto muestre que Slint y wry no comparten bien la ventana, el foco o el bucle de eventos; que el hilo del núcleo agregue una espera visible; o que el script de página no se pueda traer idéntico.
+
+## Enmienda · 2026-11-13 · D25 · Corrige el punto 10
+
+El punto 10 fijaba DOM.setFileInputFiles sin haber leído Paneles.cs. En la Unity el archivo se suelta sobre el compositor con un arrastre simulado (PAN-013), y Gemini, Mistral y Qwen lo necesitan. La app adjunta por arrastre simulado, por un solo camino. Sin compositor, el error literal «No está el compositor: no hay dónde soltar el archivo.».

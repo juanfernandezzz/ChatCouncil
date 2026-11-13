@@ -591,7 +591,6 @@ impl Panel {
         espera: Duration,
     ) -> Result<Valor, String> {
         if !OPERACIONES.contains(&op) {
-            // TEXTO-PENDIENTE
             return Err(format!(
                 "{op} no es una operación permitida del script de página."
             ));
@@ -721,7 +720,6 @@ impl Panel {
     #[cfg(windows)]
     pub fn borrar_datos(&self) -> Respuesta<()> {
         if !self.de_prueba {
-            // TEXTO-PENDIENTE
             return fallida(
                 "Borrar todos los datos del perfil solo se permite en las pruebas: en el perfil real cerraría todas las sesiones.",
             );
@@ -752,47 +750,49 @@ impl Panel {
         self.devtools("Storage.clearDataForOrigin", &String::from_utf8_lossy(&p))
     }
 
-    /// PAN-013: adjunta un archivo al `<input type=file>` que elige el script de página, con
-    /// DOM.setFileInputFiles de DevTools (ADR-0010, punto 10), sin abrir el selector.
+    /// PAN-013 (D25): suelta el archivo sobre el compositor con un arrastre simulado de DevTools
+    /// (dragEnter, dragOver, drop), como Paneles.Adjuntar: Gemini y Mistral no tienen `<input type=file>`
+    /// hasta abrir su menú y Qwen ignora el suyo. Un solo camino.
     #[cfg(windows)]
     pub async fn adjuntar(&self, spec: &str, ruta: &Path) -> Result<(), String> {
         if !ruta.is_file() {
-            // TEXTO-PENDIENTE
             return Err(format!(
                 "No existe el archivo {}: no se puede adjuntar.",
                 ruta.display()
             ));
         }
-        let input = self.correr("inputArchivo", spec, None, ESPERA).await?;
-        if campo(&input, "encontrado") != Some(&Valor::Bool(true)) {
-            return Err("No hay un <input type=file> en la página: no se puede adjuntar.".into());
-        }
-        let selector = texto_de(campo(&input, "selector")).unwrap_or_default();
-        let ruta = std::path::absolute(ruta).map_err(|e| e.to_string())?;
-        let nodo = |respuesta: &str, donde: &[&str]| {
-            let v = json::leer(respuesta);
-            let n = donde
-                .iter()
-                .fold(v.as_ref(), |v, k| v.and_then(|v| campo(v, k)));
-            match n {
-                Some(Valor::Entero(n)) if *n > 0 => Ok(*n),
-                _ => Err(format!("DevTools no dio el nodo del input: {respuesta}")),
-            }
+        let selector = json::leer(spec)
+            .and_then(|s| texto_de(campo(&s, "composer").and_then(|c| campo(c, "selector"))))
+            .unwrap_or_default();
+        let mut js = b"JSON.stringify((() => { const el = document.querySelector(".to_vec();
+        json::escapar(&selector.as_str().into(), &mut js);
+        js.extend_from_slice(
+            b"); if (!el) return null; const r = el.getBoundingClientRect(); \
+const arriba = Math.max(r.top, 0), abajo = Math.min(r.bottom, innerHeight); \
+return { x: Math.round(r.left + r.width / 2), y: Math.round((arriba + abajo) / 2) }; })())",
+        );
+        let crudo = self.ejecutar(&String::from_utf8_lossy(&js)).await?;
+        let punto = json::leer(&crudo).and_then(|v| match v {
+            Valor::Texto(t) => t.como_str().and_then(json::leer),
+            _ => None,
+        });
+        let xy = |k| match punto.as_ref().and_then(|p| campo(p, k)) {
+            Some(Valor::Entero(n)) => Some(*n),
+            _ => None,
         };
-        let documento = self.devtools("DOM.getDocument", "{}").await?;
-        let raiz = nodo(&documento, &["root", "nodeId"])?;
-        let mut p = format!("{{\"nodeId\":{raiz},\"selector\":").into_bytes();
-        json::escapar(&selector.as_str().into(), &mut p);
-        p.push(b'}');
-        let hallado = self
-            .devtools("DOM.querySelector", &String::from_utf8_lossy(&p))
-            .await?;
-        let input = nodo(&hallado, &["nodeId"])?;
-        let mut p = b"{\"files\":[".to_vec();
-        json::escapar(&ruta.to_string_lossy().as_ref().into(), &mut p);
-        p.extend_from_slice(format!("],\"nodeId\":{input}}}").as_bytes());
-        self.devtools("DOM.setFileInputFiles", &String::from_utf8_lossy(&p))
-            .await?;
+        let (Some(x), Some(y)) = (xy("x"), xy("y")) else {
+            return Err("No está el compositor: no hay dónde soltar el archivo.".into());
+        };
+        let ruta = std::path::absolute(ruta).map_err(|e| e.to_string())?;
+        let mut datos = b"{\"items\":[],\"files\":[".to_vec();
+        json::escapar(&ruta.to_string_lossy().as_ref().into(), &mut datos);
+        datos.extend_from_slice(b"],\"dragOperationsMask\":1}");
+        let datos = String::from_utf8_lossy(&datos);
+        for tipo in ["dragEnter", "dragOver", "drop"] {
+            let p = format!("{{\"type\":\"{tipo}\",\"x\":{x},\"y\":{y},\"data\":{datos}}}");
+            self.devtools("Input.dispatchDragEvent", &p).await?;
+            dormir(Duration::from_millis(150)).await?;
+        }
         Ok(())
     }
 

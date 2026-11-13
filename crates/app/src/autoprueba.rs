@@ -983,23 +983,39 @@ async fn panel_basico(
     Ok(())
 }
 
-/// PAN-013: en una página con un input de archivo, la página informa el nombre y el tamaño de lo adjuntado.
+/// PAN-013 (D25): el archivo se suelta sobre el compositor con un arrastre simulado, como Paneles.Adjuntar.
+/// La página informa nombre y tamaño de lo que recibió; adjuntar.html no tiene input, como Gemini.
 async fn adjuntar(a: &mut Anotador, p: &Panel, datos: &Path) -> Result<(), String> {
     let archivo = datos.join("adjunto.txt");
     let contenido = "Archivo de prueba del consejo, con ñ.\n";
     std::fs::write(&archivo, contenido).map_err(|e| e.to_string())?;
+    let esperado = format!("adjunto.txt|{}", contenido.len());
+
+    // Portada de Autoprueba.Adjunto: la página tipo ChatGPT con la spec real.
+    p.navegar(&format!("{ORIGEN}chatgpt.html")).await?;
+    let r = p.adjuntar(&spec("chatgpt")?, &archivo).await;
+    let visto = cadena(
+        &p.ejecutar("document.getElementById('archivo').textContent")
+            .await?,
+    )
+    .unwrap_or_default();
+    a.anotar(
+        r.is_ok() && visto == esperado,
+        "adjunto soltado sobre el compositor (DevTools)",
+        &format!("{r:?}, la página recibió \"{visto}\", se esperaba \"{esperado}\""),
+    );
+
     p.navegar(&format!("{ORIGEN}adjuntar.html")).await?;
     let r = p.adjuntar(SPEC_TEXTAREA, &archivo).await;
-    let informa = cadena(
+    let visto = cadena(
         &p.ejecutar("document.getElementById('adjunto').textContent")
             .await?,
     )
     .unwrap_or_default();
-    let esperado = format!("adjunto.txt|{}", contenido.len());
     a.anotar(
-        r.is_ok() && informa == esperado,
-        "adjuntar un archivo",
-        &format!("{r:?}, la página informa \"{informa}\""),
+        r.is_ok() && visto == esperado,
+        "adjunto soltado en una página sin input de archivo",
+        &format!("{r:?}, la página recibió \"{visto}\""),
     );
 
     // Revisión PART-012, hallazgo 8: un archivo que no existe no se adjunta en silencio.
@@ -1013,13 +1029,21 @@ async fn adjuntar(a: &mut Anotador, p: &Panel, datos: &Path) -> Result<(), Strin
         &format!("{r:?}"),
     );
 
-    // Sin input de archivo, el error literal.
-    p.navegar(&format!("{ORIGEN}textarea.html")).await?;
-    let sin = p.adjuntar(SPEC_TEXTAREA, &archivo).await;
+    // Sin compositor, el error literal de Paneles.Adjuntar.
+    let sin = p
+        .adjuntar(
+            &con_campo(
+                SPEC_TEXTAREA,
+                &["composer", "selector"],
+                Valor::Texto("#no-esta".into()),
+            )?,
+            &archivo,
+        )
+        .await;
     a.anotar(
         sin.as_ref().err().map(String::as_str)
-            == Some("No hay un <input type=file> en la página: no se puede adjuntar."),
-        "adjuntar sin input avisa",
+            == Some("No está el compositor: no hay dónde soltar el archivo."),
+        "adjuntar sin compositor avisa",
         &format!("{sin:?}"),
     );
     Ok(())

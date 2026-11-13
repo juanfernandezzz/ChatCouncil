@@ -456,6 +456,12 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
         "contadores",
         &ui.get_contadores(),
     );
+    // IFZ-003: la clase angosta los dice en una línea corta.
+    a.anotar(
+        ui.get_contadores_angosta() == "6 de 7 enviados · 5 terminados",
+        "contadores en la clase angosta",
+        &ui.get_contadores_angosta(),
+    );
 
     // INV-CAP-002: el estado solo avisa. Con cinco en «Parece terminado» y varios sondeos sin tocar nada,
     // el registro no tiene ninguna Respuesta.

@@ -900,6 +900,14 @@ async fn panel_basico(
         &format!("el estado dice {zoom:?}"),
     );
 
+    // IFZ-005: Ctrl + rueda cambia el zoom del panel, como en la Unity.
+    let zoom_teclas = p.zoom_con_teclas();
+    a.anotar(
+        zoom_teclas == Ok(true),
+        "Ctrl + rueda cambia el zoom",
+        &format!("IsZoomControlEnabled {zoom_teclas:?}"),
+    );
+
     // Contador de navegaciones: una navegación de verdad suma una.
     p.navegar(&format!("{ORIGEN}cierre.html")).await?;
     a.anotar(

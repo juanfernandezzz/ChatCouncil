@@ -156,7 +156,6 @@ fn abrir_en_el_sistema(destino: &str) -> Result<(), String> {
     if r.0 as isize > 32 {
         Ok(())
     } else {
-        // TEXTO-PENDIENTE
         Err(format!("No se pudo abrir {destino}."))
     }
 }
@@ -188,9 +187,8 @@ pub fn texto_de_version(specs_calientes: bool) -> String {
 
 /// IFZ-016: las licencias de los crates enlazados y de las dos fuentes del PDF.
 pub fn texto_de_licencias() -> String {
-    // TEXTO-PENDIENTE: la introducción y la línea de las fuentes.
     let mut t = String::from(
-        "Libertinus Serif: SIL Open Font License 1.1. DejaVu Sans Mono: licencia de Bitstream Vera.\n\nBibliotecas de Rust de esta versión, con su licencia:\n",
+        "ChatCouncil usa estas bibliotecas y fuentes de terceros. Cada una conserva su licencia, que se reproduce abajo.\n\nFuentes del informe en PDF: Libertinus Serif (SIL Open Font License 1.1) y DejaVu Sans Mono (licencia Bitstream Vera).\n\n",
     );
     for l in LICENCIAS.lines().filter(|l| !l.is_empty()) {
         t.push_str(&l.replacen('|', ": ", 1));
@@ -989,7 +987,6 @@ impl Interfaz {
         let nav = match self.navegador() {
             Ok(n) => n,
             Err(e) => {
-                // TEXTO-PENDIENTE
                 let m = format!("No se pudieron abrir los paneles: {e}");
                 self.ui.set_resultado(texto(&m));
                 self.ui.set_resultado_problema(true);
@@ -1021,9 +1018,10 @@ impl Interfaz {
                         ui.invoke_area_cambio();
                     }
                     Err(e) => {
-                        // TEXTO-PENDIENTE
-                        let m =
-                            format!("{}: no se pudo abrir la página: {e}", nombre_proveedor(id));
+                        let m = format!(
+                            "No se pudo abrir la página de {}: {e}",
+                            nombre_proveedor(id)
+                        );
                         ui.set_resultado(texto(&m));
                         ui.set_resultado_problema(true);
                     }
@@ -1822,7 +1820,13 @@ mod pruebas {
     #[test]
     fn las_licencias_traen_las_fuentes_y_los_crates_enlazados() {
         let t = texto_de_licencias();
-        assert!(t.contains("Libertinus Serif") && t.contains("DejaVu Sans Mono"));
+        // D26: la introducción y la línea de las fuentes, literales.
+        assert!(t.starts_with(
+            "ChatCouncil usa estas bibliotecas y fuentes de terceros. Cada una conserva su licencia, que se reproduce abajo.
+
+Fuentes del informe en PDF: Libertinus Serif (SIL Open Font License 1.1) y DejaVu Sans Mono (licencia Bitstream Vera).
+"
+        ));
         assert!(t.lines().any(|l| l.starts_with("slint v")));
         assert!(t.lines().any(|l| l.starts_with("wry v")));
     }

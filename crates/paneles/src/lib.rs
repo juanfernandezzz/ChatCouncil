@@ -321,6 +321,8 @@ fn preparar<'a>(
         constructor
             .with_additional_browser_args(SWITCHES.join(" "))
             .with_profile_name(&comun.perfil)
+            // IFZ-005: wry apaga el zoom con Ctrl + rueda por defecto; la Unity lo deja como WebView2.
+            .with_hotkeys_zoom(true)
             .with_new_window_req_handler(move |_, pedido| {
                 match windows::abrir_emergente(&comun2, pedido) {
                     Ok(panel) => {
@@ -670,6 +672,12 @@ impl Panel {
     #[cfg(windows)]
     pub fn perfil(&self) -> Result<String, String> {
         windows::perfil(&self.webview)
+    }
+
+    /// IFZ-005: si Ctrl + rueda (y Ctrl + y Ctrl -) cambian el zoom de la página, según WebView2.
+    #[cfg(windows)]
+    pub fn zoom_con_teclas(&self) -> Result<bool, String> {
+        windows::zoom_con_teclas(&self.webview)
     }
 
     /// Los paneles se apilan en el mismo rectángulo: el activo pasa arriba, sin ocultar los demás.
@@ -1251,6 +1259,19 @@ mod windows {
                 .map_err(|e| e.to_string())?;
         }
         Ok(webview2_com::take_pwstr(nombre))
+    }
+
+    pub(crate) fn zoom_con_teclas(webview: &WebView) -> Result<bool, String> {
+        let mut si = BOOL::default();
+        // SAFETY: la vista es válida mientras viva el webview; WebView2 escribe en si; se llama en el hilo que creó la vista.
+        unsafe {
+            webview
+                .webview()
+                .Settings()
+                .and_then(|c| c.IsZoomControlEnabled(&mut si))
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(si.as_bool())
     }
 
     pub(crate) fn contenedor(webview: &WebView) -> Result<isize, String> {

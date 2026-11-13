@@ -319,6 +319,7 @@ fn con_interfaz(o: interfaz::Opciones, prueba: Option<Prueba>) -> i32 {
             return 1;
         }
     };
+    let prueba_ninguna = prueba.is_none();
     let codigo = Rc::new(Cell::new(if prueba.is_some() { 1 } else { 0 }));
     if let Some(prueba) = prueba {
         let (c, x) = (codigo.clone(), i.clone());
@@ -328,6 +329,18 @@ fn con_interfaz(o: interfaz::Opciones, prueba: Option<Prueba>) -> i32 {
         }) {
             eprintln!("No se pudo empezar la prueba: {e}");
             return 1;
+        }
+    }
+    // Las pruebas fijan su tamaño con set_size; una ventana maximizada lo ignoraría. Se maximiza ya
+    // mostrada: run() aplica el tamaño preferido al mostrarla y pisaría el maximizado.
+    if prueba_ninguna && area_de_trabajo().is_some_and(|(a, e)| abrir_maximizada(a, e)) {
+        let ui = i.ui.as_weak();
+        if let Err(e) = slint::spawn_local(async move {
+            if let Some(ui) = ui.upgrade() {
+                ui.window().set_maximized(true);
+            }
+        }) {
+            eprintln!("No se pudo maximizar la ventana: {e}");
         }
     }
     if let Err(e) = i.ui.run() {
@@ -365,6 +378,43 @@ fn con_pruebaronda(datos: PathBuf, salida: PathBuf) -> i32 {
             Box::pin(async move { pruebaronda::correr(i, &salida).await })
         })),
     )
+}
+
+/// D26: el tamaño preferido (1280x800 lógicos, más unos 40 de barra de título y bordes) no cabe en el
+/// área de trabajo (píxeles físicos): la ventana abre maximizada, como la Unity nunca se abre más grande
+/// que la pantalla. Si no, la parte fuera de la pantalla no se dibuja y queda una banda vacía.
+fn abrir_maximizada(area: (i32, i32), escala: f32) -> bool {
+    let cabe = |logico: f32, fisico: i32| logico * escala <= fisico as f32;
+    !(cabe(1280.0, area.0) && cabe(840.0, area.1))
+}
+
+/// El área de trabajo del monitor principal (sin la barra de tareas) y la escala del sistema.
+#[cfg(windows)]
+fn area_de_trabajo() -> Option<((i32, i32), f32)> {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::UI::HiDpi::GetDpiForSystem;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SPI_GETWORKAREA, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SystemParametersInfoW,
+    };
+    let mut r = RECT::default();
+    // SAFETY: SPI_GETWORKAREA escribe un RECT en el puntero, que apunta a `r`, vivo durante la llamada.
+    unsafe {
+        SystemParametersInfoW(
+            SPI_GETWORKAREA,
+            0,
+            Some(&mut r as *mut RECT as *mut core::ffi::c_void),
+            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+        )
+    }
+    .ok()?;
+    // SAFETY: sin argumentos ni estado; solo lee los ppp del sistema.
+    let ppp = unsafe { GetDpiForSystem() };
+    Some(((r.right - r.left, r.bottom - r.top), ppp as f32 / 96.0))
+}
+
+#[cfg(not(windows))]
+fn area_de_trabajo() -> Option<((i32, i32), f32)> {
+    None
 }
 
 fn normal(datos: PathBuf, paginas_de_prueba: bool, importar: Option<PathBuf>) -> i32 {
@@ -511,6 +561,18 @@ mod pruebas {
                 fase: 2,
             })
         );
+    }
+
+    #[test]
+    fn abre_maximizada_si_el_tamano_preferido_no_cabe_en_la_pantalla() {
+        // D26: 1366x768 con la barra de tareas deja 1366x728; 800 + 40 no caben.
+        assert!(abrir_maximizada((1366, 728), 1.0));
+        assert!(!abrir_maximizada((1920, 1040), 1.0));
+        // A 150 %: 840 x 1,5 = 1260 > 1040.
+        assert!(abrir_maximizada((1920, 1040), 1.5));
+        assert!(!abrir_maximizada((2560, 1400), 1.25));
+        assert!(abrir_maximizada((1279, 1400), 1.0));
+        assert!(!abrir_maximizada((1280, 840), 1.0));
     }
 
     #[test]

@@ -218,6 +218,7 @@ slint::slint! {
 
     export component Ventana inherits Window {
         title: "ChatCouncil (nueva)";
+        // main.rs abrir_maximizada usa este tamaño: si cambia, cambia allá también.
         preferred-width: 1280px;
         preferred-height: 800px;
         min-width: 360px;
@@ -239,6 +240,9 @@ slint::slint! {
         callback seccion-cambiada(string);
         callback tecla(string);
         out property <bool> oscuro-aplicado: Palette.color-scheme == ColorScheme.dark;
+        // D26: el contenido llena la ventana; la prueba de la interfaz lo mide.
+        out property <length> ancho-contenido: contenido.width;
+        out property <length> alto-contenido: contenido.height;
 
         // ----- Ronda (la mínima de PART-014; PART-015 la conecta)
         in property <[Fila]> filas;
@@ -400,7 +404,7 @@ slint::slint! {
                     Boton { text: "Ayuda"; primario: root.seccion == "ayuda"; clicked => { root.ir("ayuda"); } }
                 }
 
-                Rectangle {
+                contenido := Rectangle {
                     // ===================== Ronda
                     VerticalLayout {
                         visible: root.seccion == "ronda";

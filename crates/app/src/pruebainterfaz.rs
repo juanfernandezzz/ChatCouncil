@@ -490,6 +490,19 @@ async fn fase3(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
         &format!("oscuro: {oscuro}"),
     );
 
+    // D26: el contenido llena la ventana en las dos clases anchas, sin banda vacía abajo ni a la derecha.
+    for (w, h) in [(1280.0, 800.0), (1000.0, 700.0)] {
+        ui.window().set_size(slint::LogicalSize::new(w, h));
+        esperar(300).await;
+        let (aw, ah) = (ui.get_ancho_contenido(), ui.get_alto_contenido());
+        let riel = if ui.get_riel_visible() { 128.0 } else { 0.0 };
+        a.anotar(
+            (aw + riel - w).abs() < 1.0 && (ah - h).abs() < 1.0,
+            "el contenido llena la ventana",
+            &format!("ventana {w}x{h}: contenido {aw}x{ah}, riel {riel}"),
+        );
+    }
+
     // IFZ-013: en la clase compacta no hay riel; el cajón aparta la página y se cierra al elegir.
     hasta(30, || i.panel_visible().is_some()).await;
     ui.window().set_size(slint::LogicalSize::new(500.0, 800.0));

@@ -11,6 +11,8 @@ path = "src/main.rs"
 
 [dependencies]
 nucleo = { path = "../nucleo" }
+# PRU-005: la autoprueba arma el PDF del informe.
+informe-pdf = { path = "../informe-pdf" }
 paneles = { path = "../paneles" }
 slint = { version = "1.18.1", features = ["raw-window-handle-06"] }
 

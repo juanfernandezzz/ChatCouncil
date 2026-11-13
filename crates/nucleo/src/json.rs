@@ -251,6 +251,41 @@ pub fn escapar(t: &Texto, salida: &mut Vec<u8>) {
     salida.push(b'"');
 }
 
+/// El valor como JSON compacto, como JSON.stringify; los textos con `escapar`.
+pub fn escribir(v: &Valor, salida: &mut Vec<u8>) {
+    fn lista<T>(
+        salida: &mut Vec<u8>,
+        abre: u8,
+        cierra: u8,
+        l: &[T],
+        uno: impl Fn(&T, &mut Vec<u8>),
+    ) {
+        salida.push(abre);
+        for (i, x) in l.iter().enumerate() {
+            if i > 0 {
+                salida.push(b',');
+            }
+            uno(x, salida);
+        }
+        salida.push(cierra);
+    }
+    match v {
+        Valor::Nulo => salida.extend_from_slice(b"null"),
+        Valor::Bool(b) => salida.extend_from_slice(if *b { b"true" } else { b"false" }),
+        Valor::Entero(n) => salida.extend_from_slice(n.to_string().as_bytes()),
+        // Como JSON.stringify: NaN e infinito no son JSON y van como null.
+        Valor::Real(r) if !r.is_finite() => salida.extend_from_slice(b"null"),
+        Valor::Real(r) => salida.extend_from_slice(r.to_string().as_bytes()),
+        Valor::Texto(t) => escapar(t, salida),
+        Valor::Lista(l) => lista(salida, b'[', b']', l, escribir),
+        Valor::Objeto(o) => lista(salida, b'{', b'}', o, |(k, v), s| {
+            escapar(k, s);
+            s.push(b':');
+            escribir(v, s);
+        }),
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn vector(nombre: &str) -> Valor {
     let ruta = format!(
@@ -266,6 +301,38 @@ mod pruebas {
 
     fn t(s: &str) -> Texto {
         Texto::from(s)
+    }
+
+    #[test]
+    fn un_real_no_finito_se_escribe_null_como_json_stringify() {
+        // Revisión PART-013, hallazgo 1: NaN e infinito no son JSON; la página no podría leer la spec.
+        for r in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let mut b = Vec::new();
+            escribir(&Valor::Lista(vec![Valor::Real(r)]), &mut b);
+            assert_eq!(b, b"[null]");
+        }
+    }
+
+    #[test]
+    fn escribir_y_leer_dan_el_mismo_valor() {
+        let suelto = Texto::desde_utf16(&[0x61, 0xD800, 0x62]);
+        let v = Valor::Objeto(vec![
+            (
+                t("a"),
+                Valor::Lista(vec![Valor::Nulo, Valor::Bool(true), Valor::Entero(-3)]),
+            ),
+            (t("b\"c"), Valor::Texto(suelto)),
+            (t("r"), Valor::Real(0.5)),
+            (t("o"), Valor::Objeto(vec![])),
+        ]);
+        let mut s = Vec::new();
+        escribir(&v, &mut s);
+        let s = String::from_utf8(s).unwrap();
+        assert_eq!(
+            s,
+            r#"{"a":[null,true,-3],"b\"c":"a\ud800b","r":0.5,"o":{}}"#
+        );
+        assert_eq!(leer(&s), Some(v));
     }
 
     #[test]

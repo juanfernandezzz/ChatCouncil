@@ -4,7 +4,7 @@ mod hilo;
 use std::cell::{Cell, RefCell};
 use std::hash::{BuildHasher, RandomState};
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -231,6 +231,22 @@ fn ppp_de_la_ventana(ventana: &slint::Window) -> Result<u32, String> {
     Ok(unsafe { windows::Win32::UI::HiDpi::GetDpiForWindow(hwnd) })
 }
 
+/// La spec de un proveedor, tal cual specs.json, en JSON compacto.
+fn spec_de(proveedor: &str) -> Option<String> {
+    let todo = nucleo::json::leer(nucleo::datos::SPECS_JSON)?;
+    let campo = |v: &nucleo::json::Valor, k: &str| match v {
+        nucleo::json::Valor::Objeto(o) => o
+            .iter()
+            .find(|(n, _)| n.como_str() == Some(k))
+            .map(|(_, v)| v.clone()),
+        _ => None,
+    };
+    let s = campo(&campo(&todo, "specs")?, proveedor)?;
+    let mut b = Vec::new();
+    nucleo::json::escribir(&s, &mut b);
+    String::from_utf8(b).ok()
+}
+
 fn escribir_paginas_de_prueba(datos: &Path) -> Result<PathBuf, String> {
     let carpeta =
         std::path::absolute(datos.join("paginas-de-prueba")).map_err(|e| e.to_string())?;
@@ -300,7 +316,7 @@ fn area(ui: &Ventana) -> (f64, f64, f64, f64) {
 
 /// El primer panel ocupa el área; los demás van fuera de la ventana con su tamaño, no a 0×0, para que
 /// una SPA siga montando (PantallaRonda.Ubicar).
-fn ubicar(ui: &Ventana, paneles: &[Panel]) {
+fn ubicar(ui: &Ventana, paneles: &[Rc<Panel>]) {
     let (x, y, ancho, alto) = area(ui);
     for (i, p) in paneles.iter().enumerate() {
         let r = if i == 0 {
@@ -323,7 +339,7 @@ fn normal(datos: PathBuf, paginas_de_prueba: bool) -> i32 {
         }
     };
     let _nucleo = HiloNucleo::iniciar(datos.clone());
-    let abiertos: Rc<RefCell<Vec<Panel>>> = Rc::default();
+    let abiertos: Rc<RefCell<Vec<Rc<Panel>>>> = Rc::default();
 
     let (w, a) = (ui.as_weak(), abiertos.clone());
     ui.on_area_cambio(move || {
@@ -352,13 +368,51 @@ fn normal(datos: PathBuf, paginas_de_prueba: bool) -> i32 {
             for url in &urls {
                 let panel = crear_panel(&navegador, ui.window(), "proveedores", area(&ui)).await?;
                 cargas.push(panel.navegar(url));
-                a.borrow_mut().push(panel);
+                a.borrow_mut().push(Rc::new(panel));
                 ubicar(&ui, &a.borrow());
             }
             // Como Paneles.EsperarCarga: una página que tarda no descarta su panel.
             for (carga, url) in cargas.into_iter().zip(&urls) {
                 if let Err(e) = carga.await {
                     eprintln!("{url}: {e}");
+                }
+            }
+            // CAP-014: el sondeo de cada página cada 1,5 s, en el reloj único de paneles. La lista se arma una vez:
+            // id, spec y el panel débil, así un panel cerrado sale solo y ninguno se empareja con otra spec.
+            // Revisión PART-013, hallazgos 2 a 5. shortcut: solo las páginas de prueba tienen id y spec por su
+            // nombre (las que no son de un proveedor van con la de chatgpt, como CompositorRecortado); desde
+            // PART-014 el id y la spec salen del proveedor de cada panel.
+            let sondeados: Vec<(String, Weak<Panel>, String)> = if paginas_de_prueba {
+                PAGINAS_LOCALES
+                    .iter()
+                    .zip(a.borrow().iter())
+                    .map(|(pagina, p)| {
+                        let id = pagina.trim_end_matches(".html").to_string();
+                        let spec = spec_de(&id)
+                            .or_else(|| spec_de("chatgpt"))
+                            .unwrap_or_default();
+                        (id, Rc::downgrade(p), spec)
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            // shortcut: los estados todavía no se muestran; desde PART-014 la interfaz los lee de aquí.
+            let mut estados = std::collections::HashMap::new();
+            while !sondeados.is_empty() {
+                let vivos: Vec<(&str, Rc<Panel>, &str)> = sondeados
+                    .iter()
+                    .filter_map(|(id, p, s)| Some((id.as_str(), p.upgrade()?, s.as_str())))
+                    .collect();
+                if vivos.is_empty() {
+                    break;
+                }
+                let lista: Vec<(&str, &Panel, &str)> =
+                    vivos.iter().map(|(id, p, s)| (*id, &**p, *s)).collect();
+                paneles::sondear(&lista, &mut estados).await;
+                if paneles::dormir(paneles::SONDEO).await.is_err() {
+                    eprintln!("El reloj de los paneles se detuvo: el sondeo de estado se corta.");
+                    break;
                 }
             }
             Ok::<_, String>(())

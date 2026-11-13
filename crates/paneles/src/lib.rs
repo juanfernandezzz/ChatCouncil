@@ -3,7 +3,7 @@
 //! almacenamiento (ADR-0010, puntos 7 y 8): fuera de este crate solo existen las funciones de abajo.
 
 use std::cell::{Cell, RefCell};
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -13,6 +13,7 @@ use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
 
 use nucleo::json::{self, Valor};
+use nucleo::puerta::Lectura;
 use nucleo::texto::Texto;
 use wry::dpi::{LogicalPosition, LogicalSize};
 pub use wry::raw_window_handle;
@@ -37,6 +38,39 @@ const TECHO_EJECUTAR: Duration = Duration::from_secs(90);
 /// La espera de una navegación (Paneles.EsperaMs) y, por defecto, de una operación del script de página.
 const ESPERA: Duration = Duration::from_secs(30);
 pub const ESPERA_CORRER: Duration = ESPERA;
+/// Los techos de PantallaRonda.cs: escribir la pregunta 60 s (la operación, 90 s), leer 60 s, estado y chat
+/// vacío 5 s, diagnóstico 30 s.
+pub const ESPERA_ESCRIBIR: Duration = Duration::from_secs(60);
+pub const ESPERA_ESCRIBIR_OPERACION: Duration = Duration::from_secs(90);
+const ESPERA_LEER: Duration = Duration::from_secs(60);
+const ESPERA_CORTA: Duration = Duration::from_secs(5);
+const ESPERA_DIAGNOSTICO: Duration = Duration::from_secs(30);
+/// CAP-014: cada cuánto se pregunta a cada página si sigue respondiendo (PantallaRonda.SondeoMs).
+pub const SONDEO: Duration = Duration::from_millis(1500);
+
+/// INV-ESC-001: las únicas operaciones del script de página que la app pide. Ninguna envía.
+pub const OPERACIONES: [&str; 7] = [
+    "escribir",
+    "leer",
+    "leerCompositor",
+    "chatVacio",
+    "estado",
+    "diagnostico",
+    "inputArchivo",
+];
+
+/// El lector del informe en un iframe, tal cual Paneles.LectorInforme de la Unity.
+const LECTOR_INFORME: &str = "(sel) => { const docs = [document]; for (const f of document.querySelectorAll('iframe')) { try { if (f.contentDocument) docs.push(f.contentDocument); } catch (e) {} } for (const d of docs) { const el = Array.from(d.querySelectorAll(sel)).pop(); if (!el) continue; const c = el.cloneNode(true); c.querySelectorAll('style, script').forEach((n) => n.remove()); const t = c.textContent || ''; if (t.trim().length > 0) return { texto: t, html: el.outerHTML }; } return null; }";
+
+/// CAP-014: lo que la página dice de su generación. Sin dato de la página no hay estado (INV-CAP-003).
+#[derive(Debug, Clone, PartialEq)]
+pub struct EstadoPagina {
+    pub generando: Option<bool>,
+    /// «observado» o «deducido»; None mientras no hay fin.
+    pub fin: Option<String>,
+    /// El zoom que la página informa; None si no lo dijo (PantallaRonda toma 100).
+    pub zoom: Option<i64>,
+}
 
 // ------------------------------------------------------------------ esperas sin tokio (ADR-0010, 2)
 
@@ -320,6 +354,8 @@ fn enganchar(
 ) -> Result<Panel, String> {
     let nav = Rc::<RefCell<Navegaciones>>::default();
     #[cfg(windows)]
+    let marcos = windows::seguir_marcos(&webview)?;
+    #[cfg(windows)]
     let contenedor = {
         windows::seguir_navegaciones(&webview, &nav)?;
         windows::teclado(&webview, comun.padre)?;
@@ -340,6 +376,8 @@ fn enganchar(
         emergente,
         contenedor,
         de_prueba: comun.paginas_de_prueba.is_some(),
+        #[cfg(windows)]
+        marcos,
         _ventana: ventana,
         _contexto: comun.contexto.clone(),
     })
@@ -405,6 +443,9 @@ pub struct Panel {
     contenedor: isize,
     /// Abierto con las páginas de prueba: solo así se puede borrar el perfil entero.
     de_prueba: bool,
+    /// Los iframes del marco principal con su URL, para leer el informe en uno de otro origen.
+    #[cfg(windows)]
+    marcos: windows::Marcos,
     /// Revisión PART-011, hallazgo 5: los campos se sueltan en orden, así el contexto sobrevive al webview,
     /// y la ventana propia de una emergente se cierra después de soltar su webview.
     #[cfg(windows)]
@@ -546,9 +587,15 @@ impl Panel {
         &self,
         op: &str,
         spec: &str,
-        texto: Option<&str>,
+        texto: Option<&Texto>,
         espera: Duration,
     ) -> Result<Valor, String> {
+        if !OPERACIONES.contains(&op) {
+            // TEXTO-PENDIENTE
+            return Err(format!(
+                "{op} no es una operación permitida del script de página."
+            ));
+        }
         // Revisión PART-011, hallazgo 3: cada script de adentro corta en lo que le queda a la operación,
         // así una página colgada no estira la espera hasta el techo de 90 s de cada ejecutar.
         let limite = Instant::now() + espera;
@@ -573,7 +620,8 @@ impl Panel {
         pedido.extend_from_slice(spec.as_bytes());
         if let Some(t) = texto {
             pedido.extend_from_slice(b",\"texto\":");
-            json::escapar(&t.into(), &mut pedido);
+            // escapar deja cada surrogate suelto como \uXXXX: el pedido es UTF-8 válido y nada se pierde.
+            json::escapar(t, &mut pedido);
         }
         pedido.push(b'}');
         let pedir = llamada("pedir", &String::from_utf8_lossy(&pedido));
@@ -748,11 +796,220 @@ impl Panel {
         Ok(())
     }
 
+    /// ESC-001 a ESC-004: escribe sin enviar. El script no pisa un borrador y verifica que el texto asentó.
+    pub async fn escribir(
+        &self,
+        spec: &str,
+        texto: &Texto,
+        espera: Duration,
+    ) -> Result<(), String> {
+        let r = self.correr("escribir", spec, Some(texto), espera).await?;
+        // El script no lanza: responde ok:false con su error (compositor ausente, borrador, texto que no asentó).
+        if campo(&r, "ok") == Some(&Valor::Bool(true)) {
+            Ok(())
+        } else {
+            Err(texto_de(campo(&r, "error"))
+                .unwrap_or_else(|| format!("escribir no dijo ok: {r:?}")))
+        }
+    }
+
+    /// El texto del compositor, sin pérdida; None si no está.
+    pub async fn leer_compositor(&self, spec: &str) -> Result<Option<Texto>, String> {
+        Ok(
+            match self.correr("leerCompositor", spec, None, ESPERA).await? {
+                Valor::Texto(t) => Some(t),
+                _ => None,
+            },
+        )
+    }
+
+    /// Si el chat no tiene mensajes; None si la página no lo puede decir.
+    pub async fn chat_vacio(&self, spec: &str) -> Result<Option<bool>, String> {
+        Ok(
+            match self.correr("chatVacio", spec, None, ESPERA_CORTA).await? {
+                Valor::Bool(b) => Some(b),
+                _ => None,
+            },
+        )
+    }
+
+    /// CAP-014: generando, fin y zoom, como los da la página.
+    pub async fn estado(&self, spec: &str) -> Result<EstadoPagina, String> {
+        let e = self.correr("estado", spec, None, ESPERA_CORTA).await?;
+        Ok(EstadoPagina {
+            generando: bool_de(campo(&e, "generando")),
+            fin: texto_de(campo(&e, "fin")),
+            zoom: entero_de(campo(&e, "zoom")),
+        })
+    }
+
+    /// DIA-001: el diagnóstico de selectores, de solo lectura, tal como lo arma el script.
+    pub async fn diagnostico(&self, spec: &str) -> Result<Valor, String> {
+        self.correr("diagnostico", spec, None, ESPERA_DIAGNOSTICO)
+            .await
+    }
+
+    /// CAP-001 y CAP-002, como PantallaRonda.Leer: la respuesta con su html crudo y, si el informe está en un
+    /// iframe, el informe a continuación. Un fallo queda en el error de la lectura.
+    #[cfg(windows)]
+    pub async fn leer(&self, id: &str, spec: &str) -> Lectura {
+        let con_fallo = |e: String| Lectura {
+            id: id.into(),
+            generating: Some(false),
+            error: Some(e.into()),
+            ..Default::default()
+        };
+        let j = match self.correr("leer", spec, None, ESPERA_LEER).await {
+            Ok(j) => j,
+            Err(e) => return con_fallo(e),
+        };
+        let t = |k: &str| match campo(&j, k) {
+            Some(Valor::Texto(t)) => Some(t.clone()),
+            _ => None,
+        };
+        let mut l = Lectura {
+            id: id.into(),
+            text: t("text").unwrap_or_default(),
+            generating: bool_de(campo(&j, "generating")),
+            completion_kind: texto_de(campo(&j, "completionKind")),
+            quiescence_ms: entero_de(campo(&j, "quiescenceMs")),
+            model_label: t("modelLabel"),
+            user_text: t("userText"),
+            fuentes_href: entero_de(campo(&j, "fuentesHref")),
+            html: t("html"),
+            error: t("error"),
+        };
+        if campo(&j, "informeEnIframe") != Some(&Valor::Bool(true)) {
+            return l;
+        }
+        match self.leer_informe_en_iframe(spec).await {
+            Err(e) => con_fallo(e),
+            Ok(Some((texto, html))) if !en_blanco(&texto) => {
+                l.text = if en_blanco(&l.text) {
+                    texto
+                } else {
+                    unir(&[&l.text, &Texto::from("\n\n"), &texto])
+                };
+                let antes = l.html.take().unwrap_or_default();
+                l.html = Some(unir(&[&antes, &Texto::from("\n"), &html]));
+                l
+            }
+            Ok(_) => {
+                let frame = json::leer(spec)
+                    .and_then(|s| texto_de(campo(campo(&s, "informeEnIframe")?, "frameUrl")))
+                    .unwrap_or_default();
+                l.con_error(format!(
+                    "el informe de {} está en un iframe ({frame}) que no se pudo leer: la burbuja sola no es la respuesta",
+                    nucleo::dominio::nombre_proveedor(id)
+                ))
+            }
+        }
+    }
+
+    /// CAP-002, como LeerInformeEnIframe de Paneles.cs: el lector corre en el último iframe vivo cuya URL
+    /// contiene frameUrl, también de otro origen. Solo lee. None si la spec no lo pide o no hay ese iframe.
+    #[cfg(windows)]
+    pub async fn leer_informe_en_iframe(
+        &self,
+        spec: &str,
+    ) -> Result<Option<(Texto, Texto)>, String> {
+        let Some(cfg) = json::leer(spec).and_then(|s| campo(&s, "informeEnIframe").cloned()) else {
+            return Ok(None);
+        };
+        let frame = texto_de(campo(&cfg, "frameUrl")).unwrap_or_default();
+        let contenido = match campo(&cfg, "contenido") {
+            Some(Valor::Texto(t)) => t.clone(),
+            _ => Texto::default(),
+        };
+        let mut js = format!("JSON.stringify(({LECTOR_INFORME})(").into_bytes();
+        json::escapar(&contenido, &mut js);
+        js.extend_from_slice(b"))");
+        let Some(r) =
+            windows::ejecutar_en_iframe(&self.marcos, &frame, &String::from_utf8_lossy(&js))?
+        else {
+            return Ok(None);
+        };
+        let crudo = r
+            .con_techo(
+                TECHO_EJECUTAR,
+                format!(
+                    "No se pudo leer el iframe: sin respuesta en {} s.",
+                    segundos(TECHO_EJECUTAR)
+                ),
+            )
+            .await?;
+        let v = json::leer(&crudo)
+            .and_then(|v| match v {
+                Valor::Texto(t) => t.como_str().and_then(json::leer),
+                _ => None,
+            })
+            .ok_or_else(|| format!("el iframe respondió algo que no es JSON: {crudo}"))?;
+        let t = |k: &str| match campo(&v, k) {
+            Some(Valor::Texto(t)) => t.clone(),
+            _ => Texto::default(),
+        };
+        Ok((v != Valor::Nulo).then(|| (t("texto"), t("html"))))
+    }
+
     #[cfg(windows)]
     fn vista(&self) -> webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2 {
         use wry::WebViewExtWindows;
         self.webview.webview()
     }
+}
+
+/// CAP-014 e INV-CAP-003, una vuelta de PantallaRonda.Sondear: pide el estado a cada página (techo 5 s) y la
+/// que no responde pierde su dato, en vez de quedarse con uno viejo.
+pub async fn sondear(
+    paneles: &[(&str, &Panel, &str)],
+    estados: &mut HashMap<String, EstadoPagina>,
+) {
+    for (id, panel, spec) in paneles {
+        match panel.estado(spec).await {
+            Ok(e) => {
+                estados.insert(id.to_string(), e);
+            }
+            Err(_) => {
+                estados.remove(*id);
+            }
+        }
+    }
+}
+
+fn bool_de(v: Option<&Valor>) -> Option<bool> {
+    match v {
+        Some(Valor::Bool(b)) => Some(*b),
+        _ => None,
+    }
+}
+
+/// Como (int?) de Newtonsoft: un real se redondea.
+fn entero_de(v: Option<&Valor>) -> Option<i64> {
+    match v {
+        Some(Valor::Entero(n)) => Some(*n),
+        Some(Valor::Real(r)) => Some(r.round() as i64),
+        _ => None,
+    }
+}
+
+/// El iframe sirve si está vivo y su URL contiene el patrón de la spec, como CC_EjecutarEnIframe.
+/// Un patrón vacío no sirve: contains("") daría cualquier iframe.
+#[cfg(any(windows, test))]
+fn marco_sirve(vivo: bool, url: &str, patron: &str) -> bool {
+    vivo && !patron.is_empty() && url.contains(patron)
+}
+
+/// string.IsNullOrWhiteSpace.
+#[cfg(windows)]
+fn en_blanco(t: &Texto) -> bool {
+    t.para_mostrar().trim().is_empty()
+}
+
+/// La concatenación de string de C#, por unidades UTF-16: un surrogate suelto se conserva.
+#[cfg(windows)]
+fn unir(partes: &[&Texto]) -> Texto {
+    let u: Vec<u16> = partes.iter().flat_map(|t| t.a_utf16()).collect();
+    Texto::desde_utf16(&u)
 }
 
 /// El origen de una URL (esquema y autoridad), como Uri.GetLeftPart(UriPartial.Authority).
@@ -808,7 +1065,7 @@ fn texto_de(v: Option<&Valor>) -> Option<String> {
 
 #[cfg(windows)]
 mod windows {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::ffi::c_void;
     use std::num::NonZeroIsize;
     use std::path::Path;
@@ -838,14 +1095,15 @@ mod windows {
     use ::windows::core::{BOOL, HSTRING, Interface, PWSTR, w};
     use webview2_com::Microsoft::Web::WebView2::Win32::{
         COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW, COREWEBVIEW2_KEY_EVENT_KIND,
-        COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN, ICoreWebView2_3, ICoreWebView2_13,
-        ICoreWebView2Profile2,
+        COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN, ICoreWebView2_3, ICoreWebView2_4, ICoreWebView2_13,
+        ICoreWebView2Frame2, ICoreWebView2Profile2,
     };
     use webview2_com::{
         AcceleratorKeyPressedEventHandler, CallDevToolsProtocolMethodCompletedHandler,
-        ClearBrowsingDataCompletedHandler, MoveFocusRequestedEventHandler,
-        NavigationCompletedEventHandler, NavigationStartingEventHandler,
-        WindowCloseRequestedEventHandler,
+        ClearBrowsingDataCompletedHandler, ExecuteScriptCompletedHandler, FrameCreatedEventHandler,
+        FrameDestroyedEventHandler, FrameNavigationStartingEventHandler,
+        MoveFocusRequestedEventHandler, NavigationCompletedEventHandler,
+        NavigationStartingEventHandler, WindowCloseRequestedEventHandler,
     };
     use wry::raw_window_handle::{
         HandleError, HasWindowHandle, RawWindowHandle, Win32WindowHandle, WindowHandle,
@@ -1256,6 +1514,98 @@ mod windows {
         .map_err(|e| e.to_string())
     }
 
+    /// Un iframe del marco principal con la última URL a la que navegó (struct Marco de panel.cpp).
+    pub(crate) struct Marco {
+        marco: ICoreWebView2Frame2,
+        url: RefCell<String>,
+        vivo: Cell<bool>,
+    }
+
+    pub(crate) type Marcos = Rc<RefCell<Vec<Rc<Marco>>>>;
+
+    /// FrameCreated de panel.cpp: cada iframe nuevo del marco principal, con su URL y si sigue vivo.
+    pub(crate) fn seguir_marcos(webview: &WebView) -> Result<Marcos, String> {
+        let vista: ICoreWebView2_4 = webview.webview().cast().map_err(|e| e.to_string())?;
+        let marcos = Marcos::default();
+        let m = marcos.clone();
+        let creado = FrameCreatedEventHandler::create(Box::new(move |_, args| {
+            let Some(args) = args else { return Ok(()) };
+            // SAFETY: args es válido mientras dura el evento.
+            let frame = unsafe { args.Frame()? };
+            let Ok(marco) = frame.cast::<ICoreWebView2Frame2>() else {
+                return Ok(());
+            };
+            let nuevo = Rc::new(Marco {
+                marco: marco.clone(),
+                url: RefCell::default(),
+                vivo: Cell::new(true),
+            });
+            // Débiles: el iframe es dueño de sus manejadores y el Marco es dueño del iframe; uno fuerte haría un ciclo.
+            let n = Rc::downgrade(&nuevo);
+            let empieza = FrameNavigationStartingEventHandler::create(Box::new(move |_, args| {
+                if let (Some(args), Some(n)) = (args, n.upgrade()) {
+                    let mut uri = PWSTR::null();
+                    // SAFETY: args es válido mientras dura el evento; take_pwstr libera la cadena de WebView2.
+                    *n.url.borrow_mut() = unsafe {
+                        args.Uri(&mut uri)?;
+                        webview2_com::take_pwstr(uri)
+                    };
+                }
+                Ok(())
+            }));
+            let n = Rc::downgrade(&nuevo);
+            let fin = FrameDestroyedEventHandler::create(Box::new(move |_, _| {
+                if let Some(n) = n.upgrade() {
+                    n.vivo.set(false);
+                }
+                Ok(())
+            }));
+            let mut token = 0i64;
+            // SAFETY: el iframe vive mientras lo tenga su Marco.
+            unsafe {
+                marco.add_NavigationStarting(&empieza, &mut token)?;
+                frame.add_Destroyed(&fin, &mut token)?;
+            }
+            let mut lista = m.borrow_mut();
+            lista.retain(|m| m.vivo.get());
+            lista.push(nuevo);
+            Ok(())
+        }));
+        let mut token = 0i64;
+        // SAFETY: la vista vive tanto como el webview, que es dueño del manejador.
+        unsafe { vista.add_FrameCreated(&creado, &mut token) }.map_err(|e| e.to_string())?;
+        Ok(marcos)
+    }
+
+    /// CC_EjecutarEnIframe: ejecuta en el último iframe vivo cuya URL contiene `url_contiene`; None si no hay.
+    pub(crate) fn ejecutar_en_iframe(
+        marcos: &Marcos,
+        url_contiene: &str,
+        js: &str,
+    ) -> Result<Option<Respuesta<String>>, String> {
+        // Los iframes destruidos sueltan aquí su referencia COM, no solo al crearse otro.
+        marcos.borrow_mut().retain(|m| m.vivo.get());
+        let marco = marcos
+            .borrow()
+            .iter()
+            .rev()
+            .find(|m| super::marco_sirve(m.vivo.get(), &m.url.borrow(), url_contiene))
+            .cloned();
+        let Some(m) = marco else { return Ok(None) };
+        let (enviar, respuesta) = canal();
+        let listo = ExecuteScriptCompletedHandler::create(Box::new(move |r, json| {
+            match r {
+                Ok(()) => enviar.enviar(json),
+                Err(e) => enviar.fallar(format!("ExecuteScript en el iframe falló: {e}")),
+            }
+            Ok(())
+        }));
+        // SAFETY: el HSTRING vive durante la llamada; el iframe vive mientras lo tenga su Marco.
+        unsafe { m.marco.ExecuteScript(&HSTRING::from(js), &listo) }
+            .map_err(|e| format!("ExecuteScript en el iframe falló: {e}"))?;
+        Ok(Some(respuesta))
+    }
+
     pub(crate) fn devtools(
         webview: &WebView,
         metodo: &str,
@@ -1321,6 +1671,73 @@ mod pruebas {
             sha,
             "39b048ce1545cf1d6fcb16f3c4e55f65c882d9cd9dc0d1dea261ed8daec15161"
         );
+    }
+
+    #[test]
+    fn la_app_solo_pide_operaciones_permitidas() {
+        // INV-ESC-001: la lista es exactamente la de pagina.js, ninguna envía, y todo correr del código pide una de ellas.
+        let en_pagina: Vec<&str> = PAGINA_JS
+            .split("case \"")
+            .skip(1)
+            .filter_map(|c| c.split('"').next())
+            .collect();
+        assert_eq!(en_pagina, OPERACIONES);
+        assert!(
+            OPERACIONES
+                .iter()
+                .all(|o| !o.to_lowercase().contains("enviar"))
+        );
+        let fuentes = [
+            include_str!("lib.rs"),
+            include_str!("../../app/src/autoprueba.rs"),
+            include_str!("../../app/src/main.rs"),
+        ];
+        // Revisión PART-013, hallazgo 7: se saltan los espacios y saltos que deja rustfmt y se exige un literal.
+        // Los patrones se arman en partes para que esta misma prueba no se encuentre a sí misma.
+        let literales = |f: &'static str, patron: &str| -> Vec<&'static str> {
+            f.match_indices(patron)
+                .filter(|(i, _)| !f[..*i].ends_with("fn "))
+                .map(|(i, _)| {
+                    let c = f[i + patron.len()..].trim_start();
+                    assert!(
+                        c.starts_with('"'),
+                        "{patron} sin un literal: {}",
+                        c.chars().take(40).collect::<String>()
+                    );
+                    c[1..].split('"').next().unwrap_or_default()
+                })
+                .collect()
+        };
+        let mut pedidas = 0;
+        for f in fuentes {
+            for op in literales(f, concat!(".corr", "er(")) {
+                assert!(OPERACIONES.contains(&op), "{op} no está en OPERACIONES");
+                pedidas += 1;
+            }
+            for funcion in literales(f, concat!("llam", "ada(")) {
+                assert!(
+                    ["pedir", "consultar"].contains(&funcion),
+                    "window.__cc.{funcion} no está permitida"
+                );
+            }
+        }
+        assert!(pedidas > 0);
+    }
+
+    #[test]
+    fn un_patron_vacio_no_elige_cualquier_iframe() {
+        // Revisión PART-013, hallazgo 8: sin frameUrl no se lee el último iframe que haya (un anuncio, por ejemplo).
+        assert!(!marco_sirve(true, "https://anuncios.test/x.html", ""));
+        assert!(marco_sirve(
+            true,
+            "https://cc-otro.test/informe.html",
+            "cc-otro.test"
+        ));
+        assert!(!marco_sirve(
+            false,
+            "https://cc-otro.test/informe.html",
+            "cc-otro.test"
+        ));
     }
 
     struct Despertador(std::thread::Thread);

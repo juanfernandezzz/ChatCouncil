@@ -1,12 +1,14 @@
 //! PRU-001: `-autoprueba RUTA`, con el formato de Autoprueba.cs de la Unity y las comprobaciones que
 //! el esqueleto ya puede hacer. Todo en una carpeta temporal nueva (INV-PRU-001).
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::rc::{Rc, Weak};
 use std::time::{Duration, Instant};
 
 use nucleo::json::Valor;
-use paneles::{ESPERA_CORRER, Navegador, Panel, SWITCHES};
+use nucleo::texto::Texto;
+use paneles::{ESPERA_CORRER, ESPERA_ESCRIBIR, Navegador, Panel, SWITCHES};
 
 use crate::hilo::HiloNucleo;
 
@@ -129,14 +131,630 @@ async fn cuerpo(
 
     let r = panel_basico(a, &panel, &version, &navegador, ventana, f64::from(escala)).await;
     a.grupo("panel", r);
+    let r = escritura(a, &navegador, ventana).await;
+    a.grupo("escritura", r);
+    let r = lectura(a, &navegador, ventana).await;
+    a.grupo("lectura", r);
+    let r = iframe_de_otro_origen(a, &navegador, ventana).await;
+    a.grupo("iframe de otro origen", r);
     let r = adjuntar(a, &panel, datos).await;
     a.grupo("adjuntar", r);
+    let r = compositor_recortado(a, &navegador, ventana).await;
+    a.grupo("compositor recortado", r);
+    let r = pdf(a, datos);
+    a.grupo("pdf", r);
     let r = nucleo(a, datos).await;
     a.grupo("núcleo", r);
     let r = perfiles(a, &panel, &navegador, ventana, datos).await;
     a.grupo("perfiles", r);
     let r = techo_externo(a, &panel, &navegador, ventana).await;
     a.grupo("techo externo", r);
+    let r = surrogate_suelto(a, &panel).await;
+    a.grupo("surrogate suelto", r);
+    let r = sondeo(a, &navegador, ventana).await;
+    a.grupo("sondeo", r);
+    Ok(())
+}
+
+/// Spec de Autoprueba.cs: la de un proveedor, tal cual specs.json.
+fn spec(proveedor: &str) -> Result<String, String> {
+    crate::spec_de(proveedor).ok_or_else(|| format!("specs.json no tiene la spec de {proveedor}"))
+}
+
+/// La spec con un campo cambiado, como malo["composer"]["selector"] = … en la Unity.
+fn con_campo(spec: &str, ruta: &[&str], valor: Valor) -> Result<String, String> {
+    let mut v = nucleo::json::leer(spec).ok_or("la spec no es JSON")?;
+    let mut c = &mut v;
+    for k in ruta {
+        let Valor::Objeto(o) = c else {
+            return Err(format!("la spec no es un objeto antes de {k}"));
+        };
+        c = &mut o
+            .iter_mut()
+            .find(|(n, _)| n.como_str() == Some(k))
+            .ok_or_else(|| format!("la spec no tiene {k}"))?
+            .1;
+    }
+    *c = valor;
+    Ok(json(&v))
+}
+
+/// El valor como JSON compacto, como ToString(Formatting.None).
+fn json(v: &Valor) -> String {
+    let mut b = Vec::new();
+    nucleo::json::escribir(v, &mut b);
+    String::from_utf8_lossy(&b).into_owned()
+}
+
+/// El campo al final de la ruta, como l["archivos"]["leidos"].
+fn en<'a>(v: &'a Valor, ruta: &[&str]) -> Option<&'a Valor> {
+    ruta.iter().try_fold(v, |v, k| match v {
+        Valor::Objeto(o) => o
+            .iter()
+            .find(|(n, _)| n.como_str() == Some(k))
+            .map(|(_, v)| v),
+        _ => None,
+    })
+}
+
+/// (string) de un campo: el texto, o "" si falta o no es texto.
+fn txt(v: Option<&Valor>) -> String {
+    match v {
+        Some(Valor::Texto(t)) => t.para_mostrar().into_owned(),
+        _ => String::new(),
+    }
+}
+
+fn num(v: Option<&Valor>) -> Option<i64> {
+    match v {
+        Some(Valor::Entero(n)) => Some(*n),
+        _ => None,
+    }
+}
+
+fn mostrar(t: &Option<Texto>) -> String {
+    t.as_ref()
+        .map_or("null".into(), |t| t.para_mostrar().into_owned())
+}
+
+/// Largo en unidades UTF-16, como string.Length.
+fn largo(t: &Texto) -> usize {
+    t.a_utf16().len()
+}
+
+/// Un panel nuevo en su perfil, con una página de prueba cargada (Paneles.Crear).
+async fn abrir(
+    navegador: &Navegador,
+    ventana: &slint::Window,
+    perfil: &str,
+    pagina: &str,
+) -> Result<Panel, String> {
+    let p = crate::crear_panel(navegador, ventana, perfil, (0.0, 0.0, 800.0, 600.0)).await?;
+    p.navegar(&format!("{ORIGEN}{pagina}")).await?;
+    Ok(p)
+}
+
+/// ESC-001 a ESC-004, como Autoprueba.Escritura: escribir y leer de vuelta en cada tipo de compositor.
+async fn escritura(
+    a: &mut Anotador,
+    navegador: &Navegador,
+    ventana: &slint::Window,
+) -> Result<(), String> {
+    let base = "Línea uno, con ñ: áéíóú ü\nLínea dos\n\nLínea cuatro, tras una vacía\n  sangría de dos espacios";
+    let texto = Texto::from(base);
+    // chatgpt y mistral: ProseMirror, un párrafo por línea.
+    for (perfil, proveedor, nombre) in [
+        (
+            "prueba-e1",
+            "chatgpt",
+            "escritura por párrafos en contenteditable (spec chatgpt)",
+        ),
+        (
+            "prueba-e2",
+            "mistral",
+            "escritura por párrafos (spec mistral)",
+        ),
+    ] {
+        let p = abrir(navegador, ventana, perfil, &format!("{proveedor}.html")).await?;
+        let s = spec(proveedor)?;
+        let e = p.escribir(&s, &texto, ESPERA_CORRER).await;
+        let leido = p.leer_compositor(&s).await?;
+        let igual = leido.as_ref() == Some(&texto);
+        let detalle = if igual {
+            format!("{} caracteres, idénticos", largo(&texto))
+        } else {
+            format!("escribir {e:?}, leyó: {}", mostrar(&leido))
+        };
+        a.anotar(e.is_ok() && igual, nombre, &detalle);
+    }
+    // Saltos de Windows (\r\n), como una pregunta pegada del portapapeles: cada \r no puede volverse otro salto.
+    let con_crlf = Texto::from(format!(
+        "{}\r\n\r\nFinal tras una línea vacía",
+        base.replace('\n', "\r\n")
+    ));
+    for proveedor in ["chatgpt", "mistral"] {
+        let p = abrir(
+            navegador,
+            ventana,
+            &format!("prueba-crlf-{proveedor}"),
+            &format!("{proveedor}.html"),
+        )
+        .await?;
+        let s = spec(proveedor)?;
+        let e = p.escribir(&s, &con_crlf, ESPERA_CORRER).await;
+        let leido = p.leer_compositor(&s).await?;
+        let l = leido.clone().unwrap_or_default();
+        let verificado = nucleo::operacion::verificar_igualdad(&con_crlf, &l);
+        let sin_cr = leido.is_some() && !l.para_mostrar().contains('\r');
+        let detalle = verificado
+            .clone()
+            .unwrap_or_else(|| format!("{} caracteres, igual al texto con \\n", largo(&l)));
+        a.anotar(
+            e.is_ok() && verificado.is_none() && sin_cr,
+            &format!("saltos \\r\\n sin líneas de más (spec {proveedor})"),
+            &detalle,
+        );
+    }
+    // Una skill elegida en el sitio es una píldora no editable en el compositor: no es un borrador y se conserva.
+    let p = abrir(navegador, ventana, "prueba-e2b", "mistral.html").await?;
+    let s = spec("mistral")?;
+    let selector = nucleo::json::leer(&s)
+        .and_then(|v| en(&v, &["composer", "selector"]).cloned())
+        .ok_or("la spec de mistral no tiene composer.selector")?;
+    p.ejecutar(&format!(
+        "document.querySelector({}).innerHTML = '<p><span contenteditable=\"false\">deep-research</span> </p>'; 'ok'",
+        json(&selector)
+    ))
+    .await?;
+    let e = p.escribir(&s, &texto, ESPERA_CORRER).await;
+    let leido = p.leer_compositor(&s).await?;
+    let pildora = p
+        .ejecutar("!!document.querySelector('[contenteditable=\"false\"]')")
+        .await?
+        == "true";
+    let recortado = leido
+        .as_ref()
+        .is_some_and(|l| l.para_mostrar().trim() == base);
+    a.anotar(
+        e.is_ok() && recortado && pildora,
+        "escritura junto a una skill elegida (píldora no editable)",
+        &format!(
+            "ok {}, píldora conservada {pildora}, leyó: {}",
+            e.is_ok(),
+            mostrar(&leido)
+        ),
+    );
+    drop(p);
+    // kimi: editor que procesa el pegado él mismo. 180.000 caracteres con las marcas del motor.
+    let p = abrir(navegador, ventana, "prueba-e3", "kimi.html").await?;
+    let s = spec("kimi")?;
+    let (mut cuerpo, mut unidades) = (String::new(), 0);
+    for i in 0.. {
+        if unidades >= 180_000 {
+            break;
+        }
+        let linea = format!(
+            "Línea {i:05}: el cuerpo de prueba lleva ñ, acentos (áéíóú) y comillas \"dobles\".{}",
+            if i % 17 == 16 { "\n\n" } else { "\n" }
+        );
+        unidades += linea.encode_utf16().count();
+        cuerpo.push_str(&linea);
+    }
+    let (con_marcas, marcas) = nucleo::operacion::insertar_marcas_intercaladas(
+        &Texto::from(cuerpo),
+        "autoprueba",
+        nucleo::operacion::INTERVALO_MARCA,
+    );
+    let reloj = Instant::now();
+    let e = p.escribir(&s, &con_marcas, Duration::from_secs(120)).await;
+    let leido = p.leer_compositor(&s).await?.unwrap_or_default();
+    let integridad = nucleo::operacion::evaluar_integridad(&leido, &marcas);
+    a.anotar(
+        e.is_ok() && leido == con_marcas && integridad.estado == "completo",
+        "pegado de 180.000 caracteres con marcas (spec kimi)",
+        &format!(
+            "{} caracteres, {} marcas, integridad {} ({}/{}), idéntico: {}, leídos {}, {} ms",
+            largo(&con_marcas),
+            marcas.len(),
+            integridad.estado,
+            integridad.presentes,
+            integridad.esperadas,
+            leido == con_marcas,
+            largo(&leido),
+            reloj.elapsed().as_millis()
+        ),
+    );
+    drop(p);
+    // ESC-002: con un borrador en el compositor, escribir avisa y no lo toca.
+    let p = abrir(navegador, ventana, "prueba-e4", "textarea.html").await?;
+    p.ejecutar("document.getElementById('compositor').value = 'Borrador de Juan'; 'ok'")
+        .await?;
+    let e = p.escribir(SPEC_TEXTAREA, &texto, ESPERA_ESCRIBIR).await;
+    let queda = p.leer_compositor(SPEC_TEXTAREA).await?;
+    a.anotar(
+        e.as_ref().err().map(String::as_str)
+            == Some("el compositor ya tenía texto: no se escribe encima de un borrador")
+            && queda == Some(Texto::from("Borrador de Juan")),
+        "escribir no pisa un borrador",
+        &format!(
+            "escribir {e:?}, el compositor quedó con: {}",
+            mostrar(&queda)
+        ),
+    );
+    Ok(())
+}
+
+/// CAP-001, CAP-014 y DIA-001, como Autoprueba.Lectura.
+async fn lectura(
+    a: &mut Anotador,
+    navegador: &Navegador,
+    ventana: &slint::Window,
+) -> Result<(), String> {
+    // chatgpt: mensaje de usuario, enlaces de fuente, informe en iframe, generando (está el botón de detener).
+    let c = abrir(navegador, ventana, "prueba-l1", "chatgpt.html").await?;
+    let s = spec("chatgpt")?;
+    let vacio = c.chat_vacio(&s).await?;
+    a.anotar(
+        vacio == Some(false),
+        "chat con mensajes no está vacío",
+        &format!("chatVacio = {vacio:?}"),
+    );
+    let l = c.correr("leer", &s, None, ESPERA_CORRER).await?;
+    let verdad = |k| en(&l, &[k]) == Some(&Valor::Bool(true));
+    a.anotar(
+        txt(en(&l, &["userText"])) == "Pregunta de prueba"
+            && num(en(&l, &["fuentesHref"])) == Some(2)
+            && verdad("informeEnIframe")
+            && verdad("generating"),
+        "lectura tipo chatgpt",
+        &format!(
+            "userText {}, fuentesHref {:?}, informeEnIframe {:?}, generating {:?}",
+            txt(en(&l, &["userText"])),
+            num(en(&l, &["fuentesHref"])),
+            en(&l, &["informeEnIframe"]),
+            en(&l, &["generating"])
+        ),
+    );
+    // Estado de generación en el tiempo: con el botón de detener, generando; sin él y con texto, fin observado.
+    let antes = c.estado(&s).await?;
+    c.ejecutar("document.querySelector('[data-testid=\"stop-button\"]').remove(); 'ok'")
+        .await?;
+    let despues = c.estado(&s).await?;
+    let crudo = c.correr("estado", &s, None, ESPERA_CORRER).await?;
+    a.anotar(
+        antes.generando == Some(true)
+            && antes.fin.is_none()
+            && despues.fin.as_deref() == Some("observado")
+            && num(en(&crudo, &["largo"])).unwrap_or(0) > 0,
+        "estado de generación",
+        &format!("antes {antes:?}, después {}", json(&crudo)),
+    );
+    // Diagnóstico de selectores, de solo lectura.
+    let d = c.diagnostico(&s).await?;
+    let sel = |k| num(en(&d, &["selectores", k]));
+    let iframes: Vec<String> = match en(&d, &["iframes"]) {
+        Some(Valor::Lista(l)) => l.iter().map(|f| txt(en(f, &["origen"]))).collect(),
+        _ => Vec::new(),
+    };
+    a.anotar(
+        sel("composer.selector") == Some(1)
+            && sel("assistantMessage.selector") == Some(1)
+            && sel("userMessage.selector") == Some(1)
+            && iframes
+                .iter()
+                .any(|f| f == "https://cc-otro.test/informe.html"),
+        "diagnóstico de selectores",
+        &format!(
+            "selectores {}, iframes {}",
+            en(&d, &["selectores"]).map(json).unwrap_or_default(),
+            iframes.join(", ")
+        ),
+    );
+    let malo = con_campo(
+        &s,
+        &["composer", "selector"],
+        Valor::Texto("[[no es un selector".into()),
+    )?;
+    let dm = c.diagnostico(&malo).await?;
+    let invalido = txt(en(&dm, &["selectores", "composer.selector"]));
+    a.anotar(
+        invalido == "invalido",
+        "diagnóstico con un selector inválido",
+        &format!("composer.selector = {invalido}"),
+    );
+    drop(c);
+    // kimi: exclude sobre una copia, html crudo sin recortes, y los dos archivos leídos de su iframe.
+    let k = abrir(navegador, ventana, "prueba-l2", "kimi.html").await?;
+    let l = k
+        .correr("leer", &spec("kimi")?, None, Duration::from_secs(60))
+        .await?;
+    let (texto, html) = (txt(en(&l, &["text"])), txt(en(&l, &["html"])));
+    a.anotar(
+        !texto.contains("Copiar y compartir")
+            && html.contains("Copiar y compartir")
+            && texto.contains("Respuesta de Kimi"),
+        "lectura con exclude y html crudo (spec kimi)",
+        &format!(
+            "el texto excluye el bloque: {}, el html lo conserva: {}",
+            !texto.contains("Copiar y compartir"),
+            html.contains("Copiar y compartir")
+        ),
+    );
+    let (leidos, total) = (
+        num(en(&l, &["archivos", "leidos"])),
+        num(en(&l, &["archivos", "total"])),
+    );
+    a.anotar(
+        leidos == Some(2)
+            && total == Some(2)
+            && texto.contains("CONTENIDO DEL ARCHIVO 1")
+            && texto.contains("CONTENIDO DEL ARCHIVO 2")
+            && texto.contains("=== ARCHIVO: dos.md ==="),
+        "archivos de kimi",
+        &format!("leídos {leidos:?}/{total:?}"),
+    );
+    drop(k);
+    // mistral: el mensaje y después el canvas; el html guarda los dos, el canvas queda cerrado, y la etiqueta de modelo.
+    let m = abrir(navegador, ventana, "prueba-l3", "mistral.html").await?;
+    let l = m
+        .correr("leer", &spec("mistral")?, None, ESPERA_CORRER)
+        .await?;
+    let cerrado = cadena(
+        &m.ejecutar("document.getElementById('chat-side-panel').innerHTML")
+            .await?,
+    );
+    let (texto, html) = (txt(en(&l, &["text"])), txt(en(&l, &["html"])));
+    a.anotar(
+        texto.starts_with("Aviso: la respuesta")
+            && texto.find("TEXTO DEL CANVAS").is_some_and(|i| i > 0)
+            && html.contains("Aviso: la respuesta")
+            && html.contains("TEXTO DEL CANVAS")
+            && cerrado.as_deref() == Some("")
+            && txt(en(&l, &["modelLabel"])) == "Rápido",
+        "canvas de mistral",
+        &format!(
+            "texto \"{texto}\", canvas cerrado después: {}, modelLabel {}",
+            cerrado.as_deref() == Some(""),
+            txt(en(&l, &["modelLabel"]))
+        ),
+    );
+    Ok(())
+}
+
+/// CAP-002, como Autoprueba.IframeDeOtroOrigen, y la lectura entera de PantallaRonda.Leer sobre la misma página.
+async fn iframe_de_otro_origen(
+    a: &mut Anotador,
+    navegador: &Navegador,
+    ventana: &slint::Window,
+) -> Result<(), String> {
+    let c = abrir(navegador, ventana, "prueba-i", "chatgpt.html").await?;
+    let real = spec("chatgpt")?;
+    // La real es el dominio de OpenAI.
+    let s = con_campo(
+        &real,
+        &["informeEnIframe", "frameUrl"],
+        Valor::Texto("cc-otro.test".into()),
+    )?;
+    // El iframe carga después que la página.
+    let _ = paneles::dormir(Duration::from_millis(500)).await;
+    let informe = c.leer_informe_en_iframe(&s).await?;
+    let ok = informe.as_ref().is_some_and(|(t, h)| {
+        t.para_mostrar().starts_with("INFORME DE PRUEBA")
+            && h.para_mostrar().contains("_reportPage_")
+    });
+    let detalle = match &informe {
+        Some((t, _)) => format!("texto \"{}\"", t.para_mostrar()),
+        None => "no se encontró el informe".into(),
+    };
+    a.anotar(ok, "script en un iframe de otro origen", &detalle);
+    let l = c.leer("chatgpt", &s).await;
+    let (texto, html) = (
+        l.text.para_mostrar().into_owned(),
+        l.html
+            .as_ref()
+            .map(|h| h.para_mostrar().into_owned())
+            .unwrap_or_default(),
+    );
+    a.anotar(
+        l.error.is_none()
+            && texto.contains("INFORME DE PRUEBA")
+            && !texto.starts_with("INFORME DE PRUEBA")
+            && html.contains("_reportPage_"),
+        "la lectura junta la respuesta y el informe del iframe",
+        &format!("error {:?}, texto \"{texto}\"", l.error),
+    );
+    // Sin ese iframe, la burbuja sola no pasa por respuesta.
+    let l = c.leer("chatgpt", &real).await;
+    let error = mostrar(&l.error);
+    a.anotar(
+        error.starts_with("el informe de ChatGPT está en un iframe ("),
+        "un informe en un iframe que no se pudo leer queda como error",
+        &error,
+    );
+    Ok(())
+}
+
+/// Como Autoprueba.CompositorRecortado: el estado da scroll al contenedor que recorta el compositor e informa el zoom.
+async fn compositor_recortado(
+    a: &mut Anotador,
+    navegador: &Navegador,
+    ventana: &slint::Window,
+) -> Result<(), String> {
+    let c = abrir(navegador, ventana, "prueba-r", "recorte.html").await?;
+    // #prompt-textarea, como la página.
+    let s = spec("chatgpt")?;
+    let mut estado = None;
+    // Uno por llamada: la tercera ya no cambia nada.
+    for _ in 0..3 {
+        estado = Some(c.estado(&s).await?);
+    }
+    let overflow = cadena(&c.ejecutar("JSON.stringify([getComputedStyle(document.getElementById('contenedor')).overflowY, getComputedStyle(document.getElementById('afuera')).overflowY])").await?).unwrap_or_default();
+    let alcanzable = c.ejecutar("(() => { const c = document.getElementById('contenedor'); c.scrollTop = c.scrollHeight; const b = document.getElementById('enviar').getBoundingClientRect(); return b.bottom <= c.getBoundingClientRect().bottom; })()").await? == "true";
+    a.anotar(
+        overflow == "[\"auto\",\"hidden\"]" && alcanzable,
+        "el contenedor que recorta el compositor gana scroll; el que no recorta, no",
+        &format!("overflow-y (contenedor, afuera) {overflow}, botón alcanzable {alcanzable}"),
+    );
+    let zoom = estado.and_then(|e| e.zoom);
+    a.anotar(
+        zoom == Some(100),
+        "el estado informa el zoom del panel",
+        &format!("zoom {zoom:?}"),
+    );
+    Ok(())
+}
+
+/// PRU-005: el PDF del informe lo arma informe-pdf (en la Unity, ImprimirPdf del panel).
+fn pdf(a: &mut Anotador, datos: &Path) -> Result<(), String> {
+    let markdown = Texto::from(
+        "# Informe de prueba\n\nUn párrafo con ñ y acentos: áéíóú.\n\n- Un punto\n- Otro punto\n",
+    );
+    let ruta = datos.join("cc-autoprueba.pdf");
+    std::fs::write(&ruta, informe_pdf::pdf_bytes(&markdown, "Autoprueba")?)
+        .map_err(|e| e.to_string())?;
+    let bytes = std::fs::read(&ruta).unwrap_or_default();
+    let cabecera = String::from_utf8_lossy(&bytes[..bytes.len().min(5)]).into_owned();
+    a.anotar(
+        ruta.exists() && cabecera == "%PDF-" && bytes.len() > 1000,
+        "PDF",
+        &format!(
+            "existe {}, cabecera \"{cabecera}\", {} bytes",
+            ruta.exists(),
+            bytes.len()
+        ),
+    );
+    Ok(())
+}
+
+/// Como Autoprueba.SurrogateSuelto: un surrogate suelto de la página llega intacto por el puente.
+async fn surrogate_suelto(a: &mut Anotador, p: &Panel) -> Result<(), String> {
+    p.navegar(&format!("{ORIGEN}textarea.html")).await?;
+    // Se arma en la página con fromCharCode y aquí por unidades UTF-16: ningún literal lo lleva.
+    const EN_PAGINA: &str =
+        "'a' + String.fromCharCode(0xD800) + 'b' + String.fromCharCode(0xDC00) + 'c'";
+    let esperado = Texto::desde_utf16(&[0x61, 0xD800, 0x62, 0xDC00, 0x63]);
+    let codigos = |t: Option<&Texto>| match t {
+        Some(t) => t
+            .a_utf16()
+            .iter()
+            .map(|c| format!("{c:04X}"))
+            .collect::<Vec<_>>()
+            .join(" "),
+        None => "null".into(),
+    };
+    // 1. El camino de producción: pagina.js responde con JSON.stringify, que escapa el surrogate en ASCII.
+    p.ejecutar(&format!(
+        "document.getElementById('compositor').value = {EN_PAGINA}; 'ok'"
+    ))
+    .await?;
+    let por_script = p.leer_compositor(SPEC_TEXTAREA).await?;
+    a.anotar(
+        por_script.as_ref() == Some(&esperado),
+        "surrogate suelto llega intacto por pagina.js",
+        &format!(
+            "esperado {}, llegó {}",
+            codigos(Some(&esperado)),
+            codigos(por_script.as_ref())
+        ),
+    );
+    // 2. Un script que pasa su resultado por JSON.stringify en la página (lo que hace el lector del iframe).
+    let crudo = p
+        .ejecutar_con_techo(
+            &format!("JSON.stringify({EN_PAGINA})"),
+            Duration::from_secs(10),
+        )
+        .await?;
+    let envuelto = match nucleo::json::leer(&crudo) {
+        Some(Valor::Texto(t)) => match t.como_str().and_then(nucleo::json::leer) {
+            Some(Valor::Texto(t)) => Some(t),
+            _ => None,
+        },
+        _ => None,
+    };
+    a.anotar(
+        envuelto.as_ref() == Some(&esperado),
+        "surrogate suelto llega intacto con JSON.stringify en la página",
+        &format!(
+            "esperado {}, llegó {}",
+            codigos(Some(&esperado)),
+            codigos(envuelto.as_ref())
+        ),
+    );
+    // 3. Texto fuera del plano básico (un emoji, par de surrogates) de ida y vuelta por el puente.
+    let con_emoji = Texto::from("antes \u{1F600} después");
+    // escribir no pisa un compositor con texto.
+    p.ejecutar("document.getElementById('compositor').value = ''; 'ok'")
+        .await?;
+    let escrito = p.escribir(SPEC_TEXTAREA, &con_emoji, ESPERA_CORRER).await;
+    let emoji = p.leer_compositor(SPEC_TEXTAREA).await?;
+    a.anotar(
+        escrito.is_ok() && emoji.as_ref() == Some(&con_emoji),
+        "texto fuera del plano básico llega intacto",
+        &format!(
+            "escribir {escrito:?}, esperado {}, llegó {}",
+            codigos(Some(&con_emoji)),
+            codigos(emoji.as_ref())
+        ),
+    );
+    // 4. Medido, no exigido: el mismo texto devuelto crudo por ExecuteScript. Va último por si deja algo colgado.
+    match p
+        .ejecutar_con_techo(EN_PAGINA, Duration::from_secs(5))
+        .await
+    {
+        Ok(crudo) => {
+            let t = match nucleo::json::leer(&crudo) {
+                Some(Valor::Texto(t)) => Some(t),
+                _ => None,
+            };
+            a.medido(&format!(
+                "resultado crudo con un surrogate suelto: llegó {}",
+                codigos(t.as_ref())
+            ));
+        }
+        Err(e) => a.medido(&format!(
+            "resultado crudo con un surrogate suelto: ExecuteScript no devuelve nada ({e})"
+        )),
+    }
+    Ok(())
+}
+
+/// CAP-014 e INV-CAP-003: el sondeo descarta el dato de una página que no responde y lo recupera cuando vuelve.
+async fn sondeo(
+    a: &mut Anotador,
+    navegador: &Navegador,
+    ventana: &slint::Window,
+) -> Result<(), String> {
+    let c = abrir(navegador, ventana, "prueba-s", "chatgpt.html").await?;
+    let s = spec("chatgpt")?;
+    let mut estados = HashMap::new();
+    paneles::sondear(&[("chatgpt", &c, &s)], &mut estados).await;
+    let antes = estados.get("chatgpt").cloned();
+    // La página se cuelga 8 s a propósito: el estado no responde en su techo de 5 s.
+    let reloj = Instant::now();
+    let colgada = c.ejecutar_con_techo(
+        "const hasta = Date.now() + 8000; while (Date.now() < hasta) {} 'fin'",
+        Duration::from_secs(1),
+    );
+    let _ = paneles::dormir(Duration::from_millis(300)).await;
+    let vuelta = Instant::now();
+    paneles::sondear(&[("chatgpt", &c, &s)], &mut estados).await;
+    let ms = vuelta.elapsed().as_millis();
+    let colgado = estados.get("chatgpt").cloned();
+    let _ = colgada.await;
+    a.anotar(
+        antes.is_some() && colgado.is_none(),
+        "el sondeo descarta el dato de una página que no responde",
+        &format!("antes {antes:?}, colgada {colgado:?}, la vuelta tardó {ms} ms"),
+    );
+    let resta = Duration::from_millis(8500).saturating_sub(reloj.elapsed());
+    let _ = paneles::dormir(resta).await;
+    paneles::sondear(&[("chatgpt", &c, &s)], &mut estados).await;
+    let vuelve = estados.get("chatgpt").cloned();
+    a.anotar(
+        vuelve.is_some(),
+        "el sondeo recupera el dato cuando la página vuelve",
+        &format!("después {vuelve:?}"),
+    );
     Ok(())
 }
 
@@ -221,7 +839,12 @@ async fn panel_basico(
     let nav_antes = p.navegaciones();
     let texto = "Primera línea con ñ y acentos: áéíóú\nSegunda línea\n\nCuarta, tras una vacía";
     let escrito = p
-        .correr("escribir", SPEC_TEXTAREA, Some(texto), ESPERA_CORRER)
+        .correr(
+            "escribir",
+            SPEC_TEXTAREA,
+            Some(&texto.into()),
+            ESPERA_CORRER,
+        )
         .await?;
     let ok = matches!(&escrito, Valor::Objeto(o) if o.iter().any(|(k, v)| k.como_str() == Some("ok") && *v == Valor::Bool(true)));
     a.anotar(ok, "escribir", &format!("{escrito:?}"));

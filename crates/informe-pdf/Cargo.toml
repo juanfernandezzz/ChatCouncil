@@ -10,3 +10,7 @@ pulldown-cmark = { version = "0.13.6", default-features = false }
 typst = "0.15.1"
 typst-pdf = "0.15.1"
 typst-layout = "0.15.1"
+
+# PAN-014: la prueba cuenta los procesos hijos con el sistema operativo; el mismo windows que ya trae wry.
+[target.'cfg(windows)'.dev-dependencies]
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_System_Diagnostics_ToolHelp"] }

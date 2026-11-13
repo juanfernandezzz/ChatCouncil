@@ -2,6 +2,7 @@
 //! el esqueleto ya puede hacer. Todo en una carpeta temporal nueva (INV-PRU-001).
 
 use std::path::Path;
+use std::rc::{Rc, Weak};
 use std::time::{Duration, Instant};
 
 use nucleo::json::Valor;
@@ -126,16 +127,57 @@ async fn cuerpo(
         arranque.elapsed().as_millis()
     ));
 
-    let r = panel_basico(a, &panel, &version).await;
+    let r = panel_basico(a, &panel, &version, &navegador, ventana, f64::from(escala)).await;
     a.grupo("panel", r);
+    let r = adjuntar(a, &panel, datos).await;
+    a.grupo("adjuntar", r);
     let r = nucleo(a, datos).await;
     a.grupo("núcleo", r);
+    let r = perfiles(a, &panel, &navegador, ventana, datos).await;
+    a.grupo("perfiles", r);
     let r = techo_externo(a, &panel, &navegador, ventana).await;
     a.grupo("techo externo", r);
     Ok(())
 }
 
-async fn panel_basico(a: &mut Anotador, p: &Panel, version: &str) -> Result<(), String> {
+const ORIGEN: &str = "https://cc-prueba.test/";
+
+/// El texto de un resultado JSON de ejecutar; None si es null o no es texto.
+fn cadena(json: &str) -> Option<String> {
+    match nucleo::json::leer(json) {
+        Some(Valor::Texto(t)) => Some(t.para_mostrar().into_owned()),
+        _ => None,
+    }
+}
+
+/// Uri.EscapeDataString: todo menos las letras, los dígitos y «-._~» va como %XX.
+fn escapar_url(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                char::from(b).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+async fn panel_basico(
+    a: &mut Anotador,
+    p: &Panel,
+    version: &str,
+    navegador: &Navegador,
+    ventana: &slint::Window,
+    escala: f64,
+) -> Result<(), String> {
+    // El perfil lo informa WebView2, no se repite el que se pidió.
+    let perfil = p.perfil()?;
+    a.anotar(
+        perfil == "prueba-a",
+        "perfil",
+        &format!("el navegador dice \"{perfil}\""),
+    );
+
     // PAN-001: los tres switches, leídos por el sistema operativo en el proceso del navegador.
     let linea = p.linea_de_comandos_del_navegador()?;
     let faltan: Vec<&str> = SWITCHES
@@ -175,7 +217,8 @@ async fn panel_basico(a: &mut Anotador, p: &Panel, version: &str) -> Result<(), 
         &format!("{propia:?}, al volver: {donde}"),
     );
 
-    // Escribir y leer por pedido y consulta, con saltos de línea.
+    // Escribir y leer por pedido y consulta, con saltos de línea, sin navegar.
+    let nav_antes = p.navegaciones();
     let texto = "Primera línea con ñ y acentos: áéíóú\nSegunda línea\n\nCuarta, tras una vacía";
     let escrito = p
         .correr("escribir", SPEC_TEXTAREA, Some(texto), ESPERA_CORRER)
@@ -202,6 +245,332 @@ async fn panel_basico(a: &mut Anotador, p: &Panel, version: &str) -> Result<(), 
         vacio == Valor::Bool(true),
         "chat vacío",
         &format!("{vacio:?}"),
+    );
+    a.anotar(
+        p.navegaciones() == nav_antes,
+        "escribir no navega",
+        &format!(
+            "navegaciones antes {nav_antes}, después {}",
+            p.navegaciones()
+        ),
+    );
+
+    // El zoom que informa el estado de la página, sin tocar: 100.
+    let estado = p
+        .correr("estado", SPEC_TEXTAREA, None, ESPERA_CORRER)
+        .await?;
+    let zoom = match &estado {
+        Valor::Objeto(o) => o
+            .iter()
+            .find(|(k, _)| k.como_str() == Some("zoom"))
+            .map(|(_, v)| v.clone()),
+        _ => None,
+    };
+    a.anotar(
+        zoom == Some(Valor::Entero(100)),
+        "zoom informado",
+        &format!("el estado dice {zoom:?}"),
+    );
+
+    // Contador de navegaciones: una navegación de verdad suma una.
+    p.navegar(&format!("{ORIGEN}cierre.html")).await?;
+    a.anotar(
+        p.navegaciones() == nav_antes + 1,
+        "contador de navegaciones",
+        &format!("antes {nav_antes}, después de navegar {}", p.navegaciones()),
+    );
+
+    // PAN-005: un cierre de sesión que la página pide sola (sin gesto) se cancela y el panel se queda
+    // donde estaba. Solo cuenta la navegación a cierre.html.
+    for destino in ["/logout", "/auth/sign-out?vuelta=1"] {
+        let (nav, bloqueadas) = (p.navegaciones(), p.bloqueadas());
+        // El intento de la página se bloquea mientras carga y navegar lo informa.
+        let _ = p
+            .navegar(&format!("{ORIGEN}cierre.html?ir={}", escapar_url(destino)))
+            .await;
+        paneles::dormir(Duration::from_millis(1500)).await?;
+        let url = cadena(&p.ejecutar("location.pathname").await?).unwrap_or_default();
+        let ok = p.bloqueadas() == bloqueadas + 1
+            && p.navegaciones() == nav + 1
+            && url == "/cierre.html";
+        a.anotar(
+            ok,
+            &format!("bloqueo de {destino}"),
+            &format!(
+                "bloqueadas {bloqueadas}→{}, navegaciones {nav}→{}, página {url}, última bloqueada {}",
+                p.bloqueadas(),
+                p.navegaciones(),
+                p.ultima_bloqueada()
+            ),
+        );
+    }
+
+    // Navegar desde la app a un cierre de sesión no puede pasar por éxito.
+    let aviso = p.navegar(&format!("{ORIGEN}signout")).await;
+    a.anotar(
+        aviso.is_err(),
+        "navegar a un cierre de sesión avisa",
+        &aviso
+            .err()
+            .unwrap_or_else(|| "navegar devolvió éxito".into()),
+    );
+
+    // Frente y detrás: dos paneles en el mismo rectángulo, medido con el orden real de las ventanas.
+    let b = crate::crear_panel(navegador, ventana, "prueba-b", (0.0, 0.0, 800.0, 600.0)).await?;
+    b.navegar(&format!("{ORIGEN}textarea.html")).await?;
+    b.frente();
+    a.anotar(
+        b.es_frente() && !p.es_frente(),
+        "frente",
+        &format!(
+            "b al frente: {}, a al frente: {}",
+            b.es_frente(),
+            p.es_frente()
+        ),
+    );
+    b.atras();
+    a.anotar(
+        p.es_frente() && !b.es_frente(),
+        "detrás",
+        &format!("después de mandar b atrás, a al frente: {}", p.es_frente()),
+    );
+    // En píxeles de la ventana: 800×600 lógicos por la escala del monitor.
+    let esperado = (
+        0,
+        0,
+        (800.0 * escala).round() as i32,
+        (600.0 * escala).round() as i32,
+    );
+    let r = p.rect_real();
+    a.anotar(
+        r == esperado,
+        "rectángulo",
+        &format!("la ventana del panel mide {r:?}"),
+    );
+
+    // PAN-011: un panel oculto se va fuera de la ventana con su tamaño, nunca a 0x0, y sigue respondiendo.
+    b.rect(-900.0, 0.0, 800.0, 600.0)?;
+    let fuera = b.rect_real();
+    let responde = b.ejecutar("'sigue'").await?;
+    a.anotar(
+        fuera.0 < 0 && (fuera.2, fuera.3) == (esperado.2, esperado.3) && responde == "\"sigue\"",
+        "panel oculto fuera de la ventana",
+        &format!("mide {fuera:?} y responde {responde}"),
+    );
+    Ok(())
+}
+
+/// PAN-013: en una página con un input de archivo, la página informa el nombre y el tamaño de lo adjuntado.
+async fn adjuntar(a: &mut Anotador, p: &Panel, datos: &Path) -> Result<(), String> {
+    let archivo = datos.join("adjunto.txt");
+    let contenido = "Archivo de prueba del consejo, con ñ.\n";
+    std::fs::write(&archivo, contenido).map_err(|e| e.to_string())?;
+    p.navegar(&format!("{ORIGEN}adjuntar.html")).await?;
+    let r = p.adjuntar(SPEC_TEXTAREA, &archivo).await;
+    let informa = cadena(
+        &p.ejecutar("document.getElementById('adjunto').textContent")
+            .await?,
+    )
+    .unwrap_or_default();
+    let esperado = format!("adjunto.txt|{}", contenido.len());
+    a.anotar(
+        r.is_ok() && informa == esperado,
+        "adjuntar un archivo",
+        &format!("{r:?}, la página informa \"{informa}\""),
+    );
+
+    // Revisión PART-012, hallazgo 8: un archivo que no existe no se adjunta en silencio.
+    let falta = datos.join("no-existe.txt");
+    let r = p.adjuntar(SPEC_TEXTAREA, &falta).await;
+    a.anotar(
+        r.as_ref()
+            .err()
+            .is_some_and(|e| e.starts_with("No existe el archivo ")),
+        "adjuntar un archivo que no existe avisa",
+        &format!("{r:?}"),
+    );
+
+    // Sin input de archivo, el error literal.
+    p.navegar(&format!("{ORIGEN}textarea.html")).await?;
+    let sin = p.adjuntar(SPEC_TEXTAREA, &archivo).await;
+    a.anotar(
+        sin.as_ref().err().map(String::as_str)
+            == Some("No hay un <input type=file> en la página: no se puede adjuntar."),
+        "adjuntar sin input avisa",
+        &format!("{sin:?}"),
+    );
+    Ok(())
+}
+
+/// Marca sintética en el almacenamiento del origen de prueba, en perfiles temporales: mide perfiles, no lee nada real.
+const LEER_MARCA: &str = "localStorage.getItem('cc-marca')";
+
+/// La última emergente del panel, distinta de `anterior`, en hasta 15 s.
+async fn esperar_emergente(
+    p: &Panel,
+    anterior: Option<&Weak<Panel>>,
+) -> Result<Option<Weak<Panel>>, String> {
+    let reloj = Instant::now();
+    while reloj.elapsed() < Duration::from_secs(15) {
+        if let Some(e) = p.emergente()
+            && anterior.is_none_or(|w| !std::ptr::eq(w.as_ptr(), Rc::as_ptr(&e)))
+        {
+            e.esperar_carga().await;
+            return Ok(Some(Rc::downgrade(&e)));
+        }
+        paneles::dormir(Duration::from_millis(100)).await?;
+    }
+    Ok(None)
+}
+
+async fn perfiles(
+    a: &mut Anotador,
+    p: &Panel,
+    navegador: &Navegador,
+    ventana: &slint::Window,
+    datos: &Path,
+) -> Result<(), String> {
+    p.navegar(&format!("{ORIGEN}emergente.html")).await?;
+    p.ejecutar("localStorage.setItem('cc-marca', 'perfil-a'); 'ok'")
+        .await?;
+
+    // PAN-004: la emergente, en el mismo perfil, con window.opener, y se cierra con window.close().
+    p.ejecutar("document.getElementById('abrir').click(); 'ok'")
+        .await?;
+    let reloj = Instant::now();
+    let mut e = p.emergente();
+    while e.is_none() && reloj.elapsed() < Duration::from_secs(15) {
+        paneles::dormir(Duration::from_millis(100)).await?;
+        e = p.emergente();
+    }
+    let Some(e) = e else {
+        a.anotar(false, "ventana emergente", "no apareció en 15 s");
+        return Ok(());
+    };
+    e.esperar_carga().await;
+    let opener = cadena(
+        &e.ejecutar("window.opener ? window.opener.location.origin : null")
+            .await?,
+    );
+    let marca = cadena(&e.ejecutar(LEER_MARCA).await?);
+    let perfil = e.perfil()?;
+    a.anotar(
+        opener.as_deref() == Some("https://cc-prueba.test")
+            && marca.as_deref() == Some("perfil-a")
+            && perfil == "prueba-a",
+        "ventana emergente con opener en el mismo perfil",
+        &format!(
+            "opener {}, perfil {perfil}, marca del perfil {}",
+            opener.as_deref().unwrap_or("null"),
+            marca.as_deref().unwrap_or("null")
+        ),
+    );
+    e.ejecutar("document.getElementById('cerrar').click(); 'ok'")
+        .await?;
+    let reloj = Instant::now();
+    while e.abierto() && reloj.elapsed() < Duration::from_secs(5) {
+        paneles::dormir(Duration::from_millis(100)).await?;
+    }
+    a.anotar(
+        !e.abierto(),
+        "la emergente se cierra con window.close()",
+        &format!("abierta después: {}", e.abierto()),
+    );
+    // Revisión PART-012, hallazgo 3: como Liberar de panel.cpp, la emergente cerrada se suelta entera.
+    drop(e);
+    a.anotar(
+        p.emergente().is_none(),
+        "la emergente cerrada se libera",
+        &format!("el panel todavía la tiene: {}", p.emergente().is_some()),
+    );
+    // Dos window.open seguidas: la segunda no cierra la primera (panel.cpp guarda cada una hasta que se cierra).
+    // Se guardan débiles: solo el panel decide cuánto viven.
+    p.ejecutar("document.getElementById('abrir').click(); 'ok'")
+        .await?;
+    let primera = esperar_emergente(p, None).await?;
+    p.ejecutar("document.getElementById('abrir').click(); 'ok'")
+        .await?;
+    let segunda = esperar_emergente(p, primera.as_ref()).await?;
+    let abierta = |w: &Option<Weak<Panel>>| {
+        w.as_ref()
+            .and_then(Weak::upgrade)
+            .is_some_and(|x| x.abierto())
+    };
+    a.anotar(
+        abierta(&primera) && abierta(&segunda),
+        "una segunda emergente no cierra la primera",
+        &format!(
+            "primera abierta: {}, segunda abierta: {}",
+            abierta(&primera),
+            abierta(&segunda)
+        ),
+    );
+    for w in [primera, segunda].into_iter().flatten() {
+        if let Some(x) = w.upgrade() {
+            x.ejecutar("window.close(); 'ok'").await?;
+        }
+    }
+
+    // Aislamiento: otro perfil, mismo origen, no ve la marca.
+    let b = crate::crear_panel(navegador, ventana, "prueba-b", (-900.0, 0.0, 800.0, 600.0)).await?;
+    b.navegar(&format!("{ORIGEN}textarea.html")).await?;
+    let otra = cadena(&b.ejecutar(LEER_MARCA).await?);
+    a.anotar(
+        otra.is_none(),
+        "aislamiento entre dos perfiles",
+        &format!(
+            "prueba-b ve la marca de prueba-a: {}",
+            otra.as_deref().unwrap_or("null")
+        ),
+    );
+    drop(b);
+
+    // INV-PAN-003: en el perfil compartido se borra solo el sitio; otro host del perfil sigue.
+    const MARCA_Y_GALLETA: &str =
+        "(localStorage.getItem('cc-marca') || '') + '|' + document.cookie";
+    p.ejecutar("document.cookie = 'cc-galleta=a; max-age=3600; path=/'; 'ok'")
+        .await?;
+    p.navegar("https://cc-otro.test/textarea.html").await?;
+    p.ejecutar("localStorage.setItem('cc-marca', 'otro'); document.cookie = 'cc-galleta=b; max-age=3600; path=/'; 'ok'")
+        .await?;
+    p.borrar_sitio(&format!("{ORIGEN}textarea.html")).await?;
+    let del_otro = cadena(&p.ejecutar(MARCA_Y_GALLETA).await?).unwrap_or_default();
+    p.navegar(&format!("{ORIGEN}textarea.html")).await?;
+    let del_propio = cadena(&p.ejecutar(MARCA_Y_GALLETA).await?).unwrap_or_default();
+    a.anotar(
+        del_propio == "|" && del_otro == "otro|cc-galleta=b",
+        "borrado de un solo sitio",
+        &format!("propio \"{del_propio}\", el otro \"{del_otro}\""),
+    );
+
+    // Revisión PART-012, hallazgo 7: sin las páginas de prueba, borrar el perfil entero se niega.
+    let sin_paginas = Navegador::new(datos, None);
+    let c = crate::crear_panel(
+        &sin_paginas,
+        ventana,
+        "prueba-c",
+        (-900.0, 0.0, 800.0, 600.0),
+    )
+    .await?;
+    let negado = c.borrar_datos().await;
+    a.anotar(
+        negado.is_err(),
+        "borrar el perfil entero se niega sin las páginas de prueba",
+        &format!("{negado:?}"),
+    );
+    drop(c);
+
+    // Borrado de los datos del perfil.
+    p.borrar_datos().await?;
+    p.navegar(&format!("{ORIGEN}textarea.html")).await?;
+    let despues = cadena(&p.ejecutar(LEER_MARCA).await?);
+    a.anotar(
+        despues.is_none(),
+        "borrado de los datos del perfil",
+        &format!(
+            "marca después de borrar: {}",
+            despues.as_deref().unwrap_or("null")
+        ),
     );
     Ok(())
 }
@@ -251,6 +620,30 @@ async fn techo_externo(
         "techo de una operación sobre una página colgada",
         &format!("cortó a los {ms} ms: {r:?}"),
     );
+
+    // Medido, no exigido: cuánto tarda en volver una página recargada con el bucle en curso.
+    let recarga = Instant::now();
+    let vuelta = async {
+        c.recargar().await?;
+        c.ejecutar_con_techo("'vuelve'", Duration::from_secs(3))
+            .await
+    }
+    .await;
+    a.medido(&format!(
+        "recargar una página trabada: {} a los {} ms del bucle de 15 s (recarga {} ms){}",
+        if vuelta.as_deref() == Ok("\"vuelve\"") {
+            "respondió"
+        } else {
+            "no respondió"
+        },
+        reloj.elapsed().as_millis(),
+        recarga.elapsed().as_millis(),
+        vuelta
+            .as_ref()
+            .err()
+            .map(|e| format!(": {e}"))
+            .unwrap_or_default()
+    ));
     Ok(())
 }
 

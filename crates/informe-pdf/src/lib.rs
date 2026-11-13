@@ -434,6 +434,62 @@ mod pruebas {
         );
     }
 
+    /// Los procesos hijos de este proceso, contados por el sistema operativo.
+    #[cfg(windows)]
+    fn procesos_hijos() -> Vec<String> {
+        use windows::Win32::Foundation::CloseHandle;
+        use windows::Win32::System::Diagnostics::ToolHelp::{
+            CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
+            TH32CS_SNAPPROCESS,
+        };
+        let pid = std::process::id();
+        let mut hijos = Vec::new();
+        // SAFETY: la foto es un handle propio que se cierra al final; PROCESSENTRY32W lleva su dwSize.
+        unsafe {
+            let foto = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).unwrap();
+            let mut e = PROCESSENTRY32W {
+                dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+                ..Default::default()
+            };
+            let mut hay = Process32FirstW(foto, &mut e).is_ok();
+            while hay {
+                if e.th32ParentProcessID == pid {
+                    let fin = e.szExeFile.iter().position(|&c| c == 0).unwrap_or(260);
+                    hijos.push(String::from_utf16_lossy(&e.szExeFile[..fin]));
+                }
+                hay = Process32NextW(foto, &mut e).is_ok();
+            }
+            let _ = CloseHandle(foto);
+        }
+        hijos
+    }
+
+    // PAN-014 sin panel (ADR-0003): armar el informe no crea ningún webview ni perfil.
+    #[cfg(windows)]
+    #[test]
+    fn informe_armar_el_pdf_no_crea_webview_ni_perfil() {
+        let d = carpeta("sin-panel");
+        let ruta = d.join("informe.pdf");
+        PdfTypst.generar(&informe_real(), &ruta, "Informe").unwrap();
+        assert!(std::fs::read(&ruta).unwrap().starts_with(b"%PDF-"));
+        let hijos = procesos_hijos();
+        assert!(
+            !hijos
+                .iter()
+                .any(|h| h.to_ascii_lowercase().contains("webview")),
+            "procesos hijos: {hijos:?}"
+        );
+        let en_la_carpeta: Vec<_> = std::fs::read_dir(&d)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(
+            en_la_carpeta,
+            ["informe.pdf"],
+            "ni navegador ni perfil informe-pdf"
+        );
+    }
+
     const FAMILIAS_DEL_TEXTO: &str = r#"font: ("Libertinus Serif", "DejaVu Sans Mono")"#;
 
     /// Los caracteres de un Markdown sin glifo en las familias que su contexto declara: el texto, Libertinus Serif

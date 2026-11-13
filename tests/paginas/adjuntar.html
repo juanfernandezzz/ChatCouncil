@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Autoprueba: adjuntar</title></head>
+<body>
+  <!-- Un compositor con su <input type=file>: la página informa nombre y tamaño de lo que se adjuntó. -->
+  <main id="chat"></main>
+  <textarea id="compositor" rows="6" cols="60"></textarea>
+  <input type="file" id="archivo" accept=".txt,text/plain">
+  <p id="adjunto"></p>
+  <script>
+    document.getElementById("archivo").addEventListener("change", (e) => {
+      const f = e.target.files[0];
+      document.getElementById("adjunto").textContent = f ? f.name + "|" + f.size : "";
+    });
+  </script>
+</body>
+</html>

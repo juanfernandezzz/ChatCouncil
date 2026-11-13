@@ -30,17 +30,43 @@ slint::slint! {
         out property <length> area-ancho: area.width;
         out property <length> area-alto: area.height;
         callback area-cambio();
-        // El área del panel: el webview se reacomoda cuando cambia su tamaño.
-        area := Rectangle {
-            changed width => { root.area-cambio(); }
-            changed height => { root.area-cambio(); }
+        in-out property <string> ultima-tecla: "ninguna";
+        forward-focus: teclas;
+        VerticalLayout {
+            // El área del panel: el webview se reacomoda cuando cambia su tamaño.
+            area := Rectangle {
+                changed width => { root.area-cambio(); }
+                changed height => { root.area-cambio(); }
+            }
+            // PAN-012: a esta franja vuelven el Tab que sale de la página y F1 a F5. El diseño es de PART-014.
+            teclas := FocusScope {
+                height: 32px;
+                key-pressed(e) => {
+                    if (e.text == Key.F1) { root.ultima-tecla = "F1"; return accept; }
+                    if (e.text == Key.F2) { root.ultima-tecla = "F2"; return accept; }
+                    if (e.text == Key.F3) { root.ultima-tecla = "F3"; return accept; }
+                    if (e.text == Key.F4) { root.ultima-tecla = "F4"; return accept; }
+                    if (e.text == Key.F5) { root.ultima-tecla = "F5"; return accept; }
+                    reject
+                }
+                // TEXTO-PENDIENTE: «Foco: la app», «Foco: la página» y «Última tecla: …».
+                Text {
+                    x: 8px;
+                    vertical-alignment: center;
+                    text: (teclas.has-focus ? "Foco: la app" : "Foco: la página") + " · Última tecla: " + root.ultima-tecla;
+                }
+            }
         }
     }
 }
 
 /// Las páginas de prueba viajan dentro del ejecutable (ADR-0010, consecuencias) y se escriben en la
 /// carpeta de datos que se esté usando, para servirlas como cc-prueba.test.
-const PAGINAS_DE_PRUEBA: [(&str, &[u8]); 11] = [
+const PAGINAS_DE_PRUEBA: [(&str, &[u8]); 12] = [
+    (
+        "adjuntar.html",
+        include_bytes!("../../../tests/paginas/adjuntar.html"),
+    ),
     (
         "chatgpt.html",
         include_bytes!("../../../tests/paginas/chatgpt.html"),

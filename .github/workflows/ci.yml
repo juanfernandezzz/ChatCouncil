@@ -30,3 +30,17 @@ jobs:
           if (Test-Path $salida) { Get-Content $salida -Encoding UTF8 } else { "No se escribió $salida" }
           "Código de salida: $($p.ExitCode)"
           exit $p.ExitCode
+      # PRU-T19: las tres fases de la interfaz, en arranques distintos sobre la misma carpeta temporal.
+      - name: pruebainterfaz
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $datos = Join-Path $env:RUNNER_TEMP 'pruebainterfaz'
+          New-Item -ItemType Directory $datos | Out-Null
+          foreach ($fase in 1, 2, 3) {
+            $salida = Join-Path $env:RUNNER_TEMP "pruebainterfaz-$fase.txt"
+            $p = Start-Process .\target\debug\ChatCouncilNueva.exe -ArgumentList '-pruebainterfaz', $salida, '-datos', $datos, '-fase', "$fase" -PassThru -Wait
+            if (Test-Path $salida) { Get-Content $salida -Encoding UTF8 } else { "No se escribió $salida" }
+            "Código de salida de la fase ${fase}: $($p.ExitCode)"
+            if ($p.ExitCode -ne 0) { exit $p.ExitCode }
+          }

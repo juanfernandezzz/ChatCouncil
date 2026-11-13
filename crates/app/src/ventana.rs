@@ -1,0 +1,597 @@
+//! La ventana de la app (PART-014): la misma estructura y los mismos textos que Ronda.uxml y
+//! Configuracion.uxml, con los controles de Slint. Los textos que vienen de nucleo::ajustes los pone
+//! interfaz.rs; acá quedan los literales del uxml.
+
+slint::slint! {
+    import { Button, CheckBox, ComboBox, LineEdit, ScrollView, AboutSlint, Palette } from "std-widgets.slint";
+
+    // ADR-0010, punto 11: «ChatCouncil (nueva)» hasta el relevo (E9).
+    // ARR-007: con -autoprueba no se arma la interfaz; el panel va en una ventana sola.
+    export component Lienzo inherits Window {
+        title: "ChatCouncil (nueva)";
+        width: 800px;
+        height: 600px;
+    }
+
+    export struct Marca { id: string, nombre: string, marcado: bool }
+    export struct Cuenta { id: string, nombre: string, estado: string }
+    export struct Fila { id: string, nombre: string, estado: string, rol: bool, visible: bool, actual: bool }
+    export struct Anterior { id: string, pregunta: string, detalle: string, carpeta: string }
+
+    // El foco visible de todos los controles: un borde de 2 px en #3A79E0 (WCAG 2.4.7).
+    component Anillo inherits Rectangle {
+        in property <bool> foco;
+        border-width: foco ? 2px : 0px;
+        border-color: #3A79E0;
+        border-radius: 6px;
+    }
+
+    // Botón con 48 dp de alto mínimo (WCAG 2.5.8) y el foco en #3A79E0.
+    component Boton inherits Rectangle {
+        in property <string> text;
+        in property <bool> primario;
+        in property <bool> habilitado: true;
+        callback clicked;
+        min-height: 48px;
+        min-width: max(48px, b.min-width);
+        preferred-width: b.preferred-width;
+        horizontal-stretch: 0;
+        forward-focus: b;
+        b := Button {
+            width: parent.width;
+            height: parent.height;
+            text: root.text;
+            primary: root.primario;
+            enabled: root.habilitado;
+            clicked => { root.clicked(); }
+        }
+        Anillo { foco: b.has-focus; }
+    }
+
+    component Marcar inherits Rectangle {
+        in property <string> text;
+        in-out property <bool> checked;
+        min-height: 48px;
+        preferred-width: c.preferred-width;
+        horizontal-stretch: 0;
+        c := CheckBox {
+            width: parent.width;
+            height: parent.height;
+            text: root.text;
+            checked <=> root.checked;
+        }
+        Anillo { foco: c.has-focus; }
+    }
+
+    component Elegir inherits VerticalLayout {
+        in property <string> etiqueta;
+        in property <[string]> opciones;
+        in-out property <int> indice;
+        forward-focus: cb;
+        spacing: 4px;
+        Text { text: root.etiqueta; wrap: word-wrap; color: Palette.foreground; }
+        Rectangle {
+            min-height: 48px;
+            cb := ComboBox {
+                width: parent.width;
+                height: parent.height;
+                model: root.opciones;
+                current-index <=> root.indice;
+                accessible-label: root.etiqueta;
+            }
+            Anillo { foco: cb.has-focus; }
+        }
+    }
+
+    component Parrafo inherits Text {
+        wrap: word-wrap;
+        color: Palette.foreground;
+    }
+
+    component Secundario inherits Text {
+        wrap: word-wrap;
+        color: Palette.foreground.transparentize(35%);
+    }
+
+    component TituloBloque inherits Text {
+        font-weight: 600;
+        font-size: 1.15rem;
+        wrap: word-wrap;
+        color: Palette.foreground;
+    }
+
+    // Una fila de la lista de paneles: enfocable y con Enter, como un botón (WCAG 2.1.1).
+    component FilaPanel inherits Rectangle {
+        in property <Fila> fila;
+        callback activar();
+        min-height: 48px;
+        background: fila.actual ? Palette.selection-background.transparentize(70%) : transparent;
+        border-radius: 6px;
+        accessible-role: list-item;
+        accessible-label: fila.nombre + ", " + fila.estado;
+        accessible-item-selected: fila.actual;
+        accessible-action-default => { root.activar(); }
+        ta := TouchArea { clicked => { fs.focus(); root.activar(); } }
+        fs := FocusScope {
+            key-pressed(e) => {
+                if (e.text == Key.Return || e.text == " ") { root.activar(); return accept; }
+                reject
+            }
+        }
+        HorizontalLayout {
+            padding-left: 12px;
+            padding-right: 12px;
+            spacing: 8px;
+            Text { text: fila.nombre; font-weight: 600; vertical-alignment: center; color: Palette.foreground; }
+            Text { text: fila.estado; vertical-alignment: center; horizontal-alignment: right; wrap: word-wrap; color: Palette.foreground.transparentize(35%); }
+        }
+        Anillo { foco: fs.has-focus; }
+    }
+
+    export component Ventana inherits Window {
+        title: "ChatCouncil (nueva)";
+        preferred-width: 1280px;
+        preferred-height: 800px;
+        min-width: 360px;
+        min-height: 480px;
+
+        // ----- clases de ancho (D3), secciones (D2) y primer arranque (ARR-002)
+        in property <bool> primer-arranque;
+        in-out property <string> seccion: "ronda";
+        // El ancho se copia con changed: atado directo a width, el riel cambia el mínimo de la ventana y forma un ciclo.
+        property <length> ancho-visto: 1280px;
+        init => { self.ancho-visto = self.width; }
+        changed width => { self.ancho-visto = self.width; }
+        out property <bool> ancha: root.ancho-visto >= 840px;
+        out property <bool> compacta: root.ancho-visto < 600px;
+        out property <bool> riel-visible: !root.primer-arranque && !root.compacta;
+        in-out property <bool> cajon-abierto;
+        // IFZ-013: el cajón aparta la página nativa, que va encima de todo lo que dibuja Slint.
+        changed cajon-abierto => { root.area-cambio(); root.cuenta-area-cambio(); }
+        callback seccion-cambiada(string);
+        callback tecla(string);
+        out property <bool> oscuro-aplicado: Palette.color-scheme == ColorScheme.dark;
+
+        // ----- Ronda (la mínima de PART-014; PART-015 la conecta)
+        in property <[Fila]> filas;
+        in property <string> titulo-investigadores;
+        in property <bool> roles-visibles;
+        in property <string> barra-titulo;
+        in property <int> etapa-actual;
+        in property <string> paso-texto;
+        in property <bool> paso-habilitado;
+        in property <string> frase;
+        in property <string> contadores;
+        in property <string> contadores-angosta;
+        in property <string> resultado;
+        in property <bool> resultado-problema;
+        in property <string> cabecera-titulo;
+        callback paso();
+        callback seleccionar(string);
+        out property <length> area-x: pagina.absolute-position.x;
+        out property <length> area-y: pagina.absolute-position.y;
+        out property <length> area-ancho: pagina.width;
+        out property <length> area-alto: pagina.height;
+        callback area-cambio();
+
+        // ----- Ajustes (Configuracion.uxml); los textos de nucleo::ajustes los pone la interfaz
+        in property <string> titulo-ajustes;
+        in property <string> bienvenida;
+        in property <int> paso-guia;
+        in property <string> texto-paso-guia;
+        in property <[Marca]> marcas;
+        in property <[string]> nombres;
+        in-out property <int> idx-integrador;
+        in-out property <int> idx-verificador1;
+        in-out property <int> idx-verificador2;
+        in-out property <int> idx-redactor;
+        in property <[string]> etiquetas-rol;
+        in property <string> aviso-reabrir;
+        in property <string> mensaje;
+        in property <bool> mensaje-problema;
+        in property <string> texto-cuentas;
+        in property <string> texto-entrar;
+        in property <string> texto-ir-a-la-ronda;
+        in property <[Cuenta]> cuentas;
+        in property <bool> vista-cuenta;
+        in property <string> cuenta-titulo;
+        in property <string> cuenta-estado;
+        out property <length> cuenta-x: cuenta-pagina.absolute-position.x;
+        out property <length> cuenta-y: cuenta-pagina.absolute-position.y;
+        out property <length> cuenta-ancho: cuenta-pagina.width;
+        out property <length> cuenta-alto: cuenta-pagina.height;
+        callback cuenta-area-cambio();
+        in property <string> etiqueta-tema;
+        in property <string> etiqueta-tamano;
+        in property <[string]> nombres-tema;
+        in property <[string]> nombres-tamano;
+        in-out property <int> idx-tema;
+        in-out property <int> idx-tamano;
+        in property <string> mensaje-apariencia;
+        in property <string> que-se-guarda;
+        in property <string> ruta-datos;
+        in property <string> texto-copiar;
+        in property <string> texto-abrir;
+        in property <bool> puede-abrir;
+        in property <string> como-copiar;
+        callback guardar();
+        callback entrar(string);
+        callback volver();
+        callback comprobar();
+        callback empezar();
+        callback apariencia-elegida();
+        callback copiar-ruta();
+        callback abrir-carpeta();
+
+        // ----- Historial y Ayuda
+        in property <[Anterior]> anteriores;
+        callback abrir-informe(string);
+        in property <string> version;
+        in property <string> licencias;
+        callback ver-versiones();
+
+        public function aplicar-tema(oscuro: bool) {
+            Palette.color-scheme = oscuro ? ColorScheme.dark : ColorScheme.light;
+        }
+
+        // Copia la ruta con el portapapeles del sistema, como LineEdit (Ctrl+C).
+        public function copiar() {
+            ruta.select-all();
+            ruta.copy();
+            ruta.clear-selection();
+        }
+
+        public function ir(s: string) {
+            root.seccion = s;
+            root.cajon-abierto = false;
+            root.seccion-cambiada(s);
+        }
+
+        // F4 y F5 (D49): la interfaz elige la región y aquí se le da el foco.
+        public function enfocar(region: string) -> bool {
+            if (region == "riel") { ir-ronda.focus(); return true; }
+            if (region == "guia") { paso-ancha.focus(); return true; }
+            if (region == "lista") { lista.focus(); return true; }
+            if (region == "abajo") { paso-angosta.focus(); return true; }
+            if (region == "formulario") { integrador.focus(); return true; }
+            if (region == "barra") { volver.focus(); return true; }
+            return false;
+        }
+
+        forward-focus: teclas;
+        teclas := FocusScope {
+            // Teclado de una mano (D49): F1 a F5 llegan a la app esté donde esté el foco. Alt+F4 es del sistema.
+            capture-key-pressed(e) => {
+                if (e.modifiers.alt) { return reject; }
+                if (e.text == Key.F1) { root.tecla("F1"); return accept; }
+                if (e.text == Key.F2) { root.tecla("F2"); return accept; }
+                if (e.text == Key.F3) { root.tecla("F3"); return accept; }
+                if (e.text == Key.F4) { root.tecla("F4"); return accept; }
+                if (e.text == Key.F5) { root.tecla("F5"); return accept; }
+                reject
+            }
+
+            HorizontalLayout {
+                // ----- riel (D2, D48): desde 600 dp y fuera del primer arranque
+                VerticalLayout {
+                    width: root.riel-visible ? 128px : 0px;
+                    visible: root.riel-visible;
+                    padding: root.riel-visible ? 8px : 0px;
+                    spacing: 4px;
+                    alignment: start;
+                    accessible-role: tab-list;
+                    ir-ronda := Boton { text: "Ronda"; primario: root.seccion == "ronda"; clicked => { root.ir("ronda"); } }
+                    Boton { text: "Historial"; primario: root.seccion == "historial"; clicked => { root.ir("historial"); } }
+                    Boton { text: "Ajustes"; primario: root.seccion == "ajustes"; clicked => { root.ir("ajustes"); } }
+                    Boton { text: "Ayuda"; primario: root.seccion == "ayuda"; clicked => { root.ir("ayuda"); } }
+                }
+
+                Rectangle {
+                    // ===================== Ronda
+                    VerticalLayout {
+                        visible: root.seccion == "ronda";
+                        padding: 8px;
+                        spacing: 8px;
+                        // Angosta (D5): barra con el título de la etapa.
+                        HorizontalLayout {
+                            visible: !root.ancha;
+                            height: root.ancha ? 0px : 56px;
+                            spacing: 8px;
+                            if root.compacta : Boton { text: "Menú"; clicked => { root.cajon-abierto = true; } }
+                            Text { text: root.barra-titulo; font-weight: 600; vertical-alignment: center; color: Palette.foreground; }
+                        }
+                        // Ancha (D4): la guía con las siete etapas y el paso.
+                        VerticalLayout {
+                            visible: root.ancha;
+                            height: root.ancha ? self.preferred-height : 0px;
+                            spacing: 8px;
+                            HorizontalLayout {
+                                spacing: 4px;
+                                for nombre[i] in ["1 Pregunta", "2 Investigación", "3 Operación", "4 Integración", "5 Verificación", "6 Redacción", "7 Informe"] : VerticalLayout {
+                                    spacing: 2px;
+                                    Text { text: nombre; font-weight: i == root.etapa-actual ? 600 : 400; color: Palette.foreground; }
+                                    Rectangle { height: 4px; background: i <= root.etapa-actual ? #3A79E0 : Palette.border; }
+                                }
+                            }
+                            HorizontalLayout {
+                                spacing: 12px;
+                                paso-ancha := Boton { text: root.paso-texto; primario: true; habilitado: root.paso-habilitado; clicked => { root.paso(); } }
+                                VerticalLayout {
+                                    Parrafo { text: root.frase; }
+                                    Secundario { text: root.contadores; }
+                                    Parrafo { text: root.resultado; color: root.resultado-problema ? #C42B1C : Palette.foreground; }
+                                }
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            lista := FocusScope {
+                                width: root.ancha ? 280px : 0px;
+                                visible: root.ancha;
+                                accessible-role: list;
+                                ScrollView {
+                                    VerticalLayout {
+                                        spacing: 2px;
+                                        alignment: start;
+                                        Text { text: root.titulo-investigadores; font-weight: 600; color: Palette.foreground; }
+                                        for f in root.filas : FilaPanel {
+                                            visible: f.visible && !f.rol;
+                                            height: (f.visible && !f.rol) ? self.min-height : 0px;
+                                            fila: f;
+                                            activar => { root.seleccionar(f.id); }
+                                        }
+                                        if root.roles-visibles : Text { text: "Verificación e integración"; font-weight: 600; color: Palette.foreground; }
+                                        for f in root.filas : FilaPanel {
+                                            visible: f.visible && f.rol;
+                                            height: (f.visible && f.rol) ? self.min-height : 0px;
+                                            fila: f;
+                                            activar => { root.seleccionar(f.id); }
+                                        }
+                                    }
+                                }
+                            }
+                            VerticalLayout {
+                                spacing: 4px;
+                                Text { text: root.cabecera-titulo; font-weight: 600; color: Palette.foreground; height: root.ancha ? 32px : 0px; visible: root.ancha; }
+                                // La página del proveedor (vista nativa) va encima de este rectángulo.
+                                pagina := Rectangle {
+                                    border-width: 1px;
+                                    border-color: Palette.border;
+                                    changed width => { root.area-cambio(); }
+                                    changed height => { root.area-cambio(); }
+                                    changed x => { root.area-cambio(); }
+                                    changed y => { root.area-cambio(); }
+                                }
+                            }
+                        }
+                        // Angosta: abajo, el paso.
+                        VerticalLayout {
+                            visible: !root.ancha;
+                            height: root.ancha ? 0px : self.preferred-height;
+                            spacing: 4px;
+                            paso-angosta := Boton { text: root.paso-texto; primario: true; habilitado: root.paso-habilitado; horizontal-stretch: 1; clicked => { root.paso(); } }
+                            Parrafo { text: root.resultado; }
+                            Parrafo { text: root.frase; }
+                            Secundario { text: root.contadores-angosta; }
+                        }
+                    }
+
+                    // ===================== Historial (D12)
+                    VerticalLayout {
+                        visible: root.seccion == "historial";
+                        padding: 8px;
+                        if root.compacta : HorizontalLayout {
+                            spacing: 8px;
+                            Boton { text: "Menú"; clicked => { root.cajon-abierto = true; } }
+                            Text { text: "Rondas anteriores"; font-weight: 600; vertical-alignment: center; color: Palette.foreground; }
+                        }
+                        ScrollView {
+                            VerticalLayout {
+                                padding: 16px;
+                                spacing: 12px;
+                                alignment: start;
+                                TituloBloque { text: "Rondas anteriores"; font-size: 1.4rem; }
+                                Secundario { text: "Las rondas de este aparato, la más nueva primero."; }
+                                if root.anteriores.length == 0 : Parrafo { text: "Todavía no hay rondas en este aparato."; }
+                                for r in root.anteriores : HorizontalLayout {
+                                    spacing: 12px;
+                                    VerticalLayout {
+                                        Parrafo { text: r.pregunta; font-weight: 600; }
+                                        Secundario { text: r.detalle; }
+                                    }
+                                    if r.carpeta != "" : Boton { text: "Abrir el informe"; clicked => { root.abrir-informe(r.carpeta); } }
+                                }
+                            }
+                        }
+                    }
+
+                    // ===================== Ajustes y primer arranque (Configuracion.uxml)
+                    VerticalLayout {
+                        visible: root.seccion == "ajustes" && !root.vista-cuenta;
+                        padding: 8px;
+                        if root.compacta && !root.primer-arranque : HorizontalLayout {
+                            spacing: 8px;
+                            Boton { text: "Menú"; clicked => { root.cajon-abierto = true; } }
+                            Text { text: "Ajustes"; font-weight: 600; vertical-alignment: center; color: Palette.foreground; }
+                        }
+                        ScrollView {
+                            VerticalLayout {
+                                padding: 16px;
+                                spacing: 12px;
+                                alignment: start;
+                                TituloBloque { text: root.titulo-ajustes; font-size: 1.4rem; }
+                                if root.primer-arranque : Parrafo { text: root.bienvenida; }
+                                if root.primer-arranque : Secundario { text: root.texto-paso-guia; }
+
+                                // Consejo y roles (D11)
+                                VerticalLayout {
+                                    visible: root.paso-guia != 2;
+                                    height: root.paso-guia != 2 ? self.preferred-height : 0px;
+                                    spacing: 8px;
+                                    TituloBloque { text: "Tu consejo"; }
+                                    Parrafo { text: "Marca los proveedores que se cargan al abrir la app."; }
+                                    for m in root.marcas : Marcar { text: m.nombre; checked <=> m.marcado; }
+                                    Text { text: "Roles"; font-weight: 600; color: Palette.foreground; }
+                                    Secundario { text: "Los proveedores sin rol investigan y operan."; }
+                                    integrador := Elegir { etiqueta: root.etiquetas-rol[0]; opciones: root.nombres; indice <=> root.idx-integrador; }
+                                    Elegir { etiqueta: root.etiquetas-rol[1]; opciones: root.nombres; indice <=> root.idx-verificador1; }
+                                    Elegir { etiqueta: root.etiquetas-rol[2]; opciones: root.nombres; indice <=> root.idx-verificador2; }
+                                    Elegir { etiqueta: root.etiquetas-rol[3]; opciones: root.nombres; indice <=> root.idx-redactor; }
+                                    if !root.primer-arranque : Secundario { text: root.aviso-reabrir; }
+                                    HorizontalLayout { alignment: start; Boton { text: "Guardar"; primario: true; clicked => { root.guardar(); } } }
+                                    Parrafo {
+                                        text: root.mensaje;
+                                        color: root.mensaje-problema ? #C42B1C : Palette.foreground;
+                                    }
+                                }
+
+                                // Cuentas (D10): la sesión se deduce de la página, sin leer cookies.
+                                VerticalLayout {
+                                    visible: root.paso-guia != 1;
+                                    height: root.paso-guia != 1 ? self.preferred-height : 0px;
+                                    spacing: 8px;
+                                    TituloBloque { text: "Tus cuentas"; }
+                                    Parrafo { text: root.texto-cuentas; }
+                                    for c in root.cuentas : HorizontalLayout {
+                                        spacing: 12px;
+                                        VerticalLayout {
+                                            Text { text: c.nombre; font-weight: 600; color: Palette.foreground; }
+                                            Secundario { text: c.estado; }
+                                        }
+                                        Boton { text: root.texto-entrar; clicked => { root.entrar(c.id); } }
+                                    }
+                                    if root.primer-arranque : HorizontalLayout {
+                                        alignment: start;
+                                        Boton { text: root.texto-ir-a-la-ronda; primario: true; clicked => { root.empezar(); } }
+                                    }
+                                }
+
+                                // Apariencia (D17): se guarda al elegir y se aplica al reabrir (D25).
+                                if !root.primer-arranque : VerticalLayout {
+                                    spacing: 8px;
+                                    TituloBloque { text: "Apariencia"; }
+                                    Elegir { etiqueta: root.etiqueta-tema; opciones: root.nombres-tema; indice <=> root.idx-tema; changed indice => { root.apariencia-elegida(); } }
+                                    Elegir { etiqueta: root.etiqueta-tamano; opciones: root.nombres-tamano; indice <=> root.idx-tamano; changed indice => { root.apariencia-elegida(); } }
+                                    Secundario { text: "El del sistema sigue lo que elegiste en Windows o en Android."; }
+                                    Parrafo { text: root.mensaje-apariencia; }
+                                }
+
+                                // Datos (D15)
+                                VerticalLayout {
+                                    visible: !root.primer-arranque;
+                                    height: !root.primer-arranque ? self.preferred-height : 0px;
+                                    spacing: 8px;
+                                    TituloBloque { text: "Tus datos"; }
+                                    Parrafo { text: root.que-se-guarda; }
+                                    Rectangle {
+                                        min-height: 48px;
+                                        ruta := LineEdit { width: parent.width; height: parent.height; text: root.ruta-datos; read-only: true; accessible-label: "Carpeta de datos"; }
+                                        Anillo { foco: ruta.has-focus; }
+                                    }
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        alignment: start;
+                                        Boton { text: root.texto-copiar; clicked => { root.copiar-ruta(); } }
+                                        if root.puede-abrir : Boton { text: root.texto-abrir; clicked => { root.abrir-carpeta(); } }
+                                    }
+                                    Secundario { text: root.como-copiar; }
+                                }
+                            }
+                        }
+                    }
+
+                    // Entrar a una cuenta (PAN-007): la página del proveedor ocupa el resto.
+                    VerticalLayout {
+                        visible: root.seccion == "ajustes" && root.vista-cuenta;
+                        padding: 8px;
+                        spacing: 8px;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            volver := Boton { text: "‹ Volver"; clicked => { root.volver(); } }
+                            VerticalLayout {
+                                Text { text: root.cuenta-titulo; font-weight: 600; color: Palette.foreground; }
+                                Secundario { text: root.cuenta-estado; }
+                            }
+                            Boton { text: "Comprobar"; clicked => { root.comprobar(); } }
+                        }
+                        cuenta-pagina := Rectangle {
+                            border-width: 1px;
+                            border-color: Palette.border;
+                            changed width => { root.cuenta-area-cambio(); }
+                            changed height => { root.cuenta-area-cambio(); }
+                            changed x => { root.cuenta-area-cambio(); }
+                            changed y => { root.cuenta-area-cambio(); }
+                        }
+                    }
+
+                    // ===================== Ayuda y Acerca de (D14, D16)
+                    VerticalLayout {
+                        visible: root.seccion == "ayuda";
+                        padding: 8px;
+                        if root.compacta : HorizontalLayout {
+                            spacing: 8px;
+                            Boton { text: "Menú"; clicked => { root.cajon-abierto = true; } }
+                            Text { text: "Ayuda"; font-weight: 600; vertical-alignment: center; color: Palette.foreground; }
+                        }
+                        ScrollView {
+                            VerticalLayout {
+                                padding: 16px;
+                                spacing: 10px;
+                                alignment: start;
+                                TituloBloque { text: "Ayuda"; font-size: 1.4rem; }
+                                TituloBloque { text: "Cómo funciona una ronda"; }
+                                Parrafo { text: "Haces una pregunta a varios proveedores de IA a la vez, cada uno en su página y con tu cuenta. Después cada proveedor revisa a ciegas lo que respondieron los demás y anota en qué coinciden y en qué no. Un integrador junta esos hallazgos en un informe, dos verificadores revisan por separado las fuentes en la web y un redactor escribe la respuesta final."; }
+                                Parrafo { text: "La app pega, captura y arma el informe. Enviar en cada página lo haces tú: así eliges qué activar en cada proveedor y nada sale sin que lo revises."; }
+                                TituloBloque { text: "Las siete etapas"; }
+                                Parrafo { text: "1. Pregunta: escribes la pregunta y la app la pega en cada página."; }
+                                Parrafo { text: "2. Investigación: en cada página activas la búsqueda web o la investigación profunda y envías; cuando terminan, la app captura las respuestas."; }
+                                Parrafo { text: "3. Operación: la app abre una conversación nueva en cada página y le pega las respuestas de los demás, sin decir de quién son. Tú envías y la app captura lo que cada uno encontró."; }
+                                Parrafo { text: "4. Integración: el integrador recibe la tabla de hallazgos y escribe el informe."; }
+                                Parrafo { text: "5. Verificación: dos verificadores revisan por separado en la web las fuentes de lo que conviene rescatar; el informe muestra las dos verificaciones para compararlas."; }
+                                Parrafo { text: "6. Redacción: el redactor recibe todo el material en un archivo adjunto y escribe la respuesta final."; }
+                                Parrafo { text: "7. Informe: la app comprueba las direcciones web que citaron los verificadores y arma una carpeta con el informe en Markdown y PDF y las respuestas de cada proveedor."; }
+                                TituloBloque { text: "Palabras de la app"; }
+                                Parrafo { text: "Proveedores: los servicios de IA de tu consejo (ChatGPT, Gemini y los demás). Los que no tienen un rol investigan y después evalúan las respuestas de los otros."; }
+                                Parrafo { text: "Roles: integrador, dos verificadores y redactor. Cada uno trabaja en su etapa; el redactor puede ser el mismo integrador."; }
+                                TituloBloque { text: "Atajos de teclado"; }
+                                Parrafo { text: "F1 y F2: el panel anterior y el siguiente. Ctrl+Mayús+Tab y Ctrl+Tab hacen lo mismo."; }
+                                Parrafo { text: "F3: el paso siguiente (el botón principal)."; }
+                                Parrafo { text: "F4 y F5: pasar a la parte siguiente o a la anterior de la pantalla: la guía, la lista de paneles, el panel y la página del proveedor."; }
+                                Parrafo { text: "Funcionan también con el foco dentro de la página de un proveedor: la tecla vuelve a la app."; }
+                                Secundario { text: "Ninguno usa Enter ni Ctrl+Enter, que en las páginas envían."; }
+                                TituloBloque { text: "Acerca de ChatCouncil"; }
+                                Parrafo { text: root.version; }
+                                Parrafo { text: "Al abrirse, la app busca una versión nueva y te la ofrece arriba. Las versiones publicadas están en la página del proyecto."; }
+                                HorizontalLayout { alignment: start; Boton { text: "Ver las versiones publicadas"; clicked => { root.ver-versiones(); } } }
+                                Text { text: "Licencias de terceros"; font-weight: 600; color: Palette.foreground; }
+                                // La licencia libre de Slint pide mostrar este aviso (Royalty-free 2.0).
+                                HorizontalLayout { alignment: start; AboutSlint { } }
+                                Secundario { text: root.licencias; }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Cajón modal de la clase compacta (D3): las mismas secciones que el riel.
+            if root.cajon-abierto : Rectangle {
+                background: #00000080;
+                TouchArea { clicked => { root.cajon-abierto = false; } }
+                Rectangle {
+                    x: 0;
+                    width: min(300px, parent.width * 0.8);
+                    background: Palette.background;
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 4px;
+                        alignment: start;
+                        Boton { text: "Ronda"; clicked => { root.ir("ronda"); } }
+                        Boton { text: "Historial"; clicked => { root.ir("historial"); } }
+                        Boton { text: "Ajustes"; clicked => { root.ir("ajustes"); } }
+                        Boton { text: "Ayuda"; clicked => { root.ir("ayuda"); } }
+                    }
+                }
+            }
+        }
+    }
+}

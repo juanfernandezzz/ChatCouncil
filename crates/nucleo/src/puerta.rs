@@ -62,6 +62,122 @@ pub struct RondaAnterior {
     pub carpeta_informe: Option<PathBuf>,
 }
 
+impl RondaAnterior {
+    /// IFZ-014 e IFZ-015: la pregunta y el detalle de la fila del historial (Aplicacion.cs:312-351).
+    pub fn lineas(
+        &self,
+        desfase_local: impl Fn(SystemTime) -> i64,
+        android: bool,
+    ) -> (String, String) {
+        let pregunta = match &self.pregunta {
+            Some(p) if p.como_str() == Some(PROMPT_SIN_RONDA) => {
+                "(capturada sin pegar la pregunta, y sin declararla)".to_string()
+            }
+            // Una pregunta larga no ocupa toda la lista: 240 unidades UTF-16, como Substring.
+            Some(p) => {
+                let u = p.a_utf16();
+                if u.len() > 240 {
+                    let corta = Texto::desde_utf16(&u[..240]);
+                    format!("{}…", corta.para_mostrar().trim_end())
+                } else {
+                    p.para_mostrar().into_owned()
+                }
+            }
+            None => String::new(),
+        };
+        let enviada = self
+            .enviada_en
+            .as_ref()
+            .map(|t| t.para_mostrar().into_owned())
+            .unwrap_or_default();
+        let fecha = leer_utc(&enviada)
+            .map(|t| fecha_larga(t, desfase_local(t)))
+            .unwrap_or(enviada);
+        let etapa = crate::ronda::nombre_de_etapa(if self.carpeta_informe.is_some() {
+            "informe"
+        } else {
+            self.etapa
+        });
+        // En Android la carpeta no se abre (D41): se dice dónde está.
+        let cola = match (&self.carpeta_informe, android) {
+            (None, _) => " · sin informe".to_string(),
+            (Some(c), true) => format!(" · informe en {}", c.display()),
+            (Some(_), false) => String::new(),
+        };
+        (pregunta, format!("{fecha} · llegó a {etapa}{cola}"))
+    }
+}
+
+/// "yyyy-MM-ddTHH:mm:ss[.fff]Z" a un instante; otra forma, None.
+fn leer_utc(s: &str) -> Option<SystemTime> {
+    let b = s.as_bytes();
+    let forma = b.len() >= 20
+        && b[4] == b'-'
+        && b[7] == b'-'
+        && b[10] == b'T'
+        && b[13] == b':'
+        && b[16] == b':'
+        && s.ends_with('Z');
+    if !forma {
+        return None;
+    }
+    let resto = s.get(19..s.len() - 1)?;
+    if !(resto.is_empty()
+        || resto.starts_with('.') && resto[1..].bytes().all(|c| c.is_ascii_digit()))
+    {
+        return None;
+    }
+    let n = |r: std::ops::Range<usize>| s.get(r)?.parse::<i64>().ok();
+    let (y, m, d) = (n(0..4)?, n(5..7)?, n(8..10)?);
+    let (h, mi, se) = (n(11..13)?, n(14..16)?, n(17..19)?);
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) || h > 23 || mi > 59 || se > 60 {
+        return None;
+    }
+    // Días desde 1970-01-01 del calendario civil (H. Hinnant, days_from_civil).
+    let y2 = if m <= 2 { y - 1 } else { y };
+    let era = y2.div_euclid(400);
+    let yoe = y2 - era * 400;
+    let doy = (153 * ((m + 9) % 12) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let segundos = (era * 146_097 + doe - 719_468) * 86_400 + h * 3600 + mi * 60 + se;
+    u64::try_from(segundos)
+        .ok()
+        .map(|s| UNIX_EPOCH + Duration::from_secs(s))
+}
+
+const MESES: [&str; 12] = [
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+];
+
+/// «d 'de' MMMM 'de' yyyy, HH:mm» en español, en la hora local.
+fn fecha_larga(t: SystemTime, desfase_local_s: i64) -> String {
+    let local = if desfase_local_s >= 0 {
+        t + Duration::from_secs(desfase_local_s as u64)
+    } else {
+        t - Duration::from_secs(desfase_local_s.unsigned_abs())
+    };
+    let s = formatear_utc(local);
+    let dia: u32 = s[8..10].parse().unwrap_or(0);
+    let mes: usize = s[5..7].parse().unwrap_or(1);
+    format!(
+        "{dia} de {} de {}, {}",
+        MESES[mes.clamp(1, 12) - 1],
+        &s[..4],
+        &s[11..16]
+    )
+}
+
 pub struct Puerta {
     carpeta: PathBuf,
     nuevo_id: Box<dyn FnMut() -> String>,
@@ -152,6 +268,18 @@ fn paso(etapa: &'static str, accion: &'static str, texto: &'static str) -> Paso 
     }
 }
 
+/// El texto del botón primario y si se puede usar ahora (PantallaRonda.cs:508): capturar en
+/// investigación u operación cuenta los terminados; lo imposible queda deshabilitado (D7).
+pub fn texto_del_paso(paso: &Paso, terminados: usize, rol_listo: bool) -> (String, bool) {
+    match paso.accion {
+        "capturar" if matches!(paso.etapa, "investigacion" | "operacion") => {
+            (format!("{} ({terminados})", paso.texto), terminados > 0)
+        }
+        "capturar" => (paso.texto.to_string(), rol_listo),
+        _ => (paso.texto.to_string(), true),
+    }
+}
+
 /// Por debajo de esto una lectura no es una respuesta observable (test-runner.ts): qwen llegó a
 /// devolver 3 caracteres como "terminado".
 pub const UMBRAL_LECTURA_MINIMO: usize = 20;
@@ -216,7 +344,7 @@ fn concatenar(partes: &[&Texto]) -> Texto {
 }
 
 #[cfg(windows)]
-fn desfase_local_del_sistema(t: SystemTime) -> i64 {
+pub fn desfase_local_del_sistema(t: SystemTime) -> i64 {
     #[repr(C)]
     struct FileTime {
         bajo: u32,
@@ -245,7 +373,7 @@ fn desfase_local_del_sistema(t: SystemTime) -> i64 {
 }
 
 #[cfg(unix)]
-fn desfase_local_del_sistema(t: SystemTime) -> i64 {
+pub fn desfase_local_del_sistema(t: SystemTime) -> i64 {
     use std::ffi::{c_char, c_int, c_long};
     // struct tm de glibc, musl, bionic y Darwin: nueve int, tm_gmtoff y tm_zone.
     #[repr(C)]
@@ -275,7 +403,7 @@ fn desfase_local_del_sistema(t: SystemTime) -> i64 {
 
 // shortcut: fuera de Windows y Unix la hora de los nombres de archivo es UTC; portar al sumar la plataforma.
 #[cfg(not(any(windows, unix)))]
-fn desfase_local_del_sistema(_: SystemTime) -> i64 {
+pub fn desfase_local_del_sistema(_: SystemTime) -> i64 {
     0
 }
 
@@ -2897,6 +3025,91 @@ fn discrepancia_de_sello(persistido: &[&Hecho], calculado: &[EntradaSello]) -> O
 #[cfg(test)]
 mod pruebas {
     use super::*;
+
+    #[test]
+    fn una_fecha_con_un_caracter_no_ascii_no_es_un_instante_y_no_tumba_la_app() {
+        // Revisión PART-014: el corte en el byte 19 caía en medio de la «é».
+        assert_eq!(leer_utc("2026-11-13T02:05:0\u{e9}Z"), None);
+        assert_eq!(leer_utc("2026-11-13T02:05:07.\u{e9}Z"), None);
+        assert!(leer_utc("2026-11-13T02:05:07.123Z").is_some());
+    }
+
+    #[test]
+    fn el_texto_del_paso_cuenta_los_terminados_y_se_deshabilita_sin_ninguno() {
+        let p = paso("investigacion", "capturar", "Capturar los que terminaron");
+        assert_eq!(
+            texto_del_paso(&p, 0, false),
+            ("Capturar los que terminaron (0)".into(), false)
+        );
+        assert_eq!(
+            texto_del_paso(&p, 2, false),
+            ("Capturar los que terminaron (2)".into(), true)
+        );
+        let r = paso("integracion", "capturar", "X");
+        assert_eq!(texto_del_paso(&r, 5, false), ("X".into(), false));
+        assert_eq!(texto_del_paso(&r, 0, true), ("X".into(), true));
+        let q = paso("pregunta", "pegar", "Pegar");
+        assert_eq!(texto_del_paso(&q, 0, false), ("Pegar".into(), true));
+    }
+
+    #[test]
+    fn una_ronda_anterior_se_muestra_con_su_fecha_local_y_su_etapa() {
+        // IFZ-014 e IFZ-015 (Aplicacion.cs:312-351).
+        let r = RondaAnterior {
+            ronda_id: Some("r1".into()),
+            indice: 1,
+            enviada_en: Some("2026-11-13T02:05:00.000Z".into()),
+            pregunta: Some("¿Qué?".into()),
+            etapa: "investigacion",
+            carpeta_informe: None,
+        };
+        let menos3 = |_| -3 * 3600;
+        assert_eq!(
+            r.lineas(menos3, false),
+            (
+                "¿Qué?".to_string(),
+                "12 de noviembre de 2026, 23:05 · llegó a Investigación · sin informe".to_string()
+            )
+        );
+        let con = RondaAnterior {
+            carpeta_informe: Some(PathBuf::from(r"C:\i")),
+            ..r.clone()
+        };
+        assert_eq!(
+            con.lineas(menos3, false).1,
+            "12 de noviembre de 2026, 23:05 · llegó a Informe"
+        );
+        assert_eq!(
+            con.lineas(menos3, true).1,
+            r"12 de noviembre de 2026, 23:05 · llegó a Informe · informe en C:\i"
+        );
+        let larga = RondaAnterior {
+            pregunta: Some(format!("{} b", "a".repeat(239)).into()),
+            ..r.clone()
+        };
+        assert_eq!(
+            larga.lineas(menos3, false).0,
+            format!("{}…", "a".repeat(239))
+        );
+        let sin = RondaAnterior {
+            pregunta: Some(PROMPT_SIN_RONDA.into()),
+            ..r.clone()
+        };
+        assert_eq!(
+            sin.lineas(menos3, false).0,
+            "(capturada sin pegar la pregunta, y sin declararla)"
+        );
+        let ilegible = RondaAnterior {
+            enviada_en: Some("ayer".into()),
+            ..r
+        };
+        assert!(
+            ilegible
+                .lineas(menos3, false)
+                .1
+                .starts_with("ayer · llegó a")
+        );
+    }
     use crate::registro::pruebas::str_de;
     use crate::urls::pruebas::HttpFalso;
     use std::cell::RefCell;

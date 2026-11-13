@@ -264,9 +264,141 @@ pub fn declarar(
     Ok(Ok(DECLARADA))
 }
 
+/// Las siete etapas, en orden, y su nombre a la vista (PantallaRonda.cs:31).
+pub const ETAPAS: [&str; 7] = [
+    "pregunta",
+    "investigacion",
+    "operacion",
+    "integracion",
+    "verificacion",
+    "redaccion",
+    "informe",
+];
+pub const NOMBRES_ETAPA: [&str; 7] = [
+    "Pregunta",
+    "Investigación",
+    "Operación",
+    "Integración",
+    "Verificación",
+    "Redacción",
+    "Informe",
+];
+
+pub fn nombre_de_etapa(etapa: &str) -> &'static str {
+    ETAPAS
+        .iter()
+        .position(|e| *e == etapa)
+        .map_or("", |i| NOMBRES_ETAPA[i])
+}
+
+/// La barra de la Ronda: «{Etapa} · {n} de 7» (PantallaRonda.cs:437).
+pub fn titulo_de_etapa(etapa: &str) -> String {
+    let i = ETAPAS.iter().position(|e| *e == etapa);
+    // La etapa sale de etapa_de_ronda, que solo da valores de ETAPAS; en compilación de prueba se exige.
+    debug_assert!(i.is_some(), "etapa desconocida: {etapa}");
+    let i = i.unwrap_or(0);
+    format!("{} · {} de {}", NOMBRES_ETAPA[i], i + 1, ETAPAS.len())
+}
+
+/// Los roles de la ronda sin repetir proveedor (integrador, verificadores, redactor) y la función de
+/// cada uno en su fila (PantallaRonda.cs:96 y 202-206).
+pub fn funciones_de_roles(roles: &RolesElegidos) -> Vec<(String, &'static str)> {
+    let mismo = roles.redactor == roles.integrador;
+    let mut v: Vec<(String, &'static str)> = Vec::new();
+    // Como el diccionario de la Unity: la última asignación gana y el orden es el de la primera.
+    let mut poner = |id: &str, f: &'static str| match v.iter_mut().find(|(i, _)| i == id) {
+        Some(x) => x.1 = f,
+        None => v.push((id.to_string(), f)),
+    };
+    let integra = if mismo {
+        "Integra y redacta"
+    } else {
+        "Integra"
+    };
+    poner(&roles.integrador, integra);
+    for id in roles.verificadores() {
+        poner(id, "Verifica");
+    }
+    poner(&roles.redactor, if mismo { integra } else { "Redacta" });
+    v
+}
+
+/// IFZ-005: el símbolo de IconoEstado y la palabra de cada estado de `Puerta::estado_de_panel`.
+pub fn icono_y_palabra(estado: &str) -> (&'static str, &'static str) {
+    match estado {
+        "por-pegar" => ("por-pegar", "Por pegar"),
+        "pegado-falta-enviar" => ("falta-enviar", "Pegado, falta que envíes"),
+        "respondiendo" => ("respondiendo", "Respondiendo"),
+        "parece-terminado-observado" | "parece-terminado-deducido" => {
+            ("terminado", "Parece terminado")
+        }
+        "capturado" => ("capturado", "Capturado"),
+        "con-problema" => ("problema", "Con problema"),
+        _ => ("", ""),
+    }
+}
+
 #[cfg(test)]
 mod pruebas {
     use super::*;
+
+    #[test]
+    fn el_titulo_de_la_barra_dice_la_etapa_y_su_numero() {
+        assert_eq!(titulo_de_etapa("investigacion"), "Investigación · 2 de 7");
+        assert_eq!(titulo_de_etapa("pregunta"), "Pregunta · 1 de 7");
+        assert_eq!(titulo_de_etapa("informe"), "Informe · 7 de 7");
+        assert_eq!(nombre_de_etapa("verificacion"), "Verificación");
+    }
+
+    #[test]
+    fn cada_estado_de_panel_tiene_su_simbolo_y_su_palabra() {
+        assert_eq!(icono_y_palabra("por-pegar"), ("por-pegar", "Por pegar"));
+        assert_eq!(
+            icono_y_palabra("pegado-falta-enviar"),
+            ("falta-enviar", "Pegado, falta que envíes")
+        );
+        assert_eq!(
+            icono_y_palabra("respondiendo"),
+            ("respondiendo", "Respondiendo")
+        );
+        assert_eq!(
+            icono_y_palabra("parece-terminado-observado"),
+            ("terminado", "Parece terminado")
+        );
+        assert_eq!(
+            icono_y_palabra("parece-terminado-deducido"),
+            ("terminado", "Parece terminado")
+        );
+        assert_eq!(icono_y_palabra("capturado"), ("capturado", "Capturado"));
+        assert_eq!(
+            icono_y_palabra("con-problema"),
+            ("problema", "Con problema")
+        );
+        assert_eq!(icono_y_palabra("otro"), ("", ""));
+    }
+
+    #[test]
+    fn cada_rol_de_la_ronda_tiene_su_funcion_sin_repetir_proveedor() {
+        let r = RolesElegidos::new("claude", "grok", "kimi", "claude");
+        assert_eq!(
+            funciones_de_roles(&r),
+            vec![
+                ("claude".to_string(), "Integra y redacta"),
+                ("grok".into(), "Verifica"),
+                ("kimi".into(), "Verifica")
+            ]
+        );
+        let r = RolesElegidos::new("deepseek", "glm", "qwen", "kimi");
+        assert_eq!(
+            funciones_de_roles(&r),
+            vec![
+                ("deepseek".to_string(), "Integra"),
+                ("glm".into(), "Verifica"),
+                ("qwen".into(), "Verifica"),
+                ("kimi".into(), "Redacta")
+            ]
+        );
+    }
     use crate::json::vector;
     use crate::registro::pruebas::{campo as de, lista, str_de};
 

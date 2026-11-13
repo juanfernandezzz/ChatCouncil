@@ -1,64 +1,20 @@
 mod autoprueba;
 mod hilo;
+mod interfaz;
+mod pruebainterfaz;
+mod ventana;
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::hash::{BuildHasher, RandomState};
 use std::path::{Path, PathBuf};
-use std::rc::{Rc, Weak};
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use paneles::{Navegador, Panel};
+use slint::ComponentHandle;
 
-use crate::hilo::HiloNucleo;
-
-slint::slint! {
-    // ADR-0010, punto 11: «ChatCouncil (nueva)» hasta el relevo (E9).
-    // ARR-007: con -autoprueba no se arma la interfaz; el panel va en una ventana sola.
-    export component Lienzo inherits Window {
-        title: "ChatCouncil (nueva)";
-        width: 800px;
-        height: 600px;
-    }
-
-    export component Ventana inherits Window {
-        title: "ChatCouncil (nueva)";
-        preferred-width: 1280px;
-        preferred-height: 800px;
-        out property <length> area-x: area.absolute-position.x;
-        out property <length> area-y: area.absolute-position.y;
-        out property <length> area-ancho: area.width;
-        out property <length> area-alto: area.height;
-        callback area-cambio();
-        in-out property <string> ultima-tecla: "ninguna";
-        forward-focus: teclas;
-        VerticalLayout {
-            // El área del panel: el webview se reacomoda cuando cambia su tamaño.
-            area := Rectangle {
-                changed width => { root.area-cambio(); }
-                changed height => { root.area-cambio(); }
-            }
-            // PAN-012: a esta franja vuelven el Tab que sale de la página y F1 a F5. El diseño es de PART-014.
-            teclas := FocusScope {
-                height: 32px;
-                key-pressed(e) => {
-                    if (e.text == Key.F1) { root.ultima-tecla = "F1"; return accept; }
-                    if (e.text == Key.F2) { root.ultima-tecla = "F2"; return accept; }
-                    if (e.text == Key.F3) { root.ultima-tecla = "F3"; return accept; }
-                    if (e.text == Key.F4) { root.ultima-tecla = "F4"; return accept; }
-                    if (e.text == Key.F5) { root.ultima-tecla = "F5"; return accept; }
-                    reject
-                }
-                // TEXTO-PENDIENTE: «Foco: la app», «Foco: la página» y «Última tecla: …».
-                Text {
-                    x: 8px;
-                    vertical-alignment: center;
-                    text: (teclas.has-focus ? "Foco: la app" : "Foco: la página") + " · Última tecla: " + root.ultima-tecla;
-                }
-            }
-        }
-    }
-}
+use crate::ventana::Lienzo;
 
 /// Las páginas de prueba viajan dentro del ejecutable (ADR-0010, consecuencias) y se escriben en la
 /// carpeta de datos que se esté usando, para servirlas como cc-prueba.test.
@@ -114,7 +70,7 @@ const PAGINAS_DE_PRUEBA: [(&str, &[u8]); 12] = [
 ];
 
 /// Las siete páginas locales que abre `-paginasdeprueba`, una por investigador del consejo.
-const PAGINAS_LOCALES: [&str; 7] = [
+pub(crate) const PAGINAS_LOCALES: [&str; 7] = [
     "textarea.html",
     "chatgpt.html",
     "mistral.html",
@@ -129,41 +85,71 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let codigo = match modo(&args, std::env::var_os("LOCALAPPDATA").map(PathBuf::from)) {
         Ok(Modo::Autoprueba(salida)) => con_autoprueba(salida, arranque),
+        Ok(Modo::PruebaInterfaz {
+            datos,
+            salida,
+            fase,
+        }) => con_pruebainterfaz(datos, salida, fase),
         Ok(Modo::Normal {
             datos,
             paginas_de_prueba,
-        }) => normal(datos, paginas_de_prueba),
+            importar,
+        }) => normal(datos, paginas_de_prueba, importar),
         Err(e) => {
             eprintln!("{e}");
             1
         }
     };
+    hilo::SALIENDO.store(true, std::sync::atomic::Ordering::SeqCst);
     std::process::exit(codigo);
 }
 
 #[derive(Debug, PartialEq)]
 enum Modo {
     Autoprueba(PathBuf),
+    /// PRU-T19: siempre con -datos, nunca sobre la carpeta real.
+    PruebaInterfaz {
+        datos: PathBuf,
+        salida: PathBuf,
+        fase: u32,
+    },
     Normal {
         datos: PathBuf,
         paginas_de_prueba: bool,
+        /// ADR-0006: sin -datos se importan las conversaciones de la Unity desde este LOCALAPPDATA.
+        importar: Option<PathBuf>,
     },
 }
 
 fn modo(args: &[String], local: Option<PathBuf>) -> Result<Modo, String> {
-    let datos = carpeta_de_datos(args, local)?;
+    let datos = carpeta_de_datos(args, local.clone())?;
     if let Some(salida) = valor_de(args, "-autoprueba")? {
         return Ok(Modo::Autoprueba(PathBuf::from(salida)));
     }
+    if let Some(salida) = valor_de(args, "-pruebainterfaz")? {
+        let datos = valor_de(args, "-datos")?
+            .ok_or("-pruebainterfaz va solo con -datos sobre una carpeta temporal.")?;
+        let fase = valor_de(args, "-fase")?
+            .and_then(|f| f.parse().ok())
+            .filter(|f| (1..=3).contains(f))
+            .ok_or("-pruebainterfaz necesita -fase 1, 2 o 3.")?;
+        return Ok(Modo::PruebaInterfaz {
+            datos: PathBuf::from(datos),
+            salida: PathBuf::from(salida),
+            fase,
+        });
+    }
+    let explicita = valor_de(args, "-datos")?.is_some();
     // Las páginas de prueba nunca van a la carpeta real: solo con una -datos explícita.
     let paginas_de_prueba = args.iter().any(|a| a == "-paginasdeprueba");
-    if paginas_de_prueba && valor_de(args, "-datos")?.is_none() {
+    if paginas_de_prueba && !explicita {
         return Err("-paginasdeprueba va solo con -datos sobre una carpeta temporal.".into());
     }
     datos
         .map(|datos| Modo::Normal {
             datos,
             paginas_de_prueba,
+            importar: if explicita { None } else { local },
         })
         .ok_or_else(|| "No se encontró la carpeta de datos: falta -datos y LOCALAPPDATA.".into())
 }
@@ -305,131 +291,65 @@ fn con_autoprueba(salida: PathBuf, arranque: Instant) -> i32 {
     codigo.get()
 }
 
-fn area(ui: &Ventana) -> (f64, f64, f64, f64) {
-    (
-        f64::from(ui.get_area_x()),
-        f64::from(ui.get_area_y()),
-        f64::from(ui.get_area_ancho()),
-        f64::from(ui.get_area_alto()),
-    )
-}
+/// Una prueba interna que corre con la interfaz armada y da el código de salida.
+type Prueba =
+    Box<dyn FnOnce(Rc<interfaz::Interfaz>) -> std::pin::Pin<Box<dyn Future<Output = i32>>>>;
 
-/// El primer panel ocupa el área; los demás van fuera de la ventana con su tamaño, no a 0×0, para que
-/// una SPA siga montando (PantallaRonda.Ubicar).
-fn ubicar(ui: &Ventana, paneles: &[Rc<Panel>]) {
-    let (x, y, ancho, alto) = area(ui);
-    for (i, p) in paneles.iter().enumerate() {
-        let r = if i == 0 {
-            p.rect(x, y, ancho, alto)
-        } else {
-            p.rect(-ancho - 100.0, 0.0, ancho, alto)
-        };
-        if let Err(e) = r {
-            eprintln!("No se pudo reacomodar el panel: {e}");
-        }
-    }
-}
-
-fn normal(datos: PathBuf, paginas_de_prueba: bool) -> i32 {
-    let ui = match Ventana::new() {
-        Ok(ui) => ui,
+/// Arma la interfaz y corre el bucle de la ventana; `prueba` corre dentro con la interfaz armada.
+fn con_interfaz(o: interfaz::Opciones, prueba: Option<Prueba>) -> i32 {
+    let i = match interfaz::Interfaz::armar(o) {
+        Ok(i) => i,
         Err(e) => {
-            eprintln!("No se pudo crear la ventana: {e}");
+            eprintln!("{e}");
             return 1;
         }
     };
-    let _nucleo = HiloNucleo::iniciar(datos.clone());
-    let abiertos: Rc<RefCell<Vec<Rc<Panel>>>> = Rc::default();
-
-    let (w, a) = (ui.as_weak(), abiertos.clone());
-    ui.on_area_cambio(move || {
-        if let Some(ui) = w.upgrade() {
-            ubicar(&ui, &a.borrow());
+    let codigo = Rc::new(Cell::new(if prueba.is_some() { 1 } else { 0 }));
+    if let Some(prueba) = prueba {
+        let (c, x) = (codigo.clone(), i.clone());
+        if let Err(e) = slint::spawn_local(async move {
+            c.set(prueba(x).await);
+            let _ = slint::quit_event_loop();
+        }) {
+            eprintln!("No se pudo empezar la prueba: {e}");
+            return 1;
         }
-    });
-
-    let (w, a) = (ui.as_weak(), abiertos.clone());
-    let apertura = slint::spawn_local(async move {
-        let Some(ui) = w.upgrade() else { return };
-        let r = async {
-            // Revisión PART-011, hallazgo 4: solo con -paginasdeprueba se escriben y se sirven las páginas de prueba.
-            let (navegador, urls) = if paginas_de_prueba {
-                let carpeta = escribir_paginas_de_prueba(&datos)?;
-                let urls = PAGINAS_LOCALES.map(|p| format!("https://cc-prueba.test/{p}"));
-                (Navegador::new(&datos, Some(carpeta)), urls.to_vec())
-            } else {
-                // shortcut: un panel en blanco; desde PART-014 los paneles abren los proveedores del consejo.
-                (
-                    Navegador::new(&datos, None),
-                    vec!["about:blank".to_string()],
-                )
-            };
-            let mut cargas = Vec::new();
-            for url in &urls {
-                let panel = crear_panel(&navegador, ui.window(), "proveedores", area(&ui)).await?;
-                cargas.push(panel.navegar(url));
-                a.borrow_mut().push(Rc::new(panel));
-                ubicar(&ui, &a.borrow());
-            }
-            // Como Paneles.EsperarCarga: una página que tarda no descarta su panel.
-            for (carga, url) in cargas.into_iter().zip(&urls) {
-                if let Err(e) = carga.await {
-                    eprintln!("{url}: {e}");
-                }
-            }
-            // CAP-014: el sondeo de cada página cada 1,5 s, en el reloj único de paneles. La lista se arma una vez:
-            // id, spec y el panel débil, así un panel cerrado sale solo y ninguno se empareja con otra spec.
-            // Revisión PART-013, hallazgos 2 a 5. shortcut: solo las páginas de prueba tienen id y spec por su
-            // nombre (las que no son de un proveedor van con la de chatgpt, como CompositorRecortado); desde
-            // PART-014 el id y la spec salen del proveedor de cada panel.
-            let sondeados: Vec<(String, Weak<Panel>, String)> = if paginas_de_prueba {
-                PAGINAS_LOCALES
-                    .iter()
-                    .zip(a.borrow().iter())
-                    .map(|(pagina, p)| {
-                        let id = pagina.trim_end_matches(".html").to_string();
-                        let spec = spec_de(&id)
-                            .or_else(|| spec_de("chatgpt"))
-                            .unwrap_or_default();
-                        (id, Rc::downgrade(p), spec)
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            };
-            // shortcut: los estados todavía no se muestran; desde PART-014 la interfaz los lee de aquí.
-            let mut estados = std::collections::HashMap::new();
-            while !sondeados.is_empty() {
-                let vivos: Vec<(&str, Rc<Panel>, &str)> = sondeados
-                    .iter()
-                    .filter_map(|(id, p, s)| Some((id.as_str(), p.upgrade()?, s.as_str())))
-                    .collect();
-                if vivos.is_empty() {
-                    break;
-                }
-                let lista: Vec<(&str, &Panel, &str)> =
-                    vivos.iter().map(|(id, p, s)| (*id, &**p, *s)).collect();
-                paneles::sondear(&lista, &mut estados).await;
-                if paneles::dormir(paneles::SONDEO).await.is_err() {
-                    eprintln!("El reloj de los paneles se detuvo: el sondeo de estado se corta.");
-                    break;
-                }
-            }
-            Ok::<_, String>(())
-        }
-        .await;
-        if let Err(e) = r {
-            eprintln!("No se pudieron abrir los paneles: {e}");
-        }
-    });
-    if let Err(e) = apertura
-        .map_err(|e| e.to_string())
-        .and_then(|_| ui.run().map_err(|e| e.to_string()))
-    {
+    }
+    if let Err(e) = i.ui.run() {
         eprintln!("El bucle de la ventana se cortó: {e}");
         return 1;
     }
-    0
+    codigo.get()
+}
+
+fn con_pruebainterfaz(datos: PathBuf, salida: PathBuf, fase: u32) -> i32 {
+    let o = interfaz::Opciones {
+        datos,
+        prueba: true,
+        paginas_de_prueba: false,
+    };
+    con_interfaz(
+        o,
+        Some(Box::new(move |i| {
+            Box::pin(async move { pruebainterfaz::correr(i, &salida, fase).await })
+        })),
+    )
+}
+
+fn normal(datos: PathBuf, paginas_de_prueba: bool, importar: Option<PathBuf>) -> i32 {
+    if let Some(local) = importar
+        && let Err(e) = interfaz::importar_de_la_unity(&local, &datos)
+    {
+        eprintln!("No se pudo importar el historial de la Unity: {e}");
+    }
+    con_interfaz(
+        interfaz::Opciones {
+            datos,
+            prueba: false,
+            paginas_de_prueba,
+        },
+        None,
+    )
 }
 
 #[cfg(test)]
@@ -449,7 +369,8 @@ mod pruebas {
             modo(&a, Some(r"C:\L".into())),
             Ok(Modo::Normal {
                 datos: PathBuf::from(r"C:\x"),
-                paginas_de_prueba: false
+                paginas_de_prueba: false,
+                importar: None,
             })
         );
     }
@@ -461,7 +382,8 @@ mod pruebas {
             modo(&a, Some(r"C:\L".into())),
             Ok(Modo::Normal {
                 datos: PathBuf::from(r"C:\L\ChatCouncil"),
-                paginas_de_prueba: false
+                paginas_de_prueba: false,
+                importar: Some(PathBuf::from(r"C:\L")),
             })
         );
         assert!(modo(&a, None).is_err());
@@ -499,7 +421,62 @@ mod pruebas {
             modo(&args(&["x", "-datos", r"C:\t", "-paginasdeprueba"]), local),
             Ok(Modo::Normal {
                 datos: PathBuf::from(r"C:\t"),
-                paginas_de_prueba: true
+                paginas_de_prueba: true,
+                importar: None,
+            })
+        );
+    }
+
+    #[test]
+    fn la_prueba_de_la_interfaz_va_solo_con_menos_datos_y_una_fase() {
+        // B5: este lote nunca abre la app sin -datos.
+        let local = Some(PathBuf::from(r"C:\L"));
+        assert!(
+            modo(
+                &args(&["x", "-pruebainterfaz", "s.txt", "-fase", "1"]),
+                local.clone()
+            )
+            .is_err()
+        );
+        assert!(
+            modo(
+                &args(&["x", "-pruebainterfaz", "s.txt", "-datos", r"C:	"]),
+                local.clone()
+            )
+            .is_err()
+        );
+        assert!(
+            modo(
+                &args(&[
+                    "x",
+                    "-pruebainterfaz",
+                    "s.txt",
+                    "-datos",
+                    r"C:	",
+                    "-fase",
+                    "4"
+                ]),
+                local.clone()
+            )
+            .is_err()
+        );
+        assert_eq!(
+            modo(
+                &args(&[
+                    "x",
+                    "-pruebainterfaz",
+                    "s.txt",
+                    "-datos",
+                    r"C:	",
+                    "-fase",
+                    "2"
+                ]),
+                local
+            ),
+            Ok(Modo::PruebaInterfaz {
+                datos: PathBuf::from(r"C:	"),
+                salida: PathBuf::from("s.txt"),
+                fase: 2,
             })
         );
     }

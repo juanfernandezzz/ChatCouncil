@@ -2,6 +2,7 @@
 //! un canal y responde. La interfaz espera la respuesta sin bloquear el dibujo.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::thread::JoinHandle;
 use std::time::SystemTime;
@@ -20,15 +21,25 @@ pub struct HiloNucleo {
 }
 
 impl HiloNucleo {
+    /// El consejo por defecto: lo usan la autoprueba y las pruebas del hilo.
     pub fn iniciar(datos: PathBuf) -> HiloNucleo {
+        let roles = RolesElegidos::por_defecto();
+        let activos = ronda::CONOCIDOS.iter().map(|s| s.to_string()).collect();
+        let pool = ronda::pool_de_investigadores(&ronda::CONOCIDOS, &roles);
+        HiloNucleo::con_consejo(datos, activos, roles, pool)
+    }
+
+    /// ARR-002: el consejo de seleccion-proveedores.json; la Puerta restaura la ronda activa del registro.
+    pub fn con_consejo(
+        datos: PathBuf,
+        activos: Vec<String>,
+        roles: RolesElegidos,
+        pool: Vec<String>,
+    ) -> HiloNucleo {
         let (ordenes, recibir) = mpsc::channel::<Orden>();
         let hilo = std::thread::Builder::new()
             .name("nucleo".into())
             .spawn(move || {
-                // shortcut: el consejo por defecto; desde PART-014 sale de seleccion-proveedores.json (ARR-002).
-                let roles = RolesElegidos::por_defecto();
-                let activos = ronda::CONOCIDOS.iter().map(|s| s.to_string()).collect();
-                let pool = ronda::pool_de_investigadores(&ronda::CONOCIDOS, &roles);
                 let mut puerta = Puerta::new(
                     datos,
                     Box::new(crate::nuevo_id),
@@ -37,6 +48,7 @@ impl HiloNucleo {
                     roles,
                     pool,
                 );
+                puerta.restaurar_ronda_activa();
                 for orden in recibir {
                     orden(&mut puerta);
                 }
@@ -72,12 +84,16 @@ impl HiloNucleo {
     }
 }
 
+/// Se enciende justo antes de `process::exit`: Windows ya terminó los demás hilos cuando se destruye
+/// lo que guarda el hilo principal, y esperar al del núcleo en ese momento aborta el proceso.
+pub static SALIENDO: AtomicBool = AtomicBool::new(false);
+
 impl Drop for HiloNucleo {
     fn drop(&mut self) {
         self.ordenes.take();
         if let Some(h) = self.hilo.take() {
             // Desde el propio hilo no se espera a sí mismo: termina solo al salir de la orden en curso.
-            if h.thread().id() != std::thread::current().id() {
+            if h.thread().id() != std::thread::current().id() && !SALIENDO.load(Ordering::SeqCst) {
                 let _ = h.join();
             }
         }

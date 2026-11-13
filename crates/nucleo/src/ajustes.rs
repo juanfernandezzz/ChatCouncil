@@ -34,6 +34,34 @@ pub const COPIAR_LA_RUTA: &str = "Copiar la ruta";
 pub const RUTA_COPIADA: &str = "Ruta copiada";
 pub const ABRIR_LA_CARPETA: &str = "Abrir la carpeta";
 
+/// AJU-004: el título de la sección, de bienvenida en el primer arranque.
+pub const TITULO_BIENVENIDA: &str = "Te damos la bienvenida";
+
+// PAN-006 y PAN-007: los estados de una cuenta en Ajustes (Configuracion.cs:28, 163-270).
+pub const SIN_COMPROBAR: &str = "Sin comprobar";
+pub const ABRIENDO: &str = "Abriendo la página…";
+pub const COMPROBANDO: &str = "Comprobando…";
+/// Comprobar reintenta leerCompositor cada 500 ms hasta 10 s.
+pub const ESPERA_COMPOSITOR_MS: u64 = 10_000;
+pub const REINTENTO_COMPOSITOR_MS: u64 = 500;
+
+/// El estado de la cuenta para una sesión deducida (dominio::estado_de_sesion).
+pub fn texto_de_sesion(sesion: &str) -> &'static str {
+    if sesion == "con-sesion" {
+        "Sesión abierta"
+    } else {
+        "Sin sesión: entra a tu cuenta en la página y toca Comprobar."
+    }
+}
+
+pub fn no_se_pudo_abrir(error: &str) -> String {
+    format!("No se pudo abrir la página: {error}")
+}
+
+pub fn no_se_pudo_comprobar(error: &str) -> String {
+    format!("No se pudo comprobar: {error}")
+}
+
 /// AJU-004: el rótulo del paso de la guía; 0 es Ajustes, con todo a la vista.
 pub fn paso_guia(paso: u8) -> &'static str {
     match paso {
@@ -200,6 +228,26 @@ pub fn escala(texto: i64, escala_del_sistema: f32) -> f32 {
 #[cfg(test)]
 mod pruebas {
     use super::*;
+
+    #[test]
+    fn el_estado_de_una_cuenta_sale_de_la_sesion_deducida() {
+        // PAN-006 y PAN-007 (Configuracion.cs:28, 163-270).
+        assert_eq!(texto_de_sesion("con-sesion"), "Sesión abierta");
+        assert_eq!(
+            texto_de_sesion("sin-sesion"),
+            "Sin sesión: entra a tu cuenta en la página y toca Comprobar."
+        );
+        assert_eq!(SIN_COMPROBAR, "Sin comprobar");
+        assert_eq!(ABRIENDO, "Abriendo la página…");
+        assert_eq!(COMPROBANDO, "Comprobando…");
+        assert_eq!(no_se_pudo_abrir("x"), "No se pudo abrir la página: x");
+        assert_eq!(no_se_pudo_comprobar("x"), "No se pudo comprobar: x");
+        assert_eq!(
+            (ESPERA_COMPOSITOR_MS, REINTENTO_COMPOSITOR_MS),
+            (10_000, 500)
+        );
+        assert_eq!(TITULO_BIENVENIDA, "Te damos la bienvenida");
+    }
     use crate::operacion::CONOCIDOS;
     use std::fs;
     use std::path::PathBuf;

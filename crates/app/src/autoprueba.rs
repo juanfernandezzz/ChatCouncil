@@ -32,6 +32,11 @@ impl Anotador {
         self.lineas.push(format!("{marca} {nombre}: {detalle}"));
     }
 
+    /// Una línea que no es comprobación: el encabezado de la salida.
+    pub fn linea(&mut self, texto: String) {
+        self.lineas.push(texto);
+    }
+
     /// INV-PRU-003: una medición se escribe pero no cuenta.
     pub fn medido(&mut self, texto: &str) {
         self.lineas.push(format!("MEDIDO {texto}"));

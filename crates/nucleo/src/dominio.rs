@@ -164,6 +164,16 @@ pub fn nombre_proveedor(id: &str) -> String {
     conocido.to_string()
 }
 
+/// PAN-006: hay sesión si la página muestra el compositor de su spec (leerCompositor devuelve texto,
+/// aunque esté vacío); nunca se miran cookies.
+pub fn estado_de_sesion(compositor: Option<&Texto>) -> &'static str {
+    if compositor.is_some() {
+        "con-sesion"
+    } else {
+        "sin-sesion"
+    }
+}
+
 /// El marcador interno de una ronda capturada sin envío es texto no vacío y no es una pregunta.
 pub fn es_pregunta_valida(texto: Option<&Texto>) -> bool {
     // Un surrogate suelto (U+FFFD en la vista) no es blanco ni "(" y corta la frase igual que en la Unity.
@@ -320,6 +330,17 @@ pub fn clasificar_lecturas_por_etapa<'a, T>(
 #[cfg(test)]
 mod pruebas {
     use super::*;
+
+    #[test]
+    fn la_sesion_se_deduce_del_compositor() {
+        // PAN-006, vector LaSesionSeDeduceDelCompositor (motor/Tests/RondaPruebas.cs:157).
+        assert_eq!(estado_de_sesion(Some(&Texto::from(""))), "con-sesion");
+        assert_eq!(
+            estado_de_sesion(Some(&Texto::from("borrador"))),
+            "con-sesion"
+        );
+        assert_eq!(estado_de_sesion(None), "sin-sesion");
+    }
     use crate::json::vector;
     use crate::registro::leer;
     use crate::registro::pruebas::{campo, lista, str_de};

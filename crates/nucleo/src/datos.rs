@@ -18,9 +18,118 @@ pub fn plantilla(fuente: &'static str, nombre: &str) -> Option<&'static str> {
     (!texto.contains('\\') && !texto.contains("${")).then_some(texto)
 }
 
+/// ARR-004: un specs.json de la carpeta de datos que sea un objeto JSON reemplaza al compilado
+/// (Aplicacion.cs:70-81); si falta, no se lee o no es JSON, None.
+pub fn specs_en_uso(carpeta_datos: &std::path::Path) -> Option<String> {
+    let texto = std::fs::read_to_string(carpeta_datos.join("specs.json")).ok()?;
+    // File.ReadAllText de la Unity quita la marca de orden de bytes.
+    let texto = texto
+        .strip_prefix('\u{feff}')
+        .map(str::to_string)
+        .unwrap_or(texto);
+    matches!(
+        crate::json::leer(&texto),
+        Some(crate::json::Valor::Objeto(_))
+    )
+    .then_some(texto)
+}
+
+fn specs_de(specs: &str) -> Vec<(crate::texto::Texto, crate::json::Valor)> {
+    use crate::json::Valor;
+    let Some(Valor::Objeto(o)) = crate::json::leer(specs) else {
+        return Vec::new();
+    };
+    o.into_iter()
+        .find(|(k, _)| k.como_str() == Some("specs"))
+        .and_then(|(_, v)| match v {
+            Valor::Objeto(s) => Some(s),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+fn spec(specs: &str, id: &str) -> Option<crate::json::Valor> {
+    specs_de(specs)
+        .into_iter()
+        .find(|(k, _)| k.como_str() == Some(id))
+        .map(|(_, v)| v)
+}
+
+/// Los proveedores salen de las specs, en el orden del pool (Roles.Conocidos); los que no son de
+/// los diez van al final, en el orden del archivo.
+pub fn ids_de_specs(specs: &str) -> Vec<String> {
+    use crate::operacion::CONOCIDOS;
+    let ids: Vec<String> = specs_de(specs)
+        .iter()
+        .filter_map(|(k, _)| k.como_str().map(str::to_string))
+        .collect();
+    let mut v: Vec<String> = CONOCIDOS
+        .iter()
+        .filter(|c| ids.iter().any(|i| i == *c))
+        .map(|c| c.to_string())
+        .collect();
+    v.extend(ids.into_iter().filter(|i| !CONOCIDOS.contains(&i.as_str())));
+    v
+}
+
+/// La spec de un proveedor, tal cual, en JSON compacto.
+pub fn spec_de(specs: &str, id: &str) -> Option<String> {
+    let mut b = Vec::new();
+    crate::json::escribir(&spec(specs, id)?, &mut b);
+    String::from_utf8(b).ok()
+}
+
+/// La página de conversación nueva del proveedor (newConversationUrl).
+pub fn url_de(specs: &str, id: &str) -> Option<String> {
+    match spec(specs, id)? {
+        crate::json::Valor::Objeto(o) => o.into_iter().find_map(|(k, v)| match v {
+            crate::json::Valor::Texto(t) if k.como_str() == Some("newConversationUrl") => {
+                t.como_str().map(str::to_string)
+            }
+            _ => None,
+        }),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod pruebas {
     use super::*;
+
+    #[test]
+    fn los_proveedores_salen_de_las_specs_en_el_orden_del_pool() {
+        assert_eq!(ids_de_specs(SPECS_JSON), crate::operacion::CONOCIDOS);
+        let otra = r#"{"specs":{"nuevo":{},"glm":{},"chatgpt":{}}}"#;
+        assert_eq!(ids_de_specs(otra), ["chatgpt", "glm", "nuevo"]);
+        assert!(ids_de_specs("no").is_empty());
+    }
+
+    #[test]
+    fn la_spec_y_la_url_de_un_proveedor_salen_de_las_specs() {
+        let s = r#"{"specs":{"x":{"newConversationUrl":"https://x.test/","a":1}}}"#;
+        assert_eq!(
+            spec_de(s, "x").as_deref(),
+            Some(r#"{"newConversationUrl":"https://x.test/","a":1}"#)
+        );
+        assert_eq!(url_de(s, "x").as_deref(), Some("https://x.test/"));
+        assert_eq!(spec_de(s, "y"), None);
+    }
+
+    #[test]
+    fn un_specs_json_valido_en_la_carpeta_reemplaza_al_compilado() {
+        // ARR-004 (Aplicacion.cs:70-81).
+        let d = std::env::temp_dir().join(format!("cc-specs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        assert_eq!(specs_en_uso(&d), None);
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("specs.json"), "{no es json").unwrap();
+        assert_eq!(specs_en_uso(&d), None);
+        std::fs::write(d.join("specs.json"), "[1]").unwrap();
+        assert_eq!(specs_en_uso(&d), None);
+        std::fs::write(d.join("specs.json"), r#"{"specs":{}}"#).unwrap();
+        assert_eq!(specs_en_uso(&d).as_deref(), Some(r#"{"specs":{}}"#));
+        std::fs::remove_dir_all(&d).unwrap();
+    }
     use serde::de::IgnoredAny;
     use serde_json::Value;
     use sha2::{Digest, Sha256};

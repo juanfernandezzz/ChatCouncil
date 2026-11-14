@@ -29,6 +29,10 @@ pub const DIALOGO_DECLARAR_TEXTO: &str = "Las respuestas se capturaron sin pegar
 pub const DIALOGO_DECLARAR_BOTON: &str = "Declarar";
 pub const DECLARADA_VACIA: &str = "La pregunta declarada no puede quedar vacía.";
 pub const DECLARADA: &str = "Pregunta declarada.";
+/// D29 (2): la pregunta ya está pegada en los paneles pero el registro no abrió la ronda.
+pub fn ronda_no_abierta(e: &str) -> String {
+    format!("La pregunta quedó pegada en los paneles, pero no se pudo abrir la ronda: {e}. No la envíes todavía: vuelve a pegarla cuando esto se resuelva.")
+}
 pub const DIALOGO_ABANDONAR_TITULO: &str = "Abandonar la ronda";
 pub const DIALOGO_ABANDONAR_TEXTO: &str = "La ronda queda en el registro tal como está y vuelves a la etapa Pregunta. Si cierras la app antes de pegar la pregunta nueva, al abrirla vuelve esta ronda.";
 pub const DIALOGO_ABANDONAR_BOTON: &str = "Abandonar la ronda";
@@ -341,6 +345,15 @@ pub fn icono_y_palabra(estado: &str) -> (&'static str, &'static str) {
 #[cfg(test)]
 mod pruebas {
     use super::*;
+
+    // D29 (2): la pregunta quedó pegada pero no se pudo abrir la ronda.
+    #[test]
+    fn ronda_no_abierta_dice_que_la_pregunta_quedo_pegada() {
+        assert_eq!(
+            ronda_no_abierta("disco lleno"),
+            "La pregunta quedó pegada en los paneles, pero no se pudo abrir la ronda: disco lleno. No la envíes todavía: vuelve a pegarla cuando esto se resuelva."
+        );
+    }
 
     #[test]
     fn el_titulo_de_la_barra_dice_la_etapa_y_su_numero() {

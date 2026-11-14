@@ -1826,6 +1826,24 @@ async fn activar_por_uia(
     .await
 }
 
+/// Como `activar_por_uia`, pero el último nodo que cumple: el modal va después del fondo en el documento.
+async fn activar_ultimo_por_uia(
+    ventana: isize,
+    tipo: i32,
+    cond: impl Fn(&str) -> bool + Send + 'static,
+) -> Result<String, String> {
+    uia(ventana, move |u| {
+        let n = u
+            .nodos()?
+            .into_iter()
+            .rfind(|n| n.tipo == tipo && cond(&n.nombre))
+            .ok_or("sin el nodo")?;
+        u.activar(&n.elemento)?;
+        Ok(n.nombre)
+    })
+    .await
+}
+
 /// A1: el foco del lector está en el modal. El modal va después del fondo en el documento: está dentro si
 /// su nodo va desde el primero del modal (la última lista, el grupo del diálogo o el último «Ronda», del
 /// cajón) en adelante.
@@ -2034,7 +2052,13 @@ async fn teclado_y_lector(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), Stri
             con_tab &= foco_en_el_modal(w, modal, &titulo).await;
         }
         let con_mayus = pulsar(w, &[MAYUS, TAB]).await && foco_en_el_modal(w, modal, &titulo).await;
-        let ayuda = activar_por_uia(w, lector::BOTON, |n| n == "Ayuda").await;
+        // D29 (3): con el cajón, el «Ayuda» que se invoca es el del cajón (el último del árbol): ese sí
+        // navega y cierra el cajón; con el menú y el diálogo, el del riel, inerte, no hace nada.
+        let ayuda = if modal == "cajón" {
+            activar_ultimo_por_uia(w, lector::BOTON, |n| n == "Ayuda").await
+        } else {
+            activar_por_uia(w, lector::BOTON, |n| n == "Ayuda").await
+        };
         esperar(500).await;
         let seccion = ui.get_seccion().to_string();
         let sigue = ui.get_menu_abierto() || ui.get_capa_abierta() || ui.get_cajon_abierto();
@@ -2042,8 +2066,13 @@ async fn teclado_y_lector(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), Stri
         ui.invoke_dialogo_cancelar();
         ui.set_cajon_abierto(false);
         esperar(300).await;
+        let efecto = if modal == "cajón" {
+            seccion == "ayuda" && !sigue
+        } else {
+            seccion == "historial" && sigue
+        };
         a.anotar(
-            abierto && al_abrir && con_tab && con_mayus && seccion == "historial" && sigue,
+            abierto && al_abrir && con_tab && con_mayus && efecto,
             &format!("con el {modal} abierto, el fondo queda inerte y el foco del lector adentro"),
             &format!(
                 "abierto {abierto}; foco adentro al abrir {al_abrir}, tras {tabs} Tab {con_tab}, tras \

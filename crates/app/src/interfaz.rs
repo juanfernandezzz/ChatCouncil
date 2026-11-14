@@ -1664,7 +1664,7 @@ impl Interfaz {
             .await
             .and_then(|x| x.map_err(|e| e.to_string()));
         match hecho {
-            Err(e) => self.resultado(&e, true),
+            Err(e) => self.resultado(&ronda::ronda_no_abierta(&e), true),
             Ok(()) if ok == n => self.resultado(
                 &format!("Pegada en los {ok} paneles. Revísala y envíala en cada uno."),
                 false,

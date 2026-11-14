@@ -259,5 +259,93 @@
         },
         "nota": "el panel es más chico que en PART-013 porque la Ronda ahora tiene la guía, el campo, la lista y la cabecera alrededor de la página",
         "validez": "orientativo (CPU del sistema entre 0 y 62 %)"
+    },
+    "PART-017": {
+        "lote": "E7 PART-016 y PART-017",
+        "fecha": "2026-11-14",
+        "entorno": {
+            "maquina": "PC de Juan, Windows 10 Home 10.0.19045",
+            "cpu": "Intel(R) Core(TM) i5-4210U CPU @ 1.70GHz, 2 núcleos, 4 hilos",
+            "webview2": "157.0.4341.46",
+            "compilacion": "release desde C:\\cc-repo con CARGO_TARGET_DIR=C:\\cc-target (ADR-0002), commit 14347ef",
+            "script": "C:\\cc-target\\tmp\\medir-017.ps1 -paginasdeprueba: medir-015.ps1 con carpetas -datos nuevas (C:\\cc-target\\tmp\\cc-medir-017-N) y el consejo por defecto guardado; siete paneles con las páginas locales de prueba"
+        },
+        "tamanos": {
+            "chatCouncilNuevaExeBytes": 58092544
+        },
+        "mediciones": {
+            "arranqueHastaLaVentanaMs": {
+                "corridas": [
+                    329,
+                    68,
+                    55
+                ],
+                "mediana": 68
+            },
+            "ramAppWorkingSetBytes": {
+                "corridas": [
+                    107286528,
+                    112021504,
+                    111239168
+                ],
+                "mediana": 111239168
+            },
+            "ramAppPrivadaBytes": {
+                "corridas": [
+                    105107456,
+                    109068288,
+                    107745280
+                ],
+                "mediana": 107745280
+            },
+            "ramWebView2WorkingSetBytes": {
+                "corridas": [
+                    800358400,
+                    875048960,
+                    835575808
+                ],
+                "mediana": 835575808,
+                "procesos": 13
+            },
+            "cpuEn30sMs": {
+                "app": [
+                    297,
+                    109,
+                    94
+                ],
+                "webView2": [
+                    312,
+                    406,
+                    453
+                ],
+                "nota": "la Ronda a la vista sondea los siete paneles cada 1500 ms"
+            },
+            "cpuSistemaPct": {
+                "antes": [
+                    88,
+                    0,
+                    1
+                ],
+                "despues": [
+                    5,
+                    0,
+                    0
+                ]
+            }
+        },
+        "reacomodo": {
+            "despues": {
+                "cliente": "984x661",
+                "ventana": "1000x700",
+                "panel": "552x357,552x357,552x357,552x357,552x357,552x357,552x357"
+            },
+            "antes": {
+                "cliente": "1366x705",
+                "ventana": "1382x744",
+                "panel": "934x401,934x401,934x401,934x401,934x401,934x401,934x401"
+            }
+        },
+        "nota": "desde D26 la ventana abre llenando la pantalla (1366x705 de cliente), por eso el «antes» difiere de PART-015",
+        "validez": "orientativo (CPU del sistema 88 % antes de la corrida 1; 0 a 5 % en el resto)"
     }
 }

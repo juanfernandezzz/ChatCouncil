@@ -4,6 +4,7 @@
 mod autoprueba;
 mod hilo;
 mod interfaz;
+mod lector;
 mod pruebainterfaz;
 mod pruebaronda;
 mod ventana;

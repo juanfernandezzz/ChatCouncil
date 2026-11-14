@@ -12,10 +12,11 @@ use std::time::{Duration, Instant};
 use nucleo::json::{self, Valor};
 use nucleo::puerta;
 use nucleo::registro::{self, Hecho};
-use slint::Model;
+use slint::{ComponentHandle, Model};
 
 use crate::autoprueba::Anotador;
 use crate::interfaz::Interfaz;
+use crate::lector;
 
 const LA_PREGUNTA: &str =
     "Primera línea de la pregunta\nSegunda línea, con ñ y acentos: áéíóú\n\nCuarta, tras una vacía";
@@ -178,6 +179,8 @@ pub async fn correr(i: Rc<Interfaz>, salida: &Path) -> i32 {
     esperar(300).await;
     let r = recorrido(&mut a, &i, salida).await;
     a.grupo("prueba", r);
+    let r = teclado_y_lector(&mut a, &i).await;
+    a.grupo("secciones, accesibilidad y teclado", r);
     let r = caidas(&mut a, &i).await;
     a.grupo("caídas", r);
     let (texto, mut codigo) = a.cerrar();
@@ -1726,6 +1729,585 @@ async fn caidas(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
             && resultado == "El navegador de los paneles se cerró solo y se volvió a abrir.",
         "los paneles vuelven tras la caída del navegador",
         &format!("reabiertos {reabiertos}; 1 + 1 = {vuelve}; \"{resultado}\""),
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------- secciones, accesibilidad y teclado (PRU-017)
+
+const F1: u16 = 0x70;
+const F2: u16 = 0x71;
+const F3: u16 = 0x72;
+const F4: u16 = 0x73;
+const F5: u16 = 0x74;
+const TAB: u16 = 0x09;
+const ENTER: u16 = 0x0D;
+const CTRL: u16 = 0x11;
+const MAYUS: u16 = 0x10;
+const ALT: u16 = 0x12;
+
+/// Lo que se lee de un nodo, sin el elemento COM, que no cruza de hilo.
+struct Visto {
+    nombre: String,
+    tipo: i32,
+    ancho: i32,
+    alto: i32,
+}
+
+/// Espera el hilo de UIA sin trabar la interfaz, que es la que le responde.
+async fn esperar_hilo<T>(h: std::thread::JoinHandle<Result<T, String>>) -> Result<T, String> {
+    if !hasta(60, || h.is_finished()).await {
+        return Err("UIA no respondió en 60 s".into());
+    }
+    h.join().map_err(|_| "el hilo de UIA se cayó".to_string())?
+}
+
+async fn uia<T: Send + 'static>(
+    ventana: isize,
+    f: impl FnOnce(&lector::Uia) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    esperar_hilo(lector::en_hilo(ventana, f)).await
+}
+
+async fn vistos(ventana: isize) -> Result<Vec<Visto>, String> {
+    uia(ventana, |u| {
+        Ok(u.nodos()?
+            .into_iter()
+            .map(|n| Visto {
+                nombre: n.nombre,
+                tipo: n.tipo,
+                ancho: n.ancho,
+                alto: n.alto,
+            })
+            .collect())
+    })
+    .await
+}
+
+/// Activa por UIA, como Narrador, el primer nodo de ese tipo cuyo nombre cumple la condición.
+async fn activar_por_uia(
+    ventana: isize,
+    tipo: i32,
+    cond: impl Fn(&str) -> bool + Send + 'static,
+) -> Result<String, String> {
+    uia(ventana, move |u| {
+        let n = u
+            .nodos()?
+            .into_iter()
+            .find(|n| n.tipo == tipo && cond(&n.nombre))
+            .ok_or("sin el nodo")?;
+        u.activar(&n.elemento)?;
+        Ok(n.nombre)
+    })
+    .await
+}
+
+/// Teclas de verdad con la ventana al frente; da tiempo a que la interfaz las procese.
+async fn pulsar(ventana: isize, vks: &[u16]) -> bool {
+    let ok = lector::al_frente(ventana) && lector::teclas(ventana, vks);
+    esperar(500).await;
+    ok
+}
+
+async fn pagina_con_foco(i: &Interfaz, id: &str) -> bool {
+    en(i, id, "document.hasFocus()").await.as_deref() == Ok("true")
+}
+
+/// El foco dentro de la página del panel visible, como lo deja F4.
+async fn entrar_a_la_pagina(i: &Interfaz, id: &str) -> bool {
+    let ok = i.panel_visible().is_some_and(|p| p.foco().is_ok());
+    i.region.set(Some("pagina"));
+    let mut dentro = false;
+    for _ in 0..25 {
+        dentro = pagina_con_foco(i, id).await;
+        if dentro {
+            break;
+        }
+        esperar(200).await;
+    }
+    ok && dentro
+}
+
+/// Los píxeles del anillo de foco (#3A79E0, con 6 de tolerancia por el suavizado) en la ventana.
+fn pixeles_de_foco(ui: &crate::ventana::Ventana) -> Result<usize, String> {
+    let foto = ui.window().take_snapshot().map_err(|e| e.to_string())?;
+    let cerca = |a: u8, b: u8| a.abs_diff(b) <= 6;
+    Ok(foto
+        .as_slice()
+        .iter()
+        .filter(|p| cerca(p.r, 0x3A) && cerca(p.g, 0x79) && cerca(p.b, 0xE0))
+        .count())
+}
+
+/// En Operación, el paso es pegar: la primera vez en la ronda abre el aviso (ESC-008). Con el aviso abierto,
+/// F2 no mueve el panel (IFZ-008: sin capa abierta). Se cancela sin pegar.
+async fn f3_abre_el_aviso(i: &Interfaz, ventana: isize) -> bool {
+    let ui = &i.ui;
+    let abierto = hasta(5, || {
+        ui.get_capa_abierta() && ui.get_dialogo_aceptar_texto() == "Entendido, pegar"
+    })
+    .await;
+    if !abierto {
+        return false;
+    }
+    let visible = || {
+        i.ronda
+            .borrow()
+            .as_ref()
+            .and_then(|r| r.visible.borrow().clone())
+    };
+    let antes = visible();
+    pulsar(ventana, &[F2]).await;
+    pulsar(ventana, &[CTRL, TAB]).await;
+    let quieto = visible() == antes && ui.get_capa_abierta();
+    ui.invoke_dialogo_cancelar();
+    esperar(300).await;
+    quieto && !ui.get_capa_abierta()
+}
+
+async fn teclado_y_lector(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
+    let ui = &i.ui;
+    let w = lector::hwnd_de(ui.window()).ok_or("sin el HWND de la ventana")?;
+    let r = i.ronda.borrow().clone().ok_or("sin ronda")?;
+    let visible = || r.visible.borrow().clone().unwrap_or_default();
+    let resultado = || ui.get_resultado().to_string();
+    let nombre = |id: &str| nucleo::dominio::nombre_proveedor(id);
+
+    // Historial (IFZ-014): las tres rondas de la prueba, la actual (la más nueva) primero, y el informe de la
+    // primera, que se abre.
+    let actual = ronda_actual(i).await.unwrap_or_default();
+    ui.invoke_ir("historial".into());
+    hasta(10, || ui.get_anteriores().row_count() > 0).await;
+    let anteriores: Vec<_> = ui.get_anteriores().iter().collect();
+    let carpeta = anteriores
+        .iter()
+        .map(|f| f.carpeta.to_string())
+        .find(|c| !c.is_empty())
+        .unwrap_or_default();
+    *i.carpeta_abierta.borrow_mut() = None;
+    ui.invoke_abrir_informe(carpeta.as_str().into());
+    hasta(5, || i.carpeta_abierta.borrow().is_some()).await;
+    let abierta = i.carpeta_abierta.borrow().clone();
+    let primera = anteriores
+        .first()
+        .map(|f| f.id.to_string())
+        .unwrap_or_default();
+    a.anotar(
+        anteriores.len() == 3
+            && !actual.is_empty()
+            && primera == actual
+            && !carpeta.is_empty()
+            && abierta.as_deref() == Some(Path::new(&carpeta)),
+        "el historial, la más nueva primero, con el informe que se abre",
+        &format!(
+            "{} rondas; la primera {primera}, la actual {actual}; abierta {abierta:?}",
+            anteriores.len()
+        ),
+    );
+
+    // La Ayuda se abre desde el riel (por UIA, como Narrador) y no con F1.
+    let f1 = pulsar(w, &[F1]).await;
+    let tras_f1 = ui.get_seccion().to_string();
+    let riel = activar_por_uia(w, lector::BOTON, |n| n == "Ayuda").await;
+    hasta(5, || ui.get_seccion() == "ayuda").await;
+    let version = ui.get_version().to_string();
+    a.anotar(
+        f1 && tras_f1 == "historial"
+            && riel.is_ok()
+            && ui.get_seccion() == "ayuda"
+            && version.starts_with(&format!(
+                "ChatCouncil, versión {}.",
+                env!("CARGO_PKG_VERSION")
+            )),
+        "la Ayuda se abre desde el riel y no con F1",
+        &format!("tras F1 «{tras_f1}»; riel {riel:?}; «{version}»"),
+    );
+
+    // WCAG 2.5.8: los controles a la vista, en las cuatro secciones, por su marco en UIA.
+    let escala = ui.window().scale_factor();
+    let minimo = (48.0 * escala).floor() as i32 - 1;
+    let (mut contados, mut chicos) = (0, Vec::new());
+    for s in ["ronda", "historial", "ajustes", "ayuda"] {
+        ui.invoke_ir(s.into());
+        esperar(700).await;
+        for v in vistos(w).await? {
+            let control = [
+                lector::BOTON,
+                lector::CASILLA,
+                lector::DESPLEGABLE,
+                lector::CAMPO,
+            ]
+            .contains(&v.tipo);
+            if control && v.ancho > 0 && v.alto > 0 {
+                contados += 1;
+                if v.ancho.min(v.alto) < minimo {
+                    chicos.push(format!("{s}: «{}» {}×{}", v.nombre, v.ancho, v.alto));
+                }
+            }
+        }
+    }
+    a.anotar(
+        contados > 0 && chicos.is_empty(),
+        "objetivos de 48 dp en las cuatro secciones",
+        &format!(
+            "{contados} controles; escala {escala}; menores que {minimo} px: [{}]",
+            chicos.join("; ")
+        ),
+    );
+
+    // IFZ-022: una casilla de Ajustes cambia desde el lector, y vuelve.
+    ui.invoke_ir("ajustes".into());
+    esperar(500).await;
+    let casilla = uia(w, |u| {
+        let n = u
+            .nodos()?
+            .into_iter()
+            .find(|n| n.tipo == lector::CASILLA && n.habilitado)
+            .ok_or("sin casillas")?;
+        let antes = u.marcado(&n.elemento);
+        u.alternar(&n.elemento)?;
+        std::thread::sleep(Duration::from_millis(400));
+        let medio = u.marcado(&n.elemento);
+        u.alternar(&n.elemento)?;
+        std::thread::sleep(Duration::from_millis(400));
+        Ok((n.nombre, antes, medio, u.marcado(&n.elemento)))
+    })
+    .await;
+    a.anotar(
+        matches!(&casilla, Ok((_, Some(x), Some(y), Some(z))) if x != y && x == z),
+        "una casilla de Ajustes cambia desde el lector",
+        &format!("{casilla:?}"),
+    );
+
+    // IFZ-020, 021 e INV-IFZ-005: la jerarquía de la Ronda.
+    ui.invoke_ir("ronda".into());
+    esperar(700).await;
+    let nodos = vistos(w).await?;
+    let paso_txt = ui.get_paso_texto().to_string();
+    let boton = |n: &str| {
+        nodos
+            .iter()
+            .any(|v| v.tipo == lector::BOTON && v.nombre == n && v.ancho > 0)
+    };
+    let nombres: Vec<String> = r.en_la_vista().iter().map(|id| nombre(id)).collect();
+    let filas = nombres.iter().all(|n| {
+        nodos
+            .iter()
+            .any(|v| v.tipo == lector::BOTON && v.nombre.starts_with(&format!("{n}, ")))
+    });
+    let actual = nodos.iter().find(|v| v.nombre.ends_with(", etapa actual"));
+    let sueltos: Vec<&str> = nodos
+        .iter()
+        .filter(|v| nombres.contains(&v.nombre) || v.nombre.contains("Página del proveedor"))
+        .map(|v| v.nombre.as_str())
+        .collect();
+    let ceros = nodos.iter().filter(|v| v.ancho <= 0 || v.alto <= 0).count();
+    a.anotar(
+        boton(&paso_txt) && boton("Ronda…") && filas && actual.is_some() && sueltos.is_empty() && ceros == 0,
+        "la jerarquía para el lector de pantalla",
+        &format!(
+            "{} nodos; paso «{paso_txt}» {}; «Ronda…» {}; filas de [{}] {filas}; «{}»; sueltos {sueltos:?}; de tamaño cero {ceros}",
+            nodos.len(),
+            boton(&paso_txt),
+            boton("Ronda…"),
+            nombres.join(", "),
+            actual.map_or("", |v| v.nombre.as_str())
+        ),
+    );
+
+    // INV-IFZ-004: un texto nuevo no rearma la jerarquía.
+    let h = lector::en_hilo(w, |u| {
+        let buscar = || {
+            u.nodos().and_then(|v| {
+                v.into_iter()
+                    .find(|n| n.tipo == lector::BOTON && n.nombre == "Ronda…")
+                    .ok_or("sin «Ronda…»".to_string())
+            })
+        };
+        let antes = buscar()?;
+        std::thread::sleep(Duration::from_millis(1500));
+        Ok(u.mismo(&antes.elemento, &buscar()?.elemento))
+    });
+    esperar(600).await;
+    let viejo = ui.get_resultado();
+    ui.set_resultado("Un texto nuevo para el lector.".into());
+    let mismo = esperar_hilo(h).await;
+    ui.set_resultado(viejo);
+    a.anotar(
+        mismo == Ok(true),
+        "un texto nuevo no rearma la jerarquía",
+        &format!("el mismo nodo «Ronda…»: {mismo:?}"),
+    );
+
+    // IFZ-022: activar una fila desde el lector la pone a la vista.
+    let otro = r
+        .en_la_vista()
+        .into_iter()
+        .find(|id| *id != visible())
+        .ok_or("un solo panel en la vista")?;
+    let prefijo = format!("{}, ", nombre(&otro));
+    let fila = activar_por_uia(w, lector::BOTON, move |n| n.starts_with(&prefijo)).await;
+    hasta(5, || visible() == otro).await;
+    a.anotar(
+        fila.is_ok() && visible() == otro,
+        "activar una fila desde el lector la pone a la vista",
+        &format!("{fila:?}; a la vista {}", visible()),
+    );
+
+    // Mantenimiento del panel visible (DIA-001).
+    let id = visible();
+    let n = nombre(&id);
+    let recargar = renglon(i, "panel", "Recargar la página", true);
+    let esperado = format!("Se recargó la página de {n}.");
+    hasta(30, || resultado() == esperado).await;
+    a.anotar(
+        recargar == Some(true) && resultado() == esperado,
+        "recargar la página",
+        &format!("«{}»", resultado()),
+    );
+
+    let dir = i.datos.join("diagnosticos");
+    let antes: Vec<_> = std::fs::read_dir(&dir)
+        .map(|d| d.flatten().map(|e| e.path()).collect())
+        .unwrap_or_default();
+    *i.carpeta_abierta.borrow_mut() = None;
+    let diag = renglon(i, "panel", "Diagnóstico de selectores", true);
+    hasta(30, || {
+        resultado().starts_with(&format!("Diagnóstico de {n} guardado en "))
+    })
+    .await;
+    let nuevos: Vec<_> = std::fs::read_dir(&dir)
+        .map(|d| {
+            d.flatten()
+                .map(|e| e.path())
+                .filter(|p| !antes.contains(p))
+                .collect()
+        })
+        .unwrap_or_default();
+    let valido = nuevos.first().and_then(|p| std::fs::read_to_string(p).ok()).is_some_and(|t| {
+        matches!(json::leer(&t), Some(Valor::Objeto(c)) if c.iter().any(|(k, _)| k.para_mostrar() == "diagnostico"))
+    });
+    let abierta = i.carpeta_abierta.borrow().clone();
+    a.anotar(
+        diag == Some(true)
+            && nuevos.len() == 1
+            && valido
+            && abierta.as_deref() == Some(dir.as_path()),
+        "el diagnóstico en un archivo",
+        &format!(
+            "archivos nuevos {nuevos:?}; JSON con «diagnostico» {valido}; abierta {abierta:?}"
+        ),
+    );
+
+    en(i, &id, "localStorage.setItem('cc-sesion', '1'); 'ok'").await?;
+    let cerrar = renglon(i, "panel", "Cerrar la sesión de este panel…", true);
+    let titulo = ui.get_dialogo_titulo().to_string();
+    ui.invoke_dialogo_aceptar();
+    let esperado = format!("Sesión de {n} cerrada. Entra con la cuenta que quieras en su página.");
+    hasta(30, || resultado() == esperado).await;
+    let mut queda = "1".to_string();
+    for _ in 0..25 {
+        if en(i, &id, "localStorage.getItem('cc-sesion')")
+            .await
+            .as_deref()
+            == Ok("null")
+        {
+            queda = String::new();
+            break;
+        }
+        esperar(200).await;
+    }
+    a.anotar(
+        cerrar == Some(true)
+            && titulo == format!("Cerrar la sesión de {n}")
+            && resultado() == esperado
+            && queda.is_empty(),
+        "el cierre de sesión borra lo que el sitio guardó",
+        &format!(
+            "«{titulo}»; «{}»; lo guardado sigue: {}",
+            resultado(),
+            !queda.is_empty()
+        ),
+    );
+
+    // D49 con teclas de verdad, con la ventana al frente.
+    let v0 = visible();
+    let ct = pulsar(w, &[CTRL, TAB]).await;
+    let v1 = visible();
+    let foco_app = lector::foco() == w;
+    let cmt = pulsar(w, &[CTRL, MAYUS, TAB]).await;
+    let v2 = visible();
+    a.anotar(
+        ct && cmt && v1 != v0 && v2 == v0 && foco_app,
+        "Ctrl+Tab y Ctrl+Mayús+Tab cambian el panel sin mover el foco",
+        &format!("{v0} → {v1} → {v2}; foco en la app {foco_app}"),
+    );
+
+    let f2 = pulsar(w, &[F2]).await;
+    let v1 = visible();
+    let f1 = pulsar(w, &[F1]).await;
+    let v2 = visible();
+    let paso_antes = ui.get_paso_texto().to_string();
+    let f3 = pulsar(w, &[F3]).await;
+    let aviso = f3_abre_el_aviso(i, w).await;
+    a.anotar(
+        f2 && f1
+            && f3
+            && v1 != v0
+            && v2 == v0
+            && paso_antes == "Pegar la operación en los paneles"
+            && aviso,
+        "F3, F2 y F1",
+        &format!(
+            "F2 {v0} → {v1}; F1 → {v2}; F3 sobre «{paso_antes}» abre el aviso de la operación y ni F2 ni Ctrl+Tab actúan con él abierto: {aviso}"
+        ),
+    );
+
+    // El anillo de foco: F4 desde ninguna región lleva el foco al riel.
+    i.region.set(None);
+    let mut camino = Vec::new();
+    let mut anillo = Err("sin F4".to_string());
+    for _ in 0..5 {
+        pulsar(w, &[F4]).await;
+        camino.push(i.region.get().unwrap_or("-"));
+        if camino.len() == 1 {
+            anillo = pixeles_de_foco(ui);
+        }
+    }
+    a.anotar(
+        matches!(anillo, Ok(n) if n > 0),
+        "el foco visible con el color 3A79E0",
+        &format!("píxeles #3A79E0 con el riel enfocado: {anillo:?}"),
+    );
+    let id = visible();
+    let dentro = pagina_con_foco(i, &id).await;
+    pulsar(w, &[F4]).await;
+    let sale_f4 = i.region.get().unwrap_or("-");
+    let app_f4 = lector::foco() == w && !pagina_con_foco(i, &id).await;
+    pulsar(w, &[F5]).await;
+    let entra_f5 = i.region.get().unwrap_or("-");
+    let dentro_f5 = pagina_con_foco(i, &id).await;
+    pulsar(w, &[F5]).await;
+    let sale_f5 = i.region.get().unwrap_or("-");
+    let app_f5 = lector::foco() == w;
+    a.anotar(
+        camino == ["riel", "guia", "lista", "cabecera", "pagina"]
+            && dentro
+            && sale_f4 == "riel"
+            && app_f4
+            && entra_f5 == "pagina"
+            && dentro_f5
+            && sale_f5 == "cabecera"
+            && app_f5,
+        "F4 y F5 entran a la página y salen a la región siguiente o la anterior",
+        &format!(
+            "F4: {} (página con foco {dentro}); F4 → {sale_f4} (app {app_f4}); F5 → {entra_f5} (página {dentro_f5}); F5 → {sale_f5} (app {app_f5})",
+            camino.join(" → ")
+        ),
+    );
+
+    // F1, F2 y F3 desde la página: la página devuelve la tecla a la app.
+    let v0 = visible();
+    let e2 = entrar_a_la_pagina(i, &v0).await;
+    pulsar(w, &[F2]).await;
+    let v1 = visible();
+    let e1 = entrar_a_la_pagina(i, &v1).await;
+    pulsar(w, &[F1]).await;
+    let v2 = visible();
+    let e3 = entrar_a_la_pagina(i, &v2).await;
+    pulsar(w, &[F3]).await;
+    let aviso = f3_abre_el_aviso(i, w).await;
+    a.anotar(
+        e2 && e1 && e3 && v1 != v0 && v2 == v0 && aviso,
+        "F1, F2 y F3 desde la página",
+        &format!("dentro {e2}/{e1}/{e3}; F2 {v0} → {v1}; F1 → {v2}; F3 abre el aviso: {aviso}"),
+    );
+
+    // Tab que sale: pasado el último control de la página, el foco vuelve a la app.
+    let id = visible();
+    let dentro = entrar_a_la_pagina(i, &id).await;
+    let mut tabs = 0;
+    while tabs < 25 && lector::foco() != w {
+        pulsar(w, &[TAB]).await;
+        tabs += 1;
+    }
+    let sale = lector::foco() == w && !pagina_con_foco(i, &id).await;
+    a.anotar(
+        dentro && sale,
+        "Tab que sale de la página",
+        &format!("dentro {dentro}; vuelve a la app tras {tabs} Tab: {sale}"),
+    );
+
+    // Un clic de verdad en la app con el foco en la página: el teclado vuelve a la app. Sin esto, la
+    // interfaz marca el control tocado y lo que se escribe va a la página escondida.
+    let id = visible();
+    let dentro = entrar_a_la_pagina(i, &id).await;
+    let (x, y) = uia(w, |u| {
+        u.nodos()?
+            .into_iter()
+            .find(|n| n.tipo == lector::BOTON && n.nombre == "Ronda")
+            .map(|n| n.centro)
+            .ok_or_else(|| "sin el botón Ronda del riel".to_string())
+    })
+    .await?;
+    let clic = lector::al_frente(w) && lector::clic(w, x, y);
+    esperar(500).await;
+    let vuelve = lector::foco() == w && !pagina_con_foco(i, &id).await;
+    a.anotar(
+        dentro && clic && vuelve,
+        "un clic en la app le devuelve el teclado",
+        &format!("dentro {dentro}; clic {clic}; teclado en la app: {vuelve}"),
+    );
+
+    // Enter sobre una fila: F4 hasta la lista, Tab a la primera fila y Enter.
+    let primera = i
+        .filas
+        .iter()
+        .filter(|f| f.visible && !f.rol)
+        .chain(i.filas.iter().filter(|f| f.visible && f.rol))
+        .map(|f| f.id.to_string())
+        .next()
+        .ok_or("sin filas a la vista")?;
+    let otra = r
+        .en_la_vista()
+        .into_iter()
+        .find(|id| *id != primera)
+        .ok_or("un solo panel en la vista")?;
+    i.seleccionar(&otra);
+    i.region.set(Some("guia"));
+    pulsar(w, &[F4]).await;
+    let en_lista = i.region.get() == Some("lista");
+    pulsar(w, &[TAB]).await;
+    pulsar(w, &[ENTER]).await;
+    a.anotar(
+        en_lista && visible() == primera,
+        "Enter sobre una fila",
+        &format!(
+            "en la lista {en_lista}; {otra} → {} (primera fila {primera})",
+            visible()
+        ),
+    );
+
+    // INV-IFZ-002: con Alt, F4 no es de la app y pide cerrar la ventana.
+    let pedido = Rc::new(std::cell::Cell::new(false));
+    let p = pedido.clone();
+    ui.window().on_close_requested(move || {
+        p.set(true);
+        slint::CloseRequestResponse::KeepWindowShown
+    });
+    let region_antes = i.region.get();
+    let alt = pulsar(w, &[ALT, F4]).await;
+    hasta(5, || pedido.get()).await;
+    ui.window()
+        .on_close_requested(|| slint::CloseRequestResponse::HideWindow);
+    a.anotar(
+        alt && pedido.get() && i.region.get() == region_antes,
+        "con Alt pulsado, F4 no lo toma la app y la ventana se cierra",
+        &format!(
+            "cierre pedido {}; región {region_antes:?} → {:?}",
+            pedido.get(),
+            i.region.get()
+        ),
     );
     Ok(())
 }

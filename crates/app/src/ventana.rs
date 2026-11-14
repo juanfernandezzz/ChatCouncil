@@ -155,16 +155,65 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
         in property <length> maximo: 600px;
         property <length> alto-al-tomar;
         property <length> y-al-tomar;
+        // IFZ-011: Deshacer es de un nivel, como en el menú de Windows: usarlo otra vez rehace.
+        property <string> previo;
+        property <string> anterior;
+        property <bool> hay-anterior;
+        init => { root.previo = root.texto; }
+        changed texto => { root.anterior = root.previo; root.previo = root.texto; root.hay-anterior = true; }
+        // IFZ-011: el menú de edición de Windows. Recibe la selección y devuelve el ítem elegido (0 si ninguno).
+        callback menu-contextual(int, int, bool) -> int;
         spacing: 2px;
-        Text { text: "Tu pregunta"; color: Palette.foreground; }
+        Text { text: "Tu pregunta"; color: Palette.foreground; accessible-role: none; }
         Rectangle {
             height: root.alto;
-            campo := TextEdit {
-                width: parent.width;
-                height: parent.height;
-                text <=> root.texto;
-                wrap: word-wrap;
-                accessible-label: "Tu pregunta";
+            border-width: 1px;
+            border-color: Palette.border;
+            border-radius: 4px;
+            background: Palette.alternate-background;
+            // TextEdit trae su propio menú (en inglés, sin Deshacer ni Eliminar): el campo es un TextInput y el
+            // clic derecho, que TextInput deja pasar, llega a este TouchArea.
+            TouchArea {
+                pointer-event(e) => {
+                    if (e.button == PointerEventButton.right && e.kind == PointerEventKind.up) {
+                        campo.focus();
+                        let a = min(campo.anchor-position-byte-offset, campo.cursor-position-byte-offset);
+                        let b = max(campo.anchor-position-byte-offset, campo.cursor-position-byte-offset);
+                        let elegido = root.menu-contextual(a, b, root.hay-anterior);
+                        if (elegido == 1) { root.texto = root.anterior; }
+                        if (elegido == 2) { campo.cut(); }
+                        if (elegido == 3) { campo.copy(); }
+                        if (elegido == 4) { campo.paste(); }
+                        // 5, Eliminar: la interfaz ya sacó la selección del texto.
+                        if (elegido == 5) { campo.set-selection-offsets(a, a); }
+                        if (elegido == 6) { campo.select-all(); }
+                        campo.focus();
+                    }
+                }
+                vista := ScrollView {
+                    x: 6px;
+                    y: 4px;
+                    width: parent.width - 12px;
+                    height: parent.height - 8px;
+                    content-width: self.visible-width;
+                    content-height: max(self.visible-height, campo.preferred-height);
+                    campo := TextInput {
+                        width: vista.visible-width;
+                        text <=> root.texto;
+                        single-line: false;
+                        wrap: word-wrap;
+                        color: Palette.foreground;
+                        accessible-label: "Tu pregunta";
+                        // El cursor no se va de la vista al escribir (como TextEdit).
+                        cursor-position-changed(c) => {
+                            if (c.y + vista.content-y < 0px) {
+                                vista.content-y = -c.y;
+                            } else if (c.y + vista.content-y > vista.visible-height - 20px) {
+                                vista.content-y = min(0px, vista.visible-height - c.y - 20px);
+                            }
+                        }
+                    }
+                }
             }
             Anillo { foco: campo.has-focus; }
         }
@@ -201,9 +250,9 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
         min-height: 48px;
         background: fila.actual ? Palette.selection-background.transparentize(70%) : transparent;
         border-radius: 6px;
-        accessible-role: list-item;
+        // IFZ-020 y 021: la fila es un botón para el lector, con el proveedor y el estado unidos con «, ».
+        accessible-role: button;
         accessible-label: fila.nombre + ", " + fila.estado;
-        accessible-item-selected: fila.actual;
         accessible-action-default => { root.activar(); }
         ta := TouchArea { clicked => { fs.focus(); root.activar(); } }
         fs := FocusScope {
@@ -217,8 +266,9 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
             padding-right: 12px;
             spacing: 8px;
             VerticalLayout { alignment: center; Icono { estado: fila.icono; } }
-            Text { text: fila.nombre; font-weight: 600; vertical-alignment: center; color: Palette.foreground; }
-            Text { text: fila.estado; vertical-alignment: center; horizontal-alignment: right; wrap: word-wrap; color: Palette.foreground.transparentize(35%); }
+            // INV-IFZ-005: los textos de la fila no son nodos propios del lector; los dice la fila.
+            Text { text: fila.nombre; font-weight: 600; vertical-alignment: center; color: Palette.foreground; accessible-role: none; }
+            Text { text: fila.estado; vertical-alignment: center; horizontal-alignment: right; wrap: word-wrap; color: Palette.foreground.transparentize(35%); accessible-role: none; }
         }
         Anillo { foco: fs.has-focus; }
     }
@@ -243,9 +293,13 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
         out property <bool> riel-visible: !root.primer-arranque && !root.compacta;
         in-out property <bool> cajon-abierto;
         // IFZ-013: el cajón aparta la página nativa, que va encima de todo lo que dibuja Slint.
-        changed cajon-abierto => { root.area-cambio(); root.cuenta-area-cambio(); }
+        // Al cerrarse el cajón, el diálogo o el menú, el foco quedaba en un elemento que ya no existe y F1 a F5
+        // dejaban de llegar (D49): vuelve a la ventana, salvo que se haya abierto otro, que se queda con el foco.
+        changed cajon-abierto => { root.area-cambio(); root.cuenta-area-cambio(); if (!root.cajon-abierto && !root.capa-abierta && !root.menu-abierto) { teclas.focus(); } }
         callback seccion-cambiada(string);
         callback tecla(string);
+        // IFZ-011: el menú de edición de Windows sobre «Tu pregunta».
+        callback menu-contextual(int, int, bool) -> int;
         out property <bool> oscuro-aplicado: Palette.color-scheme == ColorScheme.dark;
         // D26: el contenido llena la ventana; la prueba de la interfaz lo mide.
         out property <length> ancho-contenido: contenido.width;
@@ -281,7 +335,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
         callback mover(int);
         // IFZ-024: el diálogo propio, con la página apartada mientras está abierto.
         in-out property <bool> capa-abierta;
-        changed capa-abierta => { root.area-cambio(); }
+        changed capa-abierta => { root.area-cambio(); if (!root.cajon-abierto && !root.capa-abierta && !root.menu-abierto) { teclas.focus(); } }
         in property <string> dialogo-titulo;
         in property <string> dialogo-texto;
         in property <bool> dialogo-con-campo;
@@ -295,7 +349,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
         // D6, D7: los menús. El origen es el botón que lo abrió, en coordenadas de la ventana.
         in property <[Renglon]> menu-items;
         in-out property <bool> menu-abierto;
-        changed menu-abierto => { root.area-cambio(); }
+        changed menu-abierto => { root.area-cambio(); if (!root.cajon-abierto && !root.capa-abierta && !root.menu-abierto) { teclas.focus(); } }
         in-out property <length> menu-origen-x;
         in-out property <length> menu-origen-arriba;
         in-out property <length> menu-origen-abajo;
@@ -400,6 +454,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
             if (region == "riel") { ir-ronda.focus(); return true; }
             if (region == "guia") { paso-ancha.focus(); return true; }
             if (region == "lista") { lista.focus(); return true; }
+            if (region == "cabecera") { mas-panel.focus(); return true; }
             if (region == "abajo") { paso-angosta.focus(); return true; }
             if (region == "formulario") { integrador.focus(); return true; }
             if (region == "barra") { volver.focus(); return true; }
@@ -416,6 +471,11 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                 if (e.text == Key.F3) { root.tecla("F3"); return accept; }
                 if (e.text == Key.F4) { root.tecla("F4"); return accept; }
                 if (e.text == Key.F5) { root.tecla("F5"); return accept; }
+                // IFZ-009: Ctrl+Tab y Ctrl+Mayús+Tab, solo con la Ronda a la vista; en otra sección el Tab sigue su camino.
+                if (e.modifiers.control && root.seccion == "ronda" && (e.text == Key.Tab || e.text == Key.Backtab)) {
+                    root.tecla(e.modifiers.shift || e.text == Key.Backtab ? "Ctrl+Mayús+Tab" : "Ctrl+Tab");
+                    return accept;
+                }
                 reject
             }
 
@@ -458,7 +518,8 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                                 spacing: 4px;
                                 for nombre[i] in ["1 Pregunta", "2 Investigación", "3 Operación", "4 Integración", "5 Verificación", "6 Redacción", "7 Informe"] : VerticalLayout {
                                     spacing: 2px;
-                                    Text { text: nombre; font-weight: i == root.etapa-actual ? 600 : 400; color: Palette.foreground; }
+                                    // IFZ-021: el lector dice si la etapa es la actual o ya se hizo.
+                                    Text { text: nombre; font-weight: i == root.etapa-actual ? 600 : 400; color: Palette.foreground; accessible-label: nombre + (i == root.etapa-actual ? ", etapa actual" : i < root.etapa-actual ? ", hecha" : ""); }
                                     Rectangle { height: 4px; background: i <= root.etapa-actual ? #3A79E0 : Palette.border; }
                                 }
                             }
@@ -466,6 +527,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                                 texto <=> root.pregunta;
                                 alto <=> root.alto-pregunta;
                                 maximo: root.maximo-del-asa();
+                                menu-contextual(a, b, h) => { return root.menu-contextual(a, b, h); }
                             }
                             HorizontalLayout {
                                 spacing: 12px;
@@ -520,7 +582,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                                         if root.cabecera-problema != "" : Text { text: root.cabecera-problema; wrap: word-wrap; color: #C42B1C; }
                                     }
                                     if root.accion-texto != "" : Boton { text: root.accion-texto; habilitado: !root.ocupado; clicked => { root.accion-panel(); } }
-                                    Boton { text: "Más…"; clicked => { root.menu-desde(self.absolute-position, self.height, "panel"); } }
+                                    mas-panel := Boton { text: "Más…"; clicked => { root.menu-desde(self.absolute-position, self.height, "panel"); } }
                                 }
                                 // La página del proveedor (vista nativa) va encima de este rectángulo.
                                 pagina := Rectangle {
@@ -558,6 +620,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                                 texto <=> root.pregunta;
                                 alto <=> root.alto-pregunta;
                                 maximo: root.maximo-del-asa();
+                                menu-contextual(a, b, h) => { return root.menu-contextual(a, b, h); }
                             }
                             paso-angosta := Boton { text: root.paso-texto; primario: true; habilitado: root.paso-habilitado && !root.ocupado; horizontal-stretch: 1; clicked => { root.paso(); } }
                             Parrafo { text: root.resultado; color: root.resultado-problema ? #C42B1C : Palette.foreground; accessible-role: text; accessible-label: self.text; accessible-live-region: polite; }

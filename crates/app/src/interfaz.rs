@@ -213,7 +213,7 @@ pub struct Interfaz {
     navegador: RefCell<Option<Rc<Navegador>>>,
     apariencia: Cell<Apariencia>,
     pub ronda: RefCell<Option<Rc<Ronda>>>,
-    region: Cell<Option<&'static str>>,
+    pub(crate) region: Cell<Option<&'static str>>,
     tamano: Cell<(f64, f64)>,
     /// Los renglones del menú abierto y la acción de cada uno (D6, D7).
     pub menu: Rc<VecModel<Renglon>>,
@@ -296,6 +296,77 @@ fn abrir_en_el_sistema(destino: &str) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!("No se pudo abrir {destino}."))
+    }
+}
+
+/// IFZ-011: qué ítems aplican, en orden: Deshacer, Cortar, Copiar, Pegar, Eliminar, Seleccionar todo.
+fn items_de_edicion(
+    vacio: bool,
+    seleccion: bool,
+    portapapeles: bool,
+    hay_anterior: bool,
+) -> [bool; 6] {
+    [
+        hay_anterior,
+        seleccion,
+        seleccion,
+        portapapeles,
+        seleccion,
+        !vacio,
+    ]
+}
+
+fn hay_portapapeles() -> bool {
+    use windows::Win32::System::DataExchange::IsClipboardFormatAvailable;
+    // 13 es CF_UNICODETEXT. SAFETY: no toma punteros.
+    unsafe { IsClipboardFormatAvailable(13).is_ok() }
+}
+
+/// El menú nativo, con los textos de Windows; 0 si se cierra sin elegir.
+fn mostrar_menu_de_edicion(activos: [bool; 6]) -> i32 {
+    use windows::Win32::Foundation::POINT;
+    use windows::Win32::UI::Input::KeyboardAndMouse::GetActiveWindow;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, MF_GRAYED, MF_SEPARATOR,
+        MF_STRING, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenuEx,
+    };
+    use windows::core::{HSTRING, PCWSTR};
+    const TEXTOS: [&str; 6] = [
+        "&Deshacer",
+        "Cor&tar",
+        "&Copiar",
+        "&Pegar",
+        "&Eliminar",
+        "Seleccionar &todo",
+    ];
+    // SAFETY: el menú se crea y se destruye acá; las cadenas viven durante cada llamada.
+    unsafe {
+        let Ok(menu) = CreatePopupMenu() else {
+            return 0;
+        };
+        for (i, (t, activo)) in TEXTOS.iter().zip(activos).enumerate() {
+            if i == 1 || i == 5 {
+                let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
+            }
+            let banderas = if activo {
+                MF_STRING
+            } else {
+                MF_STRING | MF_GRAYED
+            };
+            let _ = AppendMenuW(menu, banderas, i + 1, &HSTRING::from(*t));
+        }
+        let mut p = POINT::default();
+        let _ = GetCursorPos(&mut p);
+        let r = TrackPopupMenuEx(
+            menu,
+            (TPM_RETURNCMD | TPM_RIGHTBUTTON).0,
+            p.x,
+            p.y,
+            GetActiveWindow(),
+            None,
+        );
+        let _ = DestroyMenu(menu);
+        r.0
     }
 }
 
@@ -517,11 +588,8 @@ impl Interfaz {
                 x.ui.set_mensaje_problema(true);
             }
         });
-        al!(on_abrir_informe, |_x, carpeta: SharedString| {
-            if let Err(e) = abrir_en_el_sistema(&carpeta) {
-                eprintln!("{e}");
-            }
-        });
+        al!(on_abrir_informe, |x, carpeta: SharedString| x
+            .abrir_carpeta(Path::new(carpeta.as_str())));
         al!(on_ver_versiones, |_x| {
             if let Err(e) = abrir_en_el_sistema(PAGINA_DE_VERSIONES) {
                 eprintln!("{e}");
@@ -540,6 +608,11 @@ impl Interfaz {
         al!(on_cuenta_area_cambio, |x| x.ubicar_cuenta());
         al!(on_abrir_menu, |x, cual: SharedString| x.abrir_menu(&cual));
         al!(on_menu_item, |x, i: i32| x.menu_item(i));
+        let w: Weak<Interfaz> = Rc::downgrade(i);
+        ui.on_menu_contextual(move |a, b, hay_anterior| {
+            w.upgrade()
+                .map_or(0, |x| x.menu_de_edicion(a, b, hay_anterior))
+        });
     }
 
     // ---------------------------------------------------------------- ajustes
@@ -878,18 +951,25 @@ impl Interfaz {
     // ---------------------------------------------------------------- teclado (D49)
 
     fn tecla(&self, t: &str) {
-        let en_ronda = self.ui.get_seccion() == "ronda" && !self.primer_arranque.get();
+        // IFZ-008: F1 a F3, y Ctrl+Tab, son de la Ronda sin capa abierta; con un diálogo o un menú a la vista
+        // no actúan.
+        let en_ronda = self.ui.get_seccion() == "ronda"
+            && !self.primer_arranque.get()
+            && !self.ui.get_capa_abierta()
+            && !self.ui.get_menu_abierto();
         match t {
             "F1" if en_ronda => self.mover(-1),
             "F2" if en_ronda => self.mover(1),
             "F3" if en_ronda => self.paso(),
             "F4" => self.region(1),
             "F5" => self.region(-1),
+            "Ctrl+Tab" if en_ronda => self.mover(1),
+            "Ctrl+Mayús+Tab" if en_ronda => self.mover(-1),
             _ => {}
         }
     }
 
-    /// Las regiones a la vista, en orden: riel, guía, lista, la página y abajo.
+    /// Las regiones a la vista, en orden: riel, guía, lista, cabecera, la página y abajo (IFZ-010).
     fn regiones(&self) -> Vec<&'static str> {
         let ui = &self.ui;
         let mut v = Vec::new();
@@ -897,7 +977,7 @@ impl Interfaz {
             v.push("riel");
         }
         match ui.get_seccion().as_str() {
-            "ronda" if ui.get_ancha() => v.extend(["guia", "lista", "pagina"]),
+            "ronda" if ui.get_ancha() => v.extend(["guia", "lista", "cabecera", "pagina"]),
             "ronda" => v.extend(["pagina", "abajo"]),
             "ajustes" if ui.get_vista_cuenta() => v.extend(["barra", "cuenta-pagina"]),
             "ajustes" => v.push("formulario"),
@@ -934,6 +1014,22 @@ impl Interfaz {
                 return;
             }
         }
+    }
+
+    /// IFZ-011 (Aplicacion.MenuContextual): el menú de edición de Windows sobre «Tu pregunta». a y b son la
+    /// selección en bytes; devuelve el ítem elegido y la ventana lo aplica.
+    fn menu_de_edicion(&self, a: i32, b: i32, hay_anterior: bool) -> i32 {
+        let t = self.ui.get_pregunta().to_string();
+        let (a, b) = (a.max(0) as usize, b.max(0) as usize);
+        let activos = items_de_edicion(t.is_empty(), b > a, hay_portapapeles(), hay_anterior);
+        let elegido = mostrar_menu_de_edicion(activos);
+        // Eliminar no pasa por el portapapeles: la selección sale acá y la ventana deja el cursor en a.
+        if elegido == 5
+            && let (Some(x), Some(y)) = (t.get(..a), t.get(b..))
+        {
+            self.ui.set_pregunta(texto(&format!("{x}{y}")));
+        }
+        elegido
     }
 
     // ---------------------------------------------------------------- ronda
@@ -3147,6 +3243,20 @@ fn mostrar_ronda(
 #[cfg(test)]
 mod pruebas {
     use super::*;
+
+    #[test]
+    fn con_el_campo_vacio_y_algo_copiado_solo_pegar_aplica() {
+        // IFZ-011, el resultado observable de la spec.
+        assert_eq!(
+            items_de_edicion(true, false, true, false),
+            [false, false, false, true, false, false]
+        );
+        // Con texto seleccionado y un cambio previo, todo menos Pegar si no hay nada copiado.
+        assert_eq!(
+            items_de_edicion(false, true, false, true),
+            [true, true, true, false, true, true]
+        );
+    }
 
     #[test]
     fn el_resumen_de_la_captura_dice_largos_problemas_y_avisos() {

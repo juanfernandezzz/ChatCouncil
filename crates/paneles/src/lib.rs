@@ -1181,15 +1181,16 @@ mod windows {
     use ::windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use ::windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
     use ::windows::Win32::UI::Input::KeyboardAndMouse::{
-        INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP, SendInput,
-        SetFocus, VIRTUAL_KEY, VK_F1, VK_F5,
+        GetFocus, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP,
+        SendInput, SetFocus, VIRTUAL_KEY, VK_F1, VK_F5,
     };
+    use ::windows::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass};
     use ::windows::Win32::UI::WindowsAndMessaging::{
         CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow, GW_HWNDFIRST, GW_HWNDNEXT,
         GetClassNameW, GetParent, GetWindow, GetWindowRect, HWND_BOTTOM, HWND_TOP, IDC_ARROW,
         IsWindow, LoadCursorW, PostMessageW, RegisterClassW, SWP_NOACTIVATE, SWP_NOMOVE,
-        SWP_NOSIZE, SWP_SHOWWINDOW, SetWindowPos, WINDOW_EX_STYLE, WM_CLOSE, WNDCLASSW,
-        WS_OVERLAPPEDWINDOW, WS_VISIBLE,
+        SWP_NOSIZE, SWP_SHOWWINDOW, SetWindowPos, WINDOW_EX_STYLE, WM_CLOSE, WM_LBUTTONDOWN,
+        WM_MBUTTONDOWN, WM_POINTERDOWN, WM_RBUTTONDOWN, WNDCLASSW, WS_OVERLAPPEDWINDOW, WS_VISIBLE,
     };
     use ::windows::core::{BOOL, HSTRING, Interface, PWSTR, w};
     use webview2_com::Microsoft::Web::WebView2::Win32::{
@@ -1529,6 +1530,11 @@ mod windows {
             Ok(())
         }));
         let mut token = 0i64;
+        // SAFETY: padre es la ventana viva de la app, de este hilo; con el mismo id, la segunda vez no
+        // agrega otro gancho.
+        if !unsafe { SetWindowSubclass(hwnd(padre), Some(clic_devuelve_el_foco), 1, 0) }.as_bool() {
+            eprintln!("No se pudo enganchar el clic que devuelve el teclado a la app.");
+        }
         // SAFETY: el controlador vive tanto como el webview, que es dueño de los manejadores.
         unsafe {
             controlador
@@ -1536,6 +1542,29 @@ mod windows {
                 .and_then(|()| controlador.add_AcceleratorKeyPressed(&tecla, &mut token))
         }
         .map_err(|e| e.to_string())
+    }
+
+    /// Un clic en la app, fuera de la página, le devuelve el teclado: Windows no lo hace solo y la
+    /// interfaz marcaba el control tocado mientras lo escrito iba a la página.
+    unsafe extern "system" fn clic_devuelve_el_foco(
+        h: HWND,
+        mensaje: u32,
+        w: WPARAM,
+        l: LPARAM,
+        _: usize,
+        _: usize,
+    ) -> LRESULT {
+        let clic = matches!(
+            mensaje,
+            WM_LBUTTONDOWN | WM_RBUTTONDOWN | WM_MBUTTONDOWN | WM_POINTERDOWN
+        );
+        // SAFETY: Windows llama con una ventana viva de este hilo; las funciones no toman punteros.
+        unsafe {
+            if clic && GetFocus() != h {
+                let _ = SetFocus(Some(h));
+            }
+            DefSubclassProc(h, mensaje, w, l)
+        }
     }
 
     /// La ventana propia de una emergente; se cierra al soltarla.

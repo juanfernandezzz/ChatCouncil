@@ -84,10 +84,10 @@
   - Outcome: La Ronda en pantalla: operación, roles e informe
   - Evidence: recorded
 
-- [ ] Part 17: Read `plans/PART17_PLAN.ai.md`
+- [x] Part 17: Read `plans/PART17_PLAN.ai.md`
   - Scenario: SCN-017
   - Outcome: Menús, mantenimiento, teclado y lector de pantalla
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 18: Read `plans/PART18_PLAN.ai.md`
   - Scenario: SCN-018

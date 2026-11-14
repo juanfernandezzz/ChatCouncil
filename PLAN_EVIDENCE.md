@@ -611,3 +611,17 @@ Artifacts:
 - ChatCouncilNueva.exe -pruebainterfaz fases 1/2/3: 16/16, 9/9, 8/8, codigo 0 (C:\cc-target\tmp\pr16-final)
 - ChatCouncilNueva.exe -autoprueba: 65/65 codigo 0 (debug pr16-final; release C:\cc-target\tmp\a1-final\auto1-3.txt)
 - rojo: C:\cc-target\tmp\pr16a\salida.txt (61/64), a1-rojo.txt
+### PART-017
+
+Menus, mantenimiento, teclado y lector de pantalla (paridad Unity). Teclado con teclas de verdad (SendInput, solo con la app al frente): F1/F2 panel, F3 paso, F4/F5 regiones riel -> guia -> lista -> cabecera -> pagina nativa y vuelta, Ctrl+Tab/Ctrl+Mayus+Tab, Tab que sale de la pagina (MoveFocusRequested), Enter sobre una fila; con Alt, F4 no es de la app y la ventana se cierra (INV-IFZ-002, caso de falla del plan). Menu de edicion nativo de Windows sobre Tu pregunta (IFZ-011): con el campo vacio y texto en el portapapeles solo Pegar habilitado; Pegar pega (verificado con agent-desktop). Mantenimiento: Recargar, Diagnostico de selectores a diagnosticos/ y Cerrar la sesion de este panel (borra lo que el sitio guardo). Lector de pantalla verificado por la jerarquia UIA desde otro hilo, como Narrador (IFZ-020 a IFZ-022, INV-IFZ-004/005): nombres de botones, filas «Nombre, estado», «, etapa actual», sin nodos de tamano cero, sin nombres sueltos, 48 dp, identidad estable del nodo al cambiar el resultado. Errores hallados con teclas reales, cada uno con su rojo: el foco quedaba en un elemento destruido al cerrarse dialogo/menu/cajon (rojo 79/82 -> verde); F2 actuaba con el aviso abierto (IFZ-008, rojo 77/82); Ctrl+Tab cambiaba el panel con un dialogo abierto (rojo 81/83 -> 83/83, hallazgo de ecc:rust-reviewer); un clic en la app no le devolvia el teclado de Windows y lo escrito iba a la pagina escondida (subclase de la ventana en paneles; rojo 82/83 -> 83/83, verificado a mano: el clic deja el foco en la app y Ctrl+Tab desde el campo cambia el panel). Revision ecc:rust-reviewer: arreglados Ctrl+Tab (IFZ-008), foco que no se roba a un dialogo recien abierto, SendInput y clic solo con la app al frente, feature Win32_System_Ole sin uso; informados sin cambio: Shift+F10 no abre el menu de edicion, Deshacer de un nivel, la prueba asume la ventana ancha. Gates: fmt 0, clippy -D warnings 0, test --workspace 240 passed 5 ignored, cargo tree -p nucleo solo nucleo. Commit 0d2df24; CI https://github.com/juanfernandezzz/ChatCouncil/actions/runs/43577271080 success (65/65, 16/16, 9/9, 8/8, 83/83).
+
+Artifacts:
+- cargo fmt --all --check: 0
+- cargo clippy --workspace --all-targets -- -D warnings: 0
+- cargo test --workspace: 240 passed, 5 ignored (C:\cc-target\tmp\pr17\gates4.txt)
+- cargo tree -p nucleo -e normal: nucleo v0.1.0
+- ChatCouncilNueva.exe -pruebaronda: Resultado 83/83, codigo 0 (C:\cc-target\tmp\pr17-final3\ronda.txt)
+- ChatCouncilNueva.exe -pruebainterfaz fases 1/2/3: 16/16, 9/9, 8/8, codigo 0 (C:\cc-target\tmp\pr17-final3)
+- ChatCouncilNueva.exe -autoprueba: 65/65 codigo 0 (C:\cc-target\tmp\pr17-final3\auto.txt)
+- rojos: C:\cc-target\tmp\pr17\ronda1.txt (77/82), ronda2.txt (79/82), pr17-rojo-clic (82/83), pr17-rojo-ctrltab (81/83)
+- agent-desktop: C:\cc-target\tmp\pr17-manual (menu de edicion, Pegar, Alt+F4 cierra con codigo 0, clic y Ctrl+Tab)

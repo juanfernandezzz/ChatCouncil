@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART17_PLAN.ai.md
+Next: plans/PART18_PLAN.ai.md
 
 ## Parts
 
@@ -89,10 +89,10 @@ Next: plans/PART17_PLAN.ai.md
   - Outcome: La Ronda en pantalla: operación, roles e informe
   - Evidence: recorded
 
-- [ ] Part 17: plans/PART17_PLAN.ai.md
+- [x] Part 17: plans/PART17_PLAN.ai.md
   - Scenario: SCN-017
   - Outcome: Menús, mantenimiento, teclado y lector de pantalla
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 18: plans/PART18_PLAN.ai.md
   - Scenario: SCN-018

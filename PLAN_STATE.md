@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: COMPLETE
+Next: plans/PART19_PLAN.ai.md
 
 ## Parts
 
@@ -98,6 +98,16 @@ Next: COMPLETE
   - Scenario: SCN-018
   - Outcome: Cierre de E7: auditoría, pulido, cobertura y medición orientativa
   - Evidence: recorded
+
+- [ ] Part 19: plans/PART19_PLAN.ai.md
+  - Scenario: SCN-019
+  - Outcome: Actualizador, instalador y publicación en un Release propio; la app nueva instalada
+  - Evidence: pending
+
+- [ ] Part 20: plans/PART20_PLAN.ai.md
+  - Scenario: SCN-020
+  - Outcome: Comparación medida contra la Unity (M1, M2, M4, M5) con la máquina en reposo
+  - Evidence: pending
 
 ## Notes
 

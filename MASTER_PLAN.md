@@ -1,4 +1,4 @@
-# ChatCouncil · plan de E6 (núcleo Rust) y E7 (interfaz y paneles)
+# ChatCouncil · plan de E6, E7 y E8
 
 ## Phase 1: E6 · Núcleo Rust
 
@@ -93,3 +93,15 @@
   - Scenario: SCN-018
   - Outcome: Cierre de E7: auditoría, pulido, cobertura y medición orientativa
   - Evidence: recorded
+
+## Phase 3: E8 · Entrega y medición
+
+- [ ] Part 19: Read `plans/PART19_PLAN.ai.md`
+  - Scenario: SCN-019
+  - Outcome: Actualizador, instalador y publicación en un Release propio; la app nueva instalada
+  - Evidence: pending
+
+- [ ] Part 20: Read `plans/PART20_PLAN.ai.md`
+  - Scenario: SCN-020
+  - Outcome: Comparación medida contra la Unity (M1, M2, M4, M5) con la máquina en reposo
+  - Evidence: pending

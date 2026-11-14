@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART16_PLAN.ai.md
+Next: plans/PART17_PLAN.ai.md
 
 ## Parts
 
@@ -84,10 +84,10 @@ Next: plans/PART16_PLAN.ai.md
   - Outcome: La Ronda en pantalla: pregunta e investigación
   - Evidence: recorded
 
-- [ ] Part 16: plans/PART16_PLAN.ai.md
+- [x] Part 16: plans/PART16_PLAN.ai.md
   - Scenario: SCN-016
   - Outcome: La Ronda en pantalla: operación, roles e informe
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 17: plans/PART17_PLAN.ai.md
   - Scenario: SCN-017

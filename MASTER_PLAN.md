@@ -79,10 +79,10 @@
   - Outcome: La Ronda en pantalla: pregunta e investigación
   - Evidence: recorded
 
-- [ ] Part 16: Read `plans/PART16_PLAN.ai.md`
+- [x] Part 16: Read `plans/PART16_PLAN.ai.md`
   - Scenario: SCN-016
   - Outcome: La Ronda en pantalla: operación, roles e informe
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 17: Read `plans/PART17_PLAN.ai.md`
   - Scenario: SCN-017

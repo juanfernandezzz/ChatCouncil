@@ -597,3 +597,17 @@ Artifacts:
 - ChatCouncilNueva.exe -pruebainterfaz fases 1/2/3: 16/16, 9/9, 4/4, codigo 0 (C:\cc-target\tmp\pi15c-*.txt)
 - ChatCouncilNueva.exe -autoprueba: Resultado 62/62, codigo 0 (C:\cc-target\tmp\ap15b.txt)
 - rojo INV-CAP-002: C:\cc-target\tmp\pr-rojo\s.txt (23/25); rojo doble clic: C:\cc-target\tmp\pr-rojo2\s.txt (26/28)
+
+### PART-016
+
+Ronda de Operacion, roles e informe (paridad Unity): aviso de operacion una vez por ronda, de a un panel, con archivo o texto y Usar su operacion anterior; integrador, verificadores y redactor con su fila de estado (funcion sola si la fila esta oculta, PruebaInterfaz.cs:202); informe armado fuera del hilo de la interfaz y Abrir carpeta. -pruebaronda cubre operacion (PRU-014), roles (PRU-015) e informe con copias de evidencia .investigacion (14 archivos), .informe (16) y .roles (37), navegador/ 0, &sucio=1, ESC-006 y el caso de falla ESC-007 (conversacion nueva que no queda vacia: no se pega). Tras un error se vuelve a pedir el estado y nunca se reintenta solo. Puerta borra lo pegado al abrir la ronda nueva con respuestas copiadas (Puerta.cs:766): test ronda_entera_deja_los_mismos_hechos_que_la_unity rojo (pegado-falta-enviar) -> verde (por-pegar); pruebaronda rojo 61/64 -> verde 64/64. D27 en el mismo commit: release sin consola (A1, autoprueba release 65/65 tres veces codigo 0), fallos.log con panic y ProcessFailed y paneles recreados si cae el navegador (A2), asa max = min(600, altura que deja al panel su minimo) (A3). Revision ecc:rust-reviewer: URL comparables en Navegaciones (unit test rojo/verde), solo RENDER_PROCESS_EXITED recarga, error de anotar tras pegar a la interfaz (TEXTO-PENDIENTE), reabrir paneles solo sin ronda ocupada, ubicacion del panic sin ruta del usuario; inyeccion del script reintenta con resultado vacio durante una carga (flaky 17/40 sin rojo deterministico). Se mantienen: abrir_chat_nuevo revisa vacio y muestra su error; decision de diseno 7. Gates: fmt 0, clippy -D warnings 0, test --workspace 239 passed 5 ignored, cargo tree -p nucleo solo nucleo. Commit 43e2d50; CI https://github.com/juanfernandezzz/ChatCouncil/actions/runs/43568214911.
+
+Artifacts:
+- cargo fmt --all --check: 0
+- cargo clippy --workspace --all-targets -- -D warnings: 0
+- cargo test --workspace: 239 passed, 5 ignored
+- cargo tree -p nucleo -e normal: nucleo v0.1.0
+- ChatCouncilNueva.exe -pruebaronda: Resultado 64/64 dos veces, codigo 0 (C:\cc-target\tmp\pr16-final)
+- ChatCouncilNueva.exe -pruebainterfaz fases 1/2/3: 16/16, 9/9, 8/8, codigo 0 (C:\cc-target\tmp\pr16-final)
+- ChatCouncilNueva.exe -autoprueba: 65/65 codigo 0 (debug pr16-final; release C:\cc-target\tmp\a1-final\auto1-3.txt)
+- rojo: C:\cc-target\tmp\pr16a\salida.txt (61/64), a1-rojo.txt

@@ -30,6 +30,14 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
         in-out property <int> escapes;
     }
 
+    // C (PART-018): colores que siguen al tema. El rojo de los problemas (#C42B1C) da 3,0:1 sobre el fondo
+    // oscuro; #FF99A4 da 8,4:1 (WCAG 1.4.3). Los bordes de controles y el asa con Palette.border dan 1,25:1 en
+    // oscuro; el primer plano al 50 % da 5,2:1 (WCAG 1.4.11) y en claro queda igual que Palette.border.
+    global Tono {
+        out property <color> problema: Palette.color-scheme == ColorScheme.dark ? #FF99A4 : #C42B1C;
+        out property <brush> trazo: Palette.foreground.transparentize(50%);
+    }
+
     // El foco visible de todos los controles: un borde de 2 px en #3A79E0 (WCAG 2.4.7).
     component Anillo inherits Rectangle {
         in property <bool> foco;
@@ -208,7 +216,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
         Rectangle {
             height: root.alto;
             border-width: 1px;
-            border-color: Palette.border;
+            border-color: Tono.trazo;
             border-radius: 4px;
             background: Palette.alternate-background;
             // TextEdit trae su propio menú (en inglés, sin Deshacer ni Eliminar): el campo es un TextInput y el
@@ -262,7 +270,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
         }
         Rectangle {
             height: 12px;
-            Rectangle { width: 32px; height: 4px; border-radius: 2px; background: Palette.border; }
+            Rectangle { width: 32px; height: 4px; border-radius: 2px; background: Tono.trazo; }
             ta := TouchArea {
                 mouse-cursor: ns-resize;
                 pointer-event(e) => {
@@ -598,7 +606,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                                     Parrafo { text: root.frase; }
                                     Secundario { text: root.contadores; }
                                     // IFZ-007: el resultado se anuncia sin mover el foco (WCAG 4.1.3).
-                                    Parrafo { text: root.resultado; color: root.resultado-problema ? #C42B1C : Palette.foreground; accessible-role: text; accessible-label: self.text; accessible-live-region: polite; }
+                                    Parrafo { text: root.resultado; color: root.resultado-problema ? Tono.problema : Palette.foreground; accessible-role: text; accessible-label: self.text; accessible-live-region: polite; }
                                 }
                                 VerticalLayout { alignment: start; ronda-menu := Boton { text: "Ronda…"; clicked => { root.menu-desde(self.absolute-position, self.height, "ronda"); } } }
                             }
@@ -642,7 +650,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                                         alignment: center;
                                         horizontal-stretch: 1;
                                         Text { text: root.cabecera-titulo; font-weight: 600; wrap: word-wrap; color: Palette.foreground; }
-                                        if root.cabecera-problema != "" : Text { text: root.cabecera-problema; wrap: word-wrap; color: #C42B1C; }
+                                        if root.cabecera-problema != "" : Text { text: root.cabecera-problema; wrap: word-wrap; color: Tono.problema; }
                                     }
                                     if root.accion-texto != "" : Boton { text: root.accion-texto; habilitado: !root.ocupado; clicked => { root.accion-panel(); } }
                                     mas-panel := Boton { text: "Más…"; clicked => { root.menu-desde(self.absolute-position, self.height, "panel"); } }
@@ -650,7 +658,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                                 // La página del proveedor (vista nativa) va encima de este rectángulo.
                                 pagina := Rectangle {
                                     border-width: 1px;
-                                    border-color: Palette.border;
+                                    border-color: Tono.trazo;
                                     changed width => { root.area-cambio(); }
                                     changed height => { root.area-cambio(); }
                                     changed x => { root.area-cambio(); }
@@ -675,7 +683,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                                         VerticalLayout { alignment: center; Icono { estado: root.icono-visible; } }
                                         Text { text: root.selector-texto; font-weight: 600; wrap: word-wrap; color: Palette.foreground; horizontal-stretch: 1; }
                                     }
-                                    if root.selector-problema != "" : Text { text: root.selector-problema; wrap: word-wrap; color: #C42B1C; }
+                                    if root.selector-problema != "" : Text { text: root.selector-problema; wrap: word-wrap; color: Tono.problema; }
                                 }
                                 Boton { text: "›"; etiqueta: "Panel siguiente"; clicked => { root.mover(1); } }
                             }
@@ -686,7 +694,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                                 menu-contextual(a, b, h, x, y) => { return root.menu-contextual(a, b, h, x, y); }
                             }
                             paso-angosta := Boton { text: root.paso-texto; primario: true; habilitado: root.paso-habilitado && !root.ocupado; horizontal-stretch: 1; clicked => { root.paso(); } }
-                            Parrafo { text: root.resultado; color: root.resultado-problema ? #C42B1C : Palette.foreground; accessible-role: text; accessible-label: self.text; accessible-live-region: polite; }
+                            Parrafo { text: root.resultado; color: root.resultado-problema ? Tono.problema : Palette.foreground; accessible-role: text; accessible-label: self.text; accessible-live-region: polite; }
                             Parrafo { text: root.frase; }
                             HorizontalLayout {
                                 spacing: 8px;
@@ -761,7 +769,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                                     HorizontalLayout { alignment: start; Boton { text: "Guardar"; primario: true; clicked => { root.guardar(); } } }
                                     Parrafo {
                                         text: root.mensaje;
-                                        color: root.mensaje-problema ? #C42B1C : Palette.foreground;
+                                        color: root.mensaje-problema ? Tono.problema : Palette.foreground;
                                     }
                                 }
 
@@ -836,7 +844,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                         }
                         cuenta-pagina := Rectangle {
                             border-width: 1px;
-                            border-color: Palette.border;
+                            border-color: Tono.trazo;
                             changed width => { root.cuenta-area-cambio(); }
                             changed height => { root.cuenta-area-cambio(); }
                             changed x => { root.cuenta-area-cambio(); }
@@ -935,7 +943,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                     background: Palette.background;
                     border-radius: 8px;
                     border-width: 1px;
-                    border-color: Palette.border;
+                    border-color: Tono.trazo;
                     accessible-role: list;
                     TouchArea { }
                     FocusScope {

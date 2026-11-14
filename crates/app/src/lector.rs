@@ -220,18 +220,27 @@ pub fn teclas(ventana: isize, vks: &[u16]) -> bool {
 /// Corre en otro hilo: mientras el menú está abierto, el hilo de la interfaz queda en su bucle.
 pub fn cerrar_menu_emergente(ventana: isize, ms: u64) -> bool {
     use windows::Win32::UI::WindowsAndMessaging::{
-        FindWindowW, GetWindowThreadProcessId, IsWindowVisible,
+        FindWindowExW, GetWindowThreadProcessId, IsWindowVisible,
     };
     let fin = std::time::Instant::now() + std::time::Duration::from_millis(ms);
     while std::time::Instant::now() < fin {
-        // SAFETY: la clase es una cadena constante; pid vive durante la llamada.
+        // Recorre todos los menús emergentes (#32768): el primero puede ser de otro proceso.
+        // SAFETY: la clase es una cadena constante; pid vive durante cada llamada.
         let de_la_app = unsafe {
-            let h = FindWindowW(windows::core::w!("#32768"), None).unwrap_or_default();
-            let mut pid = 0;
-            !h.is_invalid()
-                && IsWindowVisible(h).as_bool()
-                && GetWindowThreadProcessId(h, Some(&mut pid)) != 0
-                && pid == std::process::id()
+            let mut h = HWND::default();
+            let mut hallado = false;
+            while !hallado {
+                h = FindWindowExW(None, Some(h), windows::core::w!("#32768"), None)
+                    .unwrap_or_default();
+                if h.is_invalid() {
+                    break;
+                }
+                let mut pid = 0;
+                hallado = IsWindowVisible(h).as_bool()
+                    && GetWindowThreadProcessId(h, Some(&mut pid)) != 0
+                    && pid == std::process::id();
+            }
+            hallado
         };
         if de_la_app {
             return teclas(ventana, &[0x1B]);

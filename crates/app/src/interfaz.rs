@@ -361,7 +361,10 @@ fn mostrar_menu_de_edicion(activos: [bool; 6], junto: Option<(i32, i32)>) -> i32
         match junto {
             Some((x, y)) => {
                 p = POINT { x, y };
-                let _ = ClientToScreen(GetActiveWindow(), &mut p);
+                // Sin ventana activa no hay a qué referir el punto: el menú va junto al puntero.
+                if !ClientToScreen(GetActiveWindow(), &mut p).as_bool() {
+                    let _ = GetCursorPos(&mut p);
+                }
             }
             None => {
                 let _ = GetCursorPos(&mut p);

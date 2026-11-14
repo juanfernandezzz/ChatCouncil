@@ -1,0 +1,110 @@
+requisito | capacidad | parte | tipo de comprobación | dónde
+ARR-001 | arranque-actualizacion | PART-011 | pruebainterfaz | fase 2 «carpeta de datos»; cargo test la_carpeta_de_datos_es_la_de_menos_datos
+ARR-002 | arranque-actualizacion | PART-014 | pruebainterfaz | fase 1 «primer arranque»
+ARR-004 | arranque-actualizacion | PART-014 | cargo test | la_version_avisa_las_specs_de_la_carpeta_de_datos
+ARR-005 | arranque-actualizacion | PART-011 | manual | bench/resultados/e7-app.json (CPU en reposo 30 s, D16); la comparación con la Unity va a E8
+ARR-006 | arranque-actualizacion | PART-011 | autoprueba | «escala de la ventana»
+ARR-007 | arranque-actualizacion | PART-011 | cargo test | una_bandera_sin_su_valor_nunca_cae_a_la_carpeta_real
+CAP-001 | captura | PART-013 | autoprueba | «lectura con exclude y html crudo (spec kimi)»
+CAP-002 | captura | PART-013 | autoprueba | «la lectura junta la respuesta y el informe del iframe»
+CAP-003 | captura | PART-015 | pruebaronda | «capturar los que terminaron»
+CAP-014 | captura | PART-013 | autoprueba | «estado de generación»
+INV-CAP-002 | captura | PART-015 | pruebaronda | «sin captura sola»
+INV-CAP-003 | captura | PART-013 | autoprueba | «el sondeo descarta el dato de una página que no responde»
+ESC-001 | escritura-compositor | PART-013 | autoprueba | «escribir no pisa un borrador»
+ESC-002 | escritura-compositor | PART-013 | autoprueba | «saltos \r\n sin líneas de más (spec chatgpt)»
+ESC-003 | escritura-compositor | PART-013 | autoprueba | «pegado de 180.000 caracteres con marcas (spec kimi)»
+ESC-004 | escritura-compositor | PART-013 | autoprueba | «escribir»
+ESC-005 | escritura-compositor | PART-015 | pruebaronda | «un intento por proveedor», «resultado del pegado»
+ESC-006 | escritura-compositor | PART-015 | pruebaronda | «repegar con el mensaje ya enviado»
+ESC-007 | escritura-compositor | PART-016 | pruebaronda | «conversación que no queda vacía: no se pega»
+ESC-008 | escritura-compositor | PART-016 | pruebaronda | «operación como texto, con el aviso una vez por ronda»
+ESC-009 | escritura-compositor | PART-016 | pruebaronda | «resultado de la operación»
+ESC-012 | escritura-compositor | PART-016 | pruebaronda | «pegar el redactor con el adjunto»
+INV-ESC-001 | escritura-compositor | PART-013 | cargo test | la_app_solo_pide_operaciones_permitidas
+INV-ESC-002 | escritura-compositor | PART-013 | autoprueba | «saltos de línea y borrador»
+INV-ESC-003 | escritura-compositor | PART-013 | autoprueba | «leer el compositor»
+INT-004 | integrador | PART-016 | pruebaronda | «pegar el integrador»
+INV-INT-002 | integrador | PART-016 | cargo test | nucleo: prompts_los_roles_sin_ronda_semilla_o_pregunta_se_niegan_con_el_motivo_de_la_unity (pegar_rol corta antes de tocar el panel)
+IFZ-001 | interfaz | PART-015 | pruebaronda | «etapa Pregunta»
+IFZ-002 | interfaz | PART-015 | pruebaronda | «símbolo y palabra»
+IFZ-003 | interfaz | PART-015 | pruebaronda | «contadores»
+IFZ-004 | interfaz | PART-016 | pruebaronda | «etapa Integración»
+IFZ-005 | interfaz | PART-015 | pruebaronda | «cabecera y selector»
+IFZ-006 | interfaz | PART-015 | pruebaronda | «investigación sin enviar»
+IFZ-007 | interfaz | PART-015 | manual | C:\cc-target\tmp\man18\ifz007-recargar.txt (clics reales: el foco sigue en «Más…» 5 s); región viva polite en ventana.rs
+IFZ-008 | interfaz | PART-017 | pruebaronda | «F3, F2 y F1»
+IFZ-009 | interfaz | PART-017 | pruebaronda | «Ctrl+Tab y Ctrl+Mayús+Tab…»
+IFZ-010 | interfaz | PART-017 | pruebaronda | «F4 y F5…», «F4 recorre … angosta y compacta»
+IFZ-011 | interfaz | PART-017 | pruebaronda | «Mayús+F10 y la tecla de menú…»; cargo test con_el_campo_vacio_y_algo_copiado_solo_pegar_aplica
+IFZ-012 | interfaz | PART-015 | pruebainterfaz | fase 3 «el asa respeta el alto mínimo del panel»
+IFZ-013 | interfaz | PART-014 | pruebainterfaz | fase 3 «cajón en la clase compacta»
+IFZ-014 | interfaz | PART-014 | pruebaronda | «el historial, la más nueva primero…»
+IFZ-016 | interfaz | PART-014 | pruebaronda | «la Ayuda se abre desde el riel y no con F1»; cargo test las_licencias_traen_las_fuentes_y_los_crates_enlazados
+IFZ-017 | interfaz | PART-017 | manual | C:\cc-target\tmp\man18\man18.txt, menu-angosta-700x480.png, menu-ver-todos-700x480.png
+IFZ-018 | interfaz | PART-017 | manual | C:\cc-target\tmp\man18\man18.txt, menu-panel-integrador.png
+IFZ-019 | interfaz | PART-017 | manual | C:\cc-target\tmp\man18\man18.txt, menu-ronda-sin-ronda.png
+IFZ-020 | interfaz | PART-017 | pruebaronda | «la jerarquía para el lector de pantalla»
+IFZ-021 | interfaz | PART-017 | pruebaronda | «la jerarquía…», «una casilla de Ajustes cambia desde el lector»
+IFZ-022 | interfaz | PART-017 | pruebaronda | «activar una fila desde el lector la pone a la vista»
+IFZ-023 | interfaz | PART-015 | pruebaronda | «símbolo y palabra»
+IFZ-024 | interfaz | PART-015 | pruebaronda | «diálogo cancelado: la ronda sigue abierta»
+INV-IFZ-001 | interfaz | PART-017 | manual | C:\cc-target\tmp\man18\man18.txt (menús Ronda, panel y Corregir); pruebaronda «corregir una fase cerrada»
+INV-IFZ-002 | interfaz | PART-017 | pruebaronda | «con Alt pulsado, F4…»
+INV-IFZ-003 | interfaz | PART-017 | manual | C:\cc-target\tmp\man18\menu-ronda-1000x480.png, menu-panel-1000x480.png
+INV-IFZ-004 | interfaz | PART-017 | pruebaronda | «un texto nuevo no rearma la jerarquía»
+INV-IFZ-005 | interfaz | PART-017 | pruebaronda | «la jerarquía…»
+INV-IFZ-006 | interfaz | PART-015 | pruebaronda | «símbolo y palabra»
+INV-IFZ-007 | interfaz | PART-015 | pruebaronda | «diálogo cancelado…»
+PAN-001 | paneles-sesiones | PART-011 | autoprueba | «argumentos de no limitación»
+PAN-002 | paneles-sesiones | PART-012 | autoprueba | «perfil: el navegador dice "prueba-a"»
+PAN-003 | paneles-sesiones | PART-012 | autoprueba | «techo externo sobre una página colgada»
+PAN-004 | paneles-sesiones | PART-012 | autoprueba | «ventana emergente con opener en el mismo perfil»
+PAN-005 | paneles-sesiones | PART-012 | autoprueba | «bloqueo de /logout»; cargo test los_cierres_de_sesion_se_reconocen_como_en_panel_cpp
+PAN-006 | paneles-sesiones | PART-014 | pruebainterfaz | fase 1 «sesión deducida, con compositor»
+PAN-007 | paneles-sesiones | PART-014 | pruebainterfaz | fase 1 «sesión deducida, sin compositor»
+PAN-008 | paneles-sesiones | PART-017 | pruebaronda | «recargar la página»
+PAN-009 | paneles-sesiones | PART-017 | pruebaronda | «el cierre de sesión borra lo que el sitio guardó»
+PAN-010 | paneles-sesiones | PART-017 | E9 | accounts.google.com es una página real y pide la cuenta de Juan; en E7 solo páginas locales
+PAN-011 | paneles-sesiones | PART-012 | autoprueba | «panel oculto fuera de la ventana»
+PAN-012 | paneles-sesiones | PART-012 | autoprueba | «Tab que sale de la página», «F1, F2 y F3 desde la página»
+PAN-013 | paneles-sesiones | PART-012 | autoprueba | «adjunto soltado sobre el compositor (DevTools)»
+PAN-014 | paneles-sesiones | PART-012 | cargo test | informe_armar_el_pdf_no_crea_webview_ni_perfil
+PAN-015 | paneles-sesiones | PART-017 | pruebaronda | «el cierre de sesión borra lo que el sitio guardó» (título); la rama del fallo no se prueba
+INV-PAN-001 | paneles-sesiones | PART-012 | cargo test | la_app_solo_pide_operaciones_permitidas
+INV-PAN-002 | paneles-sesiones | PART-011 | autoprueba | «user agent sin tocar»
+INV-PAN-003 | paneles-sesiones | PART-012 | autoprueba | «borrado de un solo sitio»
+PRU-001 | pruebas-internas | PART-011 | cargo test | menos_autoprueba_da_la_ruta_de_salida
+PRU-002 | pruebas-internas | PART-012 | autoprueba | «una navegación espera su propia carga»
+PRU-003 | pruebas-internas | PART-013 | autoprueba | «escritura por párrafos en contenteditable (spec chatgpt)»
+PRU-004 | pruebas-internas | PART-013 | autoprueba | «diagnóstico de selectores»
+PRU-005 | pruebas-internas | PART-013 | autoprueba | iframe, recortado, adjunto y PDF
+PRU-006 | pruebas-internas | PART-012 | autoprueba | «aislamiento entre dos perfiles»
+PRU-007 | pruebas-internas | PART-012 | autoprueba | «techo externo…»
+PRU-008 | pruebas-internas | PART-013 | autoprueba | «surrogate suelto llega intacto por pagina.js»
+PRU-009 | pruebas-internas | PART-014 | pruebainterfaz | las tres fases; cargo test la_prueba_de_la_interfaz_va_solo_con_menos_datos_y_una_fase
+PRU-010 | pruebas-internas | PART-014 | pruebainterfaz | fase 1
+PRU-011 | pruebas-internas | PART-014 | pruebainterfaz | fases 2 y 3
+PRU-012 | pruebas-internas | PART-015 | cargo test | la_prueba_de_la_ronda_va_solo_con_menos_datos
+PRU-013 | pruebas-internas | PART-015 | pruebaronda | «fin de la investigación»
+PRU-014 | pruebas-internas | PART-016 | pruebaronda | «capturar la operación»
+PRU-015 | pruebas-internas | PART-016 | pruebaronda | «informe en .md y PDF, en Carta»
+PRU-016 | pruebas-internas | PART-015 | pruebaronda | diálogo, abandonar y declarar
+PRU-017 | pruebas-internas | PART-017 | pruebaronda | grupo «secciones, accesibilidad y teclado»
+PRU-018 | pruebas-internas | PART-016 | cargo test | la_copia_de_evidencia_no_lleva_el_navegador
+INV-PRU-001 | pruebas-internas | PART-011 | cargo test | las_paginas_de_prueba_van_solo_con_una_carpeta_de_datos_explicita
+INV-PRU-002 | pruebas-internas | PART-016 | cargo test | la_copia_de_evidencia_no_lleva_el_navegador
+INV-PRU-003 | pruebas-internas | PART-011 | cargo test | una_medicion_nunca_cuenta_para_el_resultado
+VER-002 | verificadores | PART-016 | pruebaronda | «capturar las dos verificaciones» (prompts idénticos)
+VER-008 | verificadores | PART-016 | pruebaronda | «repetir la verificación de un panel»; motivo deshabilitado en el Informe: C:\cc-target\tmp\man18\man18b.txt
+DIA-001 | diagnostico | PART-013 | pruebaronda | «el diagnóstico en un archivo»
+INF-013 | informe | PART-016 | pruebaronda | «la carpeta se abre al terminar»
+
+Totales (100 IDs):
+pruebaronda: 43
+autoprueba: 28
+pruebainterfaz: 9
+cargo test: 12
+manual: 7
+E9: 1
+sin comprobación: 0

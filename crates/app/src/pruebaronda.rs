@@ -1259,6 +1259,23 @@ async fn roles(
             en_la_vista().len()
         ),
     );
+    // VER-008 (PART-018 D1): «Repetir la verificación de este panel» abre una conversación nueva en Qwen y
+    // vuelve a pegar el mismo prompt; GLM no se toca.
+    let habilitado_repetir = renglon(i, "panel", "Repetir la verificación de este panel", true);
+    hasta(120, || {
+        (resultado().starts_with("Prompt del verificador pegado")
+            || resultado().starts_with("No se"))
+            && !ui.get_ocupado()
+    })
+    .await;
+    a.anotar(
+        habilitado_repetir == Some(true)
+            && resultado().starts_with("Prompt del verificador pegado en Qwen: ")
+            && compositor(i, "qwen").await == prompt_verificador
+            && compositor(i, "glm").await == prompt_verificador,
+        "repetir la verificación de un panel",
+        &format!("habilitado: {habilitado_repetir:?}; «{}»", resultado()),
+    );
     enviar(i, "glm").await?;
     enviar(i, "qwen").await?;
     let puerto = servidor.puerto;

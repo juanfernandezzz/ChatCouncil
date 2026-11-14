@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART18_PLAN.ai.md
+Next: COMPLETE
 
 ## Parts
 
@@ -94,10 +94,10 @@ Next: plans/PART18_PLAN.ai.md
   - Outcome: Menús, mantenimiento, teclado y lector de pantalla
   - Evidence: recorded
 
-- [ ] Part 18: plans/PART18_PLAN.ai.md
+- [x] Part 18: plans/PART18_PLAN.ai.md
   - Scenario: SCN-018
   - Outcome: Cierre de E7: auditoría, pulido, cobertura y medición orientativa
-  - Evidence: pending
+  - Evidence: recorded
 
 ## Notes
 

@@ -625,3 +625,13 @@ Artifacts:
 - ChatCouncilNueva.exe -autoprueba: 65/65 codigo 0 (C:\cc-target\tmp\pr17-final3\auto.txt)
 - rojos: C:\cc-target\tmp\pr17\ronda1.txt (77/82), ronda2.txt (79/82), pr17-rojo-clic (82/83), pr17-rojo-ctrltab (81/83)
 - agent-desktop: C:\cc-target\tmp\pr17-manual (menu de edicion, Pegar, Alt+F4 cierra con codigo 0, clic y Ctrl+Tab)
+
+### PART-018
+
+PART-018 (cierre de E7): A modales inertes, Mayús+F10 y tecla de menú, foco al abridor, regiones por clase, SAFETY y textos D28 (3592f38); B ponytail-audit sin arreglos de corrección (informe C:\cc-target\tmp\pr18-auditoria-b.txt); C contraste oscuro 3,0->8,4:1 y 1,25->5,2:1 sin cambios de texto, acción ni estado, CPU de la app en reposo igual antes y después (mediana 125 ms/30 s, intercalado); D 100 IDs de E7 con comprobación, 0 sin comprobación, PAN-010 a E9, sin TEXTO-PENDIENTE; E dos arreglos de ecc:rust-reviewer (59f9bc3). Gates locales y CI verdes: fmt, clippy -D warnings, test --workspace, cargo tree nucleo solo, autoprueba 65/65, pruebainterfaz 16/16 9/9 8/8, pruebaronda 91/91. CI https://github.com/juanfernandezzz/ChatCouncil/actions/runs/43608277571
+
+Artifacts:
+- bench/resultados/e7-cobertura.txt
+- bench/resultados/e7-app.json
+- https://github.com/juanfernandezzz/ChatCouncil/actions/runs/43608277571
+- pruebaronda Resultado: 91/91; autoprueba 65/65; pruebainterfaz 16/16, 9/9, 8/8

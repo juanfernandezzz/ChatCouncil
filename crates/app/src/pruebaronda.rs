@@ -227,6 +227,7 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
         "etapa Pregunta",
         &format!("\"{}\", campo de la pregunta a la vista", paso()),
     );
+    menu_de_edicion_con_teclado(a, i).await?;
 
     ui.invoke_paso();
     hasta(5, || !resultado().is_empty()).await;
@@ -1745,6 +1746,12 @@ const ENTER: u16 = 0x0D;
 const CTRL: u16 = 0x11;
 const MAYUS: u16 = 0x10;
 const ALT: u16 = 0x12;
+const F10: u16 = 0x79;
+// VK_APPS: la tecla de menú del teclado.
+const MENU: u16 = 0x5D;
+// Tipos de control de UIA: la lista (accessible-role list) y el grupo (groupbox, el diálogo).
+const LISTA: i32 = 50008;
+const GRUPO: i32 = 50026;
 
 /// Lo que se lee de un nodo, sin el elemento COM, que no cruza de hilo.
 struct Visto {
@@ -1800,6 +1807,68 @@ async fn activar_por_uia(
         Ok(n.nombre)
     })
     .await
+}
+
+/// A1: el foco del lector está en el modal. El modal va después del fondo en el documento: está dentro si
+/// su nodo va desde el primero del modal (la última lista, el grupo del diálogo o el último «Ronda», del
+/// cajón) en adelante.
+async fn foco_en_el_modal(ventana: isize, modal: &'static str, titulo: &str) -> bool {
+    let titulo = titulo.to_string();
+    uia(ventana, move |u| {
+        let f = u.enfocado()?;
+        let nodos = u.nodos()?;
+        let inicio = match modal {
+            "menú" => nodos.iter().rposition(|n| n.tipo == LISTA),
+            "diálogo" => nodos
+                .iter()
+                .position(|n| n.tipo == GRUPO && n.nombre == titulo),
+            _ => nodos
+                .iter()
+                .rposition(|n| n.tipo == lector::BOTON && n.nombre == "Ronda"),
+        }
+        .ok_or("sin el modal en el árbol")?;
+        let pos = nodos.iter().position(|n| u.mismo(&n.elemento, &f.elemento));
+        Ok(pos.is_some_and(|p| p >= inicio))
+    })
+    .await
+    .unwrap_or(false)
+}
+
+/// A2 (IFZ-011): en la etapa Pregunta, Mayús+F10 y la tecla de menú abren el menú de edición sobre «Tu
+/// pregunta», como el clic derecho. Teclas de verdad; otro hilo ve el menú de Windows y lo cierra con Escape.
+async fn menu_de_edicion_con_teclado(a: &mut Anotador, i: &Interfaz) -> Result<(), String> {
+    let w = lector::hwnd_de(i.ui.window()).ok_or("sin el HWND de la ventana")?;
+    let campo = uia(w, |u| {
+        Ok(u.nodos()?
+            .into_iter()
+            .find(|n| n.tipo == lector::CAMPO && n.nombre == "Tu pregunta")
+            .map(|n| n.centro))
+    })
+    .await
+    .ok()
+    .flatten();
+    let (mut abre, mut vistos) = (campo.is_some(), Vec::new());
+    for (cual, vks) in [
+        ("Mayús+F10", &[MAYUS, F10][..]),
+        ("tecla de menú", &[MENU][..]),
+    ] {
+        let en_campo = campo.is_some_and(|(x, y)| lector::al_frente(w) && lector::clic(w, x, y));
+        esperar(300).await;
+        let vigia = std::thread::spawn(move || Ok(lector::cerrar_menu_emergente(w, 5000)));
+        let tecla = lector::al_frente(w) && lector::teclas(w, vks);
+        let visto = esperar_hilo(vigia).await.unwrap_or(false);
+        esperar(300).await;
+        abre &= en_campo && tecla && visto;
+        vistos.push(format!(
+            "{cual}: clic en el campo {en_campo}, tecla {tecla}, menú {visto}"
+        ));
+    }
+    a.anotar(
+        abre,
+        "Mayús+F10 y la tecla de menú abren el menú de edición del campo",
+        &format!("campo {campo:?}; {}", vistos.join("; ")),
+    );
+    Ok(())
 }
 
 /// Teclas de verdad con la ventana al frente; da tiempo a que la interfaz las procese.
@@ -1921,6 +1990,84 @@ async fn teclado_y_lector(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), Stri
             )),
         "la Ayuda se abre desde el riel y no con F1",
         &format!("tras F1 «{tras_f1}»; riel {riel:?}; «{version}»"),
+    );
+
+    // A1 (D28): con el menú, un diálogo o el cajón abiertos, el fondo queda inerte para el lector (invocar
+    // Ayuda en el riel no la abre) y su foco queda dentro del modal, también con Tab y Mayús+Tab.
+    for modal in ["menú", "diálogo", "cajón"] {
+        ui.invoke_ir("historial".into());
+        esperar(300).await;
+        match modal {
+            "menú" => i.abrir_menu("panel"),
+            "diálogo" => i.dialogo_abandonar(),
+            _ => ui.set_cajon_abierto(true),
+        }
+        esperar(700).await;
+        let abierto = ui.get_menu_abierto() || ui.get_capa_abierta() || ui.get_cajon_abierto();
+        let titulo = ui.get_dialogo_titulo().to_string();
+        let al_abrir = foco_en_el_modal(w, modal, &titulo).await;
+        let (mut con_tab, mut tabs) = (true, 0);
+        for _ in 0..16 {
+            if !(lector::al_frente(w) && lector::teclas(w, &[TAB])) {
+                con_tab = false;
+                break;
+            }
+            esperar(150).await;
+            tabs += 1;
+            con_tab &= foco_en_el_modal(w, modal, &titulo).await;
+        }
+        let con_mayus = pulsar(w, &[MAYUS, TAB]).await && foco_en_el_modal(w, modal, &titulo).await;
+        let ayuda = activar_por_uia(w, lector::BOTON, |n| n == "Ayuda").await;
+        esperar(500).await;
+        let seccion = ui.get_seccion().to_string();
+        let sigue = ui.get_menu_abierto() || ui.get_capa_abierta() || ui.get_cajon_abierto();
+        ui.set_menu_abierto(false);
+        ui.invoke_dialogo_cancelar();
+        ui.set_cajon_abierto(false);
+        esperar(300).await;
+        a.anotar(
+            abierto && al_abrir && con_tab && con_mayus && seccion == "historial" && sigue,
+            &format!("con el {modal} abierto, el fondo queda inerte y el foco del lector adentro"),
+            &format!(
+                "abierto {abierto}; foco adentro al abrir {al_abrir}, tras {tabs} Tab {con_tab}, tras \
+                 Mayús+Tab {con_mayus}; Ayuda por UIA {ayuda:?} → «{seccion}»; sigue abierto {sigue}"
+            ),
+        );
+    }
+
+    // A3 (D28): el menú cerrado con Escape o con una elección devuelve el foco al botón que lo abrió.
+    ui.invoke_ir("ronda".into());
+    esperar(500).await;
+    let foco_en_mas = || async {
+        uia(w, |u| {
+            let f = u.enfocado()?;
+            Ok(f.tipo == lector::BOTON && f.nombre == "Más…")
+        })
+        .await
+        .unwrap_or(false)
+    };
+    let mut vuelve = Vec::new();
+    for cierre in ["Escape", "Recargar la página"] {
+        let abre = activar_por_uia(w, lector::BOTON, |n| n == "Más…")
+            .await
+            .is_ok()
+            && hasta(5, || ui.get_menu_abierto()).await;
+        let cerro = if cierre == "Escape" {
+            pulsar(w, &[0x1B]).await
+        } else {
+            activar_por_uia(w, lector::BOTON, move |n| n == cierre)
+                .await
+                .is_ok()
+        };
+        hasta(5, || !ui.get_menu_abierto()).await;
+        esperar(500).await;
+        let en_mas = foco_en_mas().await;
+        vuelve.push((cierre, abre && cerro && !ui.get_menu_abierto() && en_mas));
+    }
+    a.anotar(
+        vuelve.iter().all(|(_, ok)| *ok),
+        "al cerrarse el menú, el foco vuelve al botón que lo abrió",
+        &format!("{vuelve:?}"),
     );
 
     // WCAG 2.5.8: los controles a la vista, en las cuatro secciones, por su marco en UIA.
@@ -2205,6 +2352,39 @@ async fn teclado_y_lector(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), Stri
             camino.join(" → ")
         ),
     );
+
+    // A4 (D28): el anillo también en las clases angosta (sin guía, lista ni cabecera) y compacta (sin riel).
+    let antes = ui.window().size().to_logical(ui.window().scale_factor());
+    for (ancho, esperado) in [
+        (700.0, ["riel", "pagina", "abajo", "riel", "pagina"]),
+        (560.0, ["pagina", "abajo", "pagina", "abajo", "pagina"]),
+    ] {
+        ui.window()
+            .set_size(slint::LogicalSize::new(ancho, antes.height));
+        esperar(400).await;
+        i.region.set(None);
+        let mut camino = Vec::new();
+        let mut en_pagina = true;
+        for _ in 0..5 {
+            pulsar(w, &[F4]).await;
+            let r = i.region.get().unwrap_or("-");
+            if r == "pagina" {
+                en_pagina &= pagina_con_foco(i, &visible()).await;
+            }
+            camino.push(r);
+        }
+        pulsar(w, &[F4]).await;
+        a.anotar(
+            camino == esperado && en_pagina,
+            "F4 recorre las regiones de la clase angosta y la compacta",
+            &format!(
+                "{ancho} de ancho: {} (página con foco {en_pagina})",
+                camino.join(" → ")
+            ),
+        );
+    }
+    ui.window().set_size(antes);
+    esperar(400).await;
 
     // F1, F2 y F3 desde la página: la página devuelve la tecla a la app.
     let v0 = visible();

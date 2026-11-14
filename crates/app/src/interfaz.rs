@@ -322,9 +322,11 @@ fn hay_portapapeles() -> bool {
     unsafe { IsClipboardFormatAvailable(13).is_ok() }
 }
 
-/// El menú nativo, con los textos de Windows; 0 si se cierra sin elegir.
-fn mostrar_menu_de_edicion(activos: [bool; 6]) -> i32 {
+/// El menú nativo, con los textos de Windows; 0 si se cierra sin elegir. junto: el punto en píxeles de la
+/// ventana donde abrirlo (A2, con el teclado); sin él, junto al puntero.
+fn mostrar_menu_de_edicion(activos: [bool; 6], junto: Option<(i32, i32)>) -> i32 {
     use windows::Win32::Foundation::POINT;
+    use windows::Win32::Graphics::Gdi::ClientToScreen;
     use windows::Win32::UI::Input::KeyboardAndMouse::GetActiveWindow;
     use windows::Win32::UI::WindowsAndMessaging::{
         AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, MF_GRAYED, MF_SEPARATOR,
@@ -356,7 +358,15 @@ fn mostrar_menu_de_edicion(activos: [bool; 6]) -> i32 {
             let _ = AppendMenuW(menu, banderas, i + 1, &HSTRING::from(*t));
         }
         let mut p = POINT::default();
-        let _ = GetCursorPos(&mut p);
+        match junto {
+            Some((x, y)) => {
+                p = POINT { x, y };
+                let _ = ClientToScreen(GetActiveWindow(), &mut p);
+            }
+            None => {
+                let _ = GetCursorPos(&mut p);
+            }
+        }
         let r = TrackPopupMenuEx(
             menu,
             (TPM_RETURNCMD | TPM_RIGHTBUTTON).0,
@@ -609,9 +619,9 @@ impl Interfaz {
         al!(on_abrir_menu, |x, cual: SharedString| x.abrir_menu(&cual));
         al!(on_menu_item, |x, i: i32| x.menu_item(i));
         let w: Weak<Interfaz> = Rc::downgrade(i);
-        ui.on_menu_contextual(move |a, b, hay_anterior| {
+        ui.on_menu_contextual(move |a, b, hay_anterior, x, y| {
             w.upgrade()
-                .map_or(0, |x| x.menu_de_edicion(a, b, hay_anterior))
+                .map_or(0, |i| i.menu_de_edicion(a, b, hay_anterior, x, y))
         });
     }
 
@@ -1018,11 +1028,13 @@ impl Interfaz {
 
     /// IFZ-011 (Aplicacion.MenuContextual): el menú de edición de Windows sobre «Tu pregunta». a y b son la
     /// selección en bytes; devuelve el ítem elegido y la ventana lo aplica.
-    fn menu_de_edicion(&self, a: i32, b: i32, hay_anterior: bool) -> i32 {
+    fn menu_de_edicion(&self, a: i32, b: i32, hay_anterior: bool, x: f32, y: f32) -> i32 {
         let t = self.ui.get_pregunta().to_string();
         let (a, b) = (a.max(0) as usize, b.max(0) as usize);
         let activos = items_de_edicion(t.is_empty(), b > a, hay_portapapeles(), hay_anterior);
-        let elegido = mostrar_menu_de_edicion(activos);
+        let escala = self.ui.window().scale_factor();
+        let junto = (x >= 0.0).then_some(((x * escala) as i32, (y * escala) as i32));
+        let elegido = mostrar_menu_de_edicion(activos, junto);
         // Eliminar no pasa por el portapapeles: la selección sale acá y la ventana deja el cursor en a.
         if elegido == 5
             && let (Some(x), Some(y)) = (t.get(..a), t.get(b..))
@@ -1370,7 +1382,6 @@ impl Interfaz {
         r.paneles.borrow_mut().clear();
         self.paginas_cuenta.borrow_mut().clear();
         *self.navegador.borrow_mut() = None;
-        // TEXTO-PENDIENTE: lo redacta Claude.
         self.resultado(
             "El navegador de los paneles se cerró solo y se volvió a abrir.",
             true,
@@ -2325,10 +2336,9 @@ impl Interfaz {
             })
             .await;
         // Revisión PART-016: pegado en el panel pero sin anotar en el núcleo; se dice, no se reintenta.
-        // TEXTO-PENDIENTE: lo redacta Claude.
         if let Err(e) = anotado {
             return self.resultado(
-                &format!("El prompt quedó pegado, pero no se pudo anotar: {e}"),
+                &format!("El prompt quedó pegado, pero no se pudo registrar: {e}"),
                 true,
             );
         }
@@ -2405,10 +2415,11 @@ impl Interfaz {
         }
         match error {
             None => {
-                // TEXTO-PENDIENTE: lo redacta Claude.
                 if let Err(e) = r.nucleo.pedir(move |p| p.verificador_pegado(prompt)).await {
                     return self.resultado(
-                        &format!("El prompt quedó pegado en {nombre}, pero no se pudo anotar: {e}"),
+                        &format!(
+                            "El prompt quedó pegado en {nombre}, pero no se pudo registrar: {e}"
+                        ),
                         true,
                     );
                 }
@@ -3220,7 +3231,6 @@ fn mostrar_ronda(
             .is_some_and(|p| p.caidas() > r.caidas_vistas.borrow().get(&v).copied().unwrap_or(0));
         let problema = match situacion.problema.as_deref() {
             Some(t) => t.to_string(),
-            // TEXTO-PENDIENTE: lo redacta Claude.
             None if cayo => format!("La página de {nombre} se cerró sola y se volvió a abrir."),
             None => String::new(),
         };

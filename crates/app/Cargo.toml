@@ -19,6 +19,6 @@ verificacion = { path = "../verificacion" }
 slint = { version = "1.18.1", features = ["raw-window-handle-06"] }
 
 # La misma versión de windows que trae wry; para la hora local y los ppp de la ventana en la autoprueba,
-# el menú de edición de Windows (IFZ-011) y la jerarquía UIA que lee -pruebaronda (IFZ-020 a 022).
+# el menú de edición de Windows (IFZ-011, junto al cursor con el teclado: Gdi) y la jerarquía UIA que lee -pruebaronda (IFZ-020 a 022).
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_DataExchange", "Win32_System_Registry", "Win32_System_Variant", "Win32_UI_Accessibility", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_SystemInformation", "Win32_UI_HiDpi", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_System_DataExchange", "Win32_System_Registry", "Win32_System_Variant", "Win32_UI_Accessibility", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_SystemInformation", "Win32_UI_HiDpi", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }

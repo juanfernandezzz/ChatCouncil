@@ -46,22 +46,26 @@ impl Uia {
     /// Los nodos de la app, en orden del documento, sin entrar a otras ventanas nativas: la página del
     /// proveedor es otra ventana y no es parte de la jerarquía de la app (INV-IFZ-005).
     pub fn nodos(&self) -> Result<Vec<Nodo>, String> {
+        // SAFETY: llamada COM sobre el IUIAutomation que este hilo creó y que no sale de él.
         let andar = unsafe { self.uia.ControlViewWalker() }.map_err(|e| e.to_string())?;
         let mut v = Vec::new();
         let mut pila = vec![self.raiz.clone()];
         while let Some(e) = pila.pop() {
-            // SAFETY: llamadas COM sobre elementos vivos de este hilo.
             let mut hijos = Vec::new();
+            // SAFETY: el recorredor y e son objetos COM vivos de este hilo.
             let mut h = unsafe { andar.GetFirstChildElement(&e) }.ok();
             while let Some(x) = h {
+                // SAFETY: ídem, con x, el hermano anterior, vivo.
                 h = unsafe { andar.GetNextSiblingElement(&x) }.ok();
                 hijos.push(x);
             }
             for x in hijos.into_iter().rev() {
+                // SAFETY: lectura de una propiedad de x, vivo en este hilo.
                 let propia = unsafe { x.CurrentNativeWindowHandle() }
                     .map(|w| w.0 as isize)
                     .unwrap_or(0);
                 // La barra de título y sus botones son del sistema, no de la app.
+                // SAFETY: ídem.
                 let titulo =
                     unsafe { x.CurrentControlType() }.is_ok_and(|t| t.0 == BARRA_DE_TITULO);
                 if titulo || (propia != 0 && propia != self.ventana) {
@@ -102,6 +106,13 @@ impl Uia {
             let p: IUIAutomationTogglePattern = e.GetCurrentPatternAs(UIA_TogglePatternId).ok()?;
             p.CurrentToggleState().ok().map(|s| s == ToggleState_On)
         }
+    }
+
+    /// El nodo que tiene el foco para el lector (el que Narrador lee).
+    pub fn enfocado(&self) -> Result<Nodo, String> {
+        // SAFETY: llamada COM de este hilo; el elemento que devuelve no sale de él.
+        let e = unsafe { self.uia.GetFocusedElement() }.map_err(|e| e.to_string())?;
+        nodo(e)
     }
 
     /// El mismo nodo para UIA: si la jerarquía se rearmó, el elemento de antes ya no es el de ahora.
@@ -203,6 +214,31 @@ pub fn teclas(ventana: isize, vks: &[u16]) -> bool {
         GetForegroundWindow().0 as isize == ventana
             && SendInput(&v, size_of::<INPUT>() as i32) as usize == v.len()
     }
+}
+
+/// Espera hasta `ms` un menú emergente de Windows (clase #32768) de este proceso y lo cierra con Escape.
+/// Corre en otro hilo: mientras el menú está abierto, el hilo de la interfaz queda en su bucle.
+pub fn cerrar_menu_emergente(ventana: isize, ms: u64) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        FindWindowW, GetWindowThreadProcessId, IsWindowVisible,
+    };
+    let fin = std::time::Instant::now() + std::time::Duration::from_millis(ms);
+    while std::time::Instant::now() < fin {
+        // SAFETY: la clase es una cadena constante; pid vive durante la llamada.
+        let de_la_app = unsafe {
+            let h = FindWindowW(windows::core::w!("#32768"), None).unwrap_or_default();
+            let mut pid = 0;
+            !h.is_invalid()
+                && IsWindowVisible(h).as_bool()
+                && GetWindowThreadProcessId(h, Some(&mut pid)) != 0
+                && pid == std::process::id()
+        };
+        if de_la_app {
+            return teclas(ventana, &[0x1B]);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    false
 }
 
 /// Un clic izquierdo de verdad en ese punto de la pantalla, solo con la app al frente.

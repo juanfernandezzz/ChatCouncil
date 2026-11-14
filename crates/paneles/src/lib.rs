@@ -251,10 +251,14 @@ fn rectangulo(x: f64, y: f64, ancho: f64, alto: f64) -> Rect {
     }
 }
 
+/// D27, A2: a quién se avisa una caída de un proceso del navegador, con su tipo («ProcessFailed …»).
+pub type AlFallar = Rc<dyn Fn(&str)>;
+
 /// PAN-001: un solo navegador, con su carpeta en `<datos>/navegador`.
 pub struct Navegador {
     contexto: Rc<RefCell<WebContext>>,
     paginas_de_prueba: Option<PathBuf>,
+    al_fallar: RefCell<Option<AlFallar>>,
 }
 
 impl Navegador {
@@ -263,7 +267,13 @@ impl Navegador {
         Navegador {
             contexto: Rc::new(RefCell::new(WebContext::new(Some(datos.join("navegador"))))),
             paginas_de_prueba,
+            al_fallar: RefCell::default(),
         }
+    }
+
+    /// D27, A2: los paneles que se creen desde ahora avisan aquí cada ProcessFailed, solo con su tipo.
+    pub fn al_fallar(&self, f: impl Fn(&str) + 'static) {
+        *self.al_fallar.borrow_mut() = Some(Rc::new(f));
     }
 
     /// Un panel hijo de la ventana, en el rectángulo dado en píxeles lógicos, todavía sin página.
@@ -282,6 +292,7 @@ impl Navegador {
             paginas_de_prueba: self.paginas_de_prueba.clone(),
             perfil: perfil.to_string(),
             padre,
+            al_fallar: self.al_fallar.borrow().clone(),
         });
         let emergente = Rc::default();
         let mut contexto = self.contexto.borrow_mut();
@@ -302,6 +313,7 @@ struct Comun {
     perfil: String,
     /// La ventana de la app: a ella vuelven el Tab que sale de la página y F1 a F5 (PAN-012).
     padre: isize,
+    al_fallar: Option<AlFallar>,
 }
 
 /// La última emergente que abrió un panel. Débil: la emergente es de windows::EMERGENTES hasta que se cierra.
@@ -355,11 +367,13 @@ fn enganchar(
     #[cfg(not(windows))] ventana: Option<()>,
 ) -> Result<Panel, String> {
     let nav = Rc::<RefCell<Navegaciones>>::default();
+    let caidas = Rc::<Caidas>::default();
     #[cfg(windows)]
     let marcos = windows::seguir_marcos(&webview)?;
     #[cfg(windows)]
     let contenedor = {
         windows::seguir_navegaciones(&webview, &nav)?;
+        windows::al_fallar(&webview, comun.al_fallar.clone(), caidas.clone())?;
         windows::teclado(&webview, comun.padre)?;
         if let Some(v) = &ventana {
             windows::cerrar_con_la_pagina(&webview, v)?;
@@ -378,11 +392,40 @@ fn enganchar(
         emergente,
         contenedor,
         de_prueba: comun.paginas_de_prueba.is_some(),
+        caidas,
         #[cfg(windows)]
         marcos,
         _ventana: ventana,
         _contexto: comun.contexto.clone(),
     })
+}
+
+/// D27, A2: lo que el panel sabe de las caídas de sus procesos.
+#[derive(Default)]
+struct Caidas {
+    renderer: Cell<u64>,
+    navegador: Cell<bool>,
+}
+
+/// El tipo de ProcessFailed como lo nombra WebView2 (COREWEBVIEW2_PROCESS_FAILED_KIND).
+fn tipo_de_caida(k: i32) -> &'static str {
+    const TIPOS: [&str; 10] = [
+        "BROWSER_PROCESS_EXITED",
+        "RENDER_PROCESS_EXITED",
+        "RENDER_PROCESS_UNRESPONSIVE",
+        "FRAME_RENDER_PROCESS_EXITED",
+        "UTILITY_PROCESS_EXITED",
+        "SANDBOX_HELPER_PROCESS_EXITED",
+        "GPU_PROCESS_EXITED",
+        "PPAPI_PLUGIN_PROCESS_EXITED",
+        "PPAPI_BROKER_PROCESS_EXITED",
+        "UNKNOWN_PROCESS_EXITED",
+    ];
+    usize::try_from(k)
+        .ok()
+        .and_then(|i| TIPOS.get(i))
+        .copied()
+        .unwrap_or("UNKNOWN_PROCESS_EXITED")
 }
 
 /// PAN-005: `/(logout|log-out|signout|sign-out)(\b|/|\?|$)`, sin distinguir mayúsculas, como panel.cpp.
@@ -413,13 +456,44 @@ struct Navegaciones {
     ultima_bloqueada: String,
     /// La espera de `navegar` y el id de la navegación que le toca, en cuanto empieza.
     espera: Option<(Option<u64>, Enviador<()>)>,
+    /// La URL que pidió `navegar`: una navegación anterior que empieza tarde no se toma por la suya.
+    url_esperada: Option<String>,
+}
+
+/// La URL como la compara la espera: esquema y host en minúsculas, sin el puerto por defecto ni la barra final.
+// shortcut: no decodifica escapes %XX; si WebView2 los reescribe, la espera cae en su techo y avisa.
+fn url_comparable(u: &str) -> String {
+    let u = u.trim_end_matches('/');
+    let Some((esquema, resto)) = u.split_once("://") else {
+        return u.to_string();
+    };
+    let esquema = esquema.to_ascii_lowercase();
+    let (host, camino) = resto.split_at(resto.find(['/', '?', '#']).unwrap_or(resto.len()));
+    let mut host = host.to_ascii_lowercase();
+    let defecto = if esquema == "https" { ":443" } else { ":80" };
+    if host.ends_with(defecto) {
+        host.truncate(host.len() - defecto.len());
+    }
+    format!("{esquema}://{host}{camino}")
 }
 
 impl Navegaciones {
+    /// `url` None (recargar): vale la primera navegación que empiece.
+    fn esperar(&mut self, url: Option<&str>, enviar: Enviador<()>) {
+        self.espera = Some((None, enviar));
+        self.url_esperada = url.map(url_comparable);
+    }
+
     /// Una navegación nueva (no una redirección) empezó.
-    fn empezo(&mut self, id: u64) {
+    fn empezo(&mut self, id: u64, uri: &str) {
         self.iniciadas += 1;
-        if let Some((esperada, _)) = &mut self.espera {
+        let suya = self
+            .url_esperada
+            .as_deref()
+            .is_none_or(|u| u == url_comparable(uri));
+        if let Some((esperada, _)) = &mut self.espera
+            && suya
+        {
             *esperada = Some(id);
         }
     }
@@ -445,6 +519,8 @@ pub struct Panel {
     contenedor: isize,
     /// Abierto con las páginas de prueba: solo así se puede borrar el perfil entero.
     de_prueba: bool,
+    /// D27, A2: las veces que cayó el proceso de su página y si cayó el del navegador entero.
+    caidas: Rc<Caidas>,
     /// Los iframes del marco principal con su URL, para leer el informe en uno de otro origen.
     #[cfg(windows)]
     marcos: windows::Marcos,
@@ -477,7 +553,7 @@ impl Panel {
             fallida(bloqueada.clone())
         } else {
             let (enviar, respuesta) = canal();
-            self.nav.borrow_mut().espera = Some((None, enviar));
+            self.nav.borrow_mut().esperar(Some(url), enviar);
             match self.webview.load_url(url) {
                 Ok(()) => respuesta.con_techo(
                     ESPERA,
@@ -505,7 +581,7 @@ impl Panel {
     /// Recarga desde el navegador, sin depender de un script de la página, y espera a que termine.
     pub fn recargar(&self) -> Respuesta<()> {
         let (enviar, respuesta) = canal();
-        self.nav.borrow_mut().espera = Some((None, enviar));
+        self.nav.borrow_mut().esperar(None, enviar);
         if let Err(e) = self.webview.reload() {
             self.nav.borrow_mut().espera.take();
             return fallida(e);
@@ -531,6 +607,16 @@ impl Panel {
     /// Navegaciones del marco principal que empezaron (las bloqueadas no cuentan).
     pub fn navegaciones(&self) -> u64 {
         self.nav.borrow().iniciadas
+    }
+
+    /// D27, A2: las veces que cayó el proceso de su página y el panel se recargó solo.
+    pub fn caidas(&self) -> u64 {
+        self.caidas.renderer.get()
+    }
+
+    /// D27, A2: cayó el proceso del navegador; este panel ya no sirve y hay que crearlo de nuevo.
+    pub fn navegador_caido(&self) -> bool {
+        self.caidas.navegador.get()
     }
 
     /// Navegaciones canceladas por ir a un cierre de sesión.
@@ -605,8 +691,13 @@ impl Panel {
             let resta = limite.saturating_duration_since(Instant::now());
             self.ejecutar_o(js, resta.min(TECHO_EJECUTAR), vencida.clone())
         };
-        if ejecutar("typeof window.__cc").await? != "\"object\"" {
+        while ejecutar("typeof window.__cc").await? != "\"object\"" {
             let r = ejecutar(&format!("{PAGINA_JS}\n;'ok'")).await?;
+            // Vacío: el documento se estaba reemplazando (carga en curso). Se inyecta de nuevo, no se repite el pedido.
+            if r.is_empty() && Instant::now() < limite {
+                let _ = dormir(Duration::from_millis(100)).await;
+                continue;
+            }
             if r != "\"ok\"" {
                 return Err(format!("el script de página no cargó: {r}"));
             }
@@ -1103,15 +1194,18 @@ mod windows {
     use ::windows::core::{BOOL, HSTRING, Interface, PWSTR, w};
     use webview2_com::Microsoft::Web::WebView2::Win32::{
         COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW, COREWEBVIEW2_KEY_EVENT_KIND,
-        COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN, ICoreWebView2_3, ICoreWebView2_4, ICoreWebView2_13,
-        ICoreWebView2Frame2, ICoreWebView2Profile2,
+        COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN, COREWEBVIEW2_PROCESS_FAILED_KIND,
+        COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED,
+        COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED, ICoreWebView2_3, ICoreWebView2_4,
+        ICoreWebView2_13, ICoreWebView2Frame2, ICoreWebView2Profile2,
     };
     use webview2_com::{
         AcceleratorKeyPressedEventHandler, CallDevToolsProtocolMethodCompletedHandler,
         ClearBrowsingDataCompletedHandler, ExecuteScriptCompletedHandler, FrameCreatedEventHandler,
         FrameDestroyedEventHandler, FrameNavigationStartingEventHandler,
         MoveFocusRequestedEventHandler, NavigationCompletedEventHandler,
-        NavigationStartingEventHandler, WindowCloseRequestedEventHandler,
+        NavigationStartingEventHandler, ProcessFailedEventHandler,
+        WindowCloseRequestedEventHandler,
     };
     use wry::raw_window_handle::{
         HandleError, HasWindowHandle, RawWindowHandle, Win32WindowHandle, WindowHandle,
@@ -1154,7 +1248,7 @@ mod windows {
             }
             // Las redirecciones de una misma navegación no suman: el contador es de navegaciones nuevas.
             if !redirigida.as_bool() {
-                n.borrow_mut().empezo(id);
+                n.borrow_mut().empezo(id, &uri);
             }
             Ok(())
         }));
@@ -1177,6 +1271,41 @@ mod windows {
                 .and_then(|()| vista.add_NavigationCompleted(&termina, &mut token))
         }
         .map_err(|e| e.to_string())
+    }
+
+    /// D27, A2: cada ProcessFailed se avisa con su tipo. Si cayó el proceso de la página, se recarga como
+    /// «Recargar la página» si terminó el proceso de la página (UNRESPONSIVE solo se anota); si cayó el
+    /// del navegador, el panel queda marcado para crearlo de nuevo.
+    pub(crate) fn al_fallar(
+        webview: &WebView,
+        aviso: Option<super::AlFallar>,
+        caidas: Rc<super::Caidas>,
+    ) -> Result<(), String> {
+        let manejador = ProcessFailedEventHandler::create(Box::new(move |vista, args| {
+            let Some(args) = args else { return Ok(()) };
+            let mut tipo = COREWEBVIEW2_PROCESS_FAILED_KIND::default();
+            // SAFETY: args es válido mientras dura el evento y el puntero es una variable local.
+            unsafe { args.ProcessFailedKind(&mut tipo)? };
+            if let Some(f) = &aviso {
+                f(&format!("ProcessFailed {}", super::tipo_de_caida(tipo.0)));
+            }
+            // Revisión PART-016: una página que tarda (UNRESPONSIVE) no se recarga sola; perdería el borrador.
+            if tipo == COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED {
+                caidas.renderer.set(caidas.renderer.get() + 1);
+                if let Some(v) = vista {
+                    // SAFETY: la vista que manda el evento es válida mientras dura el evento.
+                    unsafe { v.Reload()? };
+                }
+            } else if tipo == COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED {
+                caidas.navegador.set(true);
+            }
+            Ok(())
+        }));
+        let mut token = 0i64;
+        // SAFETY: la vista vive tanto como el webview, que es dueño del manejador; la vista llega como
+        // argumento del evento, así el manejador no la retiene.
+        unsafe { webview.webview().add_ProcessFailed(&manejador, &mut token) }
+            .map_err(|e| e.to_string())
     }
 
     pub(crate) fn servir_carpeta(webview: &WebView, carpeta: &Path) -> Result<(), String> {
@@ -1886,17 +2015,47 @@ mod pruebas {
     fn la_carga_de_una_navegacion_anterior_no_resuelve_la_nueva() {
         // Revisión PART-011, hallazgo 9.
         let mut n = Navegaciones::default();
-        n.empezo(1);
+        n.empezo(1, "https://x.test/a");
         let (enviar, _respuesta) = canal::<()>();
-        n.espera = Some((None, enviar));
+        n.esperar(None, enviar);
         assert!(
             n.termino(1).is_none(),
             "terminó la anterior antes de que empiece la nueva"
         );
-        n.empezo(2);
+        n.empezo(2, "https://x.test/b");
         assert!(n.termino(1).is_none(), "una carga vieja tardía");
         assert!(n.termino(2).is_some());
         assert_eq!((n.iniciadas, n.terminadas), (2, 3));
+    }
+
+    #[test]
+    fn la_anterior_que_empieza_tarde_no_toma_la_espera_de_la_nueva() {
+        // D27, A1: la release dio «/textarea.html|loading» 1 de 4 veces; la anterior empezó y terminó
+        // después de pedir la nueva.
+        let mut n = Navegaciones::default();
+        let (enviar, _respuesta) = canal::<()>();
+        n.esperar(Some("https://cc-prueba.test/textarea.html"), enviar);
+        n.empezo(1, "https://cc-prueba.test/cierre.html");
+        assert!(
+            n.termino(1).is_none(),
+            "resolvió con la carga de la anterior"
+        );
+        n.empezo(2, "https://cc-prueba.test/textarea.html");
+        assert!(n.termino(2).is_some());
+        // Sin URL (recargar) vale la primera que empieza; la barra final no distingue.
+        let (enviar, _respuesta) = canal::<()>();
+        n.esperar(None, enviar);
+        n.empezo(3, "https://x.test/a");
+        assert!(n.termino(3).is_some());
+        let (enviar, _respuesta) = canal::<()>();
+        n.esperar(Some("https://x.test"), enviar);
+        n.empezo(4, "https://x.test/");
+        assert!(n.termino(4).is_some());
+        // Revisión PART-016: WebView2 puede normalizar el host y el puerto por defecto.
+        let (enviar, _respuesta) = canal::<()>();
+        n.esperar(Some("https://X.test:443/b"), enviar);
+        n.empezo(5, "https://x.test/b");
+        assert!(n.termino(5).is_some());
     }
 
     #[test]

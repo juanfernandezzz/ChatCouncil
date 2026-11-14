@@ -2,6 +2,9 @@
 //! Configuracion.uxml, con los controles de Slint. Los textos que vienen de nucleo::ajustes los pone
 //! interfaz.rs; acá quedan los literales del uxml.
 
+/// D27, A3: el alto mínimo de la página del proveedor; el asa del campo no lo achica más.
+pub const ALTO_MINIMO_PANEL: f32 = 200.0;
+
 slint::slint! {
     import { Button, CheckBox, ComboBox, LineEdit, ScrollView, TextEdit, AboutSlint, Palette } from "std-widgets.slint";
 
@@ -17,6 +20,8 @@ slint::slint! {
     export struct Cuenta { id: string, nombre: string, estado: string }
     export struct Fila { id: string, nombre: string, estado: string, icono: string, rol: bool, visible: bool, actual: bool }
     export struct Anterior { id: string, pregunta: string, detalle: string, carpeta: string }
+// D6, D7: un renglón del menú. El grupo va solo en el primero de cada grupo; el motivo, si está deshabilitado.
+export struct Renglon { grupo: string, texto: string, motivo: string }
 
     // El foco visible de todos los controles: un borde de 2 px en #3A79E0 (WCAG 2.4.7).
     component Anillo inherits Rectangle {
@@ -146,6 +151,8 @@ slint::slint! {
     component CampoPregunta inherits VerticalLayout {
         in-out property <string> texto;
         in-out property <length> alto;
+        // D27, A3: el tope del asa en la ventana actual.
+        in property <length> maximo: 600px;
         property <length> alto-al-tomar;
         property <length> y-al-tomar;
         spacing: 2px;
@@ -174,7 +181,7 @@ slint::slint! {
                 }
                 moved => {
                     if (self.pressed) {
-                        root.alto = clamp(root.alto-al-tomar + self.absolute-position.y + self.mouse-y - root.y-al-tomar, 48px, 600px);
+                        root.alto = clamp(root.alto-al-tomar + self.absolute-position.y + self.mouse-y - root.y-al-tomar, 48px, max(48px, root.maximo));
                     }
                 }
             }
@@ -285,6 +292,16 @@ slint::slint! {
         callback dialogo-aceptar();
         callback dialogo-cancelar();
         callback paso();
+        // D6, D7: los menús. El origen es el botón que lo abrió, en coordenadas de la ventana.
+        in property <[Renglon]> menu-items;
+        in-out property <bool> menu-abierto;
+        changed menu-abierto => { root.area-cambio(); }
+        in-out property <length> menu-origen-x;
+        in-out property <length> menu-origen-arriba;
+        in-out property <length> menu-origen-abajo;
+        callback abrir-menu(string);
+        callback menu-item(int);
+        in property <bool> investigadores-visibles: true;
         callback seleccionar(string);
         out property <length> area-x: pagina.absolute-position.x;
         out property <length> area-y: pagina.absolute-position.y;
@@ -347,6 +364,19 @@ slint::slint! {
         in property <string> version;
         in property <string> licencias;
         callback ver-versiones();
+
+        // D27, A3: el menor entre 600 y el alto que deja al panel su alto mínimo (200: ALTO_MINIMO_PANEL).
+        public pure function maximo-del-asa() -> length {
+            return max(48px, min(600px, root.alto-pregunta + pagina.height - 200px));
+        }
+
+        // D6, D7: el menú se abre junto al botón que lo pidió; la interfaz lo llena y lo abre.
+        public function menu-desde(p: Point, alto: length, cual: string) {
+            root.menu-origen-x = p.x;
+            root.menu-origen-arriba = p.y;
+            root.menu-origen-abajo = p.y + alto;
+            root.abrir-menu(cual);
+        }
 
         public function aplicar-tema(oscuro: bool) {
             Palette.color-scheme = oscuro ? ColorScheme.dark : ColorScheme.light;
@@ -416,7 +446,8 @@ slint::slint! {
                             height: root.ancha ? 0px : 56px;
                             spacing: 8px;
                             if root.compacta : Boton { text: "Menú"; clicked => { root.cajon-abierto = true; } }
-                            Text { text: root.barra-titulo; font-weight: 600; vertical-alignment: center; color: Palette.foreground; }
+                            Text { text: root.barra-titulo; font-weight: 600; vertical-alignment: center; color: Palette.foreground; horizontal-stretch: 1; }
+                            Boton { text: "Más…"; clicked => { root.menu-desde(self.absolute-position, self.height, "angosta"); } }
                         }
                         // Ancha (D4): la guía con las siete etapas y el paso.
                         VerticalLayout {
@@ -434,6 +465,7 @@ slint::slint! {
                             if root.etapa-pregunta && root.ancha : CampoPregunta {
                                 texto <=> root.pregunta;
                                 alto <=> root.alto-pregunta;
+                                maximo: root.maximo-del-asa();
                             }
                             HorizontalLayout {
                                 spacing: 12px;
@@ -444,6 +476,7 @@ slint::slint! {
                                     // IFZ-007: el resultado se anuncia sin mover el foco (WCAG 4.1.3).
                                     Parrafo { text: root.resultado; color: root.resultado-problema ? #C42B1C : Palette.foreground; accessible-role: text; accessible-label: self.text; accessible-live-region: polite; }
                                 }
+                                VerticalLayout { alignment: start; Boton { text: "Ronda…"; clicked => { root.menu-desde(self.absolute-position, self.height, "ronda"); } } }
                             }
                         }
                         HorizontalLayout {
@@ -456,7 +489,7 @@ slint::slint! {
                                     VerticalLayout {
                                         spacing: 2px;
                                         alignment: start;
-                                        Text { text: root.titulo-investigadores; font-weight: 600; color: Palette.foreground; }
+                                        if root.investigadores-visibles : Text { text: root.titulo-investigadores; font-weight: 600; color: Palette.foreground; }
                                         for f in root.filas : FilaPanel {
                                             visible: f.visible && !f.rol;
                                             height: (f.visible && !f.rol) ? self.min-height : 0px;
@@ -487,6 +520,7 @@ slint::slint! {
                                         if root.cabecera-problema != "" : Text { text: root.cabecera-problema; wrap: word-wrap; color: #C42B1C; }
                                     }
                                     if root.accion-texto != "" : Boton { text: root.accion-texto; habilitado: !root.ocupado; clicked => { root.accion-panel(); } }
+                                    Boton { text: "Más…"; clicked => { root.menu-desde(self.absolute-position, self.height, "panel"); } }
                                 }
                                 // La página del proveedor (vista nativa) va encima de este rectángulo.
                                 pagina := Rectangle {
@@ -523,11 +557,16 @@ slint::slint! {
                             if root.etapa-pregunta && !root.ancha : CampoPregunta {
                                 texto <=> root.pregunta;
                                 alto <=> root.alto-pregunta;
+                                maximo: root.maximo-del-asa();
                             }
                             paso-angosta := Boton { text: root.paso-texto; primario: true; habilitado: root.paso-habilitado && !root.ocupado; horizontal-stretch: 1; clicked => { root.paso(); } }
                             Parrafo { text: root.resultado; color: root.resultado-problema ? #C42B1C : Palette.foreground; accessible-role: text; accessible-label: self.text; accessible-live-region: polite; }
                             Parrafo { text: root.frase; }
-                            Secundario { text: root.contadores-angosta; }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Secundario { text: root.contadores-angosta; horizontal-stretch: 1; }
+                                Boton { text: "Ver todos"; clicked => { root.menu-desde(self.absolute-position, self.height, "paneles"); } }
+                            }
                         }
                     }
 
@@ -744,6 +783,49 @@ slint::slint! {
                         Boton { text: "Historial"; clicked => { root.ir("historial"); } }
                         Boton { text: "Ajustes"; clicked => { root.ir("ajustes"); } }
                         Boton { text: "Ayuda"; clicked => { root.ir("ayuda"); } }
+                    }
+                }
+            }
+
+            // D6, D7: el menú. Nunca fuera de la ventana: se abre hacia arriba si abajo falta lugar; en la clase
+            // compacta, como hoja abajo. Lo deshabilitado dice por qué debajo (Unity: AbrirMenu).
+            if root.menu-abierto : Rectangle {
+                property <bool> hoja: root.compacta;
+                property <length> abajo: root.height - root.menu-origen-abajo - 12px;
+                property <length> arriba: root.menu-origen-arriba - 12px;
+                property <bool> hacia-arriba: !self.hoja && self.abajo < 240px && self.arriba > self.abajo;
+                property <length> maximo: self.hoja ? root.height * 0.8 : self.hacia-arriba ? self.arriba : self.abajo;
+                background: #00000040;
+                TouchArea { clicked => { root.menu-abierto = false; } }
+                Rectangle {
+                    width: parent.hoja ? root.width : min(340px, root.width - 16px);
+                    x: parent.hoja ? 0px : max(8px, min(root.menu-origen-x, root.width - 348px));
+                    height: min(menu-lista.preferred-height + 2px, max(48px, parent.maximo));
+                    y: parent.hoja ? root.height - self.height : parent.hacia-arriba ? root.menu-origen-arriba - 4px - self.height : root.menu-origen-abajo + 4px;
+                    background: Palette.background;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: Palette.border;
+                    accessible-role: list;
+                    TouchArea { }
+                    FocusScope {
+                        init => { self.focus(); }
+                        key-pressed(e) => {
+                            if (e.text == Key.Escape) { root.menu-abierto = false; return accept; }
+                            reject
+                        }
+                        ScrollView {
+                            menu-lista := VerticalLayout {
+                                padding: 8px;
+                                spacing: 2px;
+                                for r[i] in root.menu-items : VerticalLayout {
+                                    spacing: 2px;
+                                    if r.grupo != "" : Text { text: r.grupo; font-weight: 600; color: Palette.foreground; }
+                                    Boton { text: r.texto; habilitado: r.motivo == ""; clicked => { root.menu-abierto = false; root.menu-item(i); } }
+                                    if r.motivo != "" : Secundario { text: r.motivo; }
+                                }
+                            }
+                        }
                     }
                 }
             }

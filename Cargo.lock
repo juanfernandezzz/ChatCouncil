@@ -219,6 +219,7 @@ dependencies = [
  "nucleo",
  "paneles",
  "slint",
+ "verificacion",
  "windows",
 ]
 

@@ -114,6 +114,9 @@ async fn cuerpo(
 ) -> Result<(), String> {
     let paginas = crate::escribir_paginas_de_prueba(datos)?;
     let navegador = Navegador::new(datos, Some(paginas));
+    let d = datos.to_path_buf();
+    navegador.al_fallar(move |tipo| crate::anotar_fallo(&d, tipo));
+    crate::registrar_panicos(datos);
     let panel =
         crate::crear_panel(&navegador, ventana, "prueba-a", (0.0, 0.0, 800.0, 600.0)).await?;
     let version = panel.version_del_navegador()?;
@@ -158,6 +161,67 @@ async fn cuerpo(
     a.grupo("surrogate suelto", r);
     let r = sondeo(a, &navegador, ventana).await;
     a.grupo("sondeo", r);
+    let r = caida_del_renderer(a, &panel, datos).await;
+    a.grupo("caída del renderer", r);
+    Ok(())
+}
+
+/// D27, A2: se tumba el proceso de la página con DevTools (Page.crash); queda una línea con fecha y tipo
+/// en fallos.log y el panel vuelve solo, como «Recargar la página».
+async fn caida_del_renderer(a: &mut Anotador, p: &Panel, datos: &Path) -> Result<(), String> {
+    let log = datos.join("fallos.log");
+    let lineas = || {
+        std::fs::read_to_string(&log)
+            .unwrap_or_default()
+            .lines()
+            .map(String::from)
+            .collect::<Vec<_>>()
+    };
+    let antes = lineas().len();
+    let (caidas, nav) = (p.caidas(), p.navegaciones());
+    // El renderer cae sin responder: la respuesta de DevTools no se espera.
+    drop(p.devtools("Page.crash", "{}"));
+    let limite = Instant::now() + Duration::from_secs(20);
+    while Instant::now() < limite && !(p.caidas() > caidas && p.navegaciones() > nav) {
+        let _ = paneles::dormir(Duration::from_millis(100)).await;
+    }
+    let mut responde = String::new();
+    while Instant::now() < limite + Duration::from_secs(10) {
+        if let Ok(r) = p.ejecutar_con_techo("1 + 1", Duration::from_secs(2)).await {
+            responde = r;
+            if responde == "2" {
+                break;
+            }
+        }
+        let _ = paneles::dormir(Duration::from_millis(200)).await;
+    }
+    let nuevas: Vec<String> = lineas().into_iter().skip(antes).collect();
+    // «2026-11-14 00:12:03 ProcessFailed RENDER_PROCESS_EXITED»: fecha, hora y tipo, nada más.
+    let bien = nuevas.len() == 1 && {
+        let l = &nuevas[0];
+        l.len() > 20
+            && l.as_bytes()[..19].iter().enumerate().all(|(i, c)| match i {
+                4 | 7 => *c == b'-',
+                10 => *c == b' ',
+                13 | 16 => *c == b':',
+                _ => c.is_ascii_digit(),
+            })
+            && &l[19..] == " ProcessFailed RENDER_PROCESS_EXITED"
+    };
+    a.anotar(
+        bien,
+        "la caída queda en fallos.log con fecha y tipo",
+        &format!("líneas nuevas: {nuevas:?}"),
+    );
+    a.anotar(
+        p.caidas() == caidas + 1 && p.navegaciones() > nav && responde == "2",
+        "el panel vuelve solo tras la caída",
+        &format!(
+            "caídas {caidas} → {}; navegaciones {nav} → {}; 1 + 1 = {responde}",
+            p.caidas(),
+            p.navegaciones()
+        ),
+    );
     Ok(())
 }
 

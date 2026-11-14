@@ -303,6 +303,9 @@ fn opcional(t: Option<&Texto>) -> Valor {
 pub const PEGAR_AQUI: &str = "Pegar la pregunta aquí";
 /// La acción del panel que lo captura solo (PantallaRonda.cs:46); la interfaz le agrega la fase.
 pub const CAPTURAR_ESTE: &str = "Capturar este panel";
+/// Las acciones de un panel en la operación y en los roles (PantallaRonda.cs:51-54).
+pub const PEGAR_OPERACION_AQUI: &str = "Pegar la operación aquí";
+pub const PEGAR_PROMPT_AQUI: &str = "Pegar el prompt aquí";
 
 /// Qué pasó y qué hacer con un panel (D9): el detalle de la cabecera, la línea corta del selector (H7)
 /// y la acción que corresponde a su estado (D6).
@@ -2042,6 +2045,13 @@ impl Puerta {
                     }
                 }
             }
+            // Lo pegado era de la ronda anterior: la nueva empieza por pegar (Puerta.cs:766).
+            self.prompt_operador.clear();
+            self.prompt_integrador = None;
+            self.prompt_verificador = None;
+            self.prompt_redactor = None;
+            self.marcas_redactor = None;
+            self.sello_verificaciones = None;
             Ok(format!(
                 "Ronda nueva abierta ({}) con {} respuestas copiadas de la ronda {}. Recaptura con \"Capturar este panel\" lo que quieras corregir.",
                 corto(&nueva),
@@ -2853,6 +2863,52 @@ impl Puerta {
             accion: Some(a),
             ..Default::default()
         };
+        let terminado = estado.starts_with("parece-terminado");
+        let rol = self.roles.de_la_etapa(etapa);
+        // Un rol fuera de su etapa está para mirarlo: no recibe la pregunta ni la operación.
+        if !self.pool.iter().any(|p| p == id) && !rol.contains(&id) {
+            return Ok(Situacion::default());
+        }
+        if !rol.is_empty() {
+            if !rol.contains(&id) {
+                return Ok(Situacion::default());
+            }
+            if estado != "con-problema" {
+                return Ok(match estado {
+                    "por-pegar" => accion(PEGAR_PROMPT_AQUI),
+                    _ if terminado => accion(CAPTURAR_ESTE),
+                    _ => Situacion::default(),
+                });
+            }
+            let ronda = Texto::from(self.ronda_actual.clone().unwrap_or_default().as_str());
+            let leido = self.leer_registro()?;
+            let detalle = leido
+                .hechos
+                .iter()
+                .rev()
+                .find(|h| {
+                    es_de(h, "error-captura", &ronda)
+                        && h.texto("proveedorId").and_then(Texto::como_str) == Some(id)
+                        && h.texto("etapaEsperada").and_then(Texto::como_str) == Some(etapa)
+                })
+                .and_then(|h| h.texto("detalle"))
+                .map(|d| d.para_mostrar().into_owned())
+                .unwrap_or_default();
+            return Ok(Situacion {
+                problema: Some(format!(
+                    "La captura no sirvió: {detalle}. Revisa la página y vuelve a capturar."
+                )),
+                corto: Some("La captura no sirvió: captura otra vez desde «Más…»."),
+                accion: Some(CAPTURAR_ESTE),
+            });
+        }
+        if etapa == "operacion" {
+            return Ok(match estado {
+                "por-pegar" => accion(PEGAR_OPERACION_AQUI),
+                _ if terminado => accion(CAPTURAR_ESTE),
+                _ => Situacion::default(),
+            });
+        }
         if etapa != "investigacion" {
             return Ok(Situacion::default());
         }
@@ -3417,10 +3473,43 @@ mod pruebas {
             Some("La captura no sirvió: captura otra vez desde «Más…».")
         );
         assert_eq!(r.accion, Some(CAPTURAR_ESTE));
-        // Fuera de la investigación la situación es de PART-016 (operación y roles).
         assert_eq!(
             s(&mut p, "chatgpt", "pregunta", "por-pegar", false),
             Situacion::default()
+        );
+        // PART-016: la operación y los roles. Un rol fuera de su etapa, y un operador en la de un rol, quedan sin acción.
+        assert_eq!(
+            s(&mut p, "chatgpt", "operacion", "por-pegar", false).accion,
+            Some(PEGAR_OPERACION_AQUI)
+        );
+        assert_eq!(
+            s(
+                &mut p,
+                "chatgpt",
+                "operacion",
+                "parece-terminado-deducido",
+                false
+            )
+            .accion,
+            Some(CAPTURAR_ESTE)
+        );
+        assert_eq!(
+            s(&mut p, "deepseek", "integracion", "por-pegar", false).accion,
+            Some(PEGAR_PROMPT_AQUI)
+        );
+        assert_eq!(
+            s(&mut p, "glm", "integracion", "por-pegar", false),
+            Situacion::default()
+        );
+        assert_eq!(
+            s(&mut p, "chatgpt", "integracion", "por-pegar", false),
+            Situacion::default()
+        );
+        let v = s(&mut p, "qwen", "verificacion", "con-problema", false);
+        assert_eq!(v.accion, Some(CAPTURAR_ESTE));
+        assert_eq!(
+            v.corto,
+            Some("La captura no sirvió: captura otra vez desde «Más…».")
         );
     }
 
@@ -5040,6 +5129,11 @@ mod pruebas {
         assert_eq!(pasos.last(), Some(&"abrir-carpeta"));
         assert_eq!(p.carpeta_informe_armado(), Some(carpeta_informe.as_path()));
         p.ronda_nueva_con_respuestas_copiadas().unwrap();
+        // Lo pegado en la ronda anterior se olvida: la nueva empieza por pegar (Puerta.cs:766).
+        assert_eq!(
+            p.estado_de_panel("chatgpt", None, None).unwrap(),
+            "por-pegar"
+        );
         p.registrar_capturas(&lote(&lotes, "kimiNueva"), &confirmada)
             .unwrap();
         let o = p.armar_operacion("chatgpt", false).unwrap();

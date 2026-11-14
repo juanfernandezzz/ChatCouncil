@@ -503,6 +503,26 @@ async fn fase3(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
         );
     }
 
+    // D27, A3: el asa no deja el panel por debajo de su alto mínimo; con lugar de sobra, el tope es 600.
+    for (h, tope) in [(600.0, false), (1400.0, true)] {
+        ui.window().set_size(slint::LogicalSize::new(1280.0, h));
+        ui.set_etapa_pregunta(true);
+        ui.set_alto_pregunta(96.0);
+        esperar(100).await;
+        let m = ui.invoke_maximo_del_asa();
+        let resta = ui.get_area_alto() - (m - 96.0);
+        let ok = if tope {
+            (m - 600.0).abs() < 0.5
+        } else {
+            m < 600.0 && (resta - crate::ventana::ALTO_MINIMO_PANEL).abs() < 1.0
+        };
+        a.anotar(
+            ok,
+            "el asa respeta el alto mínimo del panel",
+            &format!("ventana 1280x{h}: máximo {m}, al panel le quedarían {resta}"),
+        );
+    }
+
     // IFZ-013: en la clase compacta no hay riel; el cajón aparta la página y se cierra al elegir.
     hasta(30, || i.panel_visible().is_some()).await;
     ui.window().set_size(slint::LogicalSize::new(500.0, 800.0));

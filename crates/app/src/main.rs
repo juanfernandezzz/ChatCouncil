@@ -1,3 +1,6 @@
+// D27, A1: la release no abre consola. Las pruebas internas escriben su archivo y dan su código igual.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod autoprueba;
 mod hilo;
 mod interfaz;
@@ -219,6 +222,40 @@ fn ahora_local() -> String {
     )
 }
 
+/// D27, A2: el registro de fallos, solo se agrega. Una línea con la fecha local y el tipo; nunca el
+/// contenido de una página, una URL ni un dato de las cuentas. Si no se puede escribir, no hay a quién decirlo.
+pub(crate) fn anotar_fallo(datos: &Path, tipo: &str) {
+    use std::io::Write;
+    let _ = std::fs::create_dir_all(datos);
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(datos.join("fallos.log"))
+    {
+        let _ = writeln!(f, "{} {tipo}", ahora_local());
+    }
+}
+
+/// D27, A2: un pánico deja su línea en fallos.log (solo el archivo y la línea del código, no el mensaje,
+/// que podría traer texto de una página) y sigue con el gancho de siempre.
+pub(crate) fn registrar_panicos(datos: &Path) {
+    let datos = datos.to_path_buf();
+    let previo = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let lugar = info
+            .location()
+            // De una dependencia, la ruta trae la carpeta del usuario: queda desde el último «src».
+            .map(|l| {
+                let f = l.file().replace('\\', "/");
+                let corto = f.rfind("/src/").map_or(f.as_str(), |i| &f[i + 1..]);
+                format!(" en {corto}:{}", l.line())
+            })
+            .unwrap_or_default();
+        anotar_fallo(&datos, &format!("pánico{lugar}"));
+        previo(info);
+    }));
+}
+
 /// Los puntos por pulgada que Windows da al monitor de la ventana (GetDpiForWindow).
 fn ppp_de_la_ventana(ventana: &slint::Window) -> Result<u32, String> {
     use paneles::raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -312,6 +349,7 @@ type Prueba =
 
 /// Arma la interfaz y corre el bucle de la ventana; `prueba` corre dentro con la interfaz armada.
 fn con_interfaz(o: interfaz::Opciones, prueba: Option<Prueba>) -> i32 {
+    registrar_panicos(&o.datos);
     let i = match interfaz::Interfaz::armar(o) {
         Ok(i) => i,
         Err(e) => {

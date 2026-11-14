@@ -14,6 +14,8 @@ nucleo = { path = "../nucleo" }
 # PRU-005: la autoprueba arma el PDF del informe.
 informe-pdf = { path = "../informe-pdf" }
 paneles = { path = "../paneles" }
+# INF-013: las URLs de los verificadores se comprueban sin cookies antes de armar el informe.
+verificacion = { path = "../verificacion" }
 slint = { version = "1.18.1", features = ["raw-window-handle-06"] }
 
 # La misma versión de windows que trae wry; para la hora local y los ppp de la ventana en la autoprueba.

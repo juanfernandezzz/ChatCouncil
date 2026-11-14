@@ -3,7 +3,7 @@
 //! una página local por operador (ronda.html) en lugar de los proveedores. Lo que hace la persona en cada
 //! página (enviar) y lo que hace el proveedor (responder) lo simula un script en la página; la app nunca
 //! envía. Llega hasta «fin de la investigación» y sigue con el diálogo cancelado, abandonar la ronda,
-//! capturar sin pegar y declarar la pregunta. El recorrido de la operación es de PART-016.
+//! capturar sin pegar y declarar la pregunta. PART-016 agrega la operación, los roles y el informe.
 
 use std::path::Path;
 use std::rc::Rc;
@@ -176,8 +176,10 @@ pub async fn correr(i: Rc<Interfaz>, salida: &Path) -> i32 {
         env!("CARGO_PKG_VERSION")
     ));
     esperar(300).await;
-    let r = recorrido(&mut a, &i).await;
+    let r = recorrido(&mut a, &i, salida).await;
     a.grupo("prueba", r);
+    let r = caidas(&mut a, &i).await;
+    a.grupo("caídas", r);
     let (texto, mut codigo) = a.cerrar();
     if let Err(e) = std::fs::write(salida, texto) {
         eprintln!("No se pudo escribir {}: {e}", salida.display());
@@ -186,7 +188,7 @@ pub async fn correr(i: Rc<Interfaz>, salida: &Path) -> i32 {
     codigo
 }
 
-async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
+async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<(), String> {
     let ui = &i.ui;
     let paso = || ui.get_paso_texto().to_string();
     let resultado = || ui.get_resultado().to_string();
@@ -427,6 +429,17 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
         "indicador: respondiendo",
         &estados_en_la_lista(i),
     );
+    // ESC-006: con el mensaje ya enviado, repegar no duplica la pregunta ni deja intento nuevo.
+    i.pegar_en_este("grok".into()).await;
+    let n_intentos = de_tipo(&hechos(i).await, "intento").len();
+    a.anotar(
+        resultado()
+            == "No se pegó en Grok: el chat ya tiene un mensaje enviado: no se vuelve a pegar para no duplicar la pregunta"
+            && compositor(i, "grok").await.is_empty()
+            && n_intentos == 7,
+        "repegar con el mensaje ya enviado",
+        &format!("\"{}\"; intentos {n_intentos}", resultado()),
+    );
 
     // Responden todos menos Perplexity; Kimi, muy corto.
     for id in POOL.iter().filter(|id| **id != "perplexity") {
@@ -530,6 +543,8 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
         "respuesta corta marcada",
         corta.as_deref().unwrap_or("sin ErrorCaptura"),
     );
+    // PRU-018: para las capturas de la etapa con un panel con problema.
+    copiar(&i.datos, &con_sufijo(salida, ".investigacion")).map_err(|e| e.to_string())?;
 
     // Grok respondió después de pegar aquí: se captura solo ese panel.
     i.seleccionar("grok");
@@ -601,6 +616,7 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
             estados_en_la_lista(i)
         ),
     );
+    operacion(a, i, salida).await?;
 
     // PRU-016. Un diálogo cancelado no deja su acción: un «Aceptar» después no abandona nada.
     let antes = ronda_actual(i).await;
@@ -653,11 +669,10 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
         .filter(|r| id_sin_envio.is_some() && texto_de(r, "rondaId") == id_sin_envio)
         .count();
     let indice = sin_envio.and_then(|r| r.entero("indice"));
-    // La Unity espera 2: su recorrido de la operación abre antes una ronda copiada. Sin ese recorrido
-    // (PART-016) esta es la segunda ronda de la conversación, índice 1.
+    // Índice 2: el recorrido de la operación abrió antes una ronda copiada.
     a.anotar(
         sin_envio.and_then(|r| texto_de(r, "prompt")).as_deref() == Some(puerta::PROMPT_SIN_RONDA)
-            && indice == Some(1)
+            && indice == Some(2)
             && de_esa == 7,
         "capturar sin pegar",
         &format!(
@@ -688,4 +703,1053 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
         ),
     );
     Ok(())
+}
+
+// ---------------------------------------------------------------- la operación (PRU-014)
+
+/// Abre ese menú y dice si el renglón está habilitado (None si no está); con `pulsar`, lo elige.
+fn renglon(i: &Rc<Interfaz>, cual: &str, texto: &str, pulsar: bool) -> Option<bool> {
+    i.abrir_menu(cual);
+    let fila = i.menu.iter().position(|r| r.texto == texto);
+    let habilitado = fila
+        .and_then(|f| i.menu.row_data(f))
+        .map(|r| r.motivo.is_empty());
+    i.ui.set_menu_abierto(false);
+    if let (true, Some(f), Some(true)) = (pulsar, fila, habilitado) {
+        i.menu_item(f as i32);
+    }
+    habilitado
+}
+
+fn operacion_de(i: &Interfaz, id: &str) -> Option<nucleo::puerta::Operacion> {
+    i.ronda
+        .borrow()
+        .as_ref()
+        .and_then(|r| r.operaciones.borrow().get(id).cloned())
+}
+
+async fn texto_en(i: &Interfaz, id: &str, js: &str) -> String {
+    match en(i, id, js).await.ok().and_then(|r| json::leer(&r)) {
+        Some(Valor::Texto(t)) => t.para_mostrar().into_owned(),
+        _ => String::new(),
+    }
+}
+
+async fn chat_vacio(i: &Interfaz, id: &str) -> bool {
+    en(
+        i,
+        id,
+        "document.querySelectorAll('#chat .usuario, #chat .respuesta').length === 0",
+    )
+    .await
+    .as_deref()
+        == Ok("true")
+}
+
+/// Lo que haría Juan: abrir una conversación nueva en ese panel y esperar a que cargue vacía.
+async fn abrir_conversacion_nueva(a: &mut Anotador, i: &Interfaz, id: &str) -> Result<(), String> {
+    let p = i
+        .panel_de(id)
+        .ok_or_else(|| format!("no está el panel de {id}"))?;
+    p.navegar(&format!("https://cc-prueba.test/ronda.html?p={id}"))
+        .await?;
+    let limite = Instant::now() + Duration::from_secs(20);
+    while !(chat_vacio(i, id).await && compositor(i, id).await.is_empty()) {
+        if Instant::now() > limite {
+            a.anotar(
+                false,
+                &format!("conversación nueva de {id}"),
+                "no quedó vacía en 20 s",
+            );
+            break;
+        }
+        esperar(200).await;
+    }
+    Ok(())
+}
+
+async fn operacion(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<(), String> {
+    let ui = &i.ui;
+    let paso = || ui.get_paso_texto().to_string();
+    let resultado = || ui.get_resultado().to_string();
+    let ronda = ronda_actual(i).await.ok_or("sin ronda abierta")?;
+    // La página de Mistral carga siempre con un mensaje: la conversación «nueva» no queda vacía.
+    i.sucios.borrow_mut().insert("mistral".into());
+    let nav_antes: Vec<u64> = POOL
+        .iter()
+        .map(|id| i.panel_de(id).map_or(0, |p| p.navegaciones()))
+        .collect();
+
+    // Volver atrás: con la investigación cerrada se ofrece corregirla; la operación todavía no.
+    let ci = renglon(i, "panel", "Corregir la investigación…", false);
+    let co = renglon(i, "panel", "Corregir la operación…", false);
+    a.anotar(
+        ci == Some(true) && co == Some(false),
+        "corregir una fase cerrada",
+        &format!("investigación: {ci:?}; operación: {co:?}"),
+    );
+
+    // ESC-008: el aviso; pegar en los siete, de a uno y con el panel al frente.
+    ui.invoke_paso();
+    hasta(5, || ui.get_capa_abierta()).await;
+    let aviso = ui.get_capa_abierta()
+        && ui.get_dialogo_titulo() == "Antes de pegar la operación"
+        && ui.get_dialogo_casilla_texto() == "Pegarla como texto, sin archivo";
+    a.anotar(
+        aviso,
+        "aviso de la operación",
+        &format!(
+            "diálogo «{}», casilla «{}»",
+            ui.get_dialogo_titulo(),
+            ui.get_dialogo_casilla_texto()
+        ),
+    );
+    ui.invoke_dialogo_aceptar();
+    hasta(240, || resultado().starts_with("Operación pegada")).await;
+    a.anotar(
+        resultado()
+            == "Operación pegada en 6 de 7. No se pegó en: Mistral; cada uno dice qué pasó. Comprueba que el archivo quedó adjunto, revísala y envíala.",
+        "resultado de la operación",
+        &resultado(),
+    );
+
+    // ESC-007, ESC-009 y ESC-012: una navegación, vacía, el texto idéntico al armado y el archivo adjunto.
+    let mut bien = Vec::new();
+    for (n, id) in POOL.iter().enumerate().filter(|(_, id)| **id != "mistral") {
+        let Some(op) = operacion_de(i, id) else {
+            continue;
+        };
+        let navs = i.panel_de(id).map_or(0, |p| p.navegaciones()) - nav_antes[n];
+        let vacio = chat_vacio(i, id).await;
+        let adjunto = texto_en(i, id, "document.getElementById('archivo').textContent").await;
+        let nombre = op.nombre_archivo.clone().unwrap_or_default();
+        let en_disco = std::fs::read(i.datos.join("operaciones").join(&nombre)).ok();
+        let cuerpo = op
+            .cuerpo_archivo
+            .as_ref()
+            .map(|c| c.para_mostrar().into_owned());
+        let igual = match (&en_disco, &cuerpo) {
+            (Some(b), Some(c)) => b.as_slice() == c.as_bytes(),
+            _ => false,
+        };
+        if navs == 1
+            && vacio
+            && compositor(i, id).await == op.texto.para_mostrar()
+            && igual
+            && en_disco.is_some_and(|b| adjunto == format!("{nombre}|{}", b.len()))
+        {
+            bien.push(*id);
+        }
+    }
+    a.anotar(
+        bien.len() == 6,
+        "conversación nueva de la app, texto y archivo",
+        &format!("{} de 6: [{}]", bien.len(), bien.join(",")),
+    );
+    let h = hechos(i).await;
+    let sellos = de_la_ronda(&h, "sello", &ronda).len();
+    a.anotar(
+        sellos == 7,
+        "sello de la ronda",
+        &format!("{sellos} etiquetas"),
+    );
+
+    let i_mistral = POOL.iter().position(|x| *x == "mistral").unwrap_or(0);
+    i.seleccionar("mistral");
+    esperar(300).await;
+    let problema = ui.get_cabecera_problema().to_string();
+    let navs = i.panel_de("mistral").map_or(0, |p| p.navegaciones()) - nav_antes[i_mistral];
+    a.anotar(
+        estado_en_la_lista(i, "mistral") == "Con problema"
+            && problema
+                .starts_with("La operación no se pegó: la conversación nueva no quedó vacía")
+            && compositor(i, "mistral").await.is_empty()
+            && operacion_de(i, "mistral").is_none()
+            && navs == 1,
+        "conversación que no queda vacía: no se pega",
+        &format!(
+            "«{}»; {problema}; navegaciones {navs}",
+            estado_en_la_lista(i, "mistral")
+        ),
+    );
+
+    // Mistral otra vez, en una conversación nueva y por la vía del texto: el aviso ya se dio en esta ronda.
+    i.sucios.borrow_mut().remove("mistral");
+    abrir_conversacion_nueva(a, i, "mistral").await?;
+    renglon(i, "panel", crate::interfaz::PEGAR_OPERACION_TEXTO, true);
+    let sin_aviso = !ui.get_capa_abierta();
+    hasta(60, || resultado().starts_with("Operación pegada en 1 de 1")).await;
+    hasta(15, || {
+        estado_en_la_lista(i, "mistral") == "Pegado, falta que envíes"
+    })
+    .await;
+    let op = operacion_de(i, "mistral");
+    let texto_op = op
+        .as_ref()
+        .map(|o| o.texto.para_mostrar().into_owned())
+        .unwrap_or_default();
+    a.anotar(
+        sin_aviso
+            && op.as_ref().is_some_and(|o| o.cuerpo_archivo.is_none())
+            && texto_op.contains("[[CC-MARCA-")
+            && compositor(i, "mistral").await == texto_op
+            && estado_en_la_lista(i, "mistral") == "Pegado, falta que envíes",
+        "operación como texto, con el aviso una vez por ronda",
+        &format!(
+            "sin aviso: {sin_aviso}; «{}»; «{}»",
+            resultado(),
+            estado_en_la_lista(i, "mistral")
+        ),
+    );
+
+    // Los siete envían y responden con un hallazgo; la captura los registra como operación.
+    for id in POOL {
+        enviar(i, id).await?;
+    }
+    for id in POOL {
+        let t = format!(
+            "CONVERGENCIA|ALCANCE|P1,P2|Las respuestas coinciden en el punto central ({id})."
+        );
+        responder(i, id, &t).await?;
+    }
+    hasta(30, || paso() == "Capturar los que terminaron (7)").await;
+    ui.invoke_paso();
+    hasta(60, || ui.get_barra_titulo() == "Integración · 4 de 7").await;
+    let h = hechos(i).await;
+    let salidas = de_la_ronda(&h, "salida-operador", &ronda);
+    let ids_salidas: Vec<String> = salidas.iter().filter_map(|s| texto_de(s, "id")).collect();
+    let hallazgos = de_tipo(&h, "hallazgo")
+        .iter()
+        .filter(|x| texto_de(x, "salidaOperadorId").is_some_and(|s| ids_salidas.contains(&s)))
+        .count();
+    let prompts_iguales = salidas.iter().all(|s| {
+        let op = texto_de(s, "operadorId").and_then(|o| operacion_de(i, &o));
+        op.is_some_and(|o| {
+            texto_de(s, "promptCompleto") == Some(o.prompt_completo.para_mostrar().into_owned())
+        })
+    });
+    let con_archivo = salidas
+        .iter()
+        .find(|s| texto_de(s, "operadorId").as_deref() == Some("chatgpt"))
+        .and_then(|s| texto_de(s, "promptCompleto"))
+        .is_some_and(|p| p.contains("=== ARCHIVO ADJUNTO:"));
+    a.anotar(
+        salidas.len() == 7
+            && prompts_iguales
+            && hallazgos == 7
+            && con_archivo
+            && ui.get_barra_titulo() == "Integración · 4 de 7",
+        "capturar la operación",
+        &format!(
+            "{} salidas con su prompt ({prompts_iguales}), {hallazgos} hallazgos; «{}»",
+            salidas.len(),
+            ui.get_barra_titulo()
+        ),
+    );
+
+    roles(a, i, salida, &ronda).await?;
+
+    // Ronda nueva con las respuestas copiadas, y un operador que reutiliza su operación.
+    renglon(i, "ronda", "Ronda nueva con las respuestas copiadas", true);
+    hasta(5, || ui.get_capa_abierta()).await;
+    ui.invoke_dialogo_aceptar();
+    hasta(30, || resultado().starts_with("Ronda nueva abierta")).await;
+    let copiada = ronda_actual(i).await.unwrap_or_default();
+    let h = hechos(i).await;
+    let copias = de_la_ronda(&h, "respuesta", &copiada);
+    let de_la_anterior = copias.iter().all(|r| match r.valor("copiadaDe") {
+        Valor::Objeto(v) => v.iter().any(|(k, x)| {
+            k.como_str() == Some("rondaId") && *x == Valor::Texto(ronda.as_str().into())
+        }),
+        _ => false,
+    });
+    hasta(10, || ui.get_barra_titulo() == "Operación · 3 de 7").await;
+    a.anotar(
+        copiada != ronda
+            && resultado().starts_with("Ronda nueva abierta")
+            && copias.len() == 7
+            && de_la_anterior
+            && ui.get_barra_titulo() == "Operación · 3 de 7",
+        "ronda nueva con las respuestas copiadas",
+        &format!(
+            "«{}»; {} copias; «{}»",
+            resultado(),
+            copias.len(),
+            ui.get_barra_titulo()
+        ),
+    );
+    let reabiertos = hasta(90, || {
+        POOL.iter().all(|id| i.panel_de(id).is_some())
+            && ["deepseek", "glm", "qwen"]
+                .iter()
+                .all(|id| i.panel_de(id).is_none())
+    })
+    .await;
+    let (en_la_vista, visible) = i
+        .ronda
+        .borrow()
+        .as_ref()
+        .map(|r| (r.en_la_vista(), r.visible.borrow().clone()))
+        .unwrap_or_default();
+    a.anotar(
+        reabiertos && en_la_vista == POOL && visible.as_deref().is_some_and(|v| POOL.contains(&v)),
+        "ronda nueva: se cierran los roles y se reabren los investigadores",
+        &format!(
+            "en la vista [{}], visible {}",
+            en_la_vista.join(","),
+            visible.unwrap_or_default()
+        ),
+    );
+    // Reutilizar necesita el sello de la ronda nueva: primero se pega en un panel y el aviso vuelve.
+    abrir_conversacion_nueva(a, i, "gemini").await?;
+    i.seleccionar("gemini");
+    hasta(30, || ui.get_accion_texto() == puerta::PEGAR_OPERACION_AQUI).await;
+    ui.invoke_accion_panel();
+    hasta(5, || ui.get_capa_abierta()).await;
+    let de_nuevo =
+        ui.get_capa_abierta() && ui.get_dialogo_titulo() == "Antes de pegar la operación";
+    a.anotar(
+        de_nuevo,
+        "el aviso vuelve en la ronda nueva",
+        &format!("diálogo abierto: {de_nuevo}"),
+    );
+    ui.invoke_dialogo_aceptar();
+    hasta(60, || resultado().starts_with("Operación pegada en 1 de 1")).await;
+    i.seleccionar("chatgpt");
+    esperar(300).await;
+    renglon(i, "panel", crate::interfaz::USAR_ANTERIOR, true);
+    hasta(10, || resultado().starts_with("ChatGPT: se reutilizó")).await;
+    hasta(10, || estado_en_la_lista(i, "chatgpt") == "Capturado").await;
+    let h = hechos(i).await;
+    let reusada = de_la_ronda(&h, "salida-operador", &copiada)
+        .into_iter()
+        .any(|x| texto_de(x, "operadorId").as_deref() == Some("chatgpt"));
+    a.anotar(
+        resultado().starts_with("ChatGPT: se reutilizó")
+            && reusada
+            && estado_en_la_lista(i, "chatgpt") == "Capturado",
+        "usar la operación anterior",
+        &format!("«{}»; «{}»", resultado(), estado_en_la_lista(i, "chatgpt")),
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------- los roles y el informe (PRU-015)
+
+/// Lo que hace el rol: responder en párrafos, como los proveedores que dejan cada línea en un <p>.
+async fn responder_en_parrafos(i: &Interfaz, id: &str, lineas: &[&str]) -> Result<String, String> {
+    let lista = Valor::Lista(lineas.iter().map(|l| Valor::Texto((*l).into())).collect());
+    let mut b = Vec::new();
+    json::escribir(&lista, &mut b);
+    let js = format!(
+        "(() => {{ const r = document.createElement('div'); r.className = 'respuesta'; for (const l of {}) {{ const p = document.createElement('p'); p.textContent = l; r.append(p); }} document.getElementById('chat').append(r); document.getElementById('detener')?.remove(); return 'ok'; }})()",
+        String::from_utf8_lossy(&b)
+    );
+    en(i, id, &js).await
+}
+
+async fn armado(i: &Interfaz, etapa: &'static str) -> String {
+    let Some(r) = i.ronda.borrow().clone() else {
+        return String::new();
+    };
+    r.nucleo
+        .pedir(move |p| match etapa {
+            "integracion" => p.armar_prompt_integrador(),
+            "verificacion" => p.armar_prompt_verificador(),
+            _ => p.armar_redactor().map(|a| a.prompt),
+        })
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .map(|t| t.para_mostrar().into_owned())
+        .unwrap_or_default()
+}
+
+fn de_la_ronda<'a>(h: &'a [Hecho], tipo: &str, ronda: &str) -> Vec<&'a Hecho> {
+    de_tipo(h, tipo)
+        .into_iter()
+        .filter(|x| texto_de(x, "rondaId").as_deref() == Some(ronda))
+        .collect()
+}
+
+async fn roles(
+    a: &mut Anotador,
+    i: &Rc<Interfaz>,
+    salida: &Path,
+    ronda: &str,
+) -> Result<(), String> {
+    let ui = &i.ui;
+    let paso = || ui.get_paso_texto().to_string();
+    let resultado = || ui.get_resultado().to_string();
+    let titulo = || ui.get_barra_titulo().to_string();
+    let habilitado = || ui.get_paso_habilitado() && !ui.get_ocupado();
+    let pegado = || {
+        (resultado().starts_with("Prompt pegado") || resultado().starts_with("No se"))
+            && !ui.get_ocupado()
+    };
+    let roles = ["deepseek", "glm", "qwen"];
+    let en_la_vista = || {
+        i.ronda
+            .borrow()
+            .as_ref()
+            .map(|r| r.en_la_vista())
+            .unwrap_or_default()
+    };
+    let visible = || {
+        i.ronda
+            .borrow()
+            .as_ref()
+            .and_then(|r| r.visible.borrow().clone())
+            .unwrap_or_default()
+    };
+    let servidor = Servidor::nuevo().map_err(|e| e.to_string())?;
+
+    // Integración: los siete ya dejaron todo en el registro; sus páginas se cierran y se abren los tres roles.
+    let cambio = hasta(90, || {
+        POOL.iter().all(|id| i.panel_de(id).is_none())
+            && roles.iter().all(|id| i.panel_de(id).is_some())
+            // La página existe antes de que el rol entre al recorrido.
+            && en_la_vista().len() == roles.len()
+    })
+    .await;
+    a.anotar(
+        cambio && en_la_vista() == roles && !ui.get_investigadores_visibles(),
+        "segunda parte: se cierran los investigadores y se abren los roles",
+        &format!(
+            "cerrados: {} de 7; en el recorrido [{}]",
+            POOL.iter().filter(|id| i.panel_de(id).is_none()).count(),
+            en_la_vista().join(",")
+        ),
+    );
+    hasta(10, || {
+        estado_en_la_lista(i, "deepseek").starts_with("Integra y redacta")
+    })
+    .await;
+    a.anotar(
+        titulo() == "Integración · 4 de 7"
+            && paso() == "Pegar el prompt del integrador"
+            && habilitado()
+            && estado_en_la_lista(i, "deepseek").starts_with("Integra y redacta"),
+        "etapa Integración",
+        &format!(
+            "«{}», «{}»; «{}»",
+            titulo(),
+            paso(),
+            estado_en_la_lista(i, "deepseek")
+        ),
+    );
+    ui.invoke_paso();
+    hasta(90, pegado).await;
+    let prompt_integrador = armado(i, "integracion").await;
+    let deepseek_pegado = "Integra y redacta · Pegado, falta que envíes";
+    hasta(10, || estado_en_la_lista(i, "deepseek") == deepseek_pegado).await;
+    let vacio = chat_vacio(i, "deepseek").await;
+    a.anotar(
+        resultado() == "Prompt pegado en DeepSeek. Revísalo y envíalo."
+            && vacio
+            && !prompt_integrador.is_empty()
+            && compositor(i, "deepseek").await == prompt_integrador
+            && visible() == "deepseek"
+            && en_la_vista().len() == 3
+            && estado_en_la_lista(i, "deepseek") == deepseek_pegado,
+        "pegar el integrador",
+        &format!(
+            "«{}»; chat nuevo vacío: {vacio}; a la vista {}, {} en el recorrido; «{}»",
+            resultado(),
+            visible(),
+            en_la_vista().len(),
+            estado_en_la_lista(i, "deepseek")
+        ),
+    );
+
+    enviar(i, "deepseek").await?;
+    responder_en_parrafos(
+        i,
+        "deepseek",
+        &[
+            "TITULO: Informe de prueba",
+            "1. TIPOS DE DIVERGENCIA",
+            "No hay divergencias de fondo [H2].",
+            "5. QUE CONVIENE RESCATAR",
+            "Lo firme está en [H1].",
+        ],
+    )
+    .await?;
+    hasta(30, || {
+        paso() == "Capturar el informe del integrador" && habilitado()
+    })
+    .await;
+    ui.invoke_paso();
+    hasta(60, || titulo() == "Verificación · 5 de 7").await;
+    let h = hechos(i).await;
+    let informe = de_la_ronda(&h, "informe-integrador", ronda)
+        .into_iter()
+        .last();
+    let capturado = "Integra y redacta · Capturado";
+    hasta(10, || estado_en_la_lista(i, "deepseek") == capturado).await;
+    let titulo_informe = informe
+        .and_then(|x| texto_de(x, "titulo"))
+        .unwrap_or_default();
+    a.anotar(
+        titulo_informe == "Informe de prueba"
+            && informe
+                .and_then(|x| texto_de(x, "promptCompleto"))
+                .as_deref()
+                == Some(prompt_integrador.as_str())
+            && estado_en_la_lista(i, "deepseek") == capturado,
+        "capturar el integrador",
+        &format!(
+            "título «{titulo_informe}»; «{}»",
+            estado_en_la_lista(i, "deepseek")
+        ),
+    );
+
+    // INT-005: recapturar el integrador después de su etapa; gana el último.
+    responder_en_parrafos(
+        i,
+        "deepseek",
+        &[
+            "TITULO: Informe recapturado",
+            "5. QUE CONVIENE RESCATAR",
+            "Lo firme está en [H1] y en [H2].",
+        ],
+    )
+    .await?;
+    renglon(i, "ronda", "Recapturar el informe del integrador", true);
+    hasta(60, || resultado().contains("recaptur") && !ui.get_ocupado()).await;
+    let h = hechos(i).await;
+    let informes = de_la_ronda(&h, "informe-integrador", ronda);
+    a.anotar(
+        informes.len() == 2
+            && informes
+                .last()
+                .and_then(|x| texto_de(x, "titulo"))
+                .as_deref()
+                == Some("Informe recapturado")
+            && resultado().starts_with("DeepSeek: integrador recapturado"),
+        "recapturar el integrador",
+        &format!("«{}»; {} informes", resultado(), informes.len()),
+    );
+
+    // VER-002 (D62): el mismo prompt, que cita lo que rescata el último informe, en los dos verificadores.
+    a.anotar(
+        paso() == "Pegar el prompt del verificador" && habilitado(),
+        "etapa Verificación",
+        &format!("«{}»", paso()),
+    );
+    ui.invoke_paso();
+    hasta(120, pegado).await;
+    let prompt_verificador = armado(i, "verificacion").await;
+    a.anotar(
+        resultado() == "Prompt pegado en GLM y Qwen. Revísalo y envíalo."
+            && compositor(i, "glm").await == prompt_verificador
+            && compositor(i, "qwen").await == prompt_verificador
+            && prompt_verificador.contains("[H2]")
+            && visible() == "qwen"
+            && en_la_vista().len() == 3,
+        "pegar en los dos verificadores",
+        &format!(
+            "«{}»; a la vista {}, {} en el recorrido",
+            resultado(),
+            visible(),
+            en_la_vista().len()
+        ),
+    );
+    enviar(i, "glm").await?;
+    enviar(i, "qwen").await?;
+    let puerto = servidor.puerto;
+    let b = format!("http://127.0.0.1:{puerto}");
+    // Las del servidor local no se piden: las formas raras de 127.0.0.1 prueban el analizador de URL.
+    let lineas_glm = [
+        "Reviso las fuentes.".to_string(),
+        format!("CONFIRMA|OFICIAL|H1|{b}/ok|\"cita\""),
+        "CONTRADICE|SECUNDARIA|H2|https://x.invalid/p|\"otra\"".to_string(),
+        format!("CONFIRMA|PRIMARIA|H1|{b}/404|\"no está\""),
+        format!("CONFIRMA|OFICIAL|H2|http://0x7f.0.0.1:{puerto}/hex|\"hex\""),
+        format!("CONFIRMA|OFICIAL|H1|http://2130706433:{puerto}/entero|\"entero\""),
+    ];
+    let refs: Vec<&str> = lineas_glm.iter().map(String::as_str).collect();
+    responder_en_parrafos(i, "glm", &refs).await?;
+    esperar(2 * paneles::SONDEO.as_millis() as u64).await;
+    let espera_al_otro = !(paso() == "Capturar la verificación" && habilitado());
+    // El botón del panel tampoco se lleva al que sigue respondiendo.
+    i.seleccionar("glm");
+    let boton_listo = hasta(30, || {
+        ui.get_accion_texto().starts_with("Capturar este panel")
+    })
+    .await;
+    ui.invoke_accion_panel();
+    hasta(10, || resultado().starts_with("Falta que termine")).await;
+    let h = hechos(i).await;
+    let sin_verificacion = de_la_ronda(&h, "salida-verificador", ronda).is_empty();
+    a.anotar(
+        boton_listo
+            && resultado() == "Falta que termine Qwen: las verificaciones se capturan juntas."
+            && sin_verificacion,
+        "capturar un verificador espera al otro",
+        &format!(
+            "botón: {boton_listo}; «{}»; sin verificaciones: {sin_verificacion}",
+            resultado()
+        ),
+    );
+    let ok_qwen = format!("CONFIRMA|OFICIAL|H1|{b}/ok|\"la misma\"");
+    responder_en_parrafos(i, "qwen", &["Verifico por mi cuenta.", &ok_qwen]).await?;
+    hasta(30, || paso() == "Capturar la verificación" && habilitado()).await;
+    ui.invoke_paso();
+    hasta(60, || titulo() == "Redacción · 6 de 7").await;
+    let h = hechos(i).await;
+    let verificaciones = de_la_ronda(&h, "salida-verificador", ronda);
+    let de_quien: Vec<String> = verificaciones
+        .iter()
+        .filter_map(|v| texto_de(v, "verificadorId"))
+        .collect();
+    let prompts = verificaciones
+        .iter()
+        .all(|v| texto_de(v, "promptCompleto").as_deref() == Some(prompt_verificador.as_str()));
+    hasta(10, || {
+        estado_en_la_lista(i, "qwen") == "Verifica · Capturado"
+    })
+    .await;
+    a.anotar(
+        espera_al_otro
+            && de_quien == ["glm", "qwen"]
+            && prompts
+            && estado_en_la_lista(i, "glm") == "Verifica · Capturado"
+            && estado_en_la_lista(i, "qwen") == "Verifica · Capturado",
+        "capturar las dos verificaciones",
+        &format!(
+            "esperó al segundo: {espera_al_otro}; [{}]; prompts idénticos: {prompts}; «{}», «{}»",
+            de_quien.join(","),
+            estado_en_la_lista(i, "glm"),
+            estado_en_la_lista(i, "qwen")
+        ),
+    );
+
+    // Redacción: el prompt y el archivo adjunto.
+    a.anotar(
+        paso() == "Pegar el prompt y el archivo del redactor" && habilitado(),
+        "etapa Redacción",
+        &format!("«{}»", paso()),
+    );
+    ui.invoke_paso();
+    hasta(90, pegado).await;
+    let archivos: Vec<std::path::PathBuf> = std::fs::read_dir(i.datos.join("redactor"))
+        .map(|d| d.flatten().map(|e| e.path()).collect())
+        .unwrap_or_default();
+    let adjunto = texto_en(
+        i,
+        "deepseek",
+        "document.getElementById('archivo').textContent",
+    )
+    .await;
+    let esperado = match archivos.as_slice() {
+        [uno] => format!(
+            "{}|{}",
+            uno.file_name().unwrap_or_default().to_string_lossy(),
+            std::fs::metadata(uno).map_or(0, |m| m.len())
+        ),
+        _ => "-".into(),
+    };
+    let con_marca = archivos
+        .first()
+        .and_then(|a| std::fs::read_to_string(a).ok())
+        .is_some_and(|t| t.contains("[[CC-MARCA-FIN-"));
+    a.anotar(
+        resultado()
+            == "Prompt pegado en DeepSeek. Comprueba que el archivo quedó adjunto, revísalo y envíalo."
+            && compositor(i, "deepseek").await == armado(i, "redaccion").await
+            && adjunto == esperado
+            && con_marca,
+        "pegar el redactor con el adjunto",
+        &format!("«{}»; adjunto «{adjunto}», esperado «{esperado}»", resultado()),
+    );
+    enviar(i, "deepseek").await?;
+    // La imagen apunta al servidor local: el PDF no la pide, la escribe como texto.
+    let imagen = format!("![figura]({b}/imagen)");
+    responder_en_parrafos(
+        i,
+        "deepseek",
+        &[
+            "Respuesta del redactor para la persona.",
+            "Lo firme está en [H1].",
+            &imagen,
+        ],
+    )
+    .await?;
+    hasta(30, || {
+        paso() == "Capturar la respuesta del redactor" && habilitado()
+    })
+    .await;
+    ui.invoke_paso();
+    hasta(60, || titulo() == "Informe · 7 de 7").await;
+    let h = hechos(i).await;
+    let redaccion = de_la_ronda(&h, "respuesta-redactor", ronda)
+        .into_iter()
+        .last();
+    let marca = redaccion
+        .and_then(|r| texto_de(r, "marcaUltima"))
+        .unwrap_or_default();
+    hasta(10, || paso() == "Armar el informe" && habilitado()).await;
+    a.anotar(
+        marca.starts_with("[[CC-MARCA-FIN-") && paso() == "Armar el informe" && habilitado(),
+        "capturar el redactor",
+        &format!("marca última {marca}; «{}»", paso()),
+    );
+
+    // INF-013: las URLs locales sin pedir, la carpeta con .md y PDF, y la carpeta que se abre.
+    *i.carpeta_abierta.borrow_mut() = None;
+    ui.invoke_paso();
+    hasta(300, || {
+        (resultado().starts_with("Carpeta del informe") || resultado().starts_with("No se pudo"))
+            && !ui.get_ocupado()
+    })
+    .await;
+    let h = hechos(i).await;
+    let comprobadas = de_la_ronda(&h, "url-comprobada", ronda);
+    let urls: Vec<String> = comprobadas
+        .iter()
+        .map(|u| {
+            format!(
+                "{} {} ({})",
+                texto_de(u, "url").unwrap_or_default(),
+                u.entero("codigo")
+                    .map_or("sin código".into(), |c| c.to_string()),
+                texto_de(u, "detalle").unwrap_or_default()
+            )
+        })
+        .collect();
+    let locales = comprobadas
+        .iter()
+        .filter(|u| texto_de(u, "detalle").as_deref() == Some(nucleo::urls::MOTIVO_LOCAL))
+        .count();
+    let pedidos = servidor.pedidos();
+    // Cada verificador comprueba sus URLs (D62): 5 de GLM y la /ok de Qwen.
+    a.anotar(
+        comprobadas.len() == 6
+            && comprobadas.iter().all(|u| u.entero("codigo").is_none())
+            && locales == 5
+            && pedidos.is_empty(),
+        "las URLs locales y la imagen del PDF no se piden",
+        &format!(
+            "{}; pedidos al servidor: {}",
+            urls.join("; "),
+            pedidos.join("; ")
+        ),
+    );
+    let informes = i.datos.join("informes");
+    let carpetas = || -> Vec<std::path::PathBuf> {
+        std::fs::read_dir(&informes)
+            .map(|d| {
+                d.flatten()
+                    .map(|e| e.path())
+                    .filter(|p| p.is_dir())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let carpeta = carpetas().first().cloned().unwrap_or_default();
+    let nombre = carpeta
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+    let md = std::fs::read_to_string(carpeta.join(format!("{nombre}.md"))).unwrap_or_default();
+    let pdf = std::fs::read(carpeta.join(format!("{nombre}.pdf"))).unwrap_or_default();
+    let paginas = cajas_de_pagina(&pdf);
+    a.anotar(
+        carpetas().len() == 1
+            && nombre.ends_with("Informe recapturado")
+            && md.contains("Respuesta del redactor para la persona.")
+            && pdf.starts_with(b"%PDF-")
+            && pdf.len() > 1000
+            && !paginas.is_empty()
+            && paginas.iter().all(|p| p == "[0 0 612 792]"),
+        "informe en .md y PDF, en Carta",
+        &format!(
+            "carpeta «{nombre}»; .md {} caracteres; PDF {} bytes; páginas {paginas:?}",
+            md.chars().count(),
+            pdf.len()
+        ),
+    );
+    let respuestas = carpeta.join(nucleo::informe::SUBCARPETA_RESPUESTAS);
+    let de_ext = |ext: &str, minimo: u64| {
+        std::fs::read_dir(&respuestas).map_or(0, |d| {
+            d.flatten()
+                .filter(|e| {
+                    e.path().extension().is_some_and(|x| x == ext)
+                        && e.metadata().is_ok_and(|m| m.len() > minimo)
+                })
+                .count()
+        })
+    };
+    let (mds, pdfs) = (de_ext("md", 0), de_ext("pdf", 1000));
+    a.anotar(
+        mds == 7 && pdfs == 7,
+        "respuestas de los investigadores",
+        &format!("{mds} .md y {pdfs} PDF"),
+    );
+    let g = md.find("## Verificación de fuentes — GLM (");
+    let q = md.find("## Verificación de fuentes — Qwen (");
+    a.anotar(
+        matches!((g, q), (Some(g), Some(q)) if g < q),
+        "las dos verificaciones en el informe, con su nombre",
+        &format!("GLM: {}; Qwen: {}", g.is_some(), q.is_some()),
+    );
+    let abierta = i.carpeta_abierta.borrow().clone();
+    a.anotar(
+        abierta.as_deref() == Some(carpeta.as_path())
+            && resultado().ends_with("URLs de los verificadores: responden 0 de 6.")
+            && !ui.get_resultado_problema(),
+        "la carpeta se abre al terminar",
+        &format!("abierta {abierta:?}; «{}»", resultado()),
+    );
+    *i.carpeta_abierta.borrow_mut() = None;
+    hasta(10, || paso() == "Abrir carpeta" && habilitado()).await;
+    let abrir_listo = paso() == "Abrir carpeta" && habilitado();
+    ui.invoke_paso();
+    hasta(10, || i.carpeta_abierta.borrow().is_some()).await;
+    let abierta = i.carpeta_abierta.borrow().clone();
+    let n_carpetas = carpetas().len();
+    a.anotar(
+        abrir_listo && abierta.as_deref() == Some(carpeta.as_path()) && n_carpetas == 1,
+        "el botón pasa a abrir la carpeta, sin armar otro informe",
+        &format!("«{}»; abierta {abierta:?}; carpetas {n_carpetas}", paso()),
+    );
+
+    // El adaptador real, directo contra el servidor local: el código de cada método, sin cookies.
+    let http = verificacion::HttpSinCookies::nuevo();
+    let mut codigos = Vec::new();
+    for (ruta, metodo) in [
+        ("/ok", "HEAD"),
+        ("/sin-head", "HEAD"),
+        ("/sin-head", "GET"),
+        ("/404", "GET"),
+    ] {
+        let c = nucleo::urls::Http::pedir(
+            &http,
+            &format!("{b}{ruta}"),
+            metodo,
+            Duration::from_secs(10),
+        );
+        codigos.push(format!(
+            "{metodo} {ruta} {}",
+            c.map_or_else(|e| e, |c| c.to_string())
+        ));
+    }
+    let mut pedidos = servidor.pedidos();
+    pedidos.sort();
+    a.anotar(
+        codigos
+            == [
+                "HEAD /ok 200",
+                "HEAD /sin-head 405",
+                "GET /sin-head 200",
+                "GET /404 404",
+            ]
+            && pedidos == ["GET /404", "GET /sin-head", "HEAD /ok", "HEAD /sin-head"],
+        "el adaptador HTTP, sin cookies",
+        &format!(
+            "{}; el servidor vio {}",
+            codigos.join("; "),
+            pedidos.join("; ")
+        ),
+    );
+    // PRU-018: para las capturas de la etapa Informe.
+    copiar(&informes, &con_sufijo(salida, ".informe")).map_err(|e| e.to_string())?;
+    copiar(&i.datos, &con_sufijo(salida, ".roles")).map_err(|e| e.to_string())?;
+
+    // En la segunda parte no hay investigadores detrás de los roles: ocultarlos no se ofrece.
+    let ocultar = renglon(i, "ronda", "Ocultar los paneles de los roles", false);
+    a.anotar(
+        ocultar.is_none()
+            && POOL.iter().all(|id| i.panel_de(id).is_none())
+            && estado_en_la_lista(i, "glm") == "Verifica · Capturado"
+            && estado_en_la_lista(i, "qwen") == "Verifica · Capturado",
+        "los investigadores siguen cerrados y no se ofrece ocultar los roles",
+        &format!(
+            "sin «Ocultar»: {}; abiertos {} de 7",
+            ocultar.is_none(),
+            POOL.iter().filter(|id| i.panel_de(id).is_some()).count()
+        ),
+    );
+    Ok(())
+}
+
+/// Las /MediaBox del PDF, sin espacios de más: «[0 0 612 792]» es Carta (D40).
+fn cajas_de_pagina(pdf: &[u8]) -> Vec<String> {
+    let t = String::from_utf8_lossy(pdf);
+    t.match_indices("/MediaBox")
+        .filter_map(|(n, _)| {
+            let resto = &t[n + 9..];
+            let (a, b) = (resto.find('[')?, resto.find(']')?);
+            let dentro: Vec<&str> = resto[a + 1..b].split_whitespace().collect();
+            Some(format!("[{}]", dentro.join(" ")))
+        })
+        .collect()
+}
+
+/// Un servidor HTTP en 127.0.0.1 para la comprobación de URLs con el adaptador real: /404 da 404,
+/// /sin-head rechaza HEAD con 405, lo demás 200. Anota método y ruta, y «cookie» si el pedido trae cookies.
+// shortcut: el hilo que atiende queda vivo hasta que sale la app; es una prueba de una sola corrida.
+struct Servidor {
+    puerto: u16,
+    pedidos: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+}
+
+impl Servidor {
+    fn nuevo() -> std::io::Result<Self> {
+        let escucha = std::net::TcpListener::bind("127.0.0.1:0")?;
+        let puerto = escucha.local_addr()?.port();
+        let pedidos = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let anotar = pedidos.clone();
+        std::thread::spawn(move || {
+            for c in escucha.incoming().flatten() {
+                atender(c, &anotar);
+            }
+        });
+        Ok(Self { puerto, pedidos })
+    }
+
+    fn pedidos(&self) -> Vec<String> {
+        self.pedidos.lock().map(|p| p.clone()).unwrap_or_default()
+    }
+}
+
+fn atender(c: std::net::TcpStream, pedidos: &std::sync::Mutex<Vec<String>>) {
+    use std::io::{BufRead, Write};
+    let mut lector = std::io::BufReader::new(&c);
+    let mut primera = String::new();
+    let _ = lector.read_line(&mut primera);
+    let mut cookie = false;
+    loop {
+        let mut h = String::new();
+        if lector.read_line(&mut h).unwrap_or(0) == 0 || h.trim().is_empty() {
+            break;
+        }
+        cookie |= h.to_ascii_lowercase().starts_with("cookie:");
+    }
+    let partes: Vec<&str> = primera.split_whitespace().collect();
+    let [metodo, ruta, ..] = partes.as_slice() else {
+        return;
+    };
+    if let Ok(mut p) = pedidos.lock() {
+        p.push(format!(
+            "{metodo} {ruta}{}",
+            if cookie { " cookie" } else { "" }
+        ));
+    }
+    let codigo = match (*metodo, *ruta) {
+        (_, "/404") => 404,
+        ("HEAD", "/sin-head") => 405,
+        _ => 200,
+    };
+    let _ = (&c).write_all(
+        format!("HTTP/1.1 {codigo} Prueba\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            .as_bytes(),
+    );
+}
+
+fn con_sufijo(salida: &Path, sufijo: &str) -> std::path::PathBuf {
+    let mut s = salida.as_os_str().to_owned();
+    s.push(sufijo);
+    s.into()
+}
+
+/// PRU-018 e INV-PRU-002: la copia de evidencia nunca lleva el perfil del navegador.
+fn copiar(desde: &Path, hasta: &Path) -> std::io::Result<()> {
+    for e in std::fs::read_dir(desde)? {
+        let e = e?;
+        if e.file_name().to_string_lossy().starts_with("navegador") {
+            continue;
+        }
+        let destino = hasta.join(e.file_name());
+        if e.file_type()?.is_dir() {
+            copiar(&e.path(), &destino)?;
+        } else {
+            std::fs::create_dir_all(hasta)?;
+            std::fs::copy(e.path(), destino)?;
+        }
+    }
+    Ok(())
+}
+
+/// D27, A2: se cae el renderer del panel a la vista y la cabecera lo dice; se cae el navegador entero y los
+/// paneles se abren de nuevo, con el resultado que lo dice.
+async fn caidas(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
+    let ui = &i.ui;
+    let id = i
+        .ronda
+        .borrow()
+        .as_ref()
+        .and_then(|r| r.visible.borrow().clone())
+        .ok_or("sin panel a la vista".to_string())?;
+    let p = i
+        .panel_de(&id)
+        .ok_or("sin el panel a la vista".to_string())?;
+    let antes = p.caidas();
+    drop(p.devtools("Page.crash", "{}"));
+    let esperado = format!(
+        "La página de {} se cerró sola y se volvió a abrir.",
+        nucleo::dominio::nombre_proveedor(&id)
+    );
+    let avisa = hasta(20, || ui.get_cabecera_problema() == esperado.as_str()).await;
+    a.anotar(
+        avisa && p.caidas() == antes + 1,
+        "la cabecera avisa la caída del renderer",
+        &format!(
+            "caídas {antes} → {}; \"{}\"",
+            p.caidas(),
+            ui.get_cabecera_problema()
+        ),
+    );
+
+    drop(p.devtools("Browser.close", "{}"));
+    let reabiertos = hasta(60, || {
+        POOL.iter().all(|x| {
+            i.panel_de(x)
+                .is_some_and(|n| !Rc::ptr_eq(&n, &p) && !n.navegador_caido())
+        })
+    })
+    .await;
+    let mut vuelve = String::new();
+    for _ in 0..50 {
+        vuelve = en(i, &id, "1 + 1").await.unwrap_or_default();
+        if vuelve == "2" {
+            break;
+        }
+        esperar(200).await;
+    }
+    let resultado = ui.get_resultado().to_string();
+    a.anotar(
+        reabiertos
+            && vuelve == "2"
+            && resultado == "El navegador de los paneles se cerró solo y se volvió a abrir.",
+        "los paneles vuelven tras la caída del navegador",
+        &format!("reabiertos {reabiertos}; 1 + 1 = {vuelve}; \"{resultado}\""),
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod pruebas {
+    use super::*;
+
+    #[test]
+    fn la_copia_de_evidencia_no_lleva_el_navegador() {
+        // INV-PRU-002.
+        let base = std::env::temp_dir().join(format!("cc-copiar-{}", std::process::id()));
+        let desde = base.join("datos");
+        std::fs::create_dir_all(desde.join("navegador")).unwrap();
+        std::fs::create_dir_all(desde.join("registro")).unwrap();
+        std::fs::write(desde.join("navegador").join("x"), "perfil").unwrap();
+        std::fs::write(desde.join("registro").join("y"), "hechos").unwrap();
+        let hasta = base.join("copia");
+        copiar(&desde, &hasta).unwrap();
+        assert!(!hasta.join("navegador").exists());
+        assert_eq!(
+            std::fs::read_to_string(hasta.join("registro").join("y")).unwrap(),
+            "hechos"
+        );
+        std::fs::remove_dir_all(&base).unwrap();
+    }
 }

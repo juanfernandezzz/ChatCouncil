@@ -11,14 +11,14 @@ use std::time::{Duration, Instant, SystemTime};
 use nucleo::ajustes::{self, Apariencia};
 use nucleo::datos;
 use nucleo::dominio::{estado_de_sesion, nombre_proveedor};
-use nucleo::puerta::{self, Lectura, Paso, Situacion};
+use nucleo::puerta::{self, Lectura, Operacion, Paso, Situacion};
 use nucleo::ronda::{self, RolesElegidos};
 use nucleo::texto::Texto;
 use paneles::{EstadoPagina, Navegador, Panel};
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
 use crate::hilo::HiloNucleo;
-use crate::ventana::{Anterior, Cuenta, Fila, Marca, Ventana};
+use crate::ventana::{Anterior, Cuenta, Fila, Marca, Renglon, Ventana};
 
 /// IFZ-016: la página de las versiones publicadas.
 pub const PAGINA_DE_VERSIONES: &str = "https://github.com/juanfernandezzz/ChatCouncil/releases";
@@ -50,7 +50,7 @@ pub struct Ronda {
     pub funciones: Vec<(String, &'static str)>,
     roles: RolesElegidos,
     paneles: RefCell<HashMap<String, Rc<Panel>>>,
-    visible: RefCell<Option<String>>,
+    pub visible: RefCell<Option<String>>,
     /// CAP-014: lo último que dijo cada página; el sondeo lo renueva y lo que no responde se quita.
     pagina: RefCell<HashMap<String, EstadoPagina>>,
     /// Las navegaciones de cada panel en la última captura: la continuidad de hilo (PantallaRonda.Contexto).
@@ -58,9 +58,127 @@ pub struct Ronda {
     /// «No volver a avisar en esta sesión» del aviso de capacidades.
     aviso_omitido: Cell<bool>,
     ocupado: Cell<bool>,
+    /// D27, A2: las caídas del renderer de cada panel que la persona ya vio; las nuevas se avisan en la cabecera.
+    caidas_vistas: RefCell<HashMap<String, u64>>,
+    /// IFZ-004 (D42): los roles en el recorrido; fuera de él no ocupan la lista.
+    roles_mostrados: RefCell<Vec<String>>,
+    /// En la segunda parte (integración en adelante) las páginas de los investigadores se cierran.
+    investigadores_cerrados: Cell<bool>,
+    /// En la operación y en los roles la Puerta no conoce los pegados fallidos: los sabe la interfaz, que los intentó.
+    falla_operacion: RefCell<HashMap<String, String>>,
+    falla_rol: RefCell<HashMap<String, String>>,
+    falla_al_abrir: RefCell<HashMap<String, String>>,
+    /// ESC-008: la ronda que ya vio el aviso de la operación y la vía que se eligió en él.
+    aviso_operacion: RefCell<Option<String>>,
+    operacion_por_texto: Cell<bool>,
+    /// La ronda que se mostró la última vez: al cambiar se olvidan los fallos y las operaciones de la anterior.
+    ronda_vista: RefCell<Option<String>>,
+    /// Lo pegado en cada operador en esta ronda (PantallaRonda.operaciones).
+    pub operaciones: RefCell<HashMap<String, Operacion>>,
+    /// La etapa del último refresco: los menús y la lista la usan sin esperar a la Puerta.
+    etapa: Cell<&'static str>,
+    /// Lo último que dijo la Puerta: los menús se arman con esto, sin esperarla.
+    vista: RefCell<Vista>,
+}
+
+/// Lo que los menús necesitan saber de la ronda, del último refresco.
+#[derive(Default)]
+struct Vista {
+    accion_paso: &'static str,
+    estados: HashMap<String, &'static str>,
+    accion_visible: Option<&'static str>,
+    sin_ronda: bool,
+    sin_informe: bool,
+    sin_verificacion: bool,
+}
+
+/// Integración en adelante: los roles en el recorrido y los investigadores cerrados.
+fn etapa_de_roles(etapa: &str) -> bool {
+    matches!(
+        etapa,
+        "integracion" | "verificacion" | "redaccion" | "informe"
+    )
 }
 
 impl Ronda {
+    /// El integrador, los verificadores y el redactor, sin repetir.
+    pub fn roles_de_la_ronda(&self) -> Vec<String> {
+        self.funciones.iter().map(|(id, _)| id.clone()).collect()
+    }
+
+    /// Los paneles del recorrido: los investigadores en la primera parte y los roles que están a la vista.
+    pub fn en_la_vista(&self) -> Vec<String> {
+        let mostrados = self.roles_mostrados.borrow();
+        let mut v = if self.investigadores_cerrados.get() {
+            Vec::new()
+        } else {
+            self.operadores.clone()
+        };
+        for id in self.roles_de_la_ronda() {
+            if mostrados.contains(&id) && !v.contains(&id) {
+                v.push(id);
+            }
+        }
+        v
+    }
+
+    /// Capturar un rol de la etapa se lleva a todos los de la etapa (VER-003).
+    fn al_capturar(&self, id: &str) -> Vec<String> {
+        let de_la_etapa = self.roles.de_la_etapa(self.etapa.get());
+        if de_la_etapa.contains(&id) {
+            de_la_etapa.iter().map(|s| s.to_string()).collect()
+        } else {
+            vec![id.to_string()]
+        }
+    }
+
+    /// Los paneles cuyo pegado falló en la operación o en los roles.
+    fn con_falla(&self) -> HashSet<String> {
+        let mut v: HashSet<String> = self.falla_operacion.borrow().keys().cloned().collect();
+        v.extend(self.falla_rol.borrow().keys().cloned());
+        v
+    }
+
+    /// PantallaRonda.Situacion, lo que solo sabe la interfaz: la página que no abrió y los pegados que fallaron.
+    fn situacion_de_la_interfaz(&self, id: Option<&str>, etapa: &str) -> Option<Situacion> {
+        let id = id?;
+        if let Some(f) = self.falla_al_abrir.borrow().get(id) {
+            return Some(Situacion {
+                problema: Some(format!(
+                    "La página no se pudo abrir: {f} Prueba Más… → Recargar la página."
+                )),
+                corto: Some("La página no se abrió: Más… → Recargar."),
+                accion: None,
+            });
+        }
+        if self.roles.de_la_etapa(etapa).contains(&id) {
+            return self.falla_rol.borrow().get(id).map(|f| Situacion {
+                problema: Some(format!("El prompt no se pegó: {f}.")),
+                corto: Some("No se pegó el prompt: pégalo otra vez desde «Más…»."),
+                accion: Some(PEGAR_PROMPT_AQUI),
+            });
+        }
+        if etapa == "operacion" && self.operadores.iter().any(|o| o == id) {
+            return self.falla_operacion.borrow().get(id).map(|f| Situacion {
+                problema: Some(format!("La operación no se pegó: {f}.")),
+                corto: Some("No se pegó la operación: pégala otra vez desde «Más…»."),
+                accion: Some(PEGAR_OPERACION_AQUI),
+            });
+        }
+        None
+    }
+
+    /// Capturar un rol: cuando su página parece terminada o su captura falló (D7).
+    fn rol_listo(&self, id: &str) -> bool {
+        self.paneles.borrow().contains_key(id)
+            && self
+                .vista
+                .borrow()
+                .estados
+                .get(id)
+                .is_some_and(|e| terminado(e) || *e == "con-problema")
+    }
+
     /// Operadores y roles, sin repetir: las filas de la lista.
     pub fn ids(&self) -> Vec<String> {
         let mut v = self.operadores.clone();
@@ -97,7 +215,28 @@ pub struct Interfaz {
     pub ronda: RefCell<Option<Rc<Ronda>>>,
     region: Cell<Option<&'static str>>,
     tamano: Cell<(f64, f64)>,
+    /// Los renglones del menú abierto y la acción de cada uno (D6, D7).
+    pub menu: Rc<VecModel<Renglon>>,
+    acciones_menu: RefCell<Vec<Option<AccionMenu>>>,
+    /// -pruebaronda: los operadores cuya conversación «nueva» llega con un mensaje (ronda.html?sucio=1).
+    pub sucios: RefCell<HashSet<String>>,
+    /// INF-013: en -pruebaronda la carpeta no se abre en el explorador: se anota aquí.
+    pub carpeta_abierta: RefCell<Option<PathBuf>>,
 }
+
+/// Lo que hace un renglón del menú.
+type AccionMenu = Rc<dyn Fn(&Rc<Interfaz>)>;
+/// Grupo, texto, el motivo si está desactivado (D7) y lo que hace.
+type RenglonMenu = (String, String, Option<String>, AccionMenu);
+type AccionFutura = std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>;
+
+/// Las acciones de un panel en la operación y en los roles (PantallaRonda.cs:51-54).
+use puerta::{PEGAR_OPERACION_AQUI, PEGAR_PROMPT_AQUI};
+pub const PEGAR_OPERACION_TEXTO: &str = "Pegar la operación aquí como texto";
+pub const USAR_ANTERIOR: &str = "Usar su operación anterior";
+/// ESC-007: tres lecturas seguidas vacías, cada 300 ms, con un límite de 60 s.
+const ESPERA_CHAT_NUEVO: Duration = Duration::from_secs(60);
+pub const NO_QUEDO_VACIA: &str = "la conversación nueva no quedó vacía: no se pega, porque el modelo leería su propia respuesta. Abre una conversación nueva a mano y vuelve a pegar";
 
 fn leer(ruta: &Path) -> Option<String> {
     std::fs::read_to_string(ruta).ok()
@@ -257,6 +396,10 @@ impl Interfaz {
             abriendo: RefCell::default(),
             vueltas: RefCell::default(),
             navegador: RefCell::default(),
+            menu: Rc::new(VecModel::default()),
+            acciones_menu: RefCell::default(),
+            sucios: RefCell::default(),
+            carpeta_abierta: RefCell::default(),
             apariencia: Cell::new(apariencia),
             ronda: RefCell::default(),
             region: Cell::new(None),
@@ -327,6 +470,7 @@ impl Interfaz {
         ui.set_version(texto(&texto_de_version(calientes.is_some())));
         ui.set_licencias(texto(&texto_de_licencias()));
         ui.set_filas(modelo(&i.filas));
+        ui.set_menu_items(modelo(&i.menu));
         ui.set_seccion(texto(if primer_arranque { "ajustes" } else { "ronda" }));
 
         let i = Rc::new(i);
@@ -394,6 +538,8 @@ impl Interfaz {
         al!(on_dialogo_aceptar, |x| x.aceptar_dialogo());
         al!(on_dialogo_cancelar, |x| x.cerrar_capa());
         al!(on_cuenta_area_cambio, |x| x.ubicar_cuenta());
+        al!(on_abrir_menu, |x, cual: SharedString| x.abrir_menu(&cual));
+        al!(on_menu_item, |x, i: i32| x.menu_item(i));
     }
 
     // ---------------------------------------------------------------- ajustes
@@ -494,6 +640,8 @@ impl Interfaz {
             None
         };
         let n = Rc::new(Navegador::new(&self.datos, paginas));
+        let datos = self.datos.clone();
+        n.al_fallar(move |tipo| crate::anotar_fallo(&datos, tipo));
         *self.navegador.borrow_mut() = Some(n.clone());
         Ok(n)
     }
@@ -501,7 +649,12 @@ impl Interfaz {
     /// La página de cada proveedor: la de su spec, o una de prueba.
     fn url_de(&self, id: &str, indice: usize) -> String {
         if self.prueba_ronda {
-            return format!("https://cc-prueba.test/ronda.html?p={id}");
+            let sucio = if self.sucios.borrow().contains(id) {
+                "&sucio=1"
+            } else {
+                ""
+            };
+            return format!("https://cc-prueba.test/ronda.html?p={id}{sucio}");
         }
         if self.prueba {
             let pagina = if id == "chatgpt" {
@@ -729,7 +882,7 @@ impl Interfaz {
         match t {
             "F1" if en_ronda => self.mover(-1),
             "F2" if en_ronda => self.mover(1),
-            // F3 es el paso siguiente: lo conecta PART-015.
+            "F3" if en_ronda => self.paso(),
             "F4" => self.region(1),
             "F5" => self.region(-1),
             _ => {}
@@ -814,6 +967,18 @@ impl Interfaz {
             navegaciones: RefCell::default(),
             aviso_omitido: Cell::new(false),
             ocupado: Cell::new(false),
+            caidas_vistas: RefCell::default(),
+            roles_mostrados: RefCell::default(),
+            investigadores_cerrados: Cell::new(false),
+            falla_operacion: RefCell::default(),
+            falla_rol: RefCell::default(),
+            falla_al_abrir: RefCell::default(),
+            aviso_operacion: RefCell::default(),
+            operacion_por_texto: Cell::new(false),
+            ronda_vista: RefCell::default(),
+            operaciones: RefCell::default(),
+            etapa: Cell::new("pregunta"),
+            vista: RefCell::default(),
         });
         let mut filas: Vec<Fila> = r
             .operadores
@@ -834,7 +999,7 @@ impl Interfaz {
             estado: texto(f),
             icono: SharedString::new(),
             rol: true,
-            // Los roles en la lista solo mientras están en el recorrido (D42); eso es de PART-017.
+            // Los roles en la lista solo mientras están en el recorrido (D42).
             visible: false,
             actual: false,
         }));
@@ -844,7 +1009,7 @@ impl Interfaz {
         self.ui.set_roles_visibles(false);
         *self.ronda.borrow_mut() = Some(r);
         self.refrescar();
-        self.abrir_paneles();
+        self.abrir_paneles(true);
     }
 
     fn area_ronda(&self) -> (f64, f64, f64, f64) {
@@ -881,6 +1046,7 @@ impl Interfaz {
         let mostrar = self.ui.get_seccion() == "ronda"
             && !self.ui.get_cajon_abierto()
             && !self.ui.get_capa_abierta()
+            && !self.ui.get_menu_abierto()
             && w > 0.0;
         let visible = r.visible.borrow().clone();
         let (ancho, alto) = self.tamano.get();
@@ -911,7 +1077,7 @@ impl Interfaz {
         let Some(r) = self.ronda.borrow().clone() else {
             return;
         };
-        let en_la_vista = &r.operadores;
+        let en_la_vista = &r.en_la_vista();
         if en_la_vista.is_empty() {
             return;
         }
@@ -946,11 +1112,20 @@ impl Interfaz {
                 .collect()
         };
         let visible = r.visible.borrow().clone();
+        let fallidos = r.con_falla();
         let respuesta = r.nucleo.pedir(move |p| {
             let paso = p.paso_siguiente()?;
             let estados = pedido
                 .iter()
-                .map(|(id, generando, fin)| p.estado_de_panel(id, *generando, fin.as_deref()))
+                .map(|(id, generando, fin)| {
+                    let e = p.estado_de_panel(id, *generando, fin.as_deref())?;
+                    // En la operación y en los roles la Puerta no conoce los pegados fallidos: los sabe la interfaz.
+                    Ok(if e == "por-pegar" && fallidos.contains(id) {
+                        "con-problema"
+                    } else {
+                        e
+                    })
+                })
                 .collect::<std::io::Result<Vec<&'static str>>>()?;
             let situacion = match visible.and_then(|v| pedido.iter().position(|x| x.0 == v)) {
                 Some(i) => p.situacion_de_panel(
@@ -961,14 +1136,60 @@ impl Interfaz {
                 )?,
                 None => Situacion::default(),
             };
-            Ok::<_, std::io::Error>((paso, estados, situacion))
+            let ronda_actual = p.ronda_actual().map(String::from);
+            let (sin_informe, sin_verificacion) = match &ronda_actual {
+                None => (true, true),
+                Some(id) => {
+                    let id = Texto::from(id.as_str());
+                    let hechos = &p.leer_registro()?.hechos;
+                    let sin = |tipo: &str| {
+                        !hechos
+                            .iter()
+                            .any(|h| h.tipo() == tipo && h.texto("rondaId") == Some(&id))
+                    };
+                    (sin("informe-integrador"), sin("salida-verificador"))
+                }
+            };
+            Ok::<_, std::io::Error>((
+                paso,
+                estados,
+                situacion,
+                ronda_actual,
+                sin_informe,
+                sin_verificacion,
+            ))
         });
         let w = self.ui.as_weak();
         let filas = self.filas.clone();
+        let yo = self.yo();
         let _ = slint::spawn_local(async move {
             let Some(ui) = w.upgrade() else { return };
             match respuesta.await.and_then(|x| x.map_err(|e| e.to_string())) {
-                Ok((paso, estados, situacion)) => {
+                Ok((paso, estados, situacion, ronda_actual, sin_informe, sin_verificacion)) => {
+                    let Some(x) = yo.upgrade() else { return };
+                    if *r.ronda_vista.borrow() != ronda_actual {
+                        *r.ronda_vista.borrow_mut() = ronda_actual.clone();
+                        r.operaciones.borrow_mut().clear();
+                        r.falla_operacion.borrow_mut().clear();
+                        r.falla_rol.borrow_mut().clear();
+                        // En una ronda nueva los roles muestran la conversación de la anterior: salen hasta su etapa.
+                        x.sacar_roles(&r);
+                    }
+                    r.etapa.set(paso.etapa);
+                    if etapa_de_roles(paso.etapa) != r.investigadores_cerrados.get() {
+                        x.cambiar_de_parte(&r, !r.investigadores_cerrados.get());
+                    }
+                    let situacion = r
+                        .situacion_de_la_interfaz(r.visible.borrow().as_deref(), paso.etapa)
+                        .unwrap_or(situacion);
+                    *r.vista.borrow_mut() = Vista {
+                        accion_paso: paso.accion,
+                        estados: ids.iter().cloned().zip(estados.iter().copied()).collect(),
+                        accion_visible: situacion.accion,
+                        sin_ronda: ronda_actual.is_none(),
+                        sin_informe,
+                        sin_verificacion,
+                    };
                     mostrar_ronda(&ui, &filas, &r, &ids, &paso, &estados, &situacion)
                 }
                 Err(e) => {
@@ -980,7 +1201,8 @@ impl Interfaz {
     }
 
     /// Abre una página por operador, apiladas en el área de la página.
-    fn abrir_paneles(&self) {
+    /// `sondeo`: al reabrir tras la caída del navegador el sondeo de la ronda ya corre; no se arma otro.
+    fn abrir_paneles(&self, sondeo: bool) {
         let Some(r) = self.ronda.borrow().clone() else {
             return;
         };
@@ -993,11 +1215,15 @@ impl Interfaz {
                 return;
             }
         };
+        let todos = r.ids();
         let urls: Vec<(String, String)> = r
-            .operadores
-            .iter()
-            .enumerate()
-            .map(|(i, id)| (id.clone(), self.url_de(id, i)))
+            .en_la_vista()
+            .into_iter()
+            .map(|id| {
+                let i = todos.iter().position(|x| *x == id).unwrap_or(0);
+                let url = self.url_de(&id, i);
+                (id, url)
+            })
             .collect();
         let w = self.ui.as_weak();
         let yo = self.yo();
@@ -1036,8 +1262,24 @@ impl Interfaz {
             if let Some(x) = yo.upgrade() {
                 x.refrescar();
             }
-            sondear(yo, r).await;
+            if sondeo {
+                sondear(yo, r).await;
+            }
         });
+    }
+
+    /// D27, A2: cayó el proceso del navegador de los paneles. Se descartan sus páginas y se abren de nuevo,
+    /// como «Recargar la página» pero con un navegador nuevo.
+    fn reabrir_paneles(&self, r: &Rc<Ronda>) {
+        r.paneles.borrow_mut().clear();
+        self.paginas_cuenta.borrow_mut().clear();
+        *self.navegador.borrow_mut() = None;
+        // TEXTO-PENDIENTE: lo redacta Claude.
+        self.resultado(
+            "El navegador de los paneles se cerró solo y se volvió a abrir.",
+            true,
+        );
+        self.abrir_paneles(false);
     }
 
     /// Un Weak de sí misma para las tareas que siguen después de esta llamada.
@@ -1068,6 +1310,10 @@ impl Interfaz {
         let r = self.ronda.borrow().clone()?;
         if r.ocupado.get() || self.ui.get_capa_abierta() {
             return None;
+        }
+        // La persona actuó: el aviso de una caída ya vista se apaga.
+        for (id, p) in r.paneles.borrow().iter() {
+            r.caidas_vistas.borrow_mut().insert(id.clone(), p.caidas());
         }
         self.ocupar(&r, true);
         Some(r)
@@ -1105,7 +1351,45 @@ impl Interfaz {
                         x.ocupar(&r, false);
                         x.dialogo_declarar();
                     }
-                    // La operación, los roles y el informe son de PART-016.
+                    "pegar-operacion" => match x.estados(&r).await {
+                        Ok(e) => {
+                            let fallidos = r.con_falla();
+                            let ids = e
+                                .into_iter()
+                                .filter(|(id, e)| {
+                                    r.operadores.contains(id)
+                                        && (*e == "por-pegar"
+                                            || *e == "con-problema"
+                                            || fallidos.contains(id))
+                                })
+                                .map(|(id, _)| id)
+                                .collect();
+                            x.clone().con_aviso_de_operacion(&r, ids, None).await;
+                        }
+                        Err(e) => x.resultado(&e, true),
+                    },
+                    "pegar-integrador" | "pegar-verificacion" | "pegar-redactor" => {
+                        x.pegar_rol(&r, paso.etapa).await
+                    }
+                    "capturar" => {
+                        let ids = r
+                            .roles
+                            .de_la_etapa(paso.etapa)
+                            .into_iter()
+                            .map(String::from)
+                            .collect();
+                        x.capturar(ids).await;
+                    }
+                    "armar-informe" => x.armar_informe(&r).await,
+                    "abrir-carpeta" => {
+                        let carpeta = r
+                            .nucleo
+                            .pedir(|p| p.carpeta_informe_armado().map(Path::to_path_buf))
+                            .await;
+                        if let Ok(Some(c)) = carpeta {
+                            x.abrir_carpeta(&c);
+                        }
+                    }
                     _ => {}
                 },
             }
@@ -1153,7 +1437,28 @@ impl Interfaz {
             if accion == puerta::PEGAR_AQUI {
                 x.pegar_en_este(id).await;
             } else if accion.starts_with(puerta::CAPTURAR_ESTE) {
-                x.capturar(vec![id]).await;
+                // Los dos verificadores se registran juntos: capturar uno solo se llevaría al otro a medio responder.
+                let ids = r.al_capturar(&id);
+                let faltan: Vec<String> = ids
+                    .iter()
+                    .filter(|id| !r.rol_listo(id))
+                    .map(|id| nombre_proveedor(id))
+                    .collect();
+                if ids.len() > 1 && !faltan.is_empty() {
+                    x.resultado(
+                        &format!(
+                            "Falta que termine {}: las verificaciones se capturan juntas.",
+                            faltan.join(" y ")
+                        ),
+                        true,
+                    );
+                } else {
+                    x.capturar(ids).await;
+                }
+            } else if accion == PEGAR_OPERACION_AQUI {
+                x.clone().con_aviso_de_operacion(&r, vec![id], None).await;
+            } else if accion == PEGAR_PROMPT_AQUI {
+                x.pegar_rol(&r, r.etapa.get()).await;
             }
             x.ocupar(&r, false);
             x.refrescar();
@@ -1264,7 +1569,7 @@ impl Interfaz {
 
     /// ESC-006: repega en el panel visible la pregunta de la ronda, sin ronda nueva ni intento; nunca encima
     /// de un mensaje enviado ni de un borrador.
-    async fn pegar_en_este(&self, id: String) {
+    pub(crate) async fn pegar_en_este(&self, id: String) {
         let Some(r) = self.ronda.borrow().clone() else {
             return;
         };
@@ -1480,6 +1785,1066 @@ impl Interfaz {
         );
     }
 
+    /// Lo que se pide desde un menú: toma la acción, corre `f` y la suelta.
+    fn en_accion<F, Fut>(&self, f: F)
+    where
+        F: FnOnce(Rc<Interfaz>, Rc<Ronda>) -> Fut + 'static,
+        Fut: std::future::Future<Output = ()> + 'static,
+    {
+        let Some(r) = self.tomar() else { return };
+        let Some(x) = self.yo().upgrade() else {
+            return self.ocupar(&r, false);
+        };
+        let _ = slint::spawn_local(async move {
+            f(x.clone(), r.clone()).await;
+            x.ocupar(&r, false);
+            x.refrescar();
+        });
+    }
+
+    // ---------------------------------------------------------------- operación (ESC-007 a ESC-009)
+
+    /// ESC-008: el aviso antes de pegar la operación, una vez por ronda; en él se elige la vía de la ronda
+    /// (archivo, la predeterminada, o texto). `por_texto` fuerza la vía de un solo panel. Quien llama tiene la
+    /// acción tomada; si se abre el aviso, la suelta y «Entendido, pegar» la vuelve a tomar.
+    async fn con_aviso_de_operacion(
+        self: Rc<Self>,
+        r: &Rc<Ronda>,
+        ids: Vec<String>,
+        por_texto: Option<bool>,
+    ) {
+        if ids.is_empty() {
+            return;
+        }
+        let ronda = r.ronda_vista.borrow().clone();
+        if ronda.is_some() && *r.aviso_operacion.borrow() == ronda {
+            let t = por_texto.unwrap_or(r.operacion_por_texto.get());
+            return self.pegar_operaciones(r, ids, t).await;
+        }
+        self.ocupar(r, false);
+        let r = r.clone();
+        self.abrir_dialogo(
+            "Antes de pegar la operación",
+            "La app abre una conversación nueva en cada panel (si siguiera el hilo anterior, el operador leería su propia respuesta y la evaluación dejaría de ser ciega), comprueba que quede vacía, pega solo el prompt y adjunta el archivo de ese proveedor. Antes de enviar, activa en cada panel el razonamiento si el proveedor lo tiene, sin búsqueda web: la operación compara las respuestas del archivo. Nada se envía: revisa que el archivo quedó adjunto y envía tú.",
+            false,
+            Some("Pegarla como texto, sin archivo"),
+            "Entendido, pegar",
+            Box::new(move |x, _, marcada| {
+                *r.aviso_operacion.borrow_mut() = ronda;
+                r.operacion_por_texto.set(marcada);
+                let t = por_texto.unwrap_or(marcada);
+                x.en_accion(move |x, r| async move { x.pegar_operaciones(&r, ids, t).await });
+            }),
+        );
+    }
+
+    /// De a un panel por vez y con ese panel al frente (la única forma medida con textos largos).
+    async fn pegar_operaciones(&self, r: &Rc<Ronda>, ids: Vec<String>, por_texto: bool) {
+        let n = ids.len();
+        let mut ok = 0;
+        for (i, id) in ids.iter().enumerate() {
+            self.resultado(
+                &format!(
+                    "Pegando la operación: {} de {n} ({})…",
+                    i + 1,
+                    nombre_proveedor(id)
+                ),
+                false,
+            );
+            self.seleccionar(id);
+            match self.pegar_operacion(r, id, por_texto).await {
+                None => {
+                    r.falla_operacion.borrow_mut().remove(id);
+                    ok += 1;
+                }
+                Some(e) => {
+                    r.falla_operacion.borrow_mut().insert(id.clone(), e);
+                }
+            }
+            self.refrescar();
+        }
+        let fallaron: Vec<String> = ids
+            .iter()
+            .filter(|id| r.falla_operacion.borrow().contains_key(*id))
+            .map(|id| nombre_proveedor(id))
+            .collect();
+        let mut t = format!("Operación pegada en {ok} de {n}.");
+        if !fallaron.is_empty() {
+            t.push_str(&format!(
+                " No se pegó en: {}; cada uno dice qué pasó.",
+                fallaron.join(", ")
+            ));
+        }
+        if ok > 0 {
+            t.push_str(if por_texto {
+                " Revísala y envíala."
+            } else {
+                " Comprueba que el archivo quedó adjunto, revísala y envíala."
+            });
+        }
+        self.resultado(&t, !fallaron.is_empty());
+    }
+
+    /// ESC-007 y ESC-009: la conversación nueva comprobada vacía, la operación por la vía elegida, lo escrito
+    /// verificado contra lo armado y, con archivo, el adjunto. El error, o None si quedó pegada.
+    async fn pegar_operacion(&self, r: &Rc<Ronda>, id: &str, por_texto: bool) -> Option<String> {
+        let Some(p) = r.paneles.borrow().get(id).cloned() else {
+            return Some("el panel no está abierto".into());
+        };
+        // Si ya está vacía no se recarga: recargar restaura borradores y una página pesada tarda en volver.
+        let vacia = p.chat_vacio(&self.spec_de(id)).await == Ok(Some(true));
+        if !vacia && let Some(e) = self.abrir_chat_nuevo(r, id).await {
+            return Some(e);
+        }
+        let operador = id.to_string();
+        let op = match r
+            .nucleo
+            .pedir(move |p| p.armar_operacion(&operador, !por_texto))
+            .await
+            .and_then(|x| x.map_err(|e| e.to_string()))
+        {
+            Ok(op) => op,
+            Err(e) => return Some(e),
+        };
+        let ruta = op
+            .nombre_archivo
+            .as_ref()
+            .filter(|_| !por_texto)
+            .map(|n| self.datos.join("operaciones").join(n));
+        let cuerpo = op.cuerpo_archivo.as_ref().filter(|_| !por_texto);
+        if let Some(e) = self
+            .escribir_y_adjuntar(
+                r,
+                id,
+                &op.texto,
+                true,
+                cuerpo,
+                ruta.as_deref(),
+                " o pega la operación como texto",
+            )
+            .await
+        {
+            return Some(e);
+        }
+        let pegada = op.clone();
+        if let Err(e) = r.nucleo.pedir(move |p| p.operacion_pegada(&pegada)).await {
+            return Some(e);
+        }
+        r.operaciones.borrow_mut().insert(id.into(), op);
+        None
+    }
+
+    /// ESC-007: una conversación nueva con tres lecturas seguidas vacías (chat sin mensajes y compositor vacío),
+    /// cada 300 ms y con un techo de 60 s: un editor puede restaurar un borrador propio después de navegar.
+    async fn abrir_chat_nuevo(&self, r: &Rc<Ronda>, id: &str) -> Option<String> {
+        let Some(p) = r.paneles.borrow().get(id).cloned() else {
+            return Some("el panel no está abierto".into());
+        };
+        let spec = self.spec_de(id);
+        let i = r.ids().iter().position(|x| x == id).unwrap_or(0);
+        if let Err(e) = p.navegar(&self.url_de(id, i)).await {
+            return Some(format!("no se pudo abrir una conversación nueva: {e}"));
+        }
+        let limite = Instant::now() + ESPERA_CHAT_NUEVO;
+        let mut vacias = 0;
+        loop {
+            let compositor = p.leer_compositor(&spec).await;
+            let vacio = p.chat_vacio(&spec).await;
+            vacias = match (compositor, vacio) {
+                (Ok(Some(t)), Ok(Some(true))) if t.para_mostrar().trim().is_empty() => vacias + 1,
+                // La página todavía está cargando, o tiene algo: se vuelve a contar.
+                _ => 0,
+            };
+            if vacias >= 3 {
+                return None;
+            }
+            if Instant::now() > limite {
+                return Some(NO_QUEDO_VACIA.into());
+            }
+            if paneles::dormir(Duration::from_millis(300)).await.is_err() {
+                return Some(NO_QUEDO_VACIA.into());
+            }
+        }
+    }
+
+    /// ESC-009 y ESC-012: el texto en el compositor, verificado contra lo armado (la operación con sus diez
+    /// cadenas; los roles, por igualdad); con cuerpo, el archivo escrito en `ruta` y adjunto después.
+    #[allow(clippy::too_many_arguments)]
+    async fn escribir_y_adjuntar(
+        &self,
+        r: &Rc<Ronda>,
+        id: &str,
+        texto_: &Texto,
+        es_operacion: bool,
+        cuerpo: Option<&Texto>,
+        ruta: Option<&Path>,
+        otra_via: &str,
+    ) -> Option<String> {
+        let Some(p) = r.paneles.borrow().get(id).cloned() else {
+            return Some("el panel no está abierto".into());
+        };
+        let spec = self.spec_de(id);
+        if let Err(e) = p
+            .escribir(&spec, texto_, paneles::ESPERA_ESCRIBIR_OPERACION)
+            .await
+        {
+            return Some(e);
+        }
+        let leido = match p.leer_compositor(&spec).await {
+            Ok(t) => t.unwrap_or_default(),
+            Err(e) => return Some(e),
+        };
+        let error = if es_operacion {
+            nucleo::operacion::verificar_escritura(texto_, &leido)
+        } else {
+            nucleo::operacion::verificar_igualdad(texto_, &leido)
+        };
+        if error.is_some() {
+            return error;
+        }
+        let (Some(cuerpo), Some(ruta)) = (cuerpo, ruta) else {
+            return None;
+        };
+        let escrito = ruta
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|()| std::fs::write(ruta, cuerpo.para_mostrar().as_bytes()))
+            .map_err(|e| e.to_string());
+        let adjunto = match escrito {
+            Ok(()) => p.adjuntar(&spec, ruta).await,
+            Err(e) => Err(e),
+        };
+        adjunto.err().map(|e| {
+            format!(
+                "el texto quedó pegado pero el archivo no se adjuntó ({e}). Está en {}: adjúntalo a mano{otra_via}",
+                ruta.display()
+            )
+        })
+    }
+
+    /// OPE-016: el operador que lee exactamente lo mismo reutiliza su operación anterior.
+    async fn usar_operacion_anterior(&self, r: &Rc<Ronda>, id: String) {
+        let res = r
+            .nucleo
+            .pedir(move |p| p.reutilizar_operacion(&id))
+            .await
+            .and_then(|x| x.map_err(|e| e.to_string()));
+        match res {
+            Ok((ok, mensaje)) => self.resultado(&mensaje, !ok),
+            Err(e) => self.resultado(&e, true),
+        }
+    }
+
+    /// Volver a una fase ya cerrada: el registro no se reescribe, se copia a una ronda nueva y ahí se corrige.
+    fn dialogo_ronda_copiada(&self, titulo: &str, texto_: &str) {
+        self.abrir_dialogo(
+            titulo,
+            texto_,
+            false,
+            None,
+            "Abrir la ronda nueva",
+            Box::new(|x, _, _| {
+                x.en_accion(|x, r| async move {
+                    let res = r
+                        .nucleo
+                        .pedir(|p| p.ronda_nueva_con_respuestas_copiadas())
+                        .await
+                        .and_then(|v| v.map_err(|e| e.to_string()));
+                    match res {
+                        Ok(m) => x.resultado(&m, !m.starts_with("Ronda nueva abierta")),
+                        Err(e) => x.resultado(&e, true),
+                    }
+                });
+            }),
+        );
+    }
+
+    // ---------------------------------------------------------------- roles e informe (INT-004, VER-002)
+
+    /// Abre la página del rol si todavía no está (los roles no tienen página hasta que se los necesita) y lo
+    /// pone en el recorrido. true si la página está abierta.
+    async fn mostrar_rol(&self, r: &Rc<Ronda>, id: &str, seleccionar: bool) -> bool {
+        if !r.paneles.borrow().contains_key(id) {
+            match self.crear_panel_de(r, id).await {
+                Ok(()) => {
+                    r.falla_al_abrir.borrow_mut().remove(id);
+                }
+                Err(e) => {
+                    r.falla_al_abrir.borrow_mut().insert(id.into(), e);
+                }
+            }
+        }
+        if !r.roles_mostrados.borrow().iter().any(|x| x == id) {
+            r.roles_mostrados.borrow_mut().push(id.into());
+        }
+        if seleccionar {
+            self.seleccionar(id);
+        } else {
+            self.ubicar_ronda();
+            self.refrescar();
+        }
+        r.paneles.borrow().contains_key(id)
+    }
+
+    /// Una página nueva para ese panel, con su URL cargada.
+    async fn crear_panel_de(&self, r: &Rc<Ronda>, id: &str) -> Result<(), String> {
+        let nav = self.navegador()?;
+        let i = r.ids().iter().position(|x| x == id).unwrap_or(0);
+        let url = self.url_de(id, i);
+        let p =
+            crate::crear_panel(&nav, self.ui.window(), "proveedores", self.area_ronda()).await?;
+        let carga = p.navegar(&url);
+        r.paneles.borrow_mut().insert(id.into(), Rc::new(p));
+        self.ui.invoke_area_cambio();
+        carga.await
+    }
+
+    fn mostrar_roles(&self, r: &Rc<Ronda>) {
+        let Some(x) = self.yo().upgrade() else { return };
+        let r = r.clone();
+        let _ = slint::spawn_local(async move {
+            for id in r.roles_de_la_ronda() {
+                x.mostrar_rol(&r, &id, false).await;
+            }
+        });
+    }
+
+    fn sacar_roles(&self, r: &Ronda) {
+        r.roles_mostrados.borrow_mut().clear();
+        let mut visible = r.visible.borrow_mut();
+        if visible.as_ref().is_some_and(|v| !r.operadores.contains(v)) {
+            *visible = if r.investigadores_cerrados.get() {
+                None
+            } else {
+                r.operadores.first().cloned()
+            };
+        }
+        drop(visible);
+        self.ubicar_ronda();
+    }
+
+    /// A la segunda parte se cierran las páginas de los investigadores y se abren los roles; a la primera, al revés.
+    fn cambiar_de_parte(&self, r: &Rc<Ronda>, a_roles: bool) {
+        r.investigadores_cerrados.set(a_roles);
+        if a_roles {
+            r.paneles
+                .borrow_mut()
+                .retain(|id, _| !r.operadores.contains(id));
+            let mut visible = r.visible.borrow_mut();
+            if visible.as_ref().is_some_and(|v| r.operadores.contains(v)) {
+                *visible = None;
+            }
+            drop(visible);
+            self.mostrar_roles(r);
+        } else {
+            let roles = r.roles_de_la_ronda();
+            r.paneles.borrow_mut().retain(|id, _| !roles.contains(id));
+            r.roles_mostrados.borrow_mut().clear();
+            *r.visible.borrow_mut() = r.operadores.first().cloned();
+            self.abrir_paneles(false);
+        }
+        self.ubicar_ronda();
+    }
+
+    /// INT-004, VER-002 y el redactor: el prompt del rol de la etapa, en una conversación nueva comprobada
+    /// vacía, verificado por igualdad; el del redactor, con su archivo adjunto. Nunca un prompt vacío: si no se
+    /// puede armar, se dice por qué antes de tocar el panel (INV-INT-002).
+    async fn pegar_rol(&self, r: &Rc<Ronda>, etapa: &'static str) {
+        let ids: Vec<String> = r
+            .roles
+            .de_la_etapa(etapa)
+            .into_iter()
+            .map(String::from)
+            .collect();
+        if ids.is_empty() {
+            return;
+        }
+        let armado = r
+            .nucleo
+            .pedir(
+                move |p| -> std::io::Result<(Texto, Option<puerta::ArchivoRedactor>)> {
+                    Ok(match etapa {
+                        "integracion" => (p.armar_prompt_integrador()?, None),
+                        "verificacion" => (p.armar_prompt_verificador()?, None),
+                        _ => {
+                            let a = p.armar_redactor()?;
+                            (a.prompt.clone(), Some(a))
+                        }
+                    })
+                },
+            )
+            .await
+            .and_then(|x| x.map_err(|e| e.to_string()));
+        let (prompt, archivo) = match armado {
+            Ok(a) => a,
+            Err(e) => return self.resultado(&format!("No se armó el prompt: {e}."), true),
+        };
+        // D62: en la verificación, el mismo prompt va a los dos verificadores, uno después del otro.
+        for id in &ids {
+            let nombre = nombre_proveedor(id);
+            self.resultado(&format!("Pegando el prompt en {nombre}…"), false);
+            self.refrescar();
+            let mut error = if self.mostrar_rol(r, id, true).await {
+                self.abrir_chat_nuevo(r, id).await
+            } else {
+                Some("la página no se pudo abrir".into())
+            };
+            if error.is_none() {
+                let ruta = archivo
+                    .as_ref()
+                    .map(|a| self.datos.join("redactor").join(&a.nombre_archivo));
+                error = self
+                    .escribir_y_adjuntar(
+                        r,
+                        id,
+                        &prompt,
+                        false,
+                        archivo.as_ref().map(|a| &a.cuerpo_archivo),
+                        ruta.as_deref(),
+                        "",
+                    )
+                    .await;
+            }
+            match error {
+                None => {
+                    r.falla_rol.borrow_mut().remove(id);
+                }
+                Some(e) => {
+                    self.resultado(&format!("No se pegó en {nombre}: {e}."), true);
+                    r.falla_rol.borrow_mut().insert(id.clone(), e);
+                    return;
+                }
+            }
+        }
+        let aviso = archivo.as_ref().and_then(|a| a.aviso.clone());
+        let con_archivo = archivo.is_some();
+        let pegado = prompt.clone();
+        let anotado = r
+            .nucleo
+            .pedir(move |p| match (etapa, archivo) {
+                ("integracion", _) => p.integrador_pegado(pegado),
+                ("verificacion", _) => p.verificador_pegado(pegado),
+                (_, Some(a)) => p.redactor_pegado(&a),
+                _ => {}
+            })
+            .await;
+        // Revisión PART-016: pegado en el panel pero sin anotar en el núcleo; se dice, no se reintenta.
+        // TEXTO-PENDIENTE: lo redacta Claude.
+        if let Err(e) = anotado {
+            return self.resultado(
+                &format!("El prompt quedó pegado, pero no se pudo anotar: {e}"),
+                true,
+            );
+        }
+        let nombres: Vec<String> = ids.iter().map(|id| nombre_proveedor(id)).collect();
+        let mut t = format!("Prompt pegado en {}.", nombres.join(" y "));
+        t.push_str(if con_archivo {
+            " Comprueba que el archivo quedó adjunto, revísalo y envíalo."
+        } else {
+            " Revísalo y envíalo."
+        });
+        if let Some(a) = aviso {
+            t.push(' ');
+            t.push_str(&a);
+        }
+        self.resultado(&t, false);
+    }
+
+    /// INT-005 y VER-005: recapturar el integrador o los verificadores en cualquier etapa; gana el último.
+    async fn recapturar(&self, r: &Rc<Ronda>, rol: &'static str) {
+        let ids: Vec<String> = if rol == "integrador" {
+            vec![r.roles.integrador.clone()]
+        } else {
+            r.roles
+                .verificadores()
+                .iter()
+                .map(|s| s.to_string())
+                .collect()
+        };
+        self.resultado(&format!("Recapturando el {rol}…"), false);
+        self.refrescar();
+        let mut resultados = Vec::new();
+        for id in &ids {
+            self.mostrar_rol(r, id, true).await;
+            let panel = r.paneles.borrow().get(id).cloned();
+            let lectura = match panel {
+                Some(p) => p.leer(id, &self.spec_de(id)).await,
+                None => sin_panel(id),
+            };
+            resultados.push(
+                r.nucleo
+                    .pedir(move |p| p.recapturar(rol, &lectura))
+                    .await
+                    .and_then(|x| x.map_err(|e| e.to_string()))
+                    .unwrap_or_else(|e| (false, e)),
+            );
+        }
+        let t: Vec<&str> = resultados.iter().map(|(_, m)| m.as_str()).collect();
+        self.resultado(&t.join(" "), resultados.iter().any(|(ok, _)| !ok));
+    }
+
+    /// VER-008: el prompt del verificador otra vez en ese panel, en una conversación nueva, aunque la ronda ya
+    /// esté en la redacción. La respuesta se toma con «Recapturar la verificación».
+    async fn repetir_verificacion(&self, r: &Rc<Ronda>, id: String) {
+        let nombre = nombre_proveedor(&id);
+        let prompt = match r
+            .nucleo
+            .pedir(|p| p.armar_prompt_verificador())
+            .await
+            .and_then(|x| x.map_err(|e| e.to_string()))
+        {
+            Ok(t) => t,
+            Err(e) => return self.resultado(&format!("No se armó el prompt: {e}."), true),
+        };
+        self.refrescar();
+        let mut error = if self.mostrar_rol(r, &id, true).await {
+            self.abrir_chat_nuevo(r, &id).await
+        } else {
+            Some("la página no se pudo abrir".into())
+        };
+        if error.is_none() {
+            error = self
+                .escribir_y_adjuntar(r, &id, &prompt, false, None, None, "")
+                .await;
+        }
+        match error {
+            None => {
+                // TEXTO-PENDIENTE: lo redacta Claude.
+                if let Err(e) = r.nucleo.pedir(move |p| p.verificador_pegado(prompt)).await {
+                    return self.resultado(
+                        &format!("El prompt quedó pegado en {nombre}, pero no se pudo anotar: {e}"),
+                        true,
+                    );
+                }
+                self.resultado(&format!("Prompt del verificador pegado en {nombre}: actívale solo la búsqueda web y el razonamiento, envíalo y, cuando termine, usa «Ronda… → Recapturar la verificación»."), false);
+            }
+            Some(e) => self.resultado(&format!("No se pegó en {nombre}: {e}."), true),
+        }
+    }
+
+    /// INF-013 y D41: comprueba las URLs de los verificadores y arma la carpeta del informe en el hilo del
+    /// núcleo, fuera del de la interfaz; al terminar abre la carpeta. Tras un error no se reintenta solo
+    /// (ADR-0010 p.6): se vuelve a pedir el estado.
+    async fn armar_informe(&self, r: &Rc<Ronda>) {
+        self.resultado("Comprobando las URLs y armando el informe…", false);
+        self.refrescar();
+        let res = r
+            .nucleo
+            .pedir(|p| {
+                let http = verificacion::HttpSinCookies::nuevo();
+                let armado = p.armar_informe(&http, &informe_pdf::PdfTypst);
+                // Ya comprobadas para esta verificación: no vuelve a salir a la red, solo da la cuenta.
+                let urls = if armado.ok {
+                    p.comprobar_urls(&http).ok()
+                } else {
+                    None
+                };
+                (armado, urls)
+            })
+            .await;
+        let (armado, urls) = match res {
+            Ok(x) => x,
+            Err(e) => return self.resultado(&e, true),
+        };
+        let cuenta = match urls.map(|u| u.urls).filter(|u| !u.is_empty()) {
+            None => String::new(),
+            Some(u) => format!(
+                " URLs de los verificadores: responden {} de {}.",
+                u.iter()
+                    .filter(|h| h.entero("codigo").is_some_and(|c| (200..=299).contains(&c)))
+                    .count(),
+                u.len()
+            ),
+        };
+        // Sin PDF el motor devuelve el .md: la carpeta es la suya.
+        let carpeta = armado.ruta.as_ref().filter(|_| armado.ok).map(|ruta| {
+            if ruta.is_dir() {
+                ruta.clone()
+            } else {
+                ruta.parent().map(Path::to_path_buf).unwrap_or_default()
+            }
+        });
+        self.resultado(&format!("{}{cuenta}", armado.mensaje), !armado.completo);
+        if let Some(c) = carpeta {
+            self.abrir_carpeta(&c);
+        }
+    }
+
+    /// D41: la carpeta en el explorador. En -pruebaronda solo se anota (ninguna otra app se abre).
+    fn abrir_carpeta(&self, carpeta: &Path) {
+        if self.prueba_ronda {
+            *self.carpeta_abierta.borrow_mut() = Some(carpeta.to_path_buf());
+            return;
+        }
+        if let Err(e) = abrir_en_el_sistema(&carpeta.display().to_string()) {
+            self.resultado(&e, true);
+        }
+    }
+
+    // ---------------------------------------------------------------- mantenimiento del panel (DIA-001)
+
+    async fn recargar(&self, r: &Rc<Ronda>, id: String) {
+        let nombre = nombre_proveedor(&id);
+        let panel = r.paneles.borrow().get(&id).cloned();
+        let res = match panel {
+            Some(p) => p.recargar().await,
+            // La primera carga no respondió a tiempo: se vuelve a abrir sin reiniciar la app.
+            None => self.crear_panel_de(r, &id).await.map(|()| {
+                r.falla_al_abrir.borrow_mut().remove(&id);
+                self.ubicar_ronda();
+            }),
+        };
+        match res {
+            Ok(()) => self.resultado(&format!("Se recargó la página de {nombre}."), false),
+            Err(e) => self.resultado(&format!("No se pudo recargar {nombre}: {e}"), true),
+        }
+    }
+
+    /// DIA-001: lo que el script de página encontró, de solo lectura, en un archivo de la carpeta de datos; se
+    /// abre su carpeta para mandarlo (D18).
+    async fn diagnosticar(&self, r: &Rc<Ronda>, id: String) {
+        let nombre = nombre_proveedor(&id);
+        let panel = r.paneles.borrow().get(&id).cloned();
+        let res = match panel {
+            None => Err("el panel no está abierto".to_string()),
+            Some(p) => p.diagnostico(&self.spec_de(&id)).await,
+        }
+        .and_then(|d| {
+            let dir = self.datos.join("diagnosticos");
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            let ruta = dir.join(format!(
+                "{id}-{}.json",
+                crate::ahora_local().replace(' ', "-").replace(':', "")
+            ));
+            let v = nucleo::json::Valor::Objeto(vec![
+                (
+                    "proveedor".into(),
+                    nucleo::json::Valor::Texto(id.as_str().into()),
+                ),
+                (
+                    "app".into(),
+                    nucleo::json::Valor::Texto(env!("CARGO_PKG_VERSION").into()),
+                ),
+                ("diagnostico".into(), d),
+            ]);
+            let mut bytes = Vec::new();
+            nucleo::json::escribir(&v, &mut bytes);
+            std::fs::write(&ruta, bytes).map_err(|e| e.to_string())?;
+            Ok((dir, ruta))
+        });
+        match res {
+            Ok((dir, ruta)) => {
+                self.resultado(&format!("Diagnóstico de {nombre} guardado en {}. Mándalo junto con lo que pasó para que se corrijan los selectores.", ruta.display()), false);
+                self.abrir_carpeta(&dir);
+            }
+            Err(e) => self.resultado(
+                &format!("No se pudo hacer el diagnóstico de {nombre}: {e}"),
+                true,
+            ),
+        }
+    }
+
+    fn dialogo_cerrar_sesion(&self, id: String) {
+        let nombre = nombre_proveedor(&id);
+        self.abrir_dialogo(
+            &format!("Cerrar la sesión de {nombre}"),
+            &format!("Se borra todo lo que el sitio de {nombre} guardó (la sesión, las cookies y sus datos) y su página vuelve a abrirse sin cuenta. Tu sesión de Google, la de los demás proveedores, las rondas y los informes no se tocan. Después puedes entrar con otra cuenta."),
+            false,
+            None,
+            "Cerrar la sesión",
+            Box::new(move |x, _, _| {
+                x.en_accion(move |x, r| async move {
+                    let nombre = nombre_proveedor(&id);
+                    let panel = r.paneles.borrow().get(&id).cloned();
+                    let i = r.ids().iter().position(|v| *v == id).unwrap_or(0);
+                    let url = x.url_de(&id, i);
+                    let res = match panel {
+                        None => Err("el panel no está abierto".to_string()),
+                        Some(p) => match p.borrar_sitio(&url).await {
+                            Ok(_) => p.navegar(&url).await,
+                            Err(e) => Err(e),
+                        },
+                    };
+                    match res {
+                        Ok(()) => x.resultado(&format!("Sesión de {nombre} cerrada. Entra con la cuenta que quieras en su página."), false),
+                        Err(e) => x.resultado(&format!("No se pudo cerrar la sesión de {nombre}: {e}"), true),
+                    }
+                });
+            }),
+        );
+    }
+
+    /// D60: el perfil es uno para todos; las cuentas de Google que se agregan quedan para el «Continuar con
+    /// Google» de cada proveedor.
+    async fn agregar_cuenta_google(&self, r: &Rc<Ronda>, id: String) {
+        let nombre = nombre_proveedor(&id);
+        let panel = r.paneles.borrow().get(&id).cloned();
+        let res = match panel {
+            None => Err("el panel no está abierto".to_string()),
+            Some(p) => p.navegar("https://accounts.google.com/AddSession").await,
+        };
+        match res {
+            Ok(()) => self.resultado(&format!("Entra con la otra cuenta de Google en este panel. Después usa «Cerrar la sesión de este panel…» para volver a {nombre} y, en «Continuar con Google», elige la cuenta."), false),
+            Err(e) => self.resultado(&format!("No se pudo abrir el acceso de Google: {e}"), true),
+        }
+    }
+
+    // ---------------------------------------------------------------- menús (D6, D7)
+
+    /// Abre el menú que pidió un botón: «Más…» del panel, «Ronda…», «Más…» de la clase angosta o «Ver todos».
+    pub fn abrir_menu(&self, cual: &str) {
+        let Some(r) = self.ronda.borrow().clone() else {
+            return;
+        };
+        let renglones = match cual {
+            "panel" => [
+                self.renglones_del_panel(&r),
+                self.renglones_de_mantenimiento(&r),
+                self.renglones_de_correccion(&r),
+            ]
+            .concat(),
+            "ronda" => self.renglones_de_la_ronda(&r),
+            "angosta" => [
+                self.renglones_del_panel(&r),
+                self.renglones_de_mantenimiento(&r),
+                self.renglones_de_la_ronda(&r),
+            ]
+            .concat(),
+            _ => self.renglones_de_paneles(&r),
+        };
+        let mut anterior: Option<String> = None;
+        let mut filas = Vec::new();
+        let mut acciones = Vec::new();
+        for (grupo, texto_, motivo, accion) in renglones {
+            let nuevo = anterior.as_deref() != Some(grupo.as_str());
+            filas.push(Renglon {
+                grupo: texto(if nuevo { &grupo } else { "" }),
+                texto: texto(&texto_),
+                motivo: texto(motivo.as_deref().unwrap_or("")),
+            });
+            acciones.push(motivo.is_none().then_some(accion));
+            anterior = Some(grupo);
+        }
+        self.menu.set_vec(filas);
+        *self.acciones_menu.borrow_mut() = acciones;
+        self.ui.set_menu_abierto(true);
+        self.ubicar_ronda();
+    }
+
+    /// Un renglón elegido: el menú ya se cerró en la ventana.
+    pub fn menu_item(&self, i: i32) {
+        self.ubicar_ronda();
+        let accion = usize::try_from(i)
+            .ok()
+            .and_then(|i| self.acciones_menu.borrow().get(i).cloned().flatten());
+        if let (Some(a), Some(x)) = (accion, self.yo().upgrade()) {
+            a(&x);
+        }
+    }
+
+    fn con_fase(&self, r: &Ronda) -> String {
+        format!(
+            "{} ({})",
+            puerta::CAPTURAR_ESTE,
+            ronda::nombre_de_etapa(r.etapa.get())
+        )
+    }
+
+    fn renglones_del_panel(&self, r: &Rc<Ronda>) -> Vec<RenglonMenu> {
+        let etapa = r.etapa.get();
+        let visible = r.visible.borrow().clone();
+        let vista = r.vista.borrow();
+        let accion = vista.accion_visible;
+        let grupo = match &visible {
+            Some(v) => format!("Este panel: {}", nombre_proveedor(v)),
+            None => "Este panel".into(),
+        };
+        let Some(v) = visible else {
+            return Vec::new();
+        };
+        let sin_pagina = (!r.paneles.borrow().contains_key(&v))
+            .then(|| "El panel no tiene su página abierta.".to_string());
+        let id = v.clone();
+        let capturar: AccionMenu = Rc::new(move |x: &Rc<Interfaz>| {
+            let id = id.clone();
+            x.en_accion(move |x, r| async move { x.capturar(r.al_capturar(&id)).await });
+        });
+        if !r.operadores.contains(&v) {
+            let su_etapa = r.roles.de_la_etapa(etapa).contains(&v.as_str());
+            return vec![
+                (
+                    grupo.clone(),
+                    PEGAR_PROMPT_AQUI.into(),
+                    (accion != Some(PEGAR_PROMPT_AQUI)).then(|| {
+                        "Solo en su etapa, cuando el panel está por pegar o el pegado falló."
+                            .to_string()
+                    }),
+                    Rc::new(|x: &Rc<Interfaz>| {
+                        x.en_accion(|x, r| async move { x.pegar_rol(&r, r.etapa.get()).await })
+                    }),
+                ),
+                (
+                    grupo,
+                    self.con_fase(r),
+                    (!su_etapa).then(|| {
+                        "Solo en su etapa: fuera de ella, usa «Recapturar» del menú Ronda."
+                            .to_string()
+                    }),
+                    capturar,
+                ),
+            ];
+        }
+        if etapa == "operacion" {
+            let pegable = (accion != Some(PEGAR_OPERACION_AQUI))
+                .then(|| "Solo cuando el panel está por pegar o el pegado falló.".to_string());
+            let pegar = |por_texto: bool, id: String| -> AccionMenu {
+                Rc::new(move |x: &Rc<Interfaz>| {
+                    let id = id.clone();
+                    x.en_accion(move |x, r| async move {
+                        x.clone()
+                            .con_aviso_de_operacion(&r, vec![id], Some(por_texto))
+                            .await
+                    });
+                })
+            };
+            let id = v.clone();
+            return vec![
+                (
+                    grupo.clone(),
+                    PEGAR_OPERACION_AQUI.into(),
+                    pegable.clone(),
+                    pegar(false, v.clone()),
+                ),
+                (
+                    grupo.clone(),
+                    PEGAR_OPERACION_TEXTO.into(),
+                    pegable.clone(),
+                    pegar(true, v.clone()),
+                ),
+                (
+                    grupo.clone(),
+                    USAR_ANTERIOR.into(),
+                    pegable.map(|_| "Solo cuando el panel todavía no operó en esta ronda.".into()),
+                    Rc::new(move |x: &Rc<Interfaz>| {
+                        let id = id.clone();
+                        x.en_accion(
+                            move |x, r| async move { x.usar_operacion_anterior(&r, id).await },
+                        );
+                    }),
+                ),
+                (grupo, self.con_fase(r), sin_pagina, capturar),
+            ];
+        }
+        // También «pegado, falta enviar»: duplicar no se puede, escribir se niega si el compositor tiene texto.
+        let estado = vista.estados.get(&v).copied().unwrap_or("por-pegar");
+        let id = v.clone();
+        vec![
+            (
+                grupo.clone(),
+                puerta::PEGAR_AQUI.into(),
+                (accion != Some(puerta::PEGAR_AQUI) && estado != "pegado-falta-enviar").then(
+                    || {
+                        "Solo cuando el panel está por pegar, pegado sin enviar o el pegado falló."
+                            .to_string()
+                    },
+                ),
+                Rc::new(move |x: &Rc<Interfaz>| {
+                    let id = id.clone();
+                    x.en_accion(move |x, _| async move { x.pegar_en_este(id).await });
+                }),
+            ),
+            (grupo, self.con_fase(r), sin_pagina, capturar),
+        ]
+    }
+
+    /// Recargar, el diagnóstico y cerrar la sesión: de emergencia, en cualquier etapa (D6).
+    fn renglones_de_mantenimiento(&self, r: &Rc<Ronda>) -> Vec<RenglonMenu> {
+        let Some(v) = r.visible.borrow().clone() else {
+            return Vec::new();
+        };
+        let grupo = format!("Este panel: {}", nombre_proveedor(&v));
+        let sin_pagina = (!r.paneles.borrow().contains_key(&v))
+            .then(|| "El panel no tiene su página abierta.".to_string());
+        let con = |f: fn(Rc<Interfaz>, Rc<Ronda>, String) -> AccionFutura| -> AccionMenu {
+            let id = v.clone();
+            Rc::new(move |x: &Rc<Interfaz>| {
+                let id = id.clone();
+                x.en_accion(move |x, r| f(x, r, id));
+            })
+        };
+        let id = v.clone();
+        vec![
+            (
+                grupo.clone(),
+                "Recargar la página".into(),
+                None,
+                con(|x, r, id| Box::pin(async move { x.recargar(&r, id).await })),
+            ),
+            (
+                grupo.clone(),
+                "Diagnóstico de selectores".into(),
+                sin_pagina.clone(),
+                con(|x, r, id| Box::pin(async move { x.diagnosticar(&r, id).await })),
+            ),
+            (
+                grupo.clone(),
+                "Cerrar la sesión de este panel…".into(),
+                sin_pagina.clone(),
+                Rc::new(move |x: &Rc<Interfaz>| x.dialogo_cerrar_sesion(id.clone())),
+            ),
+            (
+                grupo,
+                "Agregar una cuenta de Google".into(),
+                sin_pagina,
+                con(|x, r, id| Box::pin(async move { x.agregar_cuenta_google(&r, id).await })),
+            ),
+        ]
+    }
+
+    /// Volver a una fase ya cerrada: el registro no se reescribe, se copia a una ronda nueva y ahí se corrige.
+    fn renglones_de_correccion(&self, r: &Rc<Ronda>) -> Vec<RenglonMenu> {
+        let etapa = r.etapa.get();
+        let tras_investigacion = etapa != "pregunta" && etapa != "investigacion";
+        let tras_operacion = tras_investigacion && etapa != "operacion";
+        let visible = r.visible.borrow().clone();
+        let grupo = "Corregir".to_string();
+        let repetir = match &visible {
+            Some(v) if r.roles.verificadores().contains(&v.as_str()) => (etapa != "verificacion"
+                && etapa != "redaccion")
+                .then(|| "Solo en la verificación o la redacción.".to_string()),
+            _ => Some("Solo en el panel de un verificador.".to_string()),
+        };
+        let id = visible.unwrap_or_default();
+        vec![
+            (
+                grupo.clone(),
+                "Corregir la investigación…".into(),
+                (!tras_investigacion)
+                    .then(|| "Solo cuando la investigación ya se cerró.".to_string()),
+                Rc::new(|x: &Rc<Interfaz>| {
+                    x.dialogo_ronda_copiada("Corregir la investigación", "Se abre una ronda nueva con la misma pregunta y las respuestas copiadas; la ronda actual queda intacta. Antes de pegar la operación, usa «Capturar este panel (Investigación)» en los paneles que quieras corregir: gana la última captura.")
+                }),
+            ),
+            (
+                grupo.clone(),
+                "Repetir la verificación de este panel".into(),
+                repetir,
+                Rc::new(move |x: &Rc<Interfaz>| {
+                    let id = id.clone();
+                    x.en_accion(move |x, r| async move { x.repetir_verificacion(&r, id).await });
+                }),
+            ),
+            (
+                grupo,
+                "Corregir la operación…".into(),
+                (!tras_operacion).then(|| "Solo cuando la operación ya se cerró.".to_string()),
+                Rc::new(|x: &Rc<Interfaz>| {
+                    x.dialogo_ronda_copiada("Corregir la operación", "Se abre una ronda nueva con la misma pregunta y las respuestas copiadas; la ronda actual queda intacta. Pega la operación solo en los paneles que quieras corregir; en los demás, «Usar su operación anterior».")
+                }),
+            ),
+        ]
+    }
+
+    fn renglones_de_la_ronda(&self, r: &Rc<Ronda>) -> Vec<RenglonMenu> {
+        let vista = r.vista.borrow();
+        let grupo = "Ronda".to_string();
+        let sin_ronda = vista.sin_ronda;
+        let ocultar = !r.roles_mostrados.borrow().is_empty() && !r.investigadores_cerrados.get();
+        let recapturar = |rol: &'static str| -> AccionMenu {
+            Rc::new(move |x: &Rc<Interfaz>| {
+                x.en_accion(move |x, r| async move { x.recapturar(&r, rol).await })
+            })
+        };
+        vec![
+            (
+                grupo.clone(),
+                "Recapturar el informe del integrador".into(),
+                vista.sin_informe.then(|| {
+                    "Solo cuando la ronda ya tiene un informe del integrador.".to_string()
+                }),
+                recapturar("integrador"),
+            ),
+            (
+                grupo.clone(),
+                "Recapturar la verificación".into(),
+                vista
+                    .sin_verificacion
+                    .then(|| "Solo cuando la ronda ya tiene una verificación.".to_string()),
+                recapturar("verificador"),
+            ),
+            if ocultar {
+                (
+                    grupo.clone(),
+                    "Ocultar los paneles de los roles".into(),
+                    None,
+                    Rc::new(|x: &Rc<Interfaz>| {
+                        if let Some(r) = x.ronda.borrow().clone() {
+                            x.sacar_roles(&r);
+                            x.refrescar();
+                        }
+                    }),
+                )
+            } else {
+                (
+                    grupo.clone(),
+                    "Mostrar los paneles de los roles".into(),
+                    None,
+                    Rc::new(|x: &Rc<Interfaz>| {
+                        if let Some(r) = x.ronda.borrow().clone() {
+                            x.mostrar_roles(&r);
+                        }
+                    }),
+                )
+            },
+            (
+                grupo.clone(),
+                "Capturar lo que ya está en los paneles".into(),
+                (!sin_ronda).then(|| {
+                    "Ya hay una ronda abierta: usa «Capturar los que terminaron».".to_string()
+                }),
+                Rc::new(|x: &Rc<Interfaz>| {
+                    x.en_accion(|x, r| async move { x.capturar(r.operadores.clone()).await })
+                }),
+            ),
+            (
+                grupo.clone(),
+                "Declarar la pregunta de esta ronda".into(),
+                (vista.accion_paso != "declarar-pregunta").then(|| {
+                    "Solo cuando se capturó sin pegar la pregunta con la app.".to_string()
+                }),
+                Rc::new(|x: &Rc<Interfaz>| x.dialogo_declarar()),
+            ),
+            (
+                grupo.clone(),
+                "Ronda nueva con las respuestas copiadas".into(),
+                sin_ronda.then(|| "No hay una ronda abierta.".to_string()),
+                Rc::new(|x: &Rc<Interfaz>| {
+                    x.dialogo_ronda_copiada("Ronda nueva con las respuestas copiadas", "Se abre una ronda nueva con la misma pregunta y la última respuesta de cada operador, copiadas. La ronda actual queda intacta. Después puedes recapturar lo que quieras corregir, y los operadores que leen exactamente lo mismo pueden usar su operación anterior.")
+                }),
+            ),
+            (
+                grupo,
+                "Abandonar la ronda".into(),
+                sin_ronda.then(|| "No hay una ronda abierta.".to_string()),
+                Rc::new(|x: &Rc<Interfaz>| x.dialogo_abandonar()),
+            ),
+        ]
+    }
+
+    fn renglones_de_paneles(&self, r: &Rc<Ronda>) -> Vec<RenglonMenu> {
+        let vista = r.vista.borrow();
+        r.en_la_vista()
+            .into_iter()
+            .map(|id| {
+                let estado = vista.estados.get(&id).copied().unwrap_or("por-pegar");
+                let palabra = ronda::icono_y_palabra(estado).1;
+                let t = format!("{} · {palabra}", nombre_proveedor(&id));
+                let accion: AccionMenu = Rc::new(move |x: &Rc<Interfaz>| x.seleccionar(&id));
+                ("Paneles".to_string(), t, None, accion)
+            })
+            .collect()
+    }
+
     // ---------------------------------------------------------------- diálogo (IFZ-024)
 
     /// Un aviso o una pregunta antes de un paso: la página se aparta mientras está abierto.
@@ -1547,7 +2912,13 @@ async fn sondear(yo: Weak<Interfaz>, r: Rc<Ronda>) {
                 .collect();
             paneles::sondear(&lista, &mut estados).await;
             *r.pagina.borrow_mut() = estados.clone();
+            let cayo = vivos.iter().any(|(_, p, _)| p.navegador_caido());
             let Some(x) = yo.upgrade() else { return };
+            // Revisión PART-016: con una acción en curso se espera a que termine; la marca de caída sigue.
+            if cayo && !r.ocupado.get() {
+                x.reabrir_paneles(&r);
+                estados.clear();
+            }
             x.refrescar();
         } else {
             drop(x);
@@ -1691,14 +3062,45 @@ fn mostrar_ronda(
             continue;
         };
         let (icono, palabra) = ronda::icono_y_palabra(estado_de(&f.id));
-        if !f.rol {
+        if f.rol {
+            // Los roles en la lista solo mientras están en el recorrido (D42), con su función y su estado.
+            f.visible = r
+                .roles_mostrados
+                .borrow()
+                .iter()
+                .any(|x| *x == f.id.as_str());
+            let funcion = r.funciones.iter().find(|(id, _)| *id == f.id.as_str());
+            // Fuera del recorrido, solo la función: el estado es de su etapa (PruebaInterfaz.cs:202).
+            f.estado = texto(&match funcion {
+                Some((_, func)) if f.visible => format!("{func} · {palabra}"),
+                Some((_, func)) => func.to_string(),
+                None => palabra.to_string(),
+            });
+        } else {
+            // PAN-004: en la segunda parte las páginas de los investigadores se cierran y su lista también.
+            f.visible = !r.investigadores_cerrados.get();
             f.estado = texto(palabra);
         }
         f.icono = texto(icono);
         f.actual = visible.as_deref() == Some(f.id.as_str());
         filas.set_row_data(i, f);
     }
-    if let Some(v) = visible {
+    ui.set_investigadores_visibles(!r.investigadores_cerrados.get());
+    ui.set_roles_visibles(!r.roles_mostrados.borrow().is_empty());
+    let Some(v) = visible else {
+        // Entre una parte y la otra no hay panel al frente: la cabecera no habla de ninguno.
+        for set in [
+            Ventana::set_cabecera_titulo,
+            Ventana::set_cabecera_problema,
+            Ventana::set_selector_problema,
+            Ventana::set_accion_texto,
+            Ventana::set_icono_visible,
+        ] {
+            set(ui, SharedString::new());
+        }
+        return;
+    };
+    {
         let (icono, palabra) = ronda::icono_y_palabra(estado_de(&v));
         let nombre = nombre_proveedor(&v);
         ui.set_icono_visible(texto(icono));
@@ -1708,7 +3110,7 @@ fn mostrar_ronda(
             _ => String::new(),
         };
         ui.set_cabecera_titulo(texto(&format!("{nombre} · {palabra}{zoom}")));
-        let en_la_vista = &r.operadores;
+        let en_la_vista = r.en_la_vista();
         let i = en_la_vista
             .iter()
             .position(|x| *x == v)
@@ -1717,7 +3119,16 @@ fn mostrar_ronda(
             "{nombre} · {palabra} · {i} de {}",
             en_la_vista.len()
         )));
-        ui.set_cabecera_problema(texto(situacion.problema.as_deref().unwrap_or("")));
+        let cayo = paneles
+            .get(&v)
+            .is_some_and(|p| p.caidas() > r.caidas_vistas.borrow().get(&v).copied().unwrap_or(0));
+        let problema = match situacion.problema.as_deref() {
+            Some(t) => t.to_string(),
+            // TEXTO-PENDIENTE: lo redacta Claude.
+            None if cayo => format!("La página de {nombre} se cerró sola y se volvió a abrir."),
+            None => String::new(),
+        };
+        ui.set_cabecera_problema(texto(&problema));
         ui.set_selector_problema(texto(situacion.corto.unwrap_or("")));
         // «Capturar este panel (Investigación)»: la captura dice en qué fase se registra (ConFase).
         let accion = match situacion.accion {

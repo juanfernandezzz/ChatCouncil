@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART19_PLAN.ai.md
+Next: plans/PART20_PLAN.ai.md
 
 ## Parts
 
@@ -99,10 +99,10 @@ Next: plans/PART19_PLAN.ai.md
   - Outcome: Cierre de E7: auditoría, pulido, cobertura y medición orientativa
   - Evidence: recorded
 
-- [ ] Part 19: plans/PART19_PLAN.ai.md
+- [x] Part 19: plans/PART19_PLAN.ai.md
   - Scenario: SCN-019
   - Outcome: Actualizador, instalador y publicación en un Release propio; la app nueva instalada
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 20: plans/PART20_PLAN.ai.md
   - Scenario: SCN-020

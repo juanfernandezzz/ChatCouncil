@@ -635,3 +635,12 @@ Artifacts:
 - bench/resultados/e7-app.json
 - https://github.com/juanfernandezzz/ChatCouncil/actions/runs/43608277571
 - pruebaronda Resultado: 91/91; autoprueba 65/65; pruebainterfaz 16/16, 9/9, 8/8
+
+### PART-019
+
+Actualizador y instalador portados de la Unity (nucleo::actualizacion, verificacion::descarga, app::actualizador, instalador/ChatCouncilNueva.iss). Commit b74aa8d. CI ci 43629085400 verde y publicar 43629085372 verde: Release chatcouncil-v1 con ChatCouncilNueva-instalador.exe 19.385.394 B (Unity 31.213.183 B) y version.txt 5 B (0.2.1). Instalada en el PC de Juan en AppData\Local\Programs\ChatCouncilNueva, version 0.2.1, sin elevacion (token elevado=0), datos en AppData\Local\ChatCouncil, ve la ronda en 3 Operacion (etapa actual); cerrada por su ventana. Revision ecc:rust-reviewer sin hallazgos graves; aplicados if main, cargo test en publicar y min(100) en la barra.
+
+Artifacts:
+- cargo test --workspace: verde (app 191, nucleo 23, verificacion 14, paneles 14, informe-pdf 11)
+- cargo fmt --check y clippy -D warnings: exit 0
+- https://github.com/juanfernandezzz/ChatCouncil/actions/runs/43629085372

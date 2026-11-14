@@ -96,10 +96,10 @@
 
 ## Phase 3: E8 · Entrega y medición
 
-- [ ] Part 19: Read `plans/PART19_PLAN.ai.md`
+- [x] Part 19: Read `plans/PART19_PLAN.ai.md`
   - Scenario: SCN-019
   - Outcome: Actualizador, instalador y publicación en un Release propio; la app nueva instalada
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 20: Read `plans/PART20_PLAN.ai.md`
   - Scenario: SCN-020

@@ -1,0 +1,77 @@
+# ARR-009 y D30: en cada push a main compila el release, prueba el binario publicable, arma el instalador con Inno Setup
+# y lo publica en el Release `chatcouncil-v1` junto con version.txt. Solo usa el GITHUB_TOKEN del repo (contents: write).
+# La versión es 0.2.<run_number>: la app compara contra ese número (una compilación local lleva 0.1.0 y nunca ofrece nada).
+name: publicar
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publicar
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    # Solo main publica: un workflow_dispatch desde otra rama no debe llegar a los usuarios.
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup update stable
+      - uses: Swatinem/rust-cache@v2
+      # Nada se publica con las pruebas en rojo.
+      - run: cargo test --workspace
+      - name: Version 0.2.${{ github.run_number }}
+        shell: pwsh
+        run: |
+          $v = "0.2.${{ github.run_number }}"
+          $t = Get-Content Cargo.toml -Raw
+          $n = $t -replace '(?m)^version = "0\.1\.0"', "version = `"$v`""
+          if ($n -eq $t) { throw 'No se encontró la versión del espacio de trabajo en Cargo.toml' }
+          Set-Content Cargo.toml $n -NoNewline -Encoding UTF8
+          Set-Content version.txt $v -NoNewline -Encoding ASCII
+      - run: cargo build --release -p app
+      # El binario que se publica pasa las mismas pruebas internas que el de depuración.
+      - name: pruebas del binario release
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          $exe = '.\target\release\ChatCouncilNueva.exe'
+          $salida = Join-Path $env:RUNNER_TEMP 'autoprueba.txt'
+          $p = Start-Process $exe -ArgumentList '-autoprueba', $salida -PassThru -Wait
+          if (Test-Path $salida) { Get-Content $salida -Encoding UTF8 }
+          if ($p.ExitCode -ne 0) { exit $p.ExitCode }
+          $datos = Join-Path $env:RUNNER_TEMP 'pruebainterfaz'
+          New-Item -ItemType Directory $datos | Out-Null
+          foreach ($fase in 1, 2, 3) {
+            $salida = Join-Path $env:RUNNER_TEMP "pruebainterfaz-$fase.txt"
+            $p = Start-Process $exe -ArgumentList '-pruebainterfaz', $salida, '-datos', $datos, '-fase', "$fase" -PassThru -Wait
+            if (Test-Path $salida) { Get-Content $salida -Encoding UTF8 }
+            if ($p.ExitCode -ne 0) { exit $p.ExitCode }
+          }
+          $datos = Join-Path $env:RUNNER_TEMP 'pruebaronda'
+          New-Item -ItemType Directory $datos | Out-Null
+          $salida = Join-Path $env:RUNNER_TEMP 'pruebaronda.txt'
+          $p = Start-Process $exe -ArgumentList '-pruebaronda', $salida, '-datos', $datos -PassThru -Wait
+          if (Test-Path $salida) { Get-Content $salida -Encoding UTF8 }
+          exit $p.ExitCode
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          & $iscc "/DVersion=0.2.${{ github.run_number }}" instalador\ChatCouncilNueva.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item version.txt salida\version.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: chatcouncil-v1
+          name: ChatCouncil (nueva) · instalador
+          files: |
+            salida/ChatCouncilNueva-instalador.exe
+            salida/version.txt

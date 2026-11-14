@@ -1,6 +1,7 @@
 // D27, A1: la release no abre consola. Las pruebas internas escriben su archivo y dan su código igual.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod actualizador;
 mod autoprueba;
 mod hilo;
 mod interfaz;
@@ -100,7 +101,8 @@ fn main() {
             datos,
             paginas_de_prueba,
             importar,
-        }) => normal(datos, paginas_de_prueba, importar),
+            actualizar,
+        }) => normal(datos, paginas_de_prueba, importar, actualizar),
         Err(e) => {
             eprintln!("{e}");
             1
@@ -129,6 +131,8 @@ enum Modo {
         paginas_de_prueba: bool,
         /// ADR-0006: sin -datos se importan las conversaciones de la Unity desde este LOCALAPPDATA.
         importar: Option<PathBuf>,
+        /// ARR-007 y ARR-008: solo la carpeta real busca actualización; con -datos, no.
+        actualizar: bool,
     },
 }
 
@@ -169,6 +173,7 @@ fn modo(args: &[String], local: Option<PathBuf>) -> Result<Modo, String> {
             datos,
             paginas_de_prueba,
             importar: if explicita { None } else { local },
+            actualizar: !explicita,
         })
         .ok_or_else(|| "No se encontró la carpeta de datos: falta -datos y LOCALAPPDATA.".into())
 }
@@ -351,6 +356,7 @@ type Prueba =
 /// Arma la interfaz y corre el bucle de la ventana; `prueba` corre dentro con la interfaz armada.
 fn con_interfaz(o: interfaz::Opciones, prueba: Option<Prueba>) -> i32 {
     registrar_panicos(&o.datos);
+    let actualizar = o.actualizar;
     let i = match interfaz::Interfaz::armar(o) {
         Ok(i) => i,
         Err(e) => {
@@ -358,6 +364,10 @@ fn con_interfaz(o: interfaz::Opciones, prueba: Option<Prueba>) -> i32 {
             return 1;
         }
     };
+    // ARR-008: la búsqueda de actualización arranca con la ventana armada; nunca en pruebas (ARR-007).
+    if actualizar {
+        actualizador::iniciar(&i.ui);
+    }
     let prueba_ninguna = prueba.is_none();
     let codigo = Rc::new(Cell::new(if prueba.is_some() { 1 } else { 0 }));
     if let Some(prueba) = prueba {
@@ -395,6 +405,7 @@ fn con_pruebainterfaz(datos: PathBuf, salida: PathBuf, fase: u32) -> i32 {
         prueba: true,
         paginas_de_prueba: false,
         prueba_ronda: false,
+        actualizar: false,
     };
     con_interfaz(
         o,
@@ -410,6 +421,7 @@ fn con_pruebaronda(datos: PathBuf, salida: PathBuf) -> i32 {
         prueba: true,
         paginas_de_prueba: false,
         prueba_ronda: true,
+        actualizar: false,
     };
     con_interfaz(
         o,
@@ -456,7 +468,12 @@ fn area_de_trabajo() -> Option<((i32, i32), f32)> {
     None
 }
 
-fn normal(datos: PathBuf, paginas_de_prueba: bool, importar: Option<PathBuf>) -> i32 {
+fn normal(
+    datos: PathBuf,
+    paginas_de_prueba: bool,
+    importar: Option<PathBuf>,
+    actualizar: bool,
+) -> i32 {
     if let Some(local) = importar
         && let Err(e) = interfaz::importar_de_la_unity(&local, &datos)
     {
@@ -468,6 +485,7 @@ fn normal(datos: PathBuf, paginas_de_prueba: bool, importar: Option<PathBuf>) ->
             prueba: false,
             paginas_de_prueba,
             prueba_ronda: false,
+            actualizar,
         },
         None,
     )
@@ -492,6 +510,8 @@ mod pruebas {
                 datos: PathBuf::from(r"C:\x"),
                 paginas_de_prueba: false,
                 importar: None,
+                // ARR-007: con -datos (pruebas y carpetas de prueba) no se busca actualización.
+                actualizar: false,
             })
         );
     }
@@ -505,6 +525,8 @@ mod pruebas {
                 datos: PathBuf::from(r"C:\L\ChatCouncil"),
                 paginas_de_prueba: false,
                 importar: Some(PathBuf::from(r"C:\L")),
+                // ARR-008: solo la carpeta real busca actualización.
+                actualizar: true,
             })
         );
         assert!(modo(&a, None).is_err());
@@ -544,6 +566,7 @@ mod pruebas {
                 datos: PathBuf::from(r"C:\t"),
                 paginas_de_prueba: true,
                 importar: None,
+                actualizar: false,
             })
         );
     }

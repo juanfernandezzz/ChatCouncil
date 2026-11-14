@@ -2,6 +2,8 @@
 //! (unity/Assets/Interfaz/Adaptadores.cs:19-33): pide el estado siguiendo redirecciones, sin cookies
 //! ni sesión de los paneles (INV-VER-002), sin encabezados propios y sin leer el cuerpo.
 
+mod descarga;
+
 use nucleo::urls::Http;
 use std::time::Duration;
 use ureq::config::AutoHeaderValue;

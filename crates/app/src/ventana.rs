@@ -484,6 +484,13 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
         in property <[Anterior]> anteriores;
         callback abrir-informe(string);
         in property <string> version;
+        // ARR-008 y ARR-009: el aviso de versión nueva arriba; el botón vacío lo oculta, el progreso -1 oculta la barra.
+        in-out property <bool> aviso-visible;
+        in-out property <string> aviso-texto;
+        in-out property <string> aviso-boton;
+        in-out property <float> aviso-progreso: -1;
+        in-out property <string> aviso-nueva;
+        callback aviso-accion();
         in property <string> licencias;
         callback ver-versiones();
 
@@ -549,6 +556,24 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                 reject
             }
 
+            VerticalLayout {
+            if root.aviso-visible : Rectangle {
+                background: Palette.alternate-background;
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 6px;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Text { text: root.aviso-texto; wrap: word-wrap; color: Palette.foreground; vertical-alignment: center; horizontal-stretch: 1; accessible-role: text; accessible-label: self.text; accessible-live-region: polite; }
+                        if root.aviso-boton != "" : Boton { text: root.aviso-boton; primario: true; clicked => { root.aviso-accion(); } }
+                    }
+                    if root.aviso-progreso >= 0 : Rectangle {
+                        height: 4px;
+                        background: Palette.border;
+                        Rectangle { x: 0px; width: parent.width * root.aviso-progreso; background: #3A79E0; }
+                    }
+                }
+            }
             HorizontalLayout {
                 // ----- riel (D2, D48): desde 600 dp y fuera del primer arranque
                 VerticalLayout {
@@ -899,6 +924,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                         }
                     }
                 }
+            }
             }
 
             // Cajón modal de la clase compacta (D3): las mismas secciones que el riel.

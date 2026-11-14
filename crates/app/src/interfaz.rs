@@ -34,6 +34,8 @@ pub struct Opciones {
     pub paginas_de_prueba: bool,
     /// -pruebaronda: cada operador abre ronda.html?p={id} con la spec de la prueba (PruebaRonda.cs).
     pub prueba_ronda: bool,
+    /// ARR-008: busca version.txt del Release al abrir. Falso en toda prueba y con -datos (ARR-007).
+    pub actualizar: bool,
 }
 
 /// PruebaRonda.Spec: la misma para los siete; el fin se observa porque desaparece el botón de detener.

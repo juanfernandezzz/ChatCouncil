@@ -1,0 +1,60 @@
+{
+    "exe":  "C:\\cc-target\\release\\ChatCouncilNueva.exe",
+    "exeBytes":  58197504,
+    "corridas":  [
+                     {
+                         "corrida":  1,
+                         "ventanaMs":  369,
+                         "cpuAppEn30sMs":  312,
+                         "cpuWebView2En30sMs":  625,
+                         "ramAppWorkingSetBytes":  85635072,
+                         "ramAppPrivadaBytes":  104992768,
+                         "ventanasHijas":  10,
+                         "procesosWebView2":  16,
+                         "ramWebView2WorkingSetBytes":  959152128,
+                         "cpuSistemaAntesPct":  81,
+                         "cpuSistemaDespuesPct":  32,
+                         "reacomodo":  {
+                                           "despues":  {
+                                                           "cliente":  "984x661",
+                                                           "ventana":  "1000x700",
+                                                           "panel":  "552x493,552x493,552x493,552x493,552x493,552x493,552x493,552x493,552x493,552x493"
+                                                       },
+                                           "antes":  {
+                                                         "cliente":  "1366x705",
+                                                         "ventana":  "1382x744",
+                                                         "panel":  "934x537,934x537,934x537,934x537,934x537,934x537,934x537,934x537,934x537,934x537"
+                                                     }
+                                       },
+                         "codigoDeSalida":  0
+                     },
+                     {
+                         "corrida":  2,
+                         "ventanaMs":  97,
+                         "cpuAppEn30sMs":  266,
+                         "cpuWebView2En30sMs":  375,
+                         "ramAppWorkingSetBytes":  113586176,
+                         "ramAppPrivadaBytes":  109547520,
+                         "ventanasHijas":  10,
+                         "procesosWebView2":  16,
+                         "ramWebView2WorkingSetBytes":  1073565696,
+                         "cpuSistemaAntesPct":  83,
+                         "cpuSistemaDespuesPct":  0,
+                         "codigoDeSalida":  0
+                     },
+                     {
+                         "corrida":  3,
+                         "ventanaMs":  59,
+                         "cpuAppEn30sMs":  266,
+                         "cpuWebView2En30sMs":  484,
+                         "ramAppWorkingSetBytes":  114532352,
+                         "ramAppPrivadaBytes":  109608960,
+                         "ventanasHijas":  10,
+                         "procesosWebView2":  17,
+                         "ramWebView2WorkingSetBytes":  1092923392,
+                         "cpuSistemaAntesPct":  37,
+                         "cpuSistemaDespuesPct":  0,
+                         "codigoDeSalida":  0
+                     }
+                 ]
+}

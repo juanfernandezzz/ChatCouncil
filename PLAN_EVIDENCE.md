@@ -644,3 +644,11 @@ Artifacts:
 - cargo test --workspace: verde (app 191, nucleo 23, verificacion 14, paneles 14, informe-pdf 11)
 - cargo fmt --check y clippy -D warnings: exit 0
 - https://github.com/juanfernandezzz/ChatCouncil/actions/runs/43629085372
+
+### PART-020
+
+Comparacion medida contra la Unity (misma sesion, intercalada Unity/nueva x3, maquina en reposo bajo 10 % 60 s antes de cada corrida; 3 corridas validas por app). Nueva gana en todo lo medido: M1a mediana 56,89 s vs 68,66 s (-17,1 %); M2 arbol working set 3.027.023.872 vs 3.409.156.096 B (-11,2 %), privada -20,1 %, CPU maquina 7,05 vs 13,46 % (-47,6 %); proceso propio 106.905.600 vs 281.280.512 B (-62 %), CPU 0,26 vs 5,11 %; M5 instalador 19.391.947 vs 31.210.865 B (-37,9 %). No medidas por no poder tomarse igual: M1b (clic sobre Unity sin accesibilidad) y M4 (escribe en la carpeta de la Unity / necesita ronda real E9); anotado en el JSON, sin inventar numero. CI ci 43673857540 y publicar 43673857586 verdes, commit 371a149.
+
+Artifacts:
+- bench/resultados/e8-comparacion.json
+- C:\cc-target\tmp\e8-avance.txt

@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART20_PLAN.ai.md
+Next: COMPLETE
 
 ## Parts
 
@@ -104,10 +104,10 @@ Next: plans/PART20_PLAN.ai.md
   - Outcome: Actualizador, instalador y publicación en un Release propio; la app nueva instalada
   - Evidence: recorded
 
-- [ ] Part 20: plans/PART20_PLAN.ai.md
+- [x] Part 20: plans/PART20_PLAN.ai.md
   - Scenario: SCN-020
   - Outcome: Comparación medida contra la Unity (M1, M2, M4, M5) con la máquina en reposo
-  - Evidence: pending
+  - Evidence: recorded
 
 ## Notes
 

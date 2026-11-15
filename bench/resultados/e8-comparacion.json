@@ -1,0 +1,516 @@
+{
+  "terminado": true,
+  "terminadoEn": "2026-11-14T17:14:58.9300822-03:00",
+  "condiciones": {
+    "registradoEn": "2026-11-14T16:48:09.6453842-03:00",
+    "cpu": "Intel(R) Core(TM) i5-4210U CPU @ 1.70GHz",
+    "nucleosLogicos": 4,
+    "windows": "Microsoft Windows 10 Home Single Language",
+    "webView2Runtime": "157.0.4341.46",
+    "unityVersion": null,
+    "nuevaVersion": "0.2.1",
+    "nuevaExeBytes": 58331648,
+    "unityExeBytes": 667136,
+    "plan": "GUID de plan de energía: 5678ecdc-ef31-41b7-914d-764eac195f02  (Máximo rendimiento)",
+    "umbralCpuMaquinaPct": 10,
+    "metodo": "M1a y M2 con los paneles que cada app restaura de su carpeta real (Unity 3, nueva 7); M1b y M4 no se midieron igual, ver notas"
+  },
+  "corridas": [
+    {
+      "app": "unity",
+      "corrida": 1,
+      "valida": true,
+      "cpuMaquina60s": {
+        "alcanzado": true,
+        "mediaPct": 5.1,
+        "maximoPct": 32,
+        "esperaSegundos": 60
+      },
+      "M1a": {
+        "medida": "M1a",
+        "inicio": "2026-11-14T16:49:12.4540200-03:00",
+        "fin": "2026-11-14T16:50:47.7541030-03:00",
+        "valor": 95.3,
+        "unidad": "s",
+        "rotulo": "aproximada",
+        "reposoAlcanzado": true,
+        "panelesEsperados": 3,
+        "ventanaSegundos": 1.86,
+        "primerWebViewSegundos": 3.13,
+        "arbolProcesos": 19,
+        "webview": 17,
+        "renderers": 11
+      },
+      "M2": {
+        "medida": "M2",
+        "corrida": 0,
+        "inicio": "2026-11-14T16:51:32.7279489-03:00",
+        "fin": "2026-11-14T16:52:32.9471639-03:00",
+        "rotulo": "exacta",
+        "muestras": 60,
+        "segundos": 60.22,
+        "workingSetMedianaBytes": 3553589248,
+        "workingSetMaximoBytes": 3567050752,
+        "privateBytesMedianaBytes": 3060865024,
+        "privateBytesMaximoBytes": 3073974272,
+        "cpuMediaPorcentajeMaquina": 13.78,
+        "nucleosLogicos": 4,
+        "appCpuMediaPorcentajeMaquina": 4.94,
+        "appWorkingSetMedianaBytes": 282927104,
+        "appWorkingSetMaximoBytes": 284467200,
+        "appPrivateBytesMedianaBytes": 372723712,
+        "appPrivateBytesMaximoBytes": 374308864,
+        "procesosMediana": 19,
+        "renderers": 11
+      },
+      "cierreSegundos": 4.2
+    },
+    {
+      "app": "nueva",
+      "corrida": 1,
+      "valida": true,
+      "cpuMaquina60s": {
+        "alcanzado": true,
+        "mediaPct": 6.8,
+        "maximoPct": 59,
+        "esperaSegundos": 65
+      },
+      "M1a": {
+        "medida": "M1a",
+        "inicio": "2026-11-14T16:54:12.4171771-03:00",
+        "fin": "2026-11-14T16:55:15.9236189-03:00",
+        "valor": 63.51,
+        "unidad": "s",
+        "rotulo": "aproximada",
+        "reposoAlcanzado": true,
+        "panelesEsperados": 7,
+        "ventanaSegundos": 0.21,
+        "primerWebViewSegundos": 2.21,
+        "arbolProcesos": 19,
+        "webview": 18,
+        "renderers": 12
+      },
+      "M2": {
+        "medida": "M2",
+        "corrida": 0,
+        "inicio": "2026-11-14T16:56:00.6525700-03:00",
+        "fin": "2026-11-14T16:57:00.8040374-03:00",
+        "rotulo": "exacta",
+        "muestras": 60,
+        "segundos": 60.15,
+        "workingSetMedianaBytes": 3027023872,
+        "workingSetMaximoBytes": 3031220224,
+        "privateBytesMedianaBytes": 2376282112,
+        "privateBytesMaximoBytes": 2388688896,
+        "cpuMediaPorcentajeMaquina": 7.05,
+        "nucleosLogicos": 4,
+        "appCpuMediaPorcentajeMaquina": 0.27,
+        "appWorkingSetMedianaBytes": 106168320,
+        "appWorkingSetMaximoBytes": 106201088,
+        "appPrivateBytesMedianaBytes": 127062016,
+        "appPrivateBytesMaximoBytes": 127090688,
+        "procesosMediana": 18,
+        "renderers": 11
+      },
+      "cierreSegundos": 2.6
+    },
+    {
+      "app": "unity",
+      "corrida": 2,
+      "valida": true,
+      "cpuMaquina60s": {
+        "alcanzado": true,
+        "mediaPct": 4.6,
+        "maximoPct": 28,
+        "esperaSegundos": 60
+      },
+      "M1a": {
+        "medida": "M1a",
+        "inicio": "2026-11-14T16:58:33.0694770-03:00",
+        "fin": "2026-11-14T16:59:39.7777816-03:00",
+        "valor": 66.71,
+        "unidad": "s",
+        "rotulo": "aproximada",
+        "reposoAlcanzado": true,
+        "panelesEsperados": 3,
+        "ventanaSegundos": 1.61,
+        "primerWebViewSegundos": 2.8,
+        "arbolProcesos": 19,
+        "webview": 17,
+        "renderers": 11
+      },
+      "M2": {
+        "medida": "M2",
+        "corrida": 0,
+        "inicio": "2026-11-14T17:00:24.8524973-03:00",
+        "fin": "2026-11-14T17:01:25.0372236-03:00",
+        "rotulo": "exacta",
+        "muestras": 60,
+        "segundos": 60.18,
+        "workingSetMedianaBytes": 3409156096,
+        "workingSetMaximoBytes": 3497598976,
+        "privateBytesMedianaBytes": 2973192192,
+        "privateBytesMaximoBytes": 2997899264,
+        "cpuMediaPorcentajeMaquina": 13.05,
+        "nucleosLogicos": 4,
+        "appCpuMediaPorcentajeMaquina": 5.11,
+        "appWorkingSetMedianaBytes": 269742080,
+        "appWorkingSetMaximoBytes": 283770880,
+        "appPrivateBytesMedianaBytes": 371937280,
+        "appPrivateBytesMaximoBytes": 373624832,
+        "procesosMediana": 19,
+        "renderers": 11
+      },
+      "cierreSegundos": 4.3
+    },
+    {
+      "app": "nueva",
+      "corrida": 2,
+      "valida": true,
+      "cpuMaquina60s": {
+        "alcanzado": true,
+        "mediaPct": 5,
+        "maximoPct": 39,
+        "esperaSegundos": 60
+      },
+      "M1a": {
+        "medida": "M1a",
+        "inicio": "2026-11-14T17:02:58.9810728-03:00",
+        "fin": "2026-11-14T17:03:54.2967023-03:00",
+        "valor": 55.32,
+        "unidad": "s",
+        "rotulo": "aproximada",
+        "reposoAlcanzado": true,
+        "panelesEsperados": 7,
+        "ventanaSegundos": 0.13,
+        "primerWebViewSegundos": 2.05,
+        "arbolProcesos": 19,
+        "webview": 18,
+        "renderers": 12
+      },
+      "M2": {
+        "medida": "M2",
+        "corrida": 0,
+        "inicio": "2026-11-14T17:04:38.9436095-03:00",
+        "fin": "2026-11-14T17:05:39.1085131-03:00",
+        "rotulo": "exacta",
+        "muestras": 60,
+        "segundos": 60.16,
+        "workingSetMedianaBytes": 3005925376,
+        "workingSetMaximoBytes": 3014717440,
+        "privateBytesMedianaBytes": 2370387968,
+        "privateBytesMaximoBytes": 2392899584,
+        "cpuMediaPorcentajeMaquina": 6.88,
+        "nucleosLogicos": 4,
+        "appCpuMediaPorcentajeMaquina": 0.25,
+        "appWorkingSetMedianaBytes": 106905600,
+        "appWorkingSetMaximoBytes": 106917888,
+        "appPrivateBytesMedianaBytes": 127627264,
+        "appPrivateBytesMaximoBytes": 127655936,
+        "procesosMediana": 18,
+        "renderers": 11
+      },
+      "cierreSegundos": 2.1
+    },
+    {
+      "app": "unity",
+      "corrida": 3,
+      "valida": true,
+      "cpuMaquina60s": {
+        "alcanzado": true,
+        "mediaPct": 4.6,
+        "maximoPct": 28,
+        "esperaSegundos": 60
+      },
+      "M1a": {
+        "medida": "M1a",
+        "inicio": "2026-11-14T17:07:10.8410161-03:00",
+        "fin": "2026-11-14T17:08:19.4996674-03:00",
+        "valor": 68.66,
+        "unidad": "s",
+        "rotulo": "aproximada",
+        "reposoAlcanzado": true,
+        "panelesEsperados": 3,
+        "ventanaSegundos": 1.69,
+        "primerWebViewSegundos": 3.09,
+        "arbolProcesos": 19,
+        "webview": 17,
+        "renderers": 11
+      },
+      "M2": {
+        "medida": "M2",
+        "corrida": 0,
+        "inicio": "2026-11-14T17:09:04.3216753-03:00",
+        "fin": "2026-11-14T17:10:04.5087154-03:00",
+        "rotulo": "exacta",
+        "muestras": 60,
+        "segundos": 60.19,
+        "workingSetMedianaBytes": 3347658752,
+        "workingSetMaximoBytes": 3483754496,
+        "privateBytesMedianaBytes": 2824581120,
+        "privateBytesMaximoBytes": 2960535552,
+        "cpuMediaPorcentajeMaquina": 13.46,
+        "nucleosLogicos": 4,
+        "appCpuMediaPorcentajeMaquina": 5.11,
+        "appWorkingSetMedianaBytes": 281280512,
+        "appWorkingSetMaximoBytes": 283607040,
+        "appPrivateBytesMedianaBytes": 371240960,
+        "appPrivateBytesMaximoBytes": 373489664,
+        "procesosMediana": 19,
+        "renderers": 11
+      },
+      "cierreSegundos": 3.7
+    },
+    {
+      "app": "nueva",
+      "corrida": 3,
+      "valida": true,
+      "cpuMaquina60s": {
+        "alcanzado": true,
+        "mediaPct": 6.2,
+        "maximoPct": 65,
+        "esperaSegundos": 65
+      },
+      "M1a": {
+        "medida": "M1a",
+        "inicio": "2026-11-14T17:11:43.3843899-03:00",
+        "fin": "2026-11-14T17:12:40.2777515-03:00",
+        "valor": 56.89,
+        "unidad": "s",
+        "rotulo": "aproximada",
+        "reposoAlcanzado": true,
+        "panelesEsperados": 7,
+        "ventanaSegundos": 0.14,
+        "primerWebViewSegundos": 2.08,
+        "arbolProcesos": 19,
+        "webview": 18,
+        "renderers": 12
+      },
+      "M2": {
+        "medida": "M2",
+        "corrida": 0,
+        "inicio": "2026-11-14T17:13:25.0993346-03:00",
+        "fin": "2026-11-14T17:14:25.3041102-03:00",
+        "rotulo": "exacta",
+        "muestras": 60,
+        "segundos": 60.2,
+        "workingSetMedianaBytes": 3154356224,
+        "workingSetMaximoBytes": 3157401600,
+        "privateBytesMedianaBytes": 2510766080,
+        "privateBytesMaximoBytes": 2525351936,
+        "cpuMediaPorcentajeMaquina": 7.07,
+        "nucleosLogicos": 4,
+        "appCpuMediaPorcentajeMaquina": 0.26,
+        "appWorkingSetMedianaBytes": 107466752,
+        "appWorkingSetMaximoBytes": 107483136,
+        "appPrivateBytesMedianaBytes": 128708608,
+        "appPrivateBytesMaximoBytes": 128737280,
+        "procesosMediana": 18,
+        "renderers": 11
+      },
+      "cierreSegundos": 2.1
+    }
+  ],
+  "resumen": {
+    "M1a": {
+      "unidad": "s",
+      "unity": {
+        "validas": 3,
+        "valores": [
+          95.3,
+          66.71,
+          68.66
+        ],
+        "mediana": 68.66
+      },
+      "nueva": {
+        "validas": 3,
+        "valores": [
+          63.51,
+          55.32,
+          56.89
+        ],
+        "mediana": 56.89
+      },
+      "diferencia": -11.77,
+      "diferenciaPorcentaje": -17.1,
+      "gana": "nueva"
+    },
+    "M2_arbol_workingSet": {
+      "unidad": "bytes",
+      "unity": {
+        "validas": 3,
+        "valores": [
+          3553589248,
+          3409156096,
+          3347658752
+        ],
+        "mediana": 3409156096
+      },
+      "nueva": {
+        "validas": 3,
+        "valores": [
+          3027023872,
+          3005925376,
+          3154356224
+        ],
+        "mediana": 3027023872
+      },
+      "diferencia": -382132224,
+      "diferenciaPorcentaje": -11.2,
+      "gana": "nueva"
+    },
+    "M2_arbol_privada": {
+      "unidad": "bytes",
+      "unity": {
+        "validas": 3,
+        "valores": [
+          3060865024,
+          2973192192,
+          2824581120
+        ],
+        "mediana": 2973192192
+      },
+      "nueva": {
+        "validas": 3,
+        "valores": [
+          2376282112,
+          2370387968,
+          2510766080
+        ],
+        "mediana": 2376282112
+      },
+      "diferencia": -596910080,
+      "diferenciaPorcentaje": -20.1,
+      "gana": "nueva"
+    },
+    "M2_arbol_cpuMediaPorcentajeMaquina": {
+      "unidad": "%",
+      "unity": {
+        "validas": 3,
+        "valores": [
+          13.78,
+          13.05,
+          13.46
+        ],
+        "mediana": 13.46
+      },
+      "nueva": {
+        "validas": 3,
+        "valores": [
+          7.05,
+          6.88,
+          7.07
+        ],
+        "mediana": 7.05
+      },
+      "diferencia": -6.41,
+      "diferenciaPorcentaje": -47.6,
+      "gana": "nueva"
+    },
+    "M2_app_workingSet": {
+      "unidad": "bytes",
+      "unity": {
+        "validas": 3,
+        "valores": [
+          282927104,
+          269742080,
+          281280512
+        ],
+        "mediana": 281280512
+      },
+      "nueva": {
+        "validas": 3,
+        "valores": [
+          106168320,
+          106905600,
+          107466752
+        ],
+        "mediana": 106905600
+      },
+      "diferencia": -174374912,
+      "diferenciaPorcentaje": -62,
+      "gana": "nueva"
+    },
+    "M2_app_privada": {
+      "unidad": "bytes",
+      "unity": {
+        "validas": 3,
+        "valores": [
+          372723712,
+          371937280,
+          371240960
+        ],
+        "mediana": 371937280
+      },
+      "nueva": {
+        "validas": 3,
+        "valores": [
+          127062016,
+          127627264,
+          128708608
+        ],
+        "mediana": 127627264
+      },
+      "diferencia": -244310016,
+      "diferenciaPorcentaje": -65.7,
+      "gana": "nueva"
+    },
+    "M2_app_cpuMediaPorcentajeMaquina": {
+      "unidad": "%",
+      "unity": {
+        "validas": 3,
+        "valores": [
+          4.94,
+          5.11,
+          5.11
+        ],
+        "mediana": 5.11
+      },
+      "nueva": {
+        "validas": 3,
+        "valores": [
+          0.27,
+          0.25,
+          0.26
+        ],
+        "mediana": 0.26
+      },
+      "diferencia": -4.85,
+      "diferenciaPorcentaje": -94.9,
+      "gana": "nueva"
+    }
+  },
+  "M5": {
+    "unity": {
+      "archivo": "ChatCouncil-instalador.exe",
+      "bytes": 31210865,
+      "repo": "juanfernandezzz/ChatCouncil-Unity",
+      "etiqueta": "chatcouncil-unity-v1"
+    },
+    "nueva": {
+      "archivo": "ChatCouncilNueva-instalador.exe",
+      "bytes": 19391947,
+      "repo": "juanfernandezzz/ChatCouncil",
+      "etiqueta": "chatcouncil-v1"
+    },
+    "diferenciaBytes": -11818918,
+    "diferenciaPorcentaje": -37.9
+  },
+  "validasPorApp": {
+    "unity": 3,
+    "nueva": 3
+  },
+  "notas": {
+    "noMedidas": {
+      "M1b": "No se midió igual en las dos apps: abrir diez paneles en la Unity exige un clic de persona sobre una interfaz sin accesibilidad (Unity), y agent-desktop no puede tomarlo sin entrada física; no se inventa el número.",
+      "M4": "No se midió igual: la Unity arma el informe sobre una ronda terminada y escribe en su carpeta de datos (que E8 no puede modificar), y la app nueva lo hace al cerrar una ronda real (E9). Referencia del núcleo nuevo en E6, no comparable."
+    },
+    "paneles": "Cada app restauró los paneles de su carpeta real: Unity 11 renderers y la nueva 11 a 12 al terminar M1a (la nueva con 7 esperados); no se igualó a mano para no tocar las sesiones.",
+    "M2": "Se tomó tras M1a, 30 s después del reposo y 60 s de muestras, no tras abrir diez paneles como en E1; por eso no se compara con el M2 de E1.",
+    "M5": "El Release de la Unity pesa hoy 31.210.865 B (E1 anotó 31.213.183 B); el instalador de la nueva pasó de 19.385.394 B (0.2.1) a 19.391.947 B porque el CI republicó. Se informa el vigente al medir.",
+    "actualizador": "La app nueva busca version.txt al abrir con su carpeta real (pide red); la corrida lo incluye, como en uso real.",
+    "unityVersion": "El registro no entregó la versión de la Unity (null); E1 midió 0.1.40 en este mismo PC.",
+    "sesion": "Máquina i5-4210U, 4 lógicos, WebView2 157.0.4341.46; los umbrales de reposo se cumplieron en las seis corridas (media 4,6 a 6,8 %)."
+  }
+}

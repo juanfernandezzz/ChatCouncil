@@ -1,11 +1,18 @@
-# Mide ChatCouncil-Unity desde fuera de la app: proceso, ventana, procesos hijos, archivos. No la modifica.
+﻿# Mide ChatCouncil-Unity (y, con -App nueva o la accion e8, tambien ChatCouncil nueva) desde fuera de la app: proceso,
+# ventana, procesos hijos, archivos. No las modifica.
 # Nunca lee cookies, login ni la carpeta del navegador, y nunca mata la app: la cierra como una ventana.
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('condiciones', 'm5', 'arrancar', 'diez', 'informe', 'captura', 'cerrar')]
+    [ValidateSet('condiciones', 'm5', 'arrancar', 'diez', 'informe', 'captura', 'cerrar', 'e8')]
     [string]$Accion,
-    [Parameter(Mandatory = $true)]
-    [string]$Version,
+    [string]$Version = 'e8',
+    [ValidateSet('unity', 'nueva')]
+    [string]$App = 'unity',
+    [string]$AvanceE8 = 'C:\cc-target\tmp\e8-avance.txt',
+    [string]$ResultadoE8 = 'C:\cc-target\tmp\e8-resultado.json',
+    [int]$EsperaInicialE8 = 180,
+    [int]$CorridasE8 = 3,
+    [int]$TechoMaquinaE8 = 1800,
     [int]$Corrida = 0,
     [switch]$SinRegistro,
     [string]$Traza,
@@ -15,7 +22,13 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
-$Exe = Join-Path $env:ProgramFiles 'ChatCouncil\ChatCouncil.exe'
+# E8: cada app con su ejecutable instalado y su proceso; el resto del script usa $Proc y $Exe.
+$Apps = @{
+    unity = @{ Exe = (Join-Path $env:ProgramFiles 'ChatCouncil\ChatCouncil.exe'); Proc = 'ChatCouncil'; Paneles = 3 }
+    nueva = @{ Exe = (Join-Path $env:LOCALAPPDATA 'Programs\ChatCouncilNueva\ChatCouncilNueva.exe'); Proc = 'ChatCouncilNueva'; Paneles = 7 }
+}
+$Exe = $Apps[$App].Exe
+$Proc = $Apps[$App].Proc
 $Datos = Join-Path $env:USERPROFILE 'AppData\LocalLow\ChatCouncil\ChatCouncil'
 $Salida = Join-Path $PSScriptRoot "resultados\unity-$Version-pc.json"
 $Logicos = [Environment]::ProcessorCount
@@ -72,7 +85,7 @@ function Get-Arbol {
     }
     $ids = New-Object Collections.ArrayList
     $cola = New-Object Collections.Queue
-    foreach ($p in $todos) { if ($p.Name -eq 'ChatCouncil.exe') { $cola.Enqueue([int]$p.ProcessId) } }
+    foreach ($p in $todos) { if ($p.Name -eq "$Proc.exe") { $cola.Enqueue([int]$p.ProcessId) } }
     while ($cola.Count -gt 0) {
         $id = $cola.Dequeue()
         if ($ids.Contains($id)) { continue }
@@ -138,7 +151,7 @@ function Esperar-Reposo([int]$Paneles) {
 function Es-App {
     $pid2 = [uint32]0
     [void][Entrada]::GetWindowThreadProcessId([Entrada]::GetForegroundWindow(), [ref]$pid2)
-    (@(Get-Process -Name ChatCouncil -ErrorAction SilentlyContinue).Id) -contains [int]$pid2
+    (@(Get-Process -Name $Proc -ErrorAction SilentlyContinue).Id) -contains [int]$pid2
 }
 
 # Espera el efecto de una accion de Juan y devuelve su ultimo clic izquierdo sobre la app antes del efecto.
@@ -175,7 +188,7 @@ function Mediana($v) {
 function Medir-M2 {
     Start-Sleep -Seconds 30
     $previo = @{}; $ids = Get-Arbol
-    $previoApp = @{}; $idsApp = @(Get-Process -Name ChatCouncil | ForEach-Object Id)
+    $previoApp = @{}; $idsApp = @(Get-Process -Name $Proc | ForEach-Object Id)
     [void](Tomar-Muestra $ids $previo $true)
     [void](Tomar-Muestra $idsApp $previoApp $true)
     $inicio = Get-Date
@@ -194,7 +207,7 @@ function Medir-M2 {
         [void]$app.Add($a)
     }
     $seg = $reloj.Elapsed.TotalSeconds
-    Agregar-Corrida ([pscustomobject]@{
+    $obj = ([pscustomobject]@{
             medida = 'M2'; corrida = $Corrida; inicio = Hora $inicio; fin = Hora (Get-Date); rotulo = 'exacta'
             muestras = $muestras.Count; segundos = [Math]::Round($seg, 2)
             workingSetMedianaBytes = [long](Mediana $muestras.ws); workingSetMaximoBytes = [long]($muestras.ws | Measure-Object -Maximum).Maximum
@@ -205,6 +218,173 @@ function Medir-M2 {
             appPrivateBytesMedianaBytes = [long](Mediana $app.priv); appPrivateBytesMaximoBytes = [long]($app.priv | Measure-Object -Maximum).Maximum
             procesosMediana = Mediana $muestras.procesos; renderers = Contar-Renderers
         })
+    if ($script:E8) { return $obj }
+    Agregar-Corrida $obj
+}
+
+# ---- E8: las dos apps, intercaladas, con la maquina en reposo antes de cada corrida ----
+
+function Avance([string]$t) { Add-Content -LiteralPath $AvanceE8 -Value ("{0} {1}" -f (Get-Date -Format 'o'), $t) -Encoding UTF8 }
+
+# CPU de toda la maquina, una muestra por segundo (CIM: no depende del idioma de Windows).
+function Cpu-Maquina {
+    [double](Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'").PercentProcessorTime
+}
+
+# ADR-0007: la maquina en reposo es una ventana de 60 s seguidos con la CPU media bajo $UmbralCpu. Si no llega en $TechoMaquinaE8 s, no vale.
+function Esperar-ReposoMaquina {
+    $reloj = [Diagnostics.Stopwatch]::StartNew()
+    $m = New-Object Collections.ArrayList
+    while ($reloj.Elapsed.TotalSeconds -lt $TechoMaquinaE8) {
+        $t0 = $reloj.ElapsedMilliseconds
+        [void]$m.Add((Cpu-Maquina))
+        if ($m.Count -gt 60) { $m.RemoveAt(0) }
+        if ($m.Count -eq 60) {
+            $media = ($m | Measure-Object -Average).Average
+            if ($media -lt $UmbralCpu) {
+                return [pscustomobject]@{ alcanzado = $true; mediaPct = [Math]::Round($media, 1); maximoPct = [Math]::Round(($m | Measure-Object -Maximum).Maximum, 1); esperaSegundos = [Math]::Round($reloj.Elapsed.TotalSeconds, 0) }
+            }
+        }
+        $resto = 1000 - ($reloj.ElapsedMilliseconds - $t0)
+        if ($resto -gt 0) { Start-Sleep -Milliseconds $resto }
+    }
+    $media = if ($m.Count) { ($m | Measure-Object -Average).Average } else { -1 }
+    $maximo = if ($m.Count) { ($m | Measure-Object -Maximum).Maximum } else { -1 }
+    [pscustomobject]@{ alcanzado = $false; mediaPct = [Math]::Round($media, 1); maximoPct = [Math]::Round($maximo, 1); esperaSegundos = [Math]::Round($reloj.Elapsed.TotalSeconds, 0) }
+}
+
+# M1a: del arranque al reposo con los paneles que la app restaura. Igual que la accion 'arrancar'.
+function Medir-M1a([int]$Paneles) {
+    $inicio = Get-Date
+    $reloj = [Diagnostics.Stopwatch]::StartNew()
+    $p = Start-Process -FilePath $Exe -PassThru
+    $ventana = $null; $webview = $null
+    while ($null -eq $ventana -or $null -eq $webview) {
+        if ($reloj.Elapsed.TotalSeconds -gt 120) { throw 'sin ventana o sin WebView2 a los 120 s' }
+        $p.Refresh()
+        if ($null -eq $ventana -and $p.MainWindowHandle -ne 0) { $ventana = $reloj.Elapsed.TotalSeconds }
+        if ($null -eq $webview -and (Contar-WebView) -gt 0) { $webview = $reloj.Elapsed.TotalSeconds }
+        Start-Sleep -Milliseconds 100
+    }
+    $r = Esperar-Reposo $Paneles
+    [pscustomobject]@{
+        medida = 'M1a'; inicio = Hora $inicio; fin = Hora $r.fin
+        valor = [Math]::Round(($r.fin - $inicio).TotalSeconds, 2); unidad = 's'; rotulo = 'aproximada'; reposoAlcanzado = $r.alcanzado
+        panelesEsperados = $Paneles; ventanaSegundos = [Math]::Round($ventana, 2); primerWebViewSegundos = [Math]::Round($webview, 2)
+        arbolProcesos = (Get-Arbol).Count; webview = Contar-WebView; renderers = Contar-Renderers
+    }
+}
+
+# Cierra como una ventana; nunca mata (daria el perfil). Devuelve los segundos que tardo.
+function Cerrar-App {
+    foreach ($p in @(Get-Process -Name $Proc -ErrorAction SilentlyContinue)) { [void]$p.CloseMainWindow() }
+    $reloj = [Diagnostics.Stopwatch]::StartNew()
+    while ((@(Get-Process -Name $Proc -ErrorAction SilentlyContinue).Count + (Contar-WebView)) -gt 0) {
+        if ($reloj.Elapsed.TotalSeconds -gt 90) { throw "$Proc no cerro en 90 s; no se mata para no danar el perfil" }
+        Start-Sleep -Milliseconds 500
+    }
+    [Math]::Round($reloj.Elapsed.TotalSeconds, 1)
+}
+
+function Corrida-E8([string]$Nombre, [int]$Numero) {
+    $script:Exe = $Apps[$Nombre].Exe; $script:Proc = $Apps[$Nombre].Proc
+    Avance "corrida $Numero de ${Nombre}: esperando la maquina en reposo"
+    $reposo = Esperar-ReposoMaquina
+    if (-not $reposo.alcanzado) {
+        Avance "corrida $Numero de ${Nombre}: NO VALIDA, la CPU de la maquina no bajo de $UmbralCpu % en $TechoMaquinaE8 s (media $($reposo.mediaPct) %)"
+        return [pscustomobject]@{ app = $Nombre; corrida = $Numero; valida = $false; motivo = "CPU de la maquina sobre $UmbralCpu % durante $TechoMaquinaE8 s"; cpuMaquina60s = $reposo }
+    }
+    Avance "corrida $Numero de ${Nombre}: maquina en reposo (media $($reposo.mediaPct) %), arrancando"
+    $m1a = Medir-M1a $Apps[$Nombre].Paneles
+    Avance "corrida $Numero de ${Nombre}: M1a $($m1a.valor) s (reposo alcanzado: $($m1a.reposoAlcanzado)), midiendo M2"
+    $m2 = Medir-M2
+    $cierre = Cerrar-App
+    Avance "corrida $Numero de ${Nombre}: M2 listo, app cerrada por su ventana en $cierre s"
+    Start-Sleep -Seconds 30
+    [pscustomobject]@{ app = $Nombre; corrida = $Numero; valida = $true; cpuMaquina60s = $reposo; M1a = $m1a; M2 = $m2; cierreSegundos = $cierre }
+}
+
+function Tamano-Instalador([string]$Repo, [string]$Tag) {
+    $gh = Join-Path $env:ProgramFiles 'GitHub CLI\gh.exe'
+    $a = (& $gh release view $Tag --repo $Repo --json assets | ConvertFrom-Json).assets | Where-Object { $_.name -like '*.exe' } | Select-Object -First 1
+    [pscustomobject]@{ archivo = $a.name; bytes = [long]$a.size; repo = $Repo; etiqueta = $Tag }
+}
+
+function Resumen-E8($corridas) {
+    $r = [ordered]@{}
+    $campos = @(
+        @('M1a', 'M1a', 'valor', 's'),
+        @('M2_arbol_workingSet', 'M2', 'workingSetMedianaBytes', 'bytes'),
+        @('M2_arbol_privada', 'M2', 'privateBytesMedianaBytes', 'bytes'),
+        @('M2_arbol_cpuMediaPorcentajeMaquina', 'M2', 'cpuMediaPorcentajeMaquina', '%'),
+        @('M2_app_workingSet', 'M2', 'appWorkingSetMedianaBytes', 'bytes'),
+        @('M2_app_privada', 'M2', 'appPrivateBytesMedianaBytes', 'bytes'),
+        @('M2_app_cpuMediaPorcentajeMaquina', 'M2', 'appCpuMediaPorcentajeMaquina', '%')
+    )
+    foreach ($c in $campos) {
+        $fila = [ordered]@{ unidad = $c[3] }
+        foreach ($app in 'unity', 'nueva') {
+            $v = @($corridas | Where-Object { $_.app -eq $app -and $_.valida } | ForEach-Object { $_.($c[1]).($c[2]) })
+            $fila[$app] = [ordered]@{ validas = $v.Count; valores = $v; mediana = if ($v.Count) { Mediana $v } else { $null } }
+        }
+        $u = $fila['unity'].mediana; $n = $fila['nueva'].mediana
+        if ($null -ne $u -and $null -ne $n) {
+            $fila['diferencia'] = [Math]::Round($n - $u, 2)
+            $fila['diferenciaPorcentaje'] = if ($u -ne 0) { [Math]::Round(100 * ($n - $u) / $u, 1) } else { $null }
+            $fila['gana'] = if ($n -lt $u) { 'nueva' } elseif ($n -gt $u) { 'unity' } else { 'empate' }
+        }
+        $r[$c[0]] = $fila
+    }
+    $r
+}
+
+function Ejecutar-E8 {
+    $script:E8 = $true
+    New-Item -ItemType Directory -Force (Split-Path $AvanceE8) | Out-Null
+    Set-Content -LiteralPath $AvanceE8 -Value '' -Encoding UTF8
+    Avance "inicio: espera inicial de $EsperaInicialE8 s para que termine el turno de Code"
+    Start-Sleep -Seconds $EsperaInicialE8
+    foreach ($a in $Apps.Values) { if (Get-Process -Name $a.Proc -ErrorAction SilentlyContinue) { throw "$($a.Proc) ya esta abierta; la medicion no empieza" } }
+    $cond = [pscustomobject]@{
+        registradoEn = Hora (Get-Date); cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name.Trim(); nucleosLogicos = $Logicos
+        windows = (Get-CimInstance Win32_OperatingSystem).Caption; webView2Runtime = (Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}').pv
+        unityVersion = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'ChatCouncil' } | Select-Object -First 1).DisplayVersion
+        nuevaVersion = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like 'ChatCouncil (nueva)*' } | Select-Object -First 1).DisplayVersion
+        nuevaExeBytes = (Get-Item $Apps.nueva.Exe).Length; unityExeBytes = (Get-Item $Apps.unity.Exe).Length
+        plan = ((powercfg /getactivescheme) -join ' ').Trim(); umbralCpuMaquinaPct = $UmbralCpu
+        metodo = 'M1a y M2 con los paneles que cada app restaura de su carpeta real (Unity 3, nueva 7); M1b y M4 no se midieron igual, ver notas'
+    }
+    $corridas = New-Object Collections.ArrayList
+    $pendientes = New-Object Collections.ArrayList
+    foreach ($n in 1..$CorridasE8) {
+        foreach ($app in 'unity', 'nueva') {
+            $c = Corrida-E8 $app $n
+            [void]$corridas.Add($c)
+            if (-not $c.valida) { [void]$pendientes.Add(@($app, $n)) }
+        }
+    }
+    foreach ($q in @($pendientes)) {
+        Avance "reintento de la corrida $($q[1]) de $($q[0]) (no valida antes)"
+        $c = Corrida-E8 $q[0] $q[1]
+        $c | Add-Member reintento $true
+        [void]$corridas.Add($c)
+    }
+    $m5 = [ordered]@{
+        unity = Tamano-Instalador 'juanfernandezzz/ChatCouncil-Unity' 'chatcouncil-unity-v1'
+        nueva = Tamano-Instalador 'juanfernandezzz/ChatCouncil' 'chatcouncil-v1'
+    }
+    $m5['diferenciaBytes'] = $m5.nueva.bytes - $m5.unity.bytes
+    $m5['diferenciaPorcentaje'] = [Math]::Round(100 * ($m5.nueva.bytes - $m5.unity.bytes) / $m5.unity.bytes, 1)
+    $out = [ordered]@{
+        terminado = $true; terminadoEn = Hora (Get-Date); condiciones = $cond
+        corridas = @($corridas); resumen = Resumen-E8 @($corridas); M5 = $m5
+        validasPorApp = [ordered]@{
+            unity = @($corridas | Where-Object { $_.app -eq 'unity' -and $_.valida }).Count
+            nueva = @($corridas | Where-Object { $_.app -eq 'nueva' -and $_.valida }).Count
+        }
+    }
+    [IO.File]::WriteAllText($ResultadoE8, ($out | ConvertTo-Json -Depth 10) + "`n", (New-Object Text.UTF8Encoding($false)))
+    Avance "FIN: resultado escrito en $ResultadoE8"
 }
 
 switch ($Accion) {
@@ -241,7 +421,7 @@ switch ($Accion) {
         "carpeta temporal borrada: $(-not (Test-Path $t))"
     }
     'arrancar' {
-        if (Get-Process -Name ChatCouncil -ErrorAction SilentlyContinue) { throw 'la app ya esta abierta' }
+        if (Get-Process -Name $Proc -ErrorAction SilentlyContinue) { throw 'la app ya esta abierta' }
         $inicio = Get-Date
         $reloj = [Diagnostics.Stopwatch]::StartNew()
         $p = Start-Process -FilePath $Exe -PassThru
@@ -311,14 +491,9 @@ switch ($Accion) {
             })
     }
     'cerrar' {
-        $ps = @(Get-Process -Name ChatCouncil -ErrorAction SilentlyContinue)
-        foreach ($p in $ps) { [void]$p.CloseMainWindow() }
-        $reloj = [Diagnostics.Stopwatch]::StartNew()
-        while ((@(Get-Process -Name ChatCouncil -ErrorAction SilentlyContinue).Count + (Contar-WebView)) -gt 0) {
-            if ($reloj.Elapsed.TotalSeconds -gt 90) { throw 'la app no cerro en 90 s; no se mata para no danar el perfil' }
-            Start-Sleep -Milliseconds 500
-        }
-        "cerrada en $([Math]::Round($reloj.Elapsed.TotalSeconds, 1)) s; reposo de 30 s"
+        $seg = Cerrar-App
+        "cerrada en $seg s; reposo de 30 s"
         Start-Sleep -Seconds 30
     }
+    'e8' { Ejecutar-E8 }
 }

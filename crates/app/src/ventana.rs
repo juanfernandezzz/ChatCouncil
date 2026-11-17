@@ -286,12 +286,8 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                 }
             }
         }
-        Secundario {
-            text: "Arrastra para cambiar el alto del campo";
-            font-size: 0.85rem;
-            visible: ta.has-hover || ta.pressed;
-            height: (ta.has-hover || ta.pressed) ? self.preferred-height : 0px;
-        }
+        // Sin texto de ayuda al pasar el puntero: el cursor ns-resize y la marca ya dicen que se arrastra, y un
+        // elemento cuyo tamaño dependa del puntero mueve todo lo de abajo (y el panel nativo) con solo pasar el mouse.
     }
 
     // Una fila de la lista de paneles: enfocable y con Enter, como un botón (WCAG 2.1.1).
@@ -321,8 +317,13 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
             spacing: 8px;
             VerticalLayout { alignment: center; Icono { estado: fila.icono; } }
             // INV-IFZ-005: los textos de la fila no son nodos propios del lector; los dice la fila.
-            Text { text: fila.nombre; font-weight: 600; vertical-alignment: center; color: Palette.foreground; accessible-role: none; }
-            Text { text: fila.estado; vertical-alignment: center; horizontal-alignment: right; wrap: word-wrap; color: Palette.foreground.transparentize(35%); accessible-role: none; }
+            // Nombre sobre estado: juntos se leen como una sola cosa y la columna no necesita más de lo que miden.
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 1;
+                Text { text: fila.nombre; font-weight: 600; overflow: elide; color: Palette.foreground; accessible-role: none; }
+                Text { text: fila.estado; font-size: 0.85rem; overflow: elide; color: Palette.foreground.transparentize(35%); accessible-role: none; }
+            }
         }
         Anillo { foco: fs.has-focus; }
     }
@@ -647,7 +648,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                             spacing: 8px;
                             lista := FocusScope {
                                 changed has-focus => { if (self.has-focus && Modal.abierto) { Modal.escapes += 1; } }
-                                width: root.ancha ? 280px : 0px;
+                                width: root.ancha ? 176px : 0px;
                                 visible: root.ancha;
                                 accessible-role: list;
                                 ScrollView {
@@ -1051,5 +1052,48 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod pruebas {
+    // E9: el texto de ayuda del asa crecía al pasar el mouse y empujaba todo (y el panel nativo) hacia abajo.
+    // Clase del error: una propiedad de tamaño, posición o presencia que depende del puntero. Ninguna línea de
+    // la interfaz puede combinarlas; el foco sí cambia el borde (Anillo), que no ocupa lugar.
+    #[test]
+    fn ningun_tamano_ni_presencia_depende_del_puntero() {
+        let fuente = include_str!("ventana.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap();
+        let mut malas = Vec::new();
+        for (n, l) in fuente.lines().enumerate() {
+            let t = l.trim_start();
+            if t.starts_with("//") {
+                continue;
+            }
+            let de_layout = [
+                "height:",
+                "width:",
+                "visible:",
+                "x:",
+                "y:",
+                "min-height:",
+                "preferred-height:",
+            ]
+            .iter()
+            .any(|p| t.starts_with(p) || t.contains(&format!(" {p}")));
+            let del_puntero = ["has-hover", ".pressed", "mouse-x", "mouse-y"]
+                .iter()
+                .any(|p| t.contains(p));
+            if de_layout && del_puntero {
+                malas.push(format!("{}: {t}", n + 1));
+            }
+        }
+        assert!(
+            malas.is_empty(),
+            "tamaño o presencia atados al puntero:\n{}",
+            malas.join("\n")
+        );
     }
 }

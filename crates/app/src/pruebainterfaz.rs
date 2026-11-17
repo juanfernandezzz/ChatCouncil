@@ -507,7 +507,9 @@ async fn fase3(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
     ui.window().set_size(slint::LogicalSize::new(1280.0, 800.0));
     esperar(300).await;
     let sin_barra = ui.get_area_alto();
-    ui.set_aviso_texto(SharedString::from(nucleo::actualizacion::aviso("0.2.7", "0.2.1")));
+    ui.set_aviso_texto(SharedString::from(nucleo::actualizacion::aviso(
+        "0.2.7", "0.2.1",
+    )));
     ui.set_aviso_boton(SharedString::from(nucleo::actualizacion::BOTON_ACTUALIZAR));
     ui.set_aviso_visible(true);
     esperar(300).await;

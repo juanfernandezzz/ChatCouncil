@@ -21,9 +21,8 @@ Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-; Sin permisos de administrador: se instala para la persona; puede elegir todos los usuarios.
+; D31: siempre por usuario, sin permisos de administrador y sin elegir "todos los usuarios".
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
 WizardStyle=modern
 ; La actualización desde la app corre /SILENT: cierra la app si sigue abierta y la reabre el [Run] de abajo, no el reinicio de Inno.
 RestartApplications=no
@@ -31,17 +30,21 @@ RestartApplications=no
 [Languages]
 Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
 
+[Components]
+; D31: el acceso de depuración abre el perfil real con el puerto 9222; no se instala salvo que se marque.
+Name: "depuracion"; Description: "Acceso de depuración (abre el perfil real con el puerto 9222)"; Flags: unchecked
+
 [Tasks]
 Name: "escritorio"; Description: "Crear un acceso directo en el escritorio"
 
 [Files]
 Source: "..\target\release\ChatCouncilNueva.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; Herramienta de depuración: abre la app con el puerto local de WebView2 para inspeccionar los paneles.
-Source: "abrir-depurando.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "abrir-depurando.bat"; DestDir: "{app}"; Flags: ignoreversion; Components: depuracion
 
 [Icons]
 Name: "{group}\ChatCouncil (nueva)"; Filename: "{app}\ChatCouncilNueva.exe"
-Name: "{group}\ChatCouncil (depuración)"; Filename: "{app}\abrir-depurando.bat"; IconFilename: "{app}\ChatCouncilNueva.exe"
+Name: "{group}\ChatCouncil (depuración)"; Filename: "{app}\abrir-depurando.bat"; IconFilename: "{app}\ChatCouncilNueva.exe"; Components: depuracion
 Name: "{autodesktop}\ChatCouncil (nueva)"; Filename: "{app}\ChatCouncilNueva.exe"; Tasks: escritorio
 
 [Run]

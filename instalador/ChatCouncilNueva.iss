@@ -30,9 +30,15 @@ RestartApplications=no
 [Languages]
 Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
 
+[Types]
+; El primer tipo es el que queda por defecto (también en /SILENT): sin el acceso de depuración.
+Name: "estandar"; Description: "Instalación estándar"
+Name: "completa"; Description: "Instalación con acceso de depuración"
+Name: "personalizada"; Description: "Personalizada"; Flags: iscustom
+
 [Components]
 ; D31: el acceso de depuración abre el perfil real con el puerto 9222; no se instala salvo que se marque.
-Name: "depuracion"; Description: "Acceso de depuración (abre el perfil real con el puerto 9222)"; Flags: unchecked
+Name: "depuracion"; Description: "Acceso de depuración (abre el perfil real con el puerto 9222)"; Types: completa
 
 [Tasks]
 Name: "escritorio"; Description: "Crear un acceso directo en el escritorio"

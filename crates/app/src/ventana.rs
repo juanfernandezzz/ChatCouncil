@@ -559,13 +559,18 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
             VerticalLayout {
             if root.aviso-visible : Rectangle {
                 background: Palette.alternate-background;
+                // La barra mide lo que su contenido: no se estira ni repite el alto de 48 px del botón estándar.
+                vertical-stretch: 0;
                 VerticalLayout {
-                    padding: 8px;
-                    spacing: 6px;
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    padding-top: 4px;
+                    padding-bottom: 4px;
+                    spacing: 4px;
                     HorizontalLayout {
                         spacing: 8px;
                         Text { text: root.aviso-texto; wrap: word-wrap; color: Palette.foreground; vertical-alignment: center; horizontal-stretch: 1; accessible-role: text; accessible-label: self.text; accessible-live-region: polite; }
-                        if root.aviso-boton != "" : Boton { text: root.aviso-boton; primario: true; clicked => { root.aviso-accion(); } }
+                        if root.aviso-boton != "" : Boton { text: root.aviso-boton; primario: true; min-height: 36px; clicked => { root.aviso-accion(); } }
                     }
                     if root.aviso-progreso >= 0 : Rectangle {
                         height: 4px;
@@ -575,6 +580,8 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                 }
             }
             HorizontalLayout {
+                // El espacio sobrante es del contenido, no de la barra de versión de arriba.
+                vertical-stretch: 1;
                 // ----- riel (D2, D48): desde 600 dp y fuera del primer arranque
                 VerticalLayout {
                     width: root.riel-visible ? 128px : 0px;

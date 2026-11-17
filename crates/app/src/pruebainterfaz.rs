@@ -503,6 +503,22 @@ async fn fase3(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
         );
     }
 
+    // E9: la barra de versión nueva mide lo de su botón más un poco de aire (antes sumaba 64 px por el botón de 48).
+    ui.window().set_size(slint::LogicalSize::new(1280.0, 800.0));
+    esperar(300).await;
+    let sin_barra = ui.get_area_alto();
+    ui.set_aviso_texto(SharedString::from(nucleo::actualizacion::aviso("0.2.7", "0.2.1")));
+    ui.set_aviso_boton(SharedString::from(nucleo::actualizacion::BOTON_ACTUALIZAR));
+    ui.set_aviso_visible(true);
+    esperar(300).await;
+    let barra = sin_barra - ui.get_area_alto();
+    ui.set_aviso_visible(false);
+    a.anotar(
+        barra > 0.0 && barra <= 48.0,
+        "la barra de versión nueva no pasa de 48 px",
+        &format!("alto de la barra: {barra} px"),
+    );
+
     // D27, A3: el asa no deja el panel por debajo de su alto mínimo; con lugar de sobra, el tope es 600.
     for (h, tope) in [(600.0, false), (1400.0, true)] {
         ui.window().set_size(slint::LogicalSize::new(1280.0, h));

@@ -21,7 +21,11 @@ ESC-007 | escritura-compositor | PART-016 | pruebaronda | «conversación que no
 ESC-008 | escritura-compositor | PART-016 | pruebaronda | «operación como texto, con el aviso una vez por ronda»
 ESC-009 | escritura-compositor | PART-016 | pruebaronda | «resultado de la operación»
 ESC-012 | escritura-compositor | PART-016 | pruebaronda | «pegar el redactor con el adjunto»
-INV-ESC-001 | escritura-compositor | PART-013 | cargo test | la_app_solo_pide_operaciones_permitidas
+ESC-014 | escritura-compositor | PART-021 | pruebaronda | «enviar a todos: «Sí», un clic por panel elegible y Kimi con Enter»
+ESC-015 | escritura-compositor | PART-021 | pruebaronda | «enviar a todos: «No» no envía»; «enviar a todos: lector, Esc es «No» y el foco vuelve al botón»
+ESC-016 | escritura-compositor | PART-021 | pruebaronda | «enviar a todos: cada falla dice por qué en su cabecera»; «enviar al integrador con el div de DeepSeek»
+ESC-017 | escritura-compositor | PART-021 | pruebaronda | «enviar a todos: sin comprobar no se reintenta»
+INV-ESC-001 | escritura-compositor | PART-021 | cargo test | la_app_envia_solo_con_confirmacion
 INV-ESC-002 | escritura-compositor | PART-013 | autoprueba | «saltos de línea y borrador»
 INV-ESC-003 | escritura-compositor | PART-013 | autoprueba | «leer el compositor»
 INT-004 | integrador | PART-016 | pruebaronda | «pegar el integrador»

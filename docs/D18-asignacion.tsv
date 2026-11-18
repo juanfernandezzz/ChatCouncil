@@ -65,7 +65,11 @@ ESC-010	escritura-compositor	sin parte	PART-006	faltaba en PART-004; verificaci�
 ESC-011	escritura-compositor	sin parte	PART-006	verificación pura del prompt de rol por igualdad (Cuerpos.cs)
 ESC-012	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
 ESC-013	escritura-compositor	sin parte	PART-007	marcar pegada solo la operación verificada (Puerta.cs)
-INV-ESC-001	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
+ESC-014	escritura-compositor	sin parte	PART-021	envío masivo con confirmación (D33, ADR-0011)
+ESC-015	escritura-compositor	sin parte	PART-021	envío masivo con confirmación (D33, ADR-0011)
+ESC-016	escritura-compositor	sin parte	PART-021	envío masivo con confirmación (D33, ADR-0011)
+ESC-017	escritura-compositor	sin parte	PART-021	envío masivo con confirmación (D33, ADR-0011)
+INV-ESC-001	escritura-compositor	E7	PART-021	reemplazado por D33: la app envía solo con confirmación (ADR-0011)
 INV-ESC-002	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
 INV-ESC-003	escritura-compositor	sin parte	E7	escritura en el compositor de la página o flujo de la interfaz
 INF-001	informe-final	PART-010	PART-010	destino del plan (D14)

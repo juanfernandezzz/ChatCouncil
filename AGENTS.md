@@ -15,13 +15,13 @@ La referencia de funciones es github.com/juanfernandezzz/ChatCouncil-Unity: todo
 
 1. **Rendimiento** por sobre todo, con las mismas funciones. Se demuestra midiendo contra la línea base de ChatCouncil-Unity: misma máquina, mismas condiciones, tres corridas. Toda afirmación de rendimiento trae su medición.
 2. **Autonomía dentro del lote.** Un error o una mejora dentro del alcance del lote: lo aplicas e informas qué decidiste y por qué. Fuera del alcance: lo reportas y lo dejas como está.
-3. **Juan decide; Code ejecuta.** Los textos (prompts de los modelos, specs, planes, textos de la interfaz, documentación) llegan redactados desde el chat y se copian literal. Juan hace solo lo que exige su cuenta: login, captchas, enviar en un panel y decidir cuándo capturar. Todo otro input en la app o el escritorio lo haces tú con agent-desktop; nunca le pides a Juan un clic.
+3. **Juan decide; Code ejecuta.** Los textos (prompts de los modelos, specs, planes, textos de la interfaz, documentación) llegan redactados desde el chat y se copian literal. Juan hace solo lo que exige su cuenta: login, captchas, pulsar «Enviar a todos» y «Sí» (o enviar en un panel) y decidir cuándo capturar. Todo otro input en la app o el escritorio lo haces tú con agent-desktop; nunca le pides a Juan un clic.
 
 ## Lo que no se negocia
 
 - BYOA: la app usa las cuentas de Juan en las páginas de los proveedores; nunca claves de API. Credenciales, cookies y tokens nunca se leen, copian ni registran. Captchas y cambios irreversibles en cuentas los hace Juan.
 - Los paneles son las páginas de los proveedores.
-- La app nunca envía: Juan envía a mano y decide cuándo capturar.
+- La app envía solo cuando Juan pulsa «Enviar a todos» y confirma con «Sí» en la ventana de esa etapa; Juan decide cuándo capturar. agent-desktop nunca pulsa «Enviar a todos» ni «Sí» sobre la carpeta real (ADR-0011).
 - El registro de investigación es append-only.
 - Los proveedores salen de datos (specs); el código funciona con cualquier cantidad.
 - Todo resultado es real; nunca se simula.

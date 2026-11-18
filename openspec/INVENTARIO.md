@@ -11,7 +11,7 @@ Las columnas de prueba cuentan requisitos e invariantes. «Solo android» cuenta
 | captura | 16 | 3 | 13 | 0 | 6 | 0 | 0 |
 | datos | 2 | 0 | 0 | 2 | 0 | 0 | 0 |
 | diagnosticos | 5 | 1 | 0 | 1 | 5 | 0 | 0 |
-| escritura-compositor | 13 | 3 | 4 | 0 | 12 | 0 | 1 |
+| escritura-compositor | 17 | 3 | 4 | 4 | 12 | 0 | 1 |
 | informe-final | 14 | 3 | 13 | 1 | 3 | 0 | 1 |
 | integrador | 9 | 2 | 8 | 2 | 1 | 0 | 0 |
 | interfaz | 24 | 7 | 6 | 0 | 25 | 1 | 0 |
@@ -22,7 +22,7 @@ Las columnas de prueba cuentan requisitos e invariantes. «Solo android» cuenta
 | registro | 17 | 2 | 15 | 4 | 0 | 0 | 0 |
 | ronda | 17 | 3 | 16 | 3 | 1 | 0 | 3 |
 | verificadores | 9 | 3 | 8 | 0 | 4 | 0 | 2 |
-| **Total** | **204** | **43** | **118** | **18** | **111** | **3** | **8** |
+| **Total** | **208** | **43** | **118** | **22** | **111** | **3** | **8** |
 
 ## Conflictos resueltos
 

@@ -10,3 +10,9 @@
   (Node v24.16.0; código de salida 0.)
 - Resultado: `pagina.js`, 19.301 bytes, saltos LF, sha256 39b048ce1545cf1d6fcb16f3c4e55f65c882d9cd9dc0d1dea261ed8daec15161. Es el mismo sha256 que el `unity/Assets/StreamingAssets/pagina.js` que la Unity compiló en su carpeta.
 - No se modifica. La prueba `pagina_js_es_identico_al_de_la_unity` de crates/paneles compara este sha256.
+
+# Origen de enviar.js (ESC-016, ADR-0011)
+
+- Nuevo en este repo, no viene de la Unity: la Unity no envía. Escrito a mano en JavaScript (PART-021, D33).
+- Usa las funciones de `pagina.js` (`leerCompositor`, `chatVacio`, `buscar`, `buscarTodos`, `dormir`), que se inyecta antes; sin ellas no envía.
+- sha256 1f14adcf851139012ac2785fc3d9e5685e33615720e109f28a84f4510822b938 (PART-021). `crates/paneles` lo incluye con `include_str!`; el instalador no cambia.

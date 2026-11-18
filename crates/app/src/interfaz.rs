@@ -77,6 +77,13 @@ pub struct Ronda {
     ronda_vista: RefCell<Option<String>>,
     /// Lo pegado en cada operador en esta ronda (PantallaRonda.operaciones).
     pub operaciones: RefCell<HashMap<String, Operacion>>,
+    /// ESC-016: lo que quedó escrito en cada compositor, tal como se escribió (no el prompt registrado).
+    pegados: RefCell<HashMap<String, Texto>>,
+    /// INV-ESC-001: los paneles en que «Enviar a todos» ya pulsó, comprobado o no; un pegado nuevo los quita.
+    pulsados: RefCell<HashSet<String>>,
+    /// ESC-016 y ESC-017: por qué no se envió; la cabecera lo dice mientras el panel siga pegado sin enviar.
+    /// Ok: el texto de uno de los estados de enviar.js; Err: el error del panel o del script.
+    falla_envio: RefCell<HashMap<String, Result<&'static str, String>>>,
     /// La etapa del último refresco: los menús y la lista la usan sin esperar a la Puerta.
     etapa: Cell<&'static str>,
     /// Lo último que dijo la Puerta: los menús se arman con esto, sin esperarla.
@@ -132,6 +139,13 @@ impl Ronda {
         } else {
             vec![id.to_string()]
         }
+    }
+
+    /// ESC-016: lo escrito en ese compositor; un pegado nuevo lo vuelve a habilitar para enviar.
+    fn anotar_pegado(&self, id: &str, t: &Texto) {
+        self.pegados.borrow_mut().insert(id.into(), t.clone());
+        self.pulsados.borrow_mut().remove(id);
+        self.falla_envio.borrow_mut().remove(id);
     }
 
     /// Los paneles cuyo pegado falló en la operación o en los roles.
@@ -617,6 +631,7 @@ impl Interfaz {
         al!(on_area_cambio, |x| x.ubicar_ronda());
         al!(on_paso, |x| x.paso());
         al!(on_accion_panel, |x| x.accion_panel());
+        al!(on_enviar_a_todos, |x| x.enviar());
         al!(on_mover, |x, paso: i32| x.mover(paso));
         al!(on_dialogo_aceptar, |x| x.aceptar_dialogo());
         al!(on_dialogo_cancelar, |x| x.cerrar_capa());
@@ -1086,6 +1101,9 @@ impl Interfaz {
             falla_operacion: RefCell::default(),
             falla_rol: RefCell::default(),
             falla_al_abrir: RefCell::default(),
+            pegados: RefCell::default(),
+            pulsados: RefCell::default(),
+            falla_envio: RefCell::default(),
             aviso_operacion: RefCell::default(),
             operacion_por_texto: Cell::new(false),
             ronda_vista: RefCell::default(),
@@ -1285,6 +1303,9 @@ impl Interfaz {
                         r.operaciones.borrow_mut().clear();
                         r.falla_operacion.borrow_mut().clear();
                         r.falla_rol.borrow_mut().clear();
+                        r.pegados.borrow_mut().clear();
+                        r.pulsados.borrow_mut().clear();
+                        r.falla_envio.borrow_mut().clear();
                         // En una ronda nueva los roles muestran la conversación de la anterior: salen hasta su etapa.
                         x.sacar_roles(&r);
                     }
@@ -1295,6 +1316,24 @@ impl Interfaz {
                     let situacion = r
                         .situacion_de_la_interfaz(r.visible.borrow().as_deref(), paso.etapa)
                         .unwrap_or(situacion);
+                    // ESC-016 y ESC-017: por qué no se envió, mientras el panel siga pegado sin enviar.
+                    let sin_enviar = r.visible.borrow().as_ref().and_then(|v| {
+                        let i = ids.iter().position(|x| x == v)?;
+                        (estados[i] == "pegado-falta-enviar")
+                            .then(|| r.falla_envio.borrow().get(v).cloned())
+                            .flatten()
+                    });
+                    let situacion = match sin_enviar {
+                        Some(f) => Situacion {
+                            problema: Some(match &f {
+                                Ok(t) => t.to_string(),
+                                Err(e) => e.clone(),
+                            }),
+                            corto: f.ok(),
+                            accion: None,
+                        },
+                        None => situacion,
+                    };
                     *r.vista.borrow_mut() = Vista {
                         accion_paso: paso.accion,
                         estados: ids.iter().cloned().zip(estados.iter().copied()).collect(),
@@ -1401,7 +1440,17 @@ impl Interfaz {
 
     fn spec_de(&self, id: &str) -> String {
         if self.prueba_ronda {
-            return SPEC_DE_LA_PRUEBA.into();
+            // ESC-016: el envío de cada proveedor como en su spec real: Kimi con Enter, DeepSeek con un div.
+            let submit = match id {
+                "kimi" => "{\"kind\":\"key\",\"key\":\"Enter\"}",
+                "deepseek" => "{\"kind\":\"click\",\"selector\":\"#enviar-div\"}",
+                _ => "{\"kind\":\"click\",\"selector\":\"#enviar\"}",
+            };
+            return SPEC_DE_LA_PRUEBA.replacen(
+                "\"version\"",
+                &format!("\"submit\":{submit},\"timeouts\":{{\"submitReadyMs\":1500}},\"version\""),
+                1,
+            );
         }
         datos::spec_de(&self.specs, id).unwrap_or_default()
     }
@@ -1603,7 +1652,7 @@ impl Interfaz {
         let n = r.operadores.len();
         self.abrir_dialogo(
             "Antes de pegar la pregunta",
-            &format!("En cada panel, activa a mano la búsqueda web o la investigación profunda del proveedor. En investigación profunda el aviso de terminado es una estimación: captura cuando veas el informe completo. La app pega la pregunta en los {n} paneles; tú la revisas y la envías en cada uno."),
+            &format!("En cada panel, activa a mano la búsqueda web o la investigación profunda del proveedor. En investigación profunda el aviso de terminado es una estimación: captura cuando veas el informe completo. La app pega la pregunta en los {n} paneles; la revisas y la envías con «Enviar a todos» o a mano en cada uno."),
             false,
             Some("No volver a avisar en esta sesión"),
             &format!("Pegar en los {n}"),
@@ -1620,7 +1669,9 @@ impl Interfaz {
             return Err("el panel no está abierto".into());
         };
         p.escribir(&self.spec_de(id), pregunta, paneles::ESPERA_ESCRIBIR)
-            .await
+            .await?;
+        r.anotar_pegado(id, pregunta);
+        Ok(())
     }
 
     /// Pega en todos a la vez (techo de 60 s cada uno); un fallo no tumba a los demás. Después abre la ronda
@@ -1668,7 +1719,9 @@ impl Interfaz {
         match hecho {
             Err(e) => self.resultado(&ronda::ronda_no_abierta(&e), true),
             Ok(()) if ok == n => self.resultado(
-                &format!("Pegada en los {ok} paneles. Revísala y envíala en cada uno."),
+                &format!(
+                    "Pegada en los {ok} paneles. Revísala y envíala con «Enviar a todos» o a mano."
+                ),
                 false,
             ),
             Ok(()) => self.resultado(
@@ -1713,6 +1766,148 @@ impl Interfaz {
             Err(e) => self.resultado(&format!("No se pegó en {nombre}: {e}"), true),
         }
         self.refrescar();
+    }
+
+    /// ESC-014 y ESC-015: «Enviar a todos» abre siempre la ventana de la etapa; solo «Sí, enviar» envía, y solo
+    /// en los paneles pegados sin enviar en que todavía no pulsó (INV-ESC-001).
+    pub fn enviar(&self) {
+        let Some(r) = self.tomar() else { return };
+        let yo = self.yo();
+        let _ = slint::spawn_local(async move {
+            let Some(x) = yo.upgrade() else { return };
+            // El diálogo suelta la acción; «Sí, enviar» la vuelve a tomar.
+            x.ocupar(&r, false);
+            let Some((titulo, indicacion)) = confirmacion_de_envio(r.etapa.get()) else {
+                return;
+            };
+            let ids: Vec<String> = match x.estados(&r).await {
+                Ok(e) => e
+                    .into_iter()
+                    .filter(|(id, e)| {
+                        *e == "pegado-falta-enviar" && !r.pulsados.borrow().contains(id)
+                    })
+                    .map(|(id, _)| id)
+                    .collect(),
+                Err(e) => return x.resultado(&e, true),
+            };
+            if ids.is_empty() {
+                return x.resultado("No hay nada pegado sin enviar en esta etapa.", false);
+            }
+            let nombres: Vec<String> = ids.iter().map(|id| nombre_proveedor(id)).collect();
+            x.abrir_dialogo(
+                titulo,
+                &format!(
+                    "{indicacion}\n\nSe envía en: {}. La app pulsa enviar solo donde el texto sigue tal como lo pegó.\n\n¿Está activado lo necesario en cada panel?",
+                    nombres.join(", ")
+                ),
+                false,
+                None,
+                "Sí, enviar",
+                Box::new(move |x, _, _| {
+                    x.en_accion(move |x, r| async move { x.enviar_a_todos(&r, ids).await })
+                }),
+            );
+            x.ui.set_dialogo_cancelar_texto("No, todavía no".into());
+            x.ui.set_dialogo_foco_en_cancelar(true);
+            x.ui.set_capa_cual("enviar".into());
+        });
+    }
+
+    /// ESC-016 y ESC-017: en paralelo, como el pegado de la pregunta. Un fallo no detiene a los demás; nunca se
+    /// reintenta, y el estado de cada panel sale del sondeo, como tras enviar a mano.
+    async fn enviar_a_todos(&self, r: &Rc<Ronda>, ids: Vec<String>) {
+        let n = ids.len();
+        self.resultado(
+            &if n == 1 {
+                format!("Enviando en {}…", nombre_proveedor(&ids[0]))
+            } else {
+                format!("Enviando en {n} paneles…")
+            },
+            false,
+        );
+        // Tras reabrir la app la pregunta pegada no está en memoria: es la de la ronda.
+        let pregunta = match r.etapa.get() {
+            "investigacion" => r
+                .nucleo
+                .pedir(|p| p.pregunta_de_la_ronda())
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .flatten(),
+            _ => None,
+        };
+        let tareas: Vec<_> = ids
+            .iter()
+            .map(|id| {
+                let texto = r
+                    .pegados
+                    .borrow()
+                    .get(id)
+                    .cloned()
+                    .or_else(|| pregunta.clone());
+                let panel = r.paneles.borrow().get(id).cloned();
+                let spec = self.spec_de(id);
+                slint::spawn_local(async move {
+                    match (panel, texto) {
+                        (Some(p), Some(t)) => p.pulsar_enviar(&spec, &t).await,
+                        (None, _) => Err("el panel no está abierto".into()),
+                        // Sin saber qué se pegó no se puede comprobar que el compositor sigue igual.
+                        (_, None) => {
+                            Err("no se sabe qué se pegó en este panel: envíalo a mano".into())
+                        }
+                    }
+                })
+            })
+            .collect();
+        let mut ok = 0;
+        for (tarea, id) in tareas.into_iter().zip(&ids) {
+            let res = match tarea {
+                Ok(t) => t.await,
+                Err(e) => Err(e.to_string()),
+            };
+            let falla = match res {
+                Ok((estado, comprobado)) => {
+                    if estado == "enviado-pulsado" {
+                        r.pulsados.borrow_mut().insert(id.clone());
+                    }
+                    match (estado.as_str(), comprobado) {
+                        ("enviado-pulsado", true) => None,
+                        ("enviado-pulsado", false) => texto_de_envio("sin-comprobar").map(Ok),
+                        (e, _) => Some(
+                            texto_de_envio(e).ok_or_else(|| format!("enviar.js respondió «{e}».")),
+                        ),
+                    }
+                }
+                // Un error puede llegar después del clic (la página se recargó y perdió el script): se cuenta
+                // como pulsado para no ofrecerlo otra vez; se envía a mano o se vuelve a pegar.
+                Err(e) => {
+                    r.pulsados.borrow_mut().insert(id.clone());
+                    Some(Err(e))
+                }
+            };
+            match falla {
+                None => {
+                    r.falla_envio.borrow_mut().remove(id);
+                    ok += 1;
+                }
+                Some(f) => {
+                    r.falla_envio.borrow_mut().insert(id.clone(), f);
+                }
+            }
+        }
+        let t = if ok == n && n == 1 {
+            format!(
+                "Enviado en {}. Captura cuando termine.",
+                nombre_proveedor(&ids[0])
+            )
+        } else if ok == n {
+            format!("Enviado en los {n} paneles. Captura cuando terminen.")
+        } else {
+            format!(
+                "Enviado en {ok} de {n}. Los que no se enviaron dicen por qué en su cabecera; envíalos a mano."
+            )
+        };
+        self.resultado(&t, ok < n);
     }
 
     /// CAP-003 e INV-CAP-002: lee esos paneles en paralelo (techo de 60 s) y los registra según la etapa del
@@ -1937,7 +2132,7 @@ impl Interfaz {
         let r = r.clone();
         self.abrir_dialogo(
             "Antes de pegar la operación",
-            "La app abre una conversación nueva en cada panel (si siguiera el hilo anterior, el operador leería su propia respuesta y la evaluación dejaría de ser ciega), comprueba que quede vacía, pega solo el prompt y adjunta el archivo de ese proveedor. Antes de enviar, activa en cada panel el razonamiento si el proveedor lo tiene, sin búsqueda web: la operación compara las respuestas del archivo. Nada se envía: revisa que el archivo quedó adjunto y envía tú.",
+            "La app abre una conversación nueva en cada panel (si siguiera el hilo anterior, el operador leería su propia respuesta y la evaluación dejaría de ser ciega), comprueba que quede vacía, pega solo el prompt y adjunta el archivo de ese proveedor. Antes de enviar, activa en cada panel el razonamiento si el proveedor lo tiene, sin búsqueda web: la operación compara las respuestas del archivo. Revisa que el archivo quedó adjunto; después envía con «Enviar a todos» o a mano en cada panel.",
             false,
             Some("Pegarla como texto, sin archivo"),
             "Entendido, pegar",
@@ -2114,6 +2309,7 @@ impl Interfaz {
         if error.is_some() {
             return error;
         }
+        r.anotar_pegado(id, texto_);
         let (Some(cuerpo), Some(ruta)) = (cuerpo, ruta) else {
             return None;
         };
@@ -2977,6 +3173,9 @@ impl Interfaz {
         ui.set_dialogo_casilla_texto(texto(casilla.unwrap_or("")));
         ui.set_dialogo_casilla(false);
         ui.set_dialogo_aceptar_texto(texto(aceptar));
+        ui.set_dialogo_cancelar_texto("Cancelar".into());
+        ui.set_dialogo_foco_en_cancelar(false);
+        ui.set_capa_cual(SharedString::new());
         *self.al_aceptar.borrow_mut() = Some(accion);
         ui.set_capa_abierta(true);
         self.ubicar_ronda();
@@ -3112,6 +3311,54 @@ fn terminado(estado: &str) -> bool {
 }
 
 /// PantallaRonda.Refrescar: la etapa, el paso, los contadores y las filas, todo de la Puerta.
+/// ESC-015: el título y la indicación de la ventana de cada etapa que envía; None en las que no envían.
+pub(crate) fn confirmacion_de_envio(etapa: &str) -> Option<(&'static str, &'static str)> {
+    Some(match etapa {
+        "investigacion" => (
+            "Antes de enviar la pregunta",
+            "En cada panel debe estar activada la búsqueda web o la investigación profunda del proveedor.",
+        ),
+        "operacion" => (
+            "Antes de enviar la operación",
+            "En cada panel debe estar activado el razonamiento si el proveedor lo tiene, sin búsqueda web. Si va con archivo, debe verse adjunto.",
+        ),
+        "integracion" => (
+            "Antes de enviar al integrador",
+            "En el panel del integrador debe estar activado el razonamiento si el proveedor lo tiene, sin búsqueda web.",
+        ),
+        "verificacion" => (
+            "Antes de enviar a los verificadores",
+            "En el panel de cada verificador deben estar activados la búsqueda web y el razonamiento, no la investigación profunda.",
+        ),
+        "redaccion" => (
+            "Antes de enviar al redactor",
+            "En el panel del redactor debe estar activado el razonamiento si el proveedor lo tiene, sin búsqueda web. Si va con archivo, debe verse adjunto.",
+        ),
+        _ => return None,
+    })
+}
+
+/// ESC-016 y ESC-017: lo que dice la cabecera de un panel que «Enviar a todos» no envió.
+pub(crate) fn texto_de_envio(estado: &str) -> Option<&'static str> {
+    Some(match estado {
+        "compositor-distinto" => {
+            "el texto del compositor cambió desde que se pegó: no se envía. Envíalo a mano o vuelve a pegar."
+        }
+        "compositor-vacio" => "el compositor está vacío: no hay nada que enviar.",
+        "ya-enviado" => {
+            "este panel ya tiene un mensaje enviado en esta etapa: no se vuelve a enviar."
+        }
+        "sin-boton" => "no se encontró el botón de enviar de este proveedor: envíalo a mano.",
+        "boton-desactivado" => {
+            "el botón de enviar está desactivado: revisa el panel y envíalo a mano."
+        }
+        "sin-comprobar" => {
+            "se pulsó enviar, pero no se pudo comprobar que salió: míralo en el panel antes de volver a enviar."
+        }
+        _ => return None,
+    })
+}
+
 fn mostrar_ronda(
     ui: &Ventana,
     filas: &VecModel<Fila>,
@@ -3132,6 +3379,7 @@ fn mostrar_ronda(
         .unwrap_or(0);
     ui.set_etapa_actual(actual as i32);
     ui.set_etapa_pregunta(paso.etapa == "pregunta");
+    ui.set_enviar_visible(confirmacion_de_envio(paso.etapa).is_some());
     ui.set_barra_titulo(texto(&ronda::titulo_de_etapa(paso.etapa)));
     let de_operadores: Vec<&str> = r.operadores.iter().map(|id| estado_de(id)).collect();
     let enviados = de_operadores

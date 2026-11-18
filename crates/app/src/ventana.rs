@@ -393,7 +393,19 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
         callback mover(int);
         // IFZ-024: el diálogo propio, con la página apartada mientras está abierto.
         in-out property <bool> capa-abierta;
-        changed capa-abierta => { Modal.abierto = root.cajon-abierto || root.capa-abierta || root.menu-abierto; root.area-cambio(); if (!root.cajon-abierto && !root.capa-abierta && !root.menu-abierto) { teclas.focus(); } }
+        changed capa-abierta => { Modal.abierto = root.cajon-abierto || root.capa-abierta || root.menu-abierto; root.area-cambio(); if (!root.cajon-abierto && !root.capa-abierta && !root.menu-abierto) { root.devolver-foco-de-la-capa(); } }
+        // ESC-015: la ventana de «Enviar a todos» devuelve el foco a su botón, si sigue a la vista.
+        in property <string> capa-cual;
+        function devolver-foco-de-la-capa() {
+            if (root.seccion == "ronda" && root.capa-cual == "enviar" && root.enviar-visible) {
+                if (root.ancha) { enviar-ancha.focus(); } else { enviar-angosta.focus(); }
+            } else { teclas.focus(); }
+        }
+        // ESC-014: «Enviar a todos», junto al paso de las etapas que envían.
+        in property <bool> enviar-visible;
+        callback enviar-a-todos();
+        in property <string> dialogo-cancelar-texto: "Cancelar";
+        in property <bool> dialogo-foco-en-cancelar;
         in property <string> dialogo-titulo;
         in property <string> dialogo-texto;
         in property <bool> dialogo-con-campo;
@@ -635,6 +647,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                             HorizontalLayout {
                                 spacing: 12px;
                                 paso-ancha := Boton { text: root.paso-texto; primario: true; habilitado: root.paso-habilitado && !root.ocupado; clicked => { root.paso(); } }
+                                enviar-ancha := Boton { visible: root.enviar-visible; width: root.enviar-visible ? self.preferred-width : 0px; text: "Enviar a todos"; etiqueta: "Enviar a todos los paneles pegados de esta etapa"; habilitado: !root.ocupado; clicked => { root.enviar-a-todos(); } }
                                 VerticalLayout {
                                     Parrafo { text: root.frase; }
                                     Secundario { text: root.contadores; }
@@ -726,7 +739,11 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                                 maximo: root.maximo-del-asa();
                                 menu-contextual(a, b, h, x, y) => { return root.menu-contextual(a, b, h, x, y); }
                             }
-                            paso-angosta := Boton { text: root.paso-texto; primario: true; habilitado: root.paso-habilitado && !root.ocupado; horizontal-stretch: 1; clicked => { root.paso(); } }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                paso-angosta := Boton { text: root.paso-texto; primario: true; habilitado: root.paso-habilitado && !root.ocupado; horizontal-stretch: 1; clicked => { root.paso(); } }
+                                enviar-angosta := Boton { visible: root.enviar-visible; width: root.enviar-visible ? self.preferred-width : 0px; text: "Enviar a todos"; etiqueta: "Enviar a todos los paneles pegados de esta etapa"; habilitado: !root.ocupado; clicked => { root.enviar-a-todos(); } }
+                            }
                             Parrafo { text: root.resultado; color: root.resultado-problema ? Tono.problema : Palette.foreground; accessible-role: text; accessible-label: self.text; accessible-live-region: polite; }
                             Parrafo { text: root.frase; }
                             HorizontalLayout {
@@ -1007,14 +1024,15 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
             // IFZ-024: el diálogo de la ronda. «Cancelar» o tocar el fondo lo cierran sin hacer nada.
             if root.capa-abierta : Rectangle {
                 background: #00000080;
-                // Como AbrirDialogo: el foco va al campo si lo hay; si no, al botón de aceptar.
-                init => {
-                    if (root.dialogo-con-campo) { dialogo-campo-edit.focus(); } else { dialogo-aceptar-boton.focus(); }
+                // Como AbrirDialogo: el foco va al campo si lo hay; si no, al botón de aceptar (ESC-015: a «No»).
+                function enfocar() {
+                    if (root.dialogo-con-campo) { dialogo-campo-edit.focus(); }
+                    else if (root.dialogo-foco-en-cancelar) { dialogo-cancelar-boton.focus(); }
+                    else { dialogo-aceptar-boton.focus(); }
                 }
+                init => { self.enfocar(); }
                 property <int> escapes: Modal.escapes;
-                changed escapes => {
-                    if (root.dialogo-con-campo) { dialogo-campo-edit.focus(); } else { dialogo-aceptar-boton.focus(); }
-                }
+                changed escapes => { self.enfocar(); }
                 TouchArea { clicked => { root.dialogo-cancelar(); } }
                 Rectangle {
                     width: min(560px, parent.width - 32px);
@@ -1024,7 +1042,13 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                     accessible-role: groupbox;
                     accessible-label: root.dialogo-titulo;
                     TouchArea { }
-                    VerticalLayout {
+                    // ESC-015: Esc equivale a «Cancelar» (en «Enviar a todos», a «No, todavía no»).
+                    FocusScope {
+                      key-pressed(e) => {
+                        if (e.text == Key.Escape) { root.dialogo-cancelar(); return accept; }
+                        reject
+                      }
+                      VerticalLayout {
                         padding: 16px;
                         spacing: 12px;
                         TituloBloque { text: root.dialogo-titulo; }
@@ -1046,8 +1070,9 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                             spacing: 8px;
                             alignment: start;
                             dialogo-aceptar-boton := Boton { text: root.dialogo-aceptar-texto; primario: true; en-modal: true; clicked => { root.dialogo-aceptar(); } }
-                            Boton { text: "Cancelar"; en-modal: true; clicked => { root.dialogo-cancelar(); } }
+                            dialogo-cancelar-boton := Boton { text: root.dialogo-cancelar-texto; en-modal: true; clicked => { root.dialogo-cancelar(); } }
                         }
+                      }
                     }
                 }
             }

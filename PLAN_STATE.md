@@ -109,6 +109,11 @@ Next: COMPLETE
   - Outcome: Comparación medida contra la Unity (M1, M2, M4, M5) con la máquina en reposo
   - Evidence: recorded
 
+- [x] Part 21: plans/PART21_PLAN.ai.md
+  - Scenario: SCN-021
+  - Outcome: Enviar a todos con confirmación en las cinco etapas
+  - Evidence: recorded
+
 ## Notes
 
 - This file is generated from MASTER_PLAN.md and PLAN_EVIDENCE.md.

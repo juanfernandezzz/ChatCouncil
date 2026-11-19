@@ -652,3 +652,11 @@ Comparacion medida contra la Unity (misma sesion, intercalada Unity/nueva x3, ma
 Artifacts:
 - bench/resultados/e8-comparacion.json
 - C:\cc-target\tmp\e8-avance.txt
+
+### PART-021
+
+D33 Enviar a todos con confirmacion (ESC-014..017, INV-ESC-001). Rojo: pruebaronda 91/100 sin botones en ronda.html. Verde: cargo test 24/11/191(4 ign)/15/14(1 ign); autoprueba 66/66; pruebaronda 100/100 (envio de 7 en 394 ms; 5 corridas previas mediana 402 ms, CPU maquina 17-80 %, orientativo D16); pruebainterfaz 16/16, 9/9, 9/9; fmt --check 0; clippy -D warnings 0. pagina.js sha256 39b048ce...5161 sin cambio; enviar.js 1f14adcf...b938. CPU en reposo 30 s, release, intercalado A=ba0da36 B=rama x3: A 0/0/0 %, B 0.01/0/0 % de la maquina; maquina 23.5-64.8 % (orientativo D16). Revision: ponytail-review Ship; ecc:rust-reviewer 1-4 corregidos, 5-7 reportados.
+
+Artifacts:
+- C:\cc-target\tmp\pr21-fin
+- C:\cc-target\tmp\pr21-rojo\ronda.txt

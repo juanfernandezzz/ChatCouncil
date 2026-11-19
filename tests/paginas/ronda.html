@@ -8,7 +8,34 @@
   <textarea id="compositor" rows="6" cols="60"></textarea>
   <input type="file" id="adjunto">
   <output id="archivo"></output>
+  <!-- ESC-014 (ADR-0011): el botón de enviar de cada proveedor según su spec de prueba: #enviar, el div de DeepSeek o
+       el Enter de Kimi. Cuenta los envíos en data-clics y anota la vía en data-via; con data-tragar="1" no envía nada,
+       como una página que ignora el clic. -->
+  <button id="enviar" type="button">Enviar</button>
+  <div id="enviar-div" role="button" tabindex="0">Enviar</div>
   <script>
+    function enviarPagina(via) {
+      const b = document.body;
+      b.dataset.clics = String(Number(b.dataset.clics || 0) + 1);
+      b.dataset.via = via;
+      if (b.dataset.tragar === "1") return;
+      const c = document.getElementById("compositor");
+      const u = document.createElement("div");
+      u.className = "usuario";
+      u.textContent = c.value;
+      document.getElementById("chat").append(u);
+      c.value = "";
+      if (!document.getElementById("detener")) {
+        const d = document.createElement("button");
+        d.id = "detener";
+        document.body.append(d);
+      }
+    }
+    document.getElementById("enviar").addEventListener("click", () => enviarPagina("boton"));
+    document.getElementById("enviar-div").addEventListener("click", () => enviarPagina("div"));
+    document.getElementById("compositor").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviarPagina("enter"); }
+    });
     if (new URLSearchParams(location.search).get("sucio") === "1") {
       const r = document.createElement("div");
       r.className = "respuesta";

@@ -1284,6 +1284,18 @@ async fn perfiles(
     );
     drop(c);
 
+    // ESC-016 (ADR-0011): en las pruebas solo se envía en las páginas de prueba; en otro host se niega antes de
+    // tocar la página.
+    p.navegar("about:blank").await?;
+    let envio = p.pulsar_enviar("{}", &"x".into()).await;
+    a.anotar(
+        envio
+            .as_ref()
+            .is_err_and(|e| e.starts_with("en las pruebas solo se envía en las páginas de prueba")),
+        "enviar se niega fuera de las páginas de prueba",
+        &format!("{envio:?}"),
+    );
+
     // Borrado de los datos del perfil.
     p.borrar_datos().await?;
     p.navegar(&format!("{ORIGEN}textarea.html")).await?;

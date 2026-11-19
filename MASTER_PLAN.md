@@ -105,3 +105,10 @@
   - Scenario: SCN-020
   - Outcome: Comparación medida contra la Unity (M1, M2, M4, M5) con la máquina en reposo
   - Evidence: recorded
+
+## Phase 4: E9 · Recorrido real
+
+- [x] Part 21: Read `plans/PART21_PLAN.ai.md`
+  - Scenario: SCN-021
+  - Outcome: Enviar a todos con confirmación en las cinco etapas
+  - Evidence: recorded

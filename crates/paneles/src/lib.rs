@@ -1,6 +1,7 @@
 //! Los paneles: las páginas de los proveedores en webviews hijos de la ventana de la app (ADR-0010).
-//! Solo ejecuta. No expone enviar, clic ni teclas sobre la página, ni lectura de cookies o de
-//! almacenamiento (ADR-0010, puntos 7 y 8): fuera de este crate solo existen las funciones de abajo.
+//! Solo ejecuta. El único envío es `Panel::pulsar_enviar` (ADR-0011, INV-ESC-001); no expone clic ni teclas
+//! sueltos sobre la página, ni lectura de cookies o de almacenamiento (ADR-0010, puntos 7 y 8): fuera de este
+//! crate solo existen las funciones de abajo.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BinaryHeap, HashMap};
@@ -22,6 +23,10 @@ use wry::{Rect, WebContext, WebView, WebViewBuilder};
 
 /// DAT-003: el script de página de la Unity, compilado e idéntico (datos/pagina/ORIGEN.md).
 pub const PAGINA_JS: &str = include_str!("../../../datos/pagina/pagina.js");
+/// ESC-016 (ADR-0011): el envío, aparte de pagina.js y nuevo (no viene de la Unity).
+const ENVIAR_JS: &str = include_str!("../../../datos/pagina/enviar.js");
+/// Lo que espera un envío: el botón hasta submitReadyMs (8 s) más la comprobación de 15 s, con margen.
+const ESPERA_ENVIAR: Duration = Duration::from_secs(40);
 
 /// PAN-001: los switches que mantienen activos los paneles ocultos, como en la Unity.
 pub const SWITCHES: [&str; 3] = [
@@ -683,6 +688,47 @@ impl Panel {
                 "{op} no es una operación permitida del script de página."
             ));
         }
+        self.pedir_al_script(None, op, spec, texto, espera).await
+    }
+
+    /// ESC-016 y ESC-017: pulsa enviar con enviar.js solo si el compositor sigue con `texto` y el chat no tiene
+    /// un mensaje enviado; responde el estado de enviar.js y si se comprobó que salió. Nunca reintenta.
+    /// INV-ESC-001: en las pruebas, solo en las páginas de prueba.
+    pub async fn pulsar_enviar(&self, spec: &str, texto: &Texto) -> Result<(String, bool), String> {
+        if self.de_prueba {
+            let host = self
+                .ejecutar_o("location.hostname", ESPERA_CORTA, "sin host".into())
+                .await?;
+            if !HOSTS_DE_PRUEBA.iter().any(|h| host == format!("\"{h}\"")) {
+                return Err(format!(
+                    "en las pruebas solo se envía en las páginas de prueba, no en {host}"
+                ));
+            }
+        }
+        let r = self
+            .pedir_al_script(
+                Some(("__ccEnviar", ENVIAR_JS)),
+                "enviar",
+                spec,
+                Some(texto),
+                ESPERA_ENVIAR,
+            )
+            .await?;
+        Ok((
+            texto_de(campo(&r, "estado")).unwrap_or_default(),
+            campo(&r, "comprobado") == Some(&Valor::Bool(true)),
+        ))
+    }
+
+    /// Inyecta pagina.js (y, si viene, el script de `extra` con su objeto global) y hace el pedido al objeto.
+    async fn pedir_al_script(
+        &self,
+        extra: Option<(&str, &str)>,
+        op: &str,
+        spec: &str,
+        texto: Option<&Texto>,
+        espera: Duration,
+    ) -> Result<Valor, String> {
         // Revisión PART-011, hallazgo 3: cada script de adentro corta en lo que le queda a la operación,
         // así una página colgada no estira la espera hasta el techo de 90 s de cada ejecutar.
         let limite = Instant::now() + espera;
@@ -702,6 +748,15 @@ impl Panel {
                 return Err(format!("el script de página no cargó: {r}"));
             }
         }
+        let objeto = extra.map_or("__cc", |(o, _)| o);
+        if let Some((o, js)) = extra
+            && ejecutar(&format!("typeof window.{o}")).await? != "\"object\""
+        {
+            let r = ejecutar(&format!("{js}\n;'ok'")).await?;
+            if r != "\"ok\"" {
+                return Err(format!("{o} no cargó: {r}"));
+            }
+        }
         let id = format!("pedido-{}", self.siguiente_id.get());
         self.siguiente_id.set(self.siguiente_id.get() + 1);
         let mut pedido = b"{\"id\":".to_vec();
@@ -716,12 +771,12 @@ impl Panel {
             json::escapar(t, &mut pedido);
         }
         pedido.push(b'}');
-        let pedir = llamada("pedir", &String::from_utf8_lossy(&pedido));
+        let pedir = llamada("pedir", &String::from_utf8_lossy(&pedido), objeto);
         let r = ejecutar(&pedir).await?;
         if r != "\"ok\"" {
             return Err(format!("el script de página no tomó el pedido: {r}"));
         }
-        let consultar = llamada("consultar", &id);
+        let consultar = llamada("consultar", &id, objeto);
         loop {
             let crudo = ejecutar(&consultar).await?;
             let estado = json::leer(&crudo)
@@ -1137,9 +1192,9 @@ fn segundos(d: Duration) -> String {
     s.strip_suffix(".0").map(str::to_string).unwrap_or(s)
 }
 
-/// `window.__cc.<funcion>("<argumento>")`, con el argumento escapado como JSON.stringify.
-fn llamada(funcion: &str, argumento: &str) -> String {
-    let mut js = format!("window.__cc.{funcion}(").into_bytes();
+/// `window.<objeto>.<funcion>("<argumento>")`, con el argumento escapado como JSON.stringify.
+fn llamada(funcion: &str, argumento: &str, objeto: &str) -> String {
+    let mut js = format!("window.{objeto}.{funcion}(").into_bytes();
     json::escapar(&Texto::from(argumento), &mut js);
     js.push(b')');
     String::from_utf8_lossy(&js).into_owned()
@@ -1853,8 +1908,87 @@ mod pruebas {
     }
 
     #[test]
+    fn la_app_envia_solo_con_confirmacion() {
+        // INV-ESC-001 (ADR-0011): pagina.js sigue sin enviar; el único envío es pulsar_enviar (enviar.js), con la
+        // guardia de host de las pruebas, y la app lo llama en un solo lugar: enviar_a_todos, que corre solo desde
+        // la ventana de la etapa con «Sí, enviar».
+        let codigo = |f: &'static str| f.split("#[cfg(test)]").next().unwrap_or_default();
+        let lib = codigo(include_str!("lib.rs"));
+        assert_eq!(lib.matches("ENVIAR_JS").count(), 2, "la constante y su uso");
+        let cuerpo = &lib[lib
+            .find("pub async fn pulsar_enviar(")
+            .expect("pulsar_enviar")..];
+        let cuerpo = &cuerpo[..cuerpo.find("\n    }\n").unwrap_or(cuerpo.len())];
+        assert!(cuerpo.contains("ENVIAR_JS") && cuerpo.contains("HOSTS_DE_PRUEBA"));
+        // Los patrones se arman en partes para que esta misma prueba no se encuentre a sí misma.
+        let pulsar = concat!(".pulsar_", "enviar(");
+        let a_todos = concat!("enviar_a_", "todos(");
+        let app = [
+            (
+                "interfaz.rs",
+                codigo(include_str!("../../app/src/interfaz.rs")),
+            ),
+            (
+                "ventana.rs",
+                codigo(include_str!("../../app/src/ventana.rs")),
+            ),
+            ("main.rs", codigo(include_str!("../../app/src/main.rs"))),
+            (
+                "autoprueba.rs",
+                codigo(include_str!("../../app/src/autoprueba.rs")),
+            ),
+            (
+                "pruebaronda.rs",
+                codigo(include_str!("../../app/src/pruebaronda.rs")),
+            ),
+            (
+                "pruebainterfaz.rs",
+                codigo(include_str!("../../app/src/pruebainterfaz.rs")),
+            ),
+            ("lib.rs", lib),
+        ];
+        for (nombre, f) in app {
+            // `invoke_enviar_a_todos()` pulsa el botón de la ventana: abre la confirmación, no envía.
+            let t = f
+                .match_indices(a_todos)
+                .filter(|(i, _)| !f[..*i].ends_with("invoke_"))
+                .count();
+            let p = f.matches(pulsar).count();
+            // autoprueba llama una vez a pulsar_enviar fuera de las páginas de prueba: comprueba que se niega.
+            let (p_esperado, t_esperado) = match nombre {
+                "interfaz.rs" => (1, 2),
+                "autoprueba.rs" => (1, 0),
+                _ => (0, 0),
+            };
+            assert_eq!(
+                (p, t),
+                (p_esperado, t_esperado),
+                "{nombre}: pulsar_enviar y enviar_a_todos"
+            );
+        }
+        let interfaz = app[0].1;
+        let pulsa = interfaz.find(pulsar).unwrap();
+        let def = interfaz.find(concat!("fn enviar_a_", "todos(")).unwrap();
+        assert!(
+            def < pulsa,
+            "pulsar_enviar se llama dentro de enviar_a_todos"
+        );
+        let llamada_unica = interfaz
+            .match_indices(a_todos)
+            .map(|(i, _)| i)
+            .find(|i| !interfaz[..*i].ends_with("fn "))
+            .unwrap();
+        let dialogo =
+            &interfaz[interfaz[..llamada_unica].rfind("abrir_dialogo(").unwrap()..llamada_unica];
+        assert!(
+            dialogo.contains("\"Sí, enviar\""),
+            "enviar_a_todos corre solo desde la ventana con «Sí, enviar»"
+        );
+    }
+
+    #[test]
     fn la_app_solo_pide_operaciones_permitidas() {
-        // INV-ESC-001: la lista es exactamente la de pagina.js, ninguna envía, y todo correr del código pide una de ellas.
+        // La lista es exactamente la de pagina.js, ninguna envía, y todo correr del código pide una de ellas.
         let en_pagina: Vec<&str> = PAGINA_JS
             .split("case \"")
             .skip(1)

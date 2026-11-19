@@ -231,22 +231,22 @@ pub fn pool_de_investigadores(todos: &[&str], roles: &RolesElegidos) -> Vec<Stri
 pub fn recordatorio(etapa: &str) -> &'static str {
     match etapa {
         "pregunta" => {
-            "Escribe la pregunta. La app la pega en cada panel; tú la revisas y la envías."
+            "Escribe la pregunta. La app la pega en cada panel; la revisas y la envías con «Enviar a todos» o a mano."
         }
         "investigacion" => {
-            "En cada panel, activa la búsqueda web o la investigación profunda del proveedor, revisa y envía tú. Antes de capturar, abre el panel de fuentes."
+            "En cada panel, activa la búsqueda web o la investigación profunda del proveedor, revisa y envía. Antes de capturar, abre el panel de fuentes."
         }
         "operacion" => {
-            "En cada panel, activa el razonamiento, sin búsqueda web. Revisa la operación y envíala tú. Si va con archivo, comprueba que quedó adjunto."
+            "En cada panel, activa el razonamiento, sin búsqueda web. Revisa la operación y envíala. Si va con archivo, comprueba que quedó adjunto."
         }
         "integracion" => {
-            "En el panel del integrador, activa el razonamiento, sin búsqueda web. Revisa el prompt y envíalo tú."
+            "En el panel del integrador, activa el razonamiento, sin búsqueda web. Revisa el prompt y envíalo."
         }
         "verificacion" => {
-            "En el panel de cada verificador, activa la búsqueda web y el razonamiento, no la investigación profunda (devuelve un informe, no las líneas que pide el prompt); revisa y envía tú."
+            "En el panel de cada verificador, activa la búsqueda web y el razonamiento, no la investigación profunda (devuelve un informe, no las líneas que pide el prompt); revisa y envía."
         }
         "redaccion" => {
-            "En el panel del redactor, activa el razonamiento, sin búsqueda web. Comprueba que el archivo quedó adjunto y envía tú."
+            "En el panel del redactor, activa el razonamiento, sin búsqueda web. Comprueba que el archivo quedó adjunto y envía."
         }
         "informe" => "La carpeta del informe se abre al terminar.",
         _ => panic!("etapa desconocida: {etapa}"),
@@ -565,7 +565,7 @@ mod pruebas {
         }
         assert_eq!(
             recordatorio("verificacion"),
-            "En el panel de cada verificador, activa la búsqueda web y el razonamiento, no la investigación profunda (devuelve un informe, no las líneas que pide el prompt); revisa y envía tú."
+            "En el panel de cada verificador, activa la búsqueda web y el razonamiento, no la investigación profunda (devuelve un informe, no las líneas que pide el prompt); revisa y envía."
         );
     }
 }

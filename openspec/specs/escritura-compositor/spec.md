@@ -97,12 +97,32 @@ Propósito: pegar pregunta, operación y prompts de rol en el compositor de cada
 - Prueba: vector — motor/Tests/PuertaPruebas.cs:142 (UnaRondaEnteraDejaLosMismosHechosQueElTypeScript)
 - Plataforma: ambas
 
+### ESC-014 · Enviar a todos
+- Condición y resultado observable: con al menos un panel de la etapa en «pegado, falta enviar», el botón «Enviar a todos» está activo; al pulsarlo se abre la ventana de confirmación de la etapa. Sin paneles así, el botón está inactivo.
+- Fuente: ADR-0011
+- Prueba: pruebainterfaz y pruebaronda
+
+### ESC-015 · Ventana de confirmación
+- Condición y resultado observable: la ventana muestra las indicaciones de la etapa y los paneles donde se enviará. «No, todavía no» la cierra sin enviar nada; «Sí, enviar» envía. No se puede omitir.
+- Fuente: ADR-0011
+- Prueba: pruebainterfaz y pruebaronda
+
+### ESC-016 · Envío solo sobre lo pegado
+- Condición y resultado observable: en cada panel, antes de pulsar, la app compara el compositor con el texto pegado (la misma comparación de INV-ESC-003). Si no coincide, si el panel ya tiene un mensaje enviado en la etapa, o si el botón de envío no aparece o está desactivado, ese panel no se envía y su cabecera dice por qué. Un fallo no detiene a los demás.
+- Fuente: ADR-0011
+- Prueba: pruebaronda
+
+### ESC-017 · Envío comprobado, sin reintento
+- Condición y resultado observable: tras pulsar, la app espera hasta 15 s a que el compositor quede vacío o aparezca el mensaje del usuario. Si lo ve, el panel queda igual que tras un envío a mano. Si no lo ve, lo dice en la cabecera y no reenvía.
+- Fuente: ADR-0011
+- Prueba: pruebaronda
+
 ## Invariantes
 
-### INV-ESC-001 · La app nunca envía
-- Qué nunca pasa: el script de página o la app pulsan enviar; la persona envía a mano.
-- Fuente: pagina/src/pagina.ts:6-10 ; pagina/src/pagina.ts:183 ; panel/windows/panel.cpp:8-9
-- Prueba: manual — 1. Pegar la pregunta en los paneles de un perfil de prueba. 2. Esperar 2 minutos. 3. Comprobar que ningún chat tiene un mensaje enviado.
+### INV-ESC-001 · La app envía solo con confirmación
+- Qué nunca pasa: la app pulsa enviar sin que la persona haya pulsado «Enviar a todos» y respondido «Sí» en esa misma ventana; en un panel cuyo compositor no tiene exactamente el texto pegado; dos veces el mismo texto en el mismo panel; o, en una prueba, fuera de las páginas locales de tests/paginas.
+- Fuente: ADR-0011 (D33)
+- Prueba: pruebaronda — ESC-014 a ESC-017.
 
 ### INV-ESC-002 · Nunca se escribe encima de un borrador
 - Qué nunca pasa: el compositor con texto previo se sobrescribe.

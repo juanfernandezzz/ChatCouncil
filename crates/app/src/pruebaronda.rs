@@ -85,6 +85,46 @@ async fn enviar(i: &Interfaz, id: &str) -> Result<String, String> {
     en(i, id, "(() => { const c = document.getElementById('compositor'); const u = document.createElement('div'); u.className = 'usuario'; u.textContent = c.value; document.getElementById('chat').append(u); c.value = ''; const d = document.createElement('button'); d.id = 'detener'; document.body.append(d); return 'ok'; })()").await
 }
 
+/// ESC-014: cuántas veces la página recibió enviar y por qué vía (botón, div o Enter).
+async fn envios(i: &Interfaz, id: &str) -> (u32, String) {
+    let r = en(
+        i,
+        id,
+        "(document.body.dataset.clics || '0') + '|' + (document.body.dataset.via || '')",
+    )
+    .await
+    .ok()
+    .and_then(|r| json::leer(&r));
+    let t = match r {
+        Some(Valor::Texto(t)) => t.para_mostrar().into_owned(),
+        _ => String::new(),
+    };
+    let (n, via) = t.split_once('|').unwrap_or(("0", ""));
+    (n.parse().unwrap_or(0), via.to_string())
+}
+
+/// ESC-014/015: pulsa «Enviar a todos» y comprueba la ventana de confirmación de la etapa; «Sí» o «No».
+async fn con_el_boton(i: &Interfaz, etapa: &str, si: bool) -> (bool, String) {
+    let ui = &i.ui;
+    ui.invoke_enviar_a_todos();
+    hasta(10, || ui.get_capa_abierta()).await;
+    let (titulo, indicacion) = crate::interfaz::confirmacion_de_envio(etapa).unwrap_or_default();
+    let texto = ui.get_dialogo_texto().to_string();
+    let bien = ui.get_dialogo_titulo() == titulo
+        && texto.starts_with(&format!("{indicacion}\n\nSe envía en: "))
+        && texto.contains(". La app pulsa enviar solo donde el texto sigue tal como lo pegó.\n\n")
+        && texto.ends_with("¿Está activado lo necesario en cada panel?")
+        && ui.get_dialogo_aceptar_texto() == "Sí, enviar"
+        && ui.get_dialogo_cancelar_texto() == "No, todavía no";
+    let visto = format!("«{}» «{texto}»", ui.get_dialogo_titulo());
+    if si {
+        ui.invoke_dialogo_aceptar();
+    } else {
+        ui.invoke_dialogo_cancelar();
+    }
+    (bien, visto)
+}
+
 /// Lo que hace el proveedor: responder y terminar.
 async fn responder(i: &Interfaz, id: &str, texto: &str) -> Result<String, String> {
     let js = format!(
@@ -418,8 +458,153 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
         ),
     );
 
-    // La persona envía en los siete; el indicador lo ve.
+    // ESC-014/015: «Enviar a todos» con «No, todavía no» no envía nada.
+    let (dialogo_no, visto_no) = con_el_boton(i, "investigacion", false).await;
+    esperar(500).await;
+    let mut clics_no = 0;
     for id in POOL {
+        clics_no += envios(i, id).await.0;
+    }
+    a.anotar(
+        dialogo_no && clics_no == 0 && !ui.get_capa_abierta() && visto_no.contains("Kimi"),
+        "enviar a todos: «No» no envía",
+        &format!("{visto_no}; clics {clics_no}"),
+    );
+    // ESC-015 y accesibilidad: el lector lee título, cuerpo y botones; el foco empieza en «No, todavía no»; Esc es
+    // «No» y el foco vuelve a «Enviar a todos».
+    let w = lector::hwnd_de(ui.window()).ok_or("sin el HWND de la ventana")?;
+    ui.invoke_enviar_a_todos();
+    hasta(10, || ui.get_capa_abierta()).await;
+    esperar(500).await;
+    let leido = uia(w, |u| {
+        let nodos = u.nodos()?;
+        let grupo = nodos
+            .iter()
+            .any(|n| n.tipo == GRUPO && n.nombre == "Antes de enviar la pregunta");
+        let cuerpo = nodos.iter().any(|n| {
+            n.nombre.starts_with("En cada panel debe estar activada")
+                && n.nombre
+                    .ends_with("¿Está activado lo necesario en cada panel?")
+        });
+        let botones = ["Sí, enviar", "No, todavía no"].iter().all(|b| {
+            nodos
+                .iter()
+                .any(|n| n.tipo == lector::BOTON && n.nombre == *b)
+        });
+        Ok((grupo, cuerpo, botones, u.enfocado()?.nombre))
+    })
+    .await
+    .unwrap_or_default();
+    let esc = pulsar(w, &[ESC]).await;
+    let cerro = hasta(5, || !ui.get_capa_abierta()).await;
+    esperar(300).await;
+    let foco = uia(w, |u| Ok(u.enfocado()?.nombre))
+        .await
+        .unwrap_or_default();
+    let mut clics_esc = 0;
+    for id in POOL {
+        clics_esc += envios(i, id).await.0;
+    }
+    a.anotar(
+        leido == (true, true, true, "No, todavía no".to_string())
+            && esc
+            && cerro
+            && foco == "Enviar a todos los paneles pegados de esta etapa"
+            && clics_esc == 0,
+        "enviar a todos: lector, Esc es «No» y el foco vuelve al botón",
+        &format!("título, cuerpo, botones, foco: {leido:?}; Esc {esc}; foco después «{foco}»; clics {clics_esc}"),
+    );
+    // ESC-016/017: un caso de falla por panel. Gemini con el texto cambiado, Claude con un mensaje ya enviado,
+    // Mistral sin botón y Perplexity con una página que se traga el clic; los demás se envían (Kimi con Enter).
+    en(
+        i,
+        "gemini",
+        "document.getElementById('compositor').value += ' cambio'; 'ok'",
+    )
+    .await?;
+    en(
+        i,
+        "claude",
+        "(() => { const u = document.createElement('div'); u.className = 'usuario'; u.id = 'previo'; u.textContent = 'antes'; document.getElementById('chat').append(u); return 'ok'; })()",
+    )
+    .await?;
+    en(
+        i,
+        "mistral",
+        "document.getElementById('enviar').remove(); 'ok'",
+    )
+    .await?;
+    en(i, "perplexity", "document.body.dataset.tragar = '1'; 'ok'").await?;
+    let (dialogo_si, visto_si) = con_el_boton(i, "investigacion", true).await;
+    // Grok sigue «Con problema» tras volver a pegar (su intento falló): no es elegible y se envía a mano.
+    let parcial =
+        "Enviado en 2 de 6. Los que no se enviaron dicen por qué en su cabecera; envíalos a mano.";
+    let llego = hasta(60, || resultado() == parcial).await;
+    let mut clics = Vec::new();
+    for id in POOL {
+        let (n, via) = envios(i, id).await;
+        clics.push(format!("{id} {n} {via}"));
+    }
+    let clics = clics.join(", ");
+    a.anotar(
+        dialogo_si
+            && llego
+            && clics
+                == "chatgpt 1 boton, gemini 0 , claude 0 , grok 0 , mistral 0 , kimi 1 enter, perplexity 1 boton"
+            && !visto_si.contains("Grok"),
+        "enviar a todos: «Sí», un clic por panel elegible y Kimi con Enter",
+        &format!("{visto_si}; «{}»; {clics}", resultado()),
+    );
+    let mut cabeceras = Vec::new();
+    for (id, estado) in [
+        ("gemini", "compositor-distinto"),
+        ("claude", "ya-enviado"),
+        ("mistral", "sin-boton"),
+        ("perplexity", "sin-comprobar"),
+    ] {
+        i.seleccionar(id);
+        esperar(400).await;
+        let c = ui.get_cabecera_problema().to_string();
+        cabeceras.push((
+            c == crate::interfaz::texto_de_envio(estado).unwrap_or_default(),
+            format!("{id}: «{c}»"),
+        ));
+    }
+    a.anotar(
+        cabeceras.iter().all(|c| c.0),
+        "enviar a todos: cada falla dice por qué en su cabecera",
+        &cabeceras
+            .iter()
+            .map(|c| c.1.as_str())
+            .collect::<Vec<_>>()
+            .join("; "),
+    );
+    // ESC-017: Perplexity se pulsó sin comprobación: un segundo «Enviar a todos» no lo vuelve a pulsar.
+    let (_, visto_otra) = con_el_boton(i, "investigacion", true).await;
+    hasta(60, || resultado().starts_with("Enviado en 0 de 3")).await;
+    let (n_perplexity, _) = envios(i, "perplexity").await;
+    a.anotar(
+        n_perplexity == 1 && !visto_otra.contains("Perplexity") && visto_otra.contains("Mistral"),
+        "enviar a todos: sin comprobar no se reintenta",
+        &format!(
+            "{visto_otra}; «{}»; Perplexity {n_perplexity} clic",
+            resultado()
+        ),
+    );
+    // Los que fallaron se envían a mano, como antes del botón.
+    let pregunta = format!(
+        "document.getElementById('compositor').value = {}; 'ok'",
+        cadena_js(LA_PREGUNTA)
+    );
+    en(i, "gemini", &pregunta).await?;
+    en(
+        i,
+        "claude",
+        "document.getElementById('previo').remove(); 'ok'",
+    )
+    .await?;
+    en(i, "perplexity", "document.body.dataset.tragar = ''; 'ok'").await?;
+    for id in ["gemini", "claude", "grok", "mistral", "perplexity"] {
         enviar(i, id).await?;
     }
     let respondiendo = hasta(30, || {
@@ -906,10 +1091,27 @@ async fn operacion(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
         ),
     );
 
-    // Los siete envían y responden con un hallazgo; la captura los registra como operación.
-    for id in POOL {
-        enviar(i, id).await?;
+    // Los siete envían con «Enviar a todos» (ESC-014) y responden con un hallazgo; la captura los registra como
+    // operación. Medición: de «Sí» al último panel comprobado, con sondeo de 10 ms.
+    let (dialogo, visto) = con_el_boton(i, "operacion", true).await;
+    let t0 = Instant::now();
+    let objetivo = "Enviado en los 7 paneles. Captura cuando terminen.";
+    while resultado() != objetivo && t0.elapsed() < Duration::from_secs(60) {
+        esperar(10).await;
     }
+    let ms = t0.elapsed().as_millis();
+    let mut vacios = 0;
+    for id in POOL {
+        vacios += usize::from(compositor(i, id).await.is_empty());
+    }
+    a.anotar(
+        dialogo && resultado() == objetivo && vacios == 7,
+        "enviar a todos en la operación",
+        &format!(
+            "{visto}; «{}»; compositores vacíos {vacios}; envío de 7 en {ms} ms",
+            resultado()
+        ),
+    );
     for id in POOL {
         let t = format!(
             "CONVERGENCIA|ALCANCE|P1,P2|Las respuestas coinciden en el punto central ({id})."
@@ -1166,7 +1368,19 @@ async fn roles(
         ),
     );
 
-    enviar(i, "deepseek").await?;
+    // ESC-016: DeepSeek envía con su div de botón.
+    let antes = envios(i, "deepseek").await.0;
+    let (dialogo, visto) = con_el_boton(i, "integracion", true).await;
+    let llego = hasta(30, || {
+        resultado() == "Enviado en DeepSeek. Captura cuando termine."
+    })
+    .await;
+    let (n, via) = envios(i, "deepseek").await;
+    a.anotar(
+        dialogo && llego && n == antes + 1 && via == "div",
+        "enviar al integrador con el div de DeepSeek",
+        &format!("{visto}; «{}»; {n} envío por {via}", resultado()),
+    );
     responder_en_parrafos(
         i,
         "deepseek",
@@ -1276,8 +1490,19 @@ async fn roles(
         "repetir la verificación de un panel",
         &format!("habilitado: {habilitado_repetir:?}; «{}»", resultado()),
     );
-    enviar(i, "glm").await?;
-    enviar(i, "qwen").await?;
+    let (dialogo, visto) = con_el_boton(i, "verificacion", true).await;
+    let llego = hasta(30, || {
+        resultado() == "Enviado en los 2 paneles. Captura cuando terminen."
+    })
+    .await;
+    a.anotar(
+        dialogo
+            && llego
+            && compositor(i, "glm").await.is_empty()
+            && compositor(i, "qwen").await.is_empty(),
+        "enviar a los dos verificadores",
+        &format!("{visto}; «{}»", resultado()),
+    );
     let puerto = servidor.puerto;
     let b = format!("http://127.0.0.1:{puerto}");
     // Las del servidor local no se piden: las formas raras de 127.0.0.1 prueban el analizador de URL.
@@ -1384,7 +1609,16 @@ async fn roles(
         "pegar el redactor con el adjunto",
         &format!("«{}»; adjunto «{adjunto}», esperado «{esperado}»", resultado()),
     );
-    enviar(i, "deepseek").await?;
+    let (dialogo, visto) = con_el_boton(i, "redaccion", true).await;
+    let llego = hasta(30, || {
+        resultado() == "Enviado en DeepSeek. Captura cuando termine."
+    })
+    .await;
+    a.anotar(
+        dialogo && llego && compositor(i, "deepseek").await.is_empty(),
+        "enviar al redactor",
+        &format!("{visto}; «{}»", resultado()),
+    );
     // La imagen apunta al servidor local: el PDF no la pide, la escribe como texto.
     let imagen = format!("![figura]({b}/imagen)");
     responder_en_parrafos(
@@ -1759,6 +1993,7 @@ const F3: u16 = 0x72;
 const F4: u16 = 0x73;
 const F5: u16 = 0x74;
 const TAB: u16 = 0x09;
+const ESC: u16 = 0x1B;
 const ENTER: u16 = 0x0D;
 const CTRL: u16 = 0x11;
 const MAYUS: u16 = 0x10;

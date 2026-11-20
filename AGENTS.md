@@ -27,6 +27,7 @@ La referencia de funciones es github.com/juanfernandezzz/ChatCouncil-Unity: todo
 - Todo resultado es real; nunca se simula.
 - En la interfaz se dice «consejo».
 - Las pruebas usan perfiles de prueba y el modelo más barato de la cuenta de Juan; el perfil real queda fuera de todo diagnóstico.
+- La app se abre siempre fuera del paquete de Claude (vía explorer.exe) y se comprueba que escribe en %LOCALAPPDATA%\ChatCouncil; abierta desde Code sin eso, sus datos quedan dentro del contenedor de Claude (D34).
 
 ## Evidencia
 

@@ -35,3 +35,7 @@ Que el esqueleto muestre que Slint y wry no comparten bien la ventana, el foco o
 ## Enmienda · 2026-11-13 · D25 · Corrige el punto 10
 
 El punto 10 fijaba DOM.setFileInputFiles sin haber leído Paneles.cs. En la Unity el archivo se suelta sobre el compositor con un arrastre simulado (PAN-013), y Gemini, Mistral y Qwen lo necesitan. La app adjunta por arrastre simulado, por un solo camino. Sin compositor, el error literal «No está el compositor: no hay dónde soltar el archivo.».
+
+## Enmienda · 2026-11-20 · D33 y D34 · Corrige el punto 7
+
+El punto 7 queda así: «7. La app envía solo con confirmación (ADR-0011). paneles expone una sola función de envío, enviar_a_todos, que solo llama la interfaz después del «Sí» de la ventana de la etapa; no expone otras funciones de clic ni de teclas sobre la página. Una prueba fija la lista de funciones del script que la app llama contra la lista permitida, y otra garantiza que solo la interfaz llama a enviar_a_todos.» El punto 8 no cambia: no contradice D33.

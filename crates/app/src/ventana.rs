@@ -919,11 +919,11 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                                 TituloBloque { text: "Ayuda"; font-size: 1.4rem; }
                                 TituloBloque { text: "Cómo funciona una ronda"; }
                                 Parrafo { text: "Haces una pregunta a varios proveedores de IA a la vez, cada uno en su página y con tu cuenta. Después cada proveedor revisa a ciegas lo que respondieron los demás y anota en qué coinciden y en qué no. Un integrador junta esos hallazgos en un informe, dos verificadores revisan por separado las fuentes en la web y un redactor escribe la respuesta final."; }
-                                Parrafo { text: "La app pega, captura y arma el informe. Enviar en cada página lo haces tú: así eliges qué activar en cada proveedor y nada sale sin que lo revises."; }
+                                Parrafo { text: "La app pega, envía cuando tú lo confirmas, captura y arma el informe. Antes de enviar te dice qué activar en cada proveedor; también puedes enviar a mano en cada página."; }
                                 TituloBloque { text: "Las siete etapas"; }
                                 Parrafo { text: "1. Pregunta: escribes la pregunta y la app la pega en cada página."; }
-                                Parrafo { text: "2. Investigación: en cada página activas la búsqueda web o la investigación profunda y envías; cuando terminan, la app captura las respuestas."; }
-                                Parrafo { text: "3. Operación: la app abre una conversación nueva en cada página y le pega las respuestas de los demás, sin decir de quién son. Tú envías y la app captura lo que cada uno encontró."; }
+                                Parrafo { text: "2. Investigación: en cada página activas la búsqueda web o la investigación profunda; después envías con «Enviar a todos» o a mano. Cuando terminan, la app captura las respuestas."; }
+                                Parrafo { text: "3. Operación: la app abre una conversación nueva en cada página y le pega las respuestas de los demás, sin decir de quién son. Envías con «Enviar a todos» o a mano, y la app captura lo que cada uno encontró."; }
                                 Parrafo { text: "4. Integración: el integrador recibe la tabla de hallazgos y escribe el informe."; }
                                 Parrafo { text: "5. Verificación: dos verificadores revisan por separado en la web las fuentes de lo que conviene rescatar; el informe muestra las dos verificaciones para compararlas."; }
                                 Parrafo { text: "6. Redacción: el redactor recibe todo el material en un archivo adjunto y escribe la respuesta final."; }

@@ -1853,7 +1853,7 @@ impl Interfaz {
                         (None, _) => Err("el panel no está abierto".into()),
                         // Sin saber qué se pegó no se puede comprobar que el compositor sigue igual.
                         (_, None) => {
-                            Err("no se sabe qué se pegó en este panel: envíalo a mano".into())
+                            Err("la app no tiene registrado qué pegó en este panel: no se envía. Envíalo a mano.".into())
                         }
                     }
                 })

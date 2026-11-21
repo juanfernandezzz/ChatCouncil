@@ -347,6 +347,13 @@ pub struct ArchivoRedactor {
     pub prompt_completo: Texto,
 }
 
+impl ArchivoRedactor {
+    /// Lo que pesa el archivo adjunto, en bytes (R17: el límite de lectura de cada proveedor).
+    pub fn peso_del_archivo(&self) -> usize {
+        self.cuerpo_archivo.bytes().len()
+    }
+}
+
 fn falla(mensaje: impl Into<String>) -> io::Error {
     io::Error::other(mensaje.into())
 }

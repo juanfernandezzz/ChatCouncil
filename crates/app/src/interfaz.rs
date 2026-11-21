@@ -2490,7 +2490,48 @@ impl Interfaz {
             Ok(a) => a,
             Err(e) => return self.resultado(&format!("No se armó el prompt: {e}."), true),
         };
-        // D62: en la verificación, el mismo prompt va a los dos verificadores, uno después del otro.
+        // PART-022, R17: un archivo más grande de lo que el proveedor lee se avisa antes de pegarlo.
+        let excedido = archivo.as_ref().and_then(|a| {
+            ids.iter().find_map(|id| {
+                let lim = datos::limite_archivo_bytes(&self.specs, id)?;
+                let peso = a.peso_del_archivo();
+                (peso > lim).then(|| (nombre_proveedor(id), peso, lim))
+            })
+        });
+        let Some((nombre, peso, lim)) = excedido else {
+            return self.pegar_rol_armado(r, etapa, ids, prompt, archivo).await;
+        };
+        let (kb, lim_kb) = (peso.div_ceil(1000), lim / 1000);
+        let (r, ids_, prompt_, archivo_) = (r.clone(), ids.clone(), prompt.clone(), archivo.clone());
+        self.abrir_dialogo(
+            &format!("El archivo no cabe en {nombre}"),
+            &format!(
+                "El archivo pesa {kb} KB y {nombre} lee hasta unos {lim_kb} KB por archivo: leería solo una parte. Asigna este rol a otro proveedor, o pega igual si quieres probar."
+            ),
+            false,
+            None,
+            "Pegar igual",
+            Box::new(move |x, _, _| {
+                let (ids, prompt, archivo) = (ids_.clone(), prompt_.clone(), archivo_.clone());
+                let _ = r.clone();
+                x.en_accion(move |x, r| async move {
+                    x.pegar_rol_armado(&r, etapa, ids, prompt, archivo).await
+                })
+            }),
+        );
+        self.ui.set_dialogo_cancelar_texto("No pegar".into());
+        self.ui.set_dialogo_foco_en_cancelar(true);
+    }
+
+    /// El pegado del rol ya armado, en los paneles de `ids` (D62: en la verificación el mismo prompt va a los dos).
+    async fn pegar_rol_armado(
+        &self,
+        r: &Rc<Ronda>,
+        etapa: &'static str,
+        ids: Vec<String>,
+        prompt: Texto,
+        archivo: Option<puerta::ArchivoRedactor>,
+    ) {
         for id in &ids {
             let nombre = nombre_proveedor(id);
             self.resultado(&format!("Pegando el prompt en {nombre}…"), false);

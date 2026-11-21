@@ -92,9 +92,29 @@ pub fn url_de(specs: &str, id: &str) -> Option<String> {
     }
 }
 
+/// PART-022, R17: cuántos bytes de archivo adjunto lee el proveedor, si se midió (limiteArchivoBytes).
+pub fn limite_archivo_bytes(specs: &str, id: &str) -> Option<usize> {
+    match spec(specs, id)? {
+        crate::json::Valor::Objeto(o) => o.into_iter().find_map(|(k, v)| match v {
+            crate::json::Valor::Entero(n) if k.como_str() == Some("limiteArchivoBytes") => {
+                usize::try_from(n).ok()
+            }
+            _ => None,
+        }),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod pruebas {
     use super::*;
+
+    #[test]
+    fn el_limite_de_archivo_solo_lo_tiene_deepseek() {
+        assert_eq!(limite_archivo_bytes(SPECS_JSON, "deepseek"), Some(90000));
+        assert_eq!(limite_archivo_bytes(SPECS_JSON, "kimi"), None);
+        assert_eq!(limite_archivo_bytes(SPECS_JSON, "no-existe"), None);
+    }
 
     #[test]
     fn los_proveedores_salen_de_las_specs_en_el_orden_del_pool() {
@@ -152,7 +172,7 @@ mod pruebas {
     fn specs_json_coincide_con_dat_001() {
         assert_eq!(
             sha256(SPECS_JSON),
-            "23f6142a766d2052bcb7b5ce9bed7ed6b84e1687e9605181e500aa5a442829ba"
+            "05f66a1a98ead130f47480511025e8565c62a5599ccb81faa6ebfdafc30a0b84"
         );
     }
 

@@ -253,6 +253,8 @@ pub struct Hallazgos {
     pub hallazgos: Vec<Hallazgo>,
     /// Líneas no vacías que no calzaron con ningún prefijo o no traían los campos exigidos.
     pub lineas_descartadas: usize,
+    /// PART-022, R15: la última línea no vacía empieza como un hallazgo y no trae sus campos.
+    pub ultima_cortada: bool,
 }
 
 fn etiquetas(campo: &U) -> Vec<&U> {
@@ -305,8 +307,10 @@ pub fn parsear_hallazgos<S: AsRef<str>>(salida: &Texto, validas: &[S]) -> Hallaz
             .and_then(|cat| Some((cat, campos(linea, if con_eje.is_some() { 4 } else { 3 })?)))
         else {
             r.lineas_descartadas += 1;
+            r.ultima_cortada = categoria.is_some();
             continue;
         };
+        r.ultima_cortada = false;
         let et = etiquetas(c[c.len() - 2]);
         // PART-022, R30: un eje que no es HECHOS, FUENTES ni CONCLUSIONES se marca igual que una etiqueta inválida.
         let eje_invalido = con_eje.is_some()

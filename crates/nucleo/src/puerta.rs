@@ -1329,16 +1329,11 @@ impl Puerta {
             INTERVALO_MARCA,
         );
         let marca_fin = format!("[[CC-MARCA-FIN-{token}]]");
-        unidades.extend(format!("
-{marca_fin}
-").encode_utf16());
+        unidades.extend(format!("\n{marca_fin}\n").encode_utf16());
         let archivo = Texto::desde_utf16(&unidades);
         let nombre = format!("integrador-{}.txt", self.sello_de_archivo());
         let prompt = prompts::armar_prompt_integrador(&pregunta);
-        let cabecera = Texto::from(format!("
-
-=== ARCHIVO ADJUNTO: {nombre} ===
-"));
+        let cabecera = Texto::from(format!("\n\n=== ARCHIVO ADJUNTO: {nombre} ===\n"));
         Ok(ArchivoRedactor {
             prompt_completo: concatenar(&[&prompt, &cabecera, &archivo]),
             prompt,
@@ -2961,6 +2956,25 @@ impl Puerta {
             });
         }
         if etapa == "operacion" {
+            if estado == "capturado" {
+                // R15: lo que ese panel devolvió, ya registrado, se revisa por si fue un bucle.
+                let ronda = Texto::from(self.ronda_actual.clone().unwrap_or_default().as_str());
+                let leido = self.leer_registro()?;
+                let aviso = leido
+                    .hechos
+                    .iter()
+                    .rev()
+                    .find(|h| {
+                        es_de(h, "salida-operador", &ronda)
+                            && h.texto("operadorId").and_then(Texto::como_str) == Some(id)
+                    })
+                    .and_then(|h| h.texto("salidaCruda"))
+                    .and_then(aviso_de_bucle);
+                return Ok(Situacion {
+                    problema: aviso,
+                    ..Default::default()
+                });
+            }
             return Ok(match estado {
                 "por-pegar" => accion(PEGAR_OPERACION_AQUI),
                 _ if terminado => accion(CAPTURAR_ESTE),
@@ -3184,6 +3198,28 @@ pub fn aviso_prompts_de_captura<'a>(
             con_prompt.len()
         )
     }
+}
+
+/// D35.5: inferido, se revisa con datos. La fracción de líneas de hallazgo idénticas desde la que se avisa.
+const FRACCION_BUCLE: (usize, usize) = (3, 10);
+
+/// PART-022, R15: una salida con muchas líneas de hallazgo idénticas, o cuya última línea quedó a medias,
+/// puede ser un bucle del modelo. None si no hay motivo para avisar.
+pub fn aviso_de_bucle(salida: &Texto) -> Option<String> {
+    let r = parseos::parsear_hallazgos(salida, &Vec::<&str>::new());
+    let n = r.hallazgos.len();
+    let mut vistos = HashSet::new();
+    let repetidas = r
+        .hallazgos
+        .iter()
+        .filter(|h| !vistos.insert((h.categoria, &h.eje, &h.etiquetas, &h.descripcion)))
+        .count();
+    let (num, den) = FRACCION_BUCLE;
+    (r.ultima_cortada || (n > 0 && repetidas * den >= n * num)).then(|| {
+        format!(
+            "la salida repite muchas líneas iguales ({repetidas} de {n}) o viene cortada: puede ser un bucle del modelo. Vuelve a capturar o repite la operación en este panel antes de integrar."
+        )
+    })
 }
 
 /// Corto: los primeros 8 caracteres (unidades UTF-16, como Substring) de un id.
@@ -4049,6 +4085,30 @@ mod pruebas {
         p.restaurar_ronda_activa();
         assert_eq!(p.ronda_actual(), Some(RONDA_CORRIDA));
         p
+    }
+
+    #[test]
+    fn captura_una_salida_con_bucle_o_cortada_avisa_y_una_normal_no() {
+        let linea = |d: &str| format!("DIVERGENCIA|HECHOS|P1,P2|{d}");
+        let normal = Texto::from(
+            (0..10).map(|i| linea(&format!("d{i}"))).collect::<Vec<_>>().join("\n"),
+        );
+        assert_eq!(aviso_de_bucle(&normal), None);
+        // 3 repetidas de 10: justo el 30 %.
+        let mut v: Vec<String> = (0..6).map(|i| linea(&format!("d{i}"))).collect();
+        v.extend(vec![linea("x"); 4]);
+        let en_el_limite = aviso_de_bucle(&Texto::from(v.join("\n"))).unwrap();
+        assert!(en_el_limite.contains("(3 de 10)"), "{en_el_limite}");
+        // 2 repetidas de 10 (20 %): no avisa.
+        let mut v: Vec<String> = (0..7).map(|i| linea(&format!("d{i}"))).collect();
+        v.extend(vec![linea("x"); 3]);
+        assert_eq!(aviso_de_bucle(&Texto::from(v.join("\n"))), None);
+        // Un bucle de verdad.
+        let bucle = Texto::from(vec![linea("igual"); 20].join("\n"));
+        assert!(aviso_de_bucle(&bucle).unwrap().contains("(19 de 20)"));
+        // Última línea a medias.
+        let cortada = Texto::from(format!("{}\nDIVERGENCIA|HECHOS|P1", linea("a")));
+        assert!(aviso_de_bucle(&cortada).is_some());
     }
 
     /// PART-022, R27: el nombre del archivo no lleva ningún código estable, y siete paneles dan siete nombres.

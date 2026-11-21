@@ -2472,8 +2472,11 @@ impl Interfaz {
             .pedir(
                 move |p| -> std::io::Result<(Texto, Option<puerta::ArchivoRedactor>)> {
                     Ok(match etapa {
-                        "integracion" => (p.armar_prompt_integrador()?, None),
                         "verificacion" => (p.armar_prompt_verificador()?, None),
+                        "integracion" => {
+                            let a = p.armar_integrador()?;
+                            (a.prompt.clone(), Some(a))
+                        }
                         _ => {
                             let a = p.armar_redactor()?;
                             (a.prompt.clone(), Some(a))
@@ -2530,7 +2533,8 @@ impl Interfaz {
         let anotado = r
             .nucleo
             .pedir(move |p| match (etapa, archivo) {
-                ("integracion", _) => p.integrador_pegado(pegado),
+                ("integracion", Some(a)) => p.integrador_pegado_con_archivo(&a),
+                ("integracion", None) => p.integrador_pegado(pegado),
                 ("verificacion", _) => p.verificador_pegado(pegado),
                 (_, Some(a)) => p.redactor_pegado(&a),
                 _ => {}

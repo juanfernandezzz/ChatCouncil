@@ -205,6 +205,7 @@ pub struct Puerta {
     prompt_verificador: Option<Texto>,
     prompt_redactor: Option<Texto>,
     marcas_redactor: Option<(String, String)>,
+    marcas_integrador: Option<(String, String)>,
     sello_verificaciones: Option<Vec<(String, String)>>,
     // El informe armado en este proceso: el paso pasa a abrir su carpeta en vez de armar otro.
     informe_armado: Option<(String, PathBuf)>,
@@ -706,6 +707,7 @@ impl Puerta {
             prompt_verificador: None,
             prompt_redactor: None,
             marcas_redactor: None,
+            marcas_integrador: None,
             sello_verificaciones: None,
             informe_armado: None,
         }
@@ -940,6 +942,7 @@ impl Puerta {
         self.prompt_verificador = None;
         self.prompt_redactor = None;
         self.marcas_redactor = None;
+        self.marcas_integrador = None;
         self.sello_verificaciones = None;
     }
 
@@ -1236,13 +1239,7 @@ impl Puerta {
             let marca_fin = format!("[[CC-MARCA-FIN-{token}]]");
             // Cuerpo y marcas siguen en UTF-16 hasta el final: un solo paso a Texto.
             if con_archivo {
-                let codigo = &resultado
-                    .sello
-                    .iter()
-                    .find(|s| s.panel_source_id == operador_id)
-                    .expect("una entrada del sello por operador")
-                    .codigo_estable;
-                let prompt = operacion::prompt_con_archivo(&pregunta);
+                let prompt = operacion::prompt_con_archivo(&pregunta, cuerpo.respuestas_para_operador.len());
                 let (mut unidades, mut marcas) = operacion::marcas_intercaladas(
                     &operacion::cuerpo_de(&cuerpo.respuestas_para_operador),
                     &token,
@@ -1251,7 +1248,14 @@ impl Puerta {
                 unidades.extend(format!("\n{marca_fin}\n").encode_utf16());
                 marcas.push(marca_fin);
                 let archivo = Texto::desde_utf16(&unidades);
-                let nombre = format!("operacion-{codigo}-{}.txt", self.sello_de_archivo());
+                // PART-022, R27: ningún código estable en el nombre; 6 hexadecimales nuevos por panel.
+                let azar: String = (self.nuevo_id)()
+                    .chars()
+                    .filter(char::is_ascii_hexdigit)
+                    .rev()
+                    .take(6)
+                    .collect();
+                let nombre = format!("respuestas-{}-{azar}.txt", self.sello_de_archivo());
                 let cabecera = Texto::from(format!("\n\n=== ARCHIVO ADJUNTO: {nombre} ===\n"));
                 return Ok(Operacion {
                     operador_id: operador_id.to_string(),
@@ -1313,14 +1317,43 @@ impl Puerta {
         Ok((leido, ronda, pregunta, tabla))
     }
 
-    /// INT-003: el prompt del integrador con la tabla de hallazgos de la ronda.
-    pub fn armar_prompt_integrador(&mut self) -> io::Result<Texto> {
+    /// INT-003 y PART-022 (B4): el prompt del integrador y, en un archivo adjunto con marcas, la tabla
+    /// de hallazgos de la ronda. No escribe nada.
+    pub fn armar_integrador(&mut self) -> io::Result<ArchivoRedactor> {
         let pool = self.pool.clone();
         let (_, _, pregunta, tabla) = self.tabla_de_ronda(&strs(&pool), "integrador")?;
-        Ok(prompts::armar_prompt_integrador(
-            &pregunta,
-            &tabla.para_prompt,
-        ))
+        let token = (self.nuevo_id)();
+        let (mut unidades, marcas) = operacion::marcas_intercaladas(
+            &prompts::armar_archivo_integrador(&tabla.para_prompt).a_utf16(),
+            &token,
+            INTERVALO_MARCA,
+        );
+        let marca_fin = format!("[[CC-MARCA-FIN-{token}]]");
+        unidades.extend(format!("
+{marca_fin}
+").encode_utf16());
+        let archivo = Texto::desde_utf16(&unidades);
+        let nombre = format!("integrador-{}.txt", self.sello_de_archivo());
+        let prompt = prompts::armar_prompt_integrador(&pregunta);
+        let cabecera = Texto::from(format!("
+
+=== ARCHIVO ADJUNTO: {nombre} ===
+"));
+        Ok(ArchivoRedactor {
+            prompt_completo: concatenar(&[&prompt, &cabecera, &archivo]),
+            prompt,
+            cuerpo_archivo: archivo,
+            nombre_archivo: nombre,
+            marca_primera: marcas.first().cloned().unwrap_or_else(|| marca_fin.clone()),
+            marca_ultima: marca_fin,
+            sello_verificaciones: Vec::new(),
+            aviso: None,
+        })
+    }
+
+    /// El prompt del integrador tal como lo lee el operador, con el archivo adjunto incluido.
+    pub fn armar_prompt_integrador(&mut self) -> io::Result<Texto> {
+        Ok(self.armar_integrador()?.prompt_completo)
     }
 
     /// VER-001, INT-006: la sección QUE CONVIENE RESCATAR del último informe del integrador, tal
@@ -2051,6 +2084,7 @@ impl Puerta {
             self.prompt_verificador = None;
             self.prompt_redactor = None;
             self.marcas_redactor = None;
+        self.marcas_integrador = None;
             self.sello_verificaciones = None;
             Ok(format!(
                 "Ronda nueva abierta ({}) con {} respuestas copiadas de la ronda {}. Recaptura con \"Capturar este panel\" lo que quieras corregir.",
@@ -2495,19 +2529,21 @@ impl Puerta {
             l.html.as_ref(),
         )?)
         .0;
-        let h = Hecho::nuevo(
-            "informe-integrador",
-            &[
-                ("id", Valor::Texto(id.into())),
-                ("rondaId", Valor::Texto(ronda_id.into())),
-                ("operadorId", Valor::Texto(l.id.as_str().into())),
-                ("promptCompleto", prompt),
-                ("informeCrudo", Valor::Texto(l.text.clone())),
-                ("titulo", opcional(titulo.as_ref())),
-                ("recibidaEn", Valor::Texto(self.ahora().into())),
-                ("html", opcional(l.html.as_ref())),
-            ],
-        )?;
+        let mut campos = vec![
+            ("id", Valor::Texto(id.into())),
+            ("rondaId", Valor::Texto(ronda_id.into())),
+            ("operadorId", Valor::Texto(l.id.as_str().into())),
+            ("promptCompleto", prompt),
+            ("informeCrudo", Valor::Texto(l.text.clone())),
+            ("titulo", opcional(titulo.as_ref())),
+            ("recibidaEn", Valor::Texto(self.ahora().into())),
+            ("html", opcional(l.html.as_ref())),
+        ];
+        if let Some((a, b)) = &self.marcas_integrador {
+            campos.push(("marcaPrimera", Valor::Texto(a.as_str().into())));
+            campos.push(("marcaUltima", Valor::Texto(b.as_str().into())));
+        }
+        let h = Hecho::nuevo("informe-integrador", &campos)?;
         self.escribir(&h)
     }
 
@@ -2616,6 +2652,13 @@ impl Puerta {
 
     pub fn integrador_pegado(&mut self, prompt: Texto) {
         self.prompt_integrador = Some(prompt);
+    }
+
+    /// B4: el integrador quedó pegado con su archivo: su respuesta se registra con ese prompt y esas marcas.
+    pub fn integrador_pegado_con_archivo(&mut self, archivo: &ArchivoRedactor) {
+        self.prompt_integrador = Some(archivo.prompt_completo.clone());
+        self.marcas_integrador =
+            Some((archivo.marca_primera.clone(), archivo.marca_ultima.clone()));
     }
 
     pub fn verificador_pegado(&mut self, prompt: Texto) {
@@ -3993,6 +4036,28 @@ mod pruebas {
         p
     }
 
+    /// PART-022, R27: el nombre del archivo no lleva ningún código estable, y siete paneles dan siete nombres.
+    #[test]
+    fn operacion_el_nombre_del_archivo_no_lleva_codigo_estable_y_es_distinto_por_panel() {
+        let c = Carpeta::nueva("operacion-nombres");
+        let todas = lineas_corrida();
+        let pool = pool_puerta();
+        let mut p = puerta_en_corrida(&c.0, &todas[..=12]);
+        let nombres: Vec<String> = pool
+            .iter()
+            .map(|op| p.armar_operacion(op, true).unwrap().nombre_archivo.unwrap())
+            .collect();
+        assert_eq!(nombres.len(), 7);
+        assert_eq!(nombres.iter().collect::<HashSet<_>>().len(), 7);
+        for n in &nombres {
+            let (_, resto) = n.split_once('-').unwrap();
+            assert!(n.starts_with("respuestas-") && n.ends_with(".txt"), "{n}");
+            assert!(!n.contains("operacion"), "{n}");
+            let azar = resto.rsplit_once('-').unwrap().1.trim_end_matches(".txt");
+            assert!(azar.len() == 6 && azar.chars().all(|c| c.is_ascii_hexdigit()), "{n}");
+        }
+    }
+
     #[test]
     fn operacion_la_corrida_de_la_unity_da_los_mismos_sellos_y_prompts() {
         let c = Carpeta::nueva("operacion-corrida");
@@ -4021,32 +4086,6 @@ mod pruebas {
         );
         let hechos = registro::leer(&format!("{}\n", todas.join("\n"))).hechos;
         let es = |h: &Hecho, k: &str, v: &str| h.texto(k).and_then(Texto::como_str) == Some(v);
-        for o in &operaciones {
-            let salida = hechos
-                .iter()
-                .find(|h| {
-                    h.tipo() == "salida-operador"
-                        && es(h, "rondaId", RONDA_CORRIDA)
-                        && es(h, "operadorId", &o.operador_id)
-                })
-                .unwrap();
-            assert_eq!(
-                Some(&o.prompt_completo),
-                salida.texto("promptCompleto"),
-                "{}",
-                o.operador_id
-            );
-        }
-        let kimi = operaciones
-            .iter()
-            .find(|o| o.operador_id == "kimi")
-            .unwrap();
-        assert_eq!(
-            kimi.nombre_archivo.as_deref(),
-            Some(crate::registro::pruebas::str_de(&crate::json::vector(
-                "ArchivoKimi"
-            )))
-        );
         assert!(
             operaciones
                 .iter()
@@ -4177,6 +4216,7 @@ mod pruebas {
     /// promptCompleto que la Unity registró, byte a byte. Línea 49: informe sin rescate; 50: el
     /// recapturado; 51 y 52: las verificaciones de glm y qwen; 53: la respuesta del redactor.
     #[test]
+    #[ignore = "PART-022: los prompts se apartaron de la Unity a propósito (D35 a D38); el vector de la Unity ya no es el criterio, ver DESVIACIONES.md"]
     fn prompts_los_de_los_roles_en_la_corrida_son_los_de_la_unity() {
         let todas = lineas_corrida();
         let prompt_de = |i: usize| {
@@ -4964,6 +5004,7 @@ mod pruebas {
     }
 
     #[test]
+    #[ignore = "PART-022: los prompts se apartaron de la Unity a propósito (D35 a D38); el vector de la Unity ya no es el criterio, ver DESVIACIONES.md"]
     fn ronda_entera_deja_los_mismos_hechos_que_la_unity() {
         use std::cell::Cell;
         use std::rc::Rc;

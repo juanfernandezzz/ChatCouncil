@@ -36,15 +36,27 @@ LA PREGUNTA QUE ORIGINO TODO ESTO FUE:
 {{PREGUNTA}}
 ===== fin de la pregunta =====
 
-LA TABLA DE HALLAZGOS:
+LA TABLA DE HALLAZGOS ESTA EN EL ARCHIVO ADJUNTO
 
-{{HALLAZGOS}}
+ANTES DE EMPEZAR, CONFIRMA QUE LEISTE EL ARCHIVO ENTERO
+
+El archivo contiene marcas del tipo [[CC-xxxxx]] intercaladas. Son marcas de control de integridad, no forman parte del contenido. En la primera linea de tu respuesta, escribe exactamente:
+
+ARCHIVO: primera marca = <la primera marca [[CC-...]] que aparece en el archivo>, ultima marca = <la ultima marca [[CC-...]] que aparece en el archivo>
+
+Si no puedes leer el archivo, o no encuentras marcas, escribe en su lugar:
+
+ARCHIVO: no pude leer el archivo adjunto
+
+No sigas sin esa primera linea. Despues de ella, ignora las marcas por completo y no las menciones de nuevo.
 
 Cada linea tiene seis campos: el identificador del hallazgo, su categoria, su eje, las respuestas que lo sostienen, su descripcion, y el operador que lo registro.
 
+Las lineas de categoria LIMITACION no describen las respuestas: registran algo que un operador no pudo determinar. No las uses como prueba de que a las respuestas les falta algo.
+
 QUE TIENES QUE HACER
 
-La primera linea de tu informe tiene que ser un titulo corto, de no mas de ocho palabras, que diga de que trata la pregunta. Escribelo asi:
+La segunda linea de tu respuesta, justo despues de la linea ARCHIVO, tiene que ser un titulo corto, de no mas de ocho palabras, que diga de que trata la pregunta. Escribelo asi:
 
 TITULO: el titulo aqui
 
@@ -84,7 +96,7 @@ Escribe en parrafos, en prosa normal. No uses tablas ni listas con vinetas.
 
 REGLA OBLIGATORIA: cada parrafo que escribas tiene que contener al menos una referencia a un hallazgo de la tabla, con su identificador entre corchetes. Por ejemplo: [H12]. Si un parrafo se apoya en varios hallazgos, ponlos todos: [H12] [H31].
 
-No puedes afirmar nada que no este en la tabla. Si la tabla no alcanza para responder algo de las cuatro secciones, escribelo en un parrafo que empiece con LA TABLA NO ALCANZA y explica que falta. Ese parrafo es el unico que puede ir sin referencias.
+No puedes afirmar nada que no este en la tabla. Si la tabla no alcanza para responder algo de las cinco secciones, escribelo en un parrafo que empiece con LA TABLA NO ALCANZA y explica que falta. Ese parrafo es el unico que puede ir sin referencias.
 
 TRES COSAS QUE NO TIENES QUE HACER
 

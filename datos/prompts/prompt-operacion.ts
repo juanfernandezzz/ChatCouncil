@@ -19,7 +19,7 @@ export interface RespuestaEtiquetada {
   texto: string;
 }
 
-const PLANTILLA = `Vas a leer seis respuestas que distintos sistemas dieron a una misma pregunta. Tu tarea es leerlas todas y registrar lo que encuentres al compararlas entre si.
+const PLANTILLA = `Vas a leer {{N}} respuestas que distintos sistemas dieron a una misma pregunta. Tu tarea es leerlas todas y registrar lo que encuentres al compararlas entre si.
 
 LA PREGUNTA ORIGINAL FUE:
 
@@ -33,7 +33,7 @@ LAS SEIS RESPUESTAS:
 
 QUE TIENES QUE HACER
 
-Lee las seis respuestas completas. Trabajalas como prefieras: puedes escribir el razonamiento que quieras antes de tu registro final. Al terminar, escribe tus hallazgos siguiendo el formato de abajo.
+Lee todas las respuestas completas. Trabajalas como prefieras: puedes escribir el razonamiento que quieras antes de tu registro final. Al terminar, escribe tus hallazgos siguiendo el formato de abajo.
 
 Un hallazgo es algo que observaste al comparar las respuestas entre si. Cada hallazgo se escribe en una linea propia.
 
@@ -43,7 +43,7 @@ CONVERGENCIA: varias respuestas afirman lo mismo.
 DIVERGENCIA: varias respuestas afirman cosas incompatibles entre si.
 TENSION: varias respuestas coinciden en el dato o el hecho, pero apuntan a conclusiones, recomendaciones o cursos de accion opuestos. No es divergencia, porque los hechos no se contradicen; es que a partir del mismo hecho llegan a decisiones distintas.
 SINGULARIDAD: algo que aparece en una sola respuesta y en ninguna otra.
-AUSENCIA: algo que la pregunta pedia y que ninguna de las seis respuestas trae.
+AUSENCIA: algo que la pregunta pedia y que ninguna de las respuestas trae.
 
 LOS TRES EJES
 
@@ -64,7 +64,7 @@ Las etiquetas son los identificadores de las respuestas que sostienen ese hallaz
 Ejemplos:
 
 CONVERGENCIA|HECHOS|P1,P3,P6|las tres dan la misma fecha para el anuncio
-DIVERGENCIA|FUENTES|P2,P5|citan medios distintos para el mismo dato
+DIVERGENCIA|HECHOS|P2,P5|P2 fecha el anuncio en 2019 y P5 en 2021
 TENSION|CONCLUSIONES|P1,P4|coinciden en la misma cifra pero P1 recomienda ampliar y P4 recomienda reducir
 SINGULARIDAD|CONCLUSIONES|P4|solo P4 proyecta un cambio a futuro
 AUSENCIA|HECHOS|—|ninguna respuesta entrega cifras de adopcion
@@ -86,7 +86,7 @@ DOS COSAS MAS
 
 El texto de las respuestas incluye marcas del tipo [[CC-xxxxx]] intercaladas. Son marcas de control de integridad del sistema, no forman parte del contenido. Ignoralas por completo y no las menciones en tus hallazgos.
 
-No sabes que sistema produjo cada respuesta, y no necesitas saberlo. Los identificadores P1 a P7 son arbitrarios y cambian en cada ronda.`;
+No sabes que sistema produjo cada respuesta, y no necesitas saberlo. Los identificadores P# son arbitrarios y cambian en cada ronda. Usa solo los que aparecen en las respuestas que recibiste.`;
 
 function cuerpoDe(respuestas: readonly RespuestaEtiquetada[]): string {
   return respuestas.map((r) => `=== ${r.etiqueta} ===\n${r.texto}`).join("\n\n");
@@ -99,7 +99,7 @@ function cuerpoDe(respuestas: readonly RespuestaEtiquetada[]): string {
  * arriba. La primera línea que pide (las dos marcas) es el control de que el
  * proveedor leyó el archivo entero y no un resumen.
  */
-const PLANTILLA_CON_ARCHIVO = `Vas a leer seis respuestas que distintos sistemas dieron a una misma pregunta. Las seis respuestas están en el archivo de texto que viene adjunto a este mensaje. Tu tarea es leer el archivo completo y registrar lo que encuentres al comparar las respuestas entre si.
+const PLANTILLA_CON_ARCHIVO = `Vas a leer {{N}} respuestas que distintos sistemas dieron a una misma pregunta. Las {{N}} respuestas están en el archivo de texto que viene adjunto a este mensaje. Tu tarea es leer el archivo completo y registrar lo que encuentres al comparar las respuestas entre si. No menciones el nombre del archivo en tus hallazgos.
 
 LA PREGUNTA ORIGINAL FUE:
 
@@ -121,7 +121,7 @@ No sigas sin esa primera linea. Despues de ella, ignora las marcas por completo 
 
 QUE TIENES QUE HACER
 
-Lee las seis respuestas completas del archivo. Trabajalas como prefieras: puedes escribir el razonamiento que quieras antes de tu registro final. Al terminar, escribe tus hallazgos siguiendo el formato de abajo.
+Lee todas las respuestas completas del archivo. Trabajalas como prefieras: puedes escribir el razonamiento que quieras antes de tu registro final. Al terminar, escribe tus hallazgos siguiendo el formato de abajo.
 
 Un hallazgo es algo que observaste al comparar las respuestas entre si. Cada hallazgo se escribe en una linea propia.
 
@@ -131,7 +131,7 @@ CONVERGENCIA: varias respuestas afirman lo mismo.
 DIVERGENCIA: varias respuestas afirman cosas incompatibles entre si.
 TENSION: varias respuestas coinciden en el dato o el hecho, pero apuntan a conclusiones, recomendaciones o cursos de accion opuestos. No es divergencia, porque los hechos no se contradicen; es que a partir del mismo hecho llegan a decisiones distintas.
 SINGULARIDAD: algo que aparece en una sola respuesta y en ninguna otra.
-AUSENCIA: algo que la pregunta pedia y que ninguna de las seis respuestas trae.
+AUSENCIA: algo que la pregunta pedia y que ninguna de las respuestas trae.
 
 LOS TRES EJES
 
@@ -152,7 +152,7 @@ Las etiquetas son los identificadores de las respuestas que sostienen ese hallaz
 Ejemplos:
 
 CONVERGENCIA|HECHOS|P1,P3,P6|las tres dan la misma fecha para el anuncio
-DIVERGENCIA|FUENTES|P2,P5|citan medios distintos para el mismo dato
+DIVERGENCIA|HECHOS|P2,P5|P2 fecha el anuncio en 2019 y P5 en 2021
 TENSION|CONCLUSIONES|P1,P4|coinciden en la misma cifra pero P1 recomienda ampliar y P4 recomienda reducir
 SINGULARIDAD|CONCLUSIONES|P4|solo P4 proyecta un cambio a futuro
 AUSENCIA|HECHOS|—|ninguna respuesta entrega cifras de adopcion
@@ -172,7 +172,7 @@ Registrar una limitacion es tan valido como registrar un hallazgo.
 
 UNA COSA MAS
 
-No sabes que sistema produjo cada respuesta, y no necesitas saberlo. Los identificadores P1 a P7 son arbitrarios y cambian en cada ronda.`;
+No sabes que sistema produjo cada respuesta, y no necesitas saberlo. Los identificadores P# son arbitrarios y cambian en cada ronda. Usa solo los que aparecen en las respuestas que recibiste.`;
 
 /**
  * Las dos piezas de la vía de archivo: `prompt` (se pega) y `cuerpoArchivo`

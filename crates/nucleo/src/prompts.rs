@@ -138,14 +138,13 @@ pub fn tabla_de(hallazgos: &[HallazgoParaIntegrador]) -> Texto {
 }
 
 /// INT-003: {{PREGUNTA}} y {{HALLAZGOS}} en la plantilla del integrador.
-pub fn armar_prompt_integrador(pregunta: &Texto, hallazgos: &[HallazgoParaIntegrador]) -> Texto {
-    armar(
-        datos::PROMPT_INTEGRADOR,
-        &[
-            ("{{PREGUNTA}}", pregunta),
-            ("{{HALLAZGOS}}", &tabla_de(hallazgos)),
-        ],
-    )
+pub fn armar_prompt_integrador(pregunta: &Texto) -> Texto {
+    armar(datos::PROMPT_INTEGRADOR, &[("{{PREGUNTA}}", pregunta)])
+}
+
+/// PART-022, B4: la tabla de hallazgos, que el integrador lee en un archivo adjunto (las marcas las intercala quien llama).
+pub fn armar_archivo_integrador(hallazgos: &[HallazgoParaIntegrador]) -> Texto {
+    tabla_de(hallazgos)
 }
 
 /// VER-001: el rescate tal cual y solo los hallazgos que cita, en su orden: H##|CATEGORIA|EJE|DESCRIPCION.
@@ -501,7 +500,7 @@ fn enlaces_n(n: usize) -> String {
 pub fn lineas_de_control(c: &ControlesRedaccion) -> Vec<String> {
     let lectura = match c.lectura_archivo {
         "entero" => {
-            "Leyó el archivo entero: la primera línea trae la primera y la última marca correctas."
+            "Reprodujo la primera y la última marca del archivo: es un indicio de que lo recorrió entero, no una prueba."
         }
         "no-pudo-leer" => "No pudo leer el archivo: respondió \"no pude leer el archivo adjunto\".",
         "marcas-distintas" => {
@@ -642,20 +641,18 @@ mod pruebas {
         let rescate = texto_de(&vector("Rescate")).clone();
         for caso in lista(&vector("Prompts")) {
             let pregunta = texto_de(campo(caso, "pregunta"));
-            assert_eq!(
-                armar_prompt_integrador(pregunta, &hallazgos),
-                *texto_de(campo(caso, "integrador")),
-                "integrador: {pregunta:?}"
-            );
+            // PART-022 (B4, B1 a B3): el integrador y el redactor se apartan de la Unity a propósito:
+            // llevan la pregunta; el verificador sigue igual que la Unity.
+            for (rol, p) in [
+                ("integrador", armar_prompt_integrador(pregunta)),
+                ("redactor", armar_prompt_redactor(pregunta)),
+            ] {
+                assert!(contiene(&p, pregunta), "{rol}: {pregunta:?}");
+            }
             assert_eq!(
                 armar_prompt_verificador(pregunta, &rescate, &para_verificador),
                 *texto_de(campo(caso, "verificador")),
                 "verificador: {pregunta:?}"
-            );
-            assert_eq!(
-                armar_prompt_redactor(pregunta),
-                *texto_de(campo(caso, "redactor")),
-                "redactor: {pregunta:?}"
             );
         }
     }
@@ -667,10 +664,8 @@ mod pruebas {
         let pregunta = texto_de(campo(&lista(&vector("Prompts"))[1], "pregunta")).clone();
         let rescate = texto_de(&vector("Rescate")).clone();
         let hallazgos = hallazgos_integrador();
-        assert!(contiene(
-            &armar_prompt_integrador(&pregunta, &hallazgos),
-            &pregunta
-        ));
+        let _ = hallazgos;
+        assert!(contiene(&armar_prompt_integrador(&pregunta), &pregunta));
         assert!(contiene(&armar_prompt_redactor(&pregunta), &pregunta));
         let verificador = armar_prompt_verificador(&pregunta, &rescate, &[]);
         assert!(contiene(&verificador, &pregunta));

@@ -228,6 +228,8 @@ const CATEGORIAS4: [&str; 5] = [
     "SINGULARIDAD",
     "AUSENCIA",
 ];
+/// D35.5 (R30): los tres ejes del formato de operación.
+const EJES: [&str; 3] = ["HECHOS", "FUENTES", "CONCLUSIONES"];
 const CATEGORIAS_LIMITACION: [&str; 4] = [
     "LIMITACION:CORPUS",
     "LIMITACION:AMBIGUEDAD",
@@ -242,6 +244,7 @@ pub struct Hallazgo {
     pub eje: Option<Texto>,
     pub etiquetas: Vec<Texto>,
     pub descripcion: Texto,
+    /// Una etiqueta que ese operador no recibió, o un eje que no es HECHOS, FUENTES ni CONCLUSIONES.
     pub etiqueta_invalida: bool,
 }
 
@@ -288,6 +291,14 @@ pub fn parsear_hallazgos<S: AsRef<str>>(salida: &Texto, validas: &[S]) -> Hallaz
         if linea.is_empty() {
             continue;
         }
+        // PART-022, R02: la limpieza de comienzo de la verificación (viñeta, numeración, negrita).
+        let limpia = sin_negrita_antes_de_la_barra(sin_vineta_antes_de(linea, |l, n| {
+            CATEGORIAS4
+                .iter()
+                .chain(&CATEGORIAS_LIMITACION)
+                .any(|p| en(l, n, p))
+        }));
+        let linea = trim(&limpia);
         let con_eje = prefijo(linea, &CATEGORIAS4);
         let categoria = con_eje.or_else(|| prefijo(linea, &CATEGORIAS_LIMITACION));
         let Some((categoria, c)) = categoria
@@ -297,10 +308,13 @@ pub fn parsear_hallazgos<S: AsRef<str>>(salida: &Texto, validas: &[S]) -> Hallaz
             continue;
         };
         let et = etiquetas(c[c.len() - 2]);
+        // PART-022, R30: un eje que no es HECHOS, FUENTES ni CONCLUSIONES se marca igual que una etiqueta inválida.
+        let eje_invalido = con_eje.is_some()
+            && !EJES.iter().any(|e| es(&mayusculas(trim(c[1])), e));
         r.hallazgos.push(Hallazgo {
             categoria,
             eje: con_eje.map(|_| texto(trim(c[1]))),
-            etiqueta_invalida: et.iter().any(|e| !valida(e, validas)),
+            etiqueta_invalida: eje_invalido || et.iter().any(|e| !valida(e, validas)),
             etiquetas: et.iter().map(|e| texto(e)).collect(),
             descripcion: texto(trim(c[c.len() - 1])),
         });
@@ -493,13 +507,18 @@ fn palabra_en(s: &U, i: usize) -> Option<usize> {
 
 /// Vineta: ^[B>*#\-•0-9.)]+ seguido de una palabra clave; se quita el prefijo.
 fn sin_vineta(l: &U) -> &U {
+    sin_vineta_antes_de(l, |l, n| palabra_en(l, n).is_some())
+}
+
+/// La misma viñeta, antes de lo que `clave` reconozca (PART-022, R02: las categorías de un hallazgo).
+fn sin_vineta_antes_de(l: &U, clave: impl Fn(&U, usize) -> bool) -> &U {
     let n = l
         .iter()
         .take_while(|&&c| {
             b(c) || digito(c) || matches!(c, 0x3E | 0x2A | 0x23 | 0x2D | 0x2022 | 0x2E | 0x29)
         })
         .count();
-    if n > 0 && palabra_en(l, n).is_some() {
+    if n > 0 && clave(l, n) {
         &l[n..]
     } else {
         l
@@ -767,8 +786,27 @@ fn linea_titulo(l: &U) -> Option<&U> {
     .then_some(g)
 }
 
-/// TituloInforme.ExtraerTituloDelInforme: solo mira la PRIMERA línea no vacía; sin título, None.
+/// La línea de control de lectura del archivo (RED-007): "ARCHIVO: …", con o sin asteriscos delante.
+pub fn es_linea_archivo(l: &U) -> bool {
+    let l = trim(l);
+    let estrellas = l.iter().take_while(|&&c| c == ESTRELLA || b(c)).count();
+    ci(l, estrellas, "ARCHIVO:")
+}
+
+/// El texto sin su primera línea no vacía si esa es la línea ARCHIVO (PART-022, B4: el integrador, como el redactor).
+pub fn quitar_linea_archivo(texto: &Texto) -> Texto {
+    let s = texto.a_utf16();
+    let ls = lineas(&s);
+    match ls.iter().position(|l| !trim(l).is_empty()) {
+        Some(i) if es_linea_archivo(ls[i]) => self::texto(&unir(&ls[i + 1..])),
+        _ => texto.clone(),
+    }
+}
+
+/// TituloInforme.ExtraerTituloDelInforme: solo mira la PRIMERA línea no vacía (después de la línea
+/// ARCHIVO, si la trae); sin título, None.
 pub fn extraer_titulo_del_informe(informe: &Texto) -> (Option<Texto>, Texto) {
+    let informe = &quitar_linea_archivo(informe);
     let s = informe.a_utf16();
     let ls = lineas(&s);
     let Some(i) = ls.iter().position(|l| !trim(l).is_empty()) else {
@@ -1403,6 +1441,16 @@ fn vacio(t: Option<&Texto>) -> bool {
 
 /// TextoDeHtml.TextoDelInformeIntegrador: el re-derivado del html, o el crudo si no hay html.
 pub fn texto_del_informe_integrador(crudo: &Texto, html: Option<&Texto>) -> io::Result<Texto> {
+    Ok(quitar_linea_archivo(&texto_del_informe_integrador_con_linea(
+        crudo, html,
+    )?))
+}
+
+/// Lo mismo, con la línea ARCHIVO: de ahí sale el control de lectura.
+pub fn texto_del_informe_integrador_con_linea(
+    crudo: &Texto,
+    html: Option<&Texto>,
+) -> io::Result<Texto> {
     match html {
         Some(h) if !vacio(html) => texto_de_html_en_bloques(h, false),
         _ => Ok(crudo.clone()),
@@ -1836,6 +1884,80 @@ mod pruebas {
         assert_eq!(tension.len(), 1);
         assert_eq!(tension[0].etiquetas, vec![t("P1"), t("P9")]);
         assert!(tension[0].etiqueta_invalida);
+    }
+
+    // PART-022, R02: la misma limpieza de comienzo que la verificación.
+    #[test]
+    fn parseos_hallazgos_con_vineta_numeracion_o_negrita_cuentan_como_hallazgo() {
+        let r = parsear_hallazgos(
+            &t(concat!(
+                "- CONVERGENCIA|HECHOS|P1|con vineta
+",
+                "2. DIVERGENCIA|FUENTES|P1,P2|numerada
+",
+                "**TENSION**|CONCLUSIONES|P1|con negrita
+",
+                "SINGULARIDAD|HECHOS|P1|correcta"
+            )),
+            &P1_A_P6,
+        );
+        assert_eq!(r.hallazgos.len(), 4);
+        assert_eq!(r.lineas_descartadas, 0);
+        assert_eq!(r.hallazgos[0].categoria, "CONVERGENCIA");
+        assert_eq!(r.hallazgos[0].descripcion, t("con vineta"));
+        assert_eq!(r.hallazgos[2].categoria, "TENSION");
+        assert_eq!(r.hallazgos[2].descripcion, t("con negrita"));
+        // Una línea de prosa que no empieza con categoria sigue descartada.
+        let prosa = parsear_hallazgos(&t("- hola|HECHOS|P1|no"), &P1_A_P6);
+        assert_eq!(prosa.hallazgos.len(), 0);
+        assert_eq!(prosa.lineas_descartadas, 1);
+    }
+
+    // PART-022, R30: un eje fuera de los tres se marca igual que una etiqueta inválida.
+    #[test]
+    fn parseos_un_eje_fuera_de_los_tres_queda_marcado_como_etiqueta_invalida() {
+        let r = parsear_hallazgos(
+            &t(concat!(
+                "CONVERGENCIA|RESUMEN|P1|eje inventado
+",
+                "CONVERGENCIA|hechos|P1|minusculas valen
+",
+                "CONVERGENCIA|Fuentes|P1|mezcla vale
+",
+                "AUSENCIA|CONCLUSIONES|—|ok
+",
+                "LIMITACION:OTRA|P1|sin eje"
+            )),
+            &P1_A_P6,
+        );
+        let marcas: Vec<bool> = r.hallazgos.iter().map(|h| h.etiqueta_invalida).collect();
+        assert_eq!(marcas, vec![true, false, false, false, false]);
+    }
+
+    // PART-022, B4: la línea ARCHIVO del integrador va antes del título y no es parte del informe.
+    #[test]
+    fn parseos_el_titulo_se_lee_aunque_la_linea_archivo_vaya_antes() {
+        let informe = t("ARCHIVO: primera marca = [[CC-1]], ultima marca = [[CC-9]]
+TITULO: El titulo
+
+1. TIPOS DE DIVERGENCIA
+texto");
+        let (titulo, cuerpo) = extraer_titulo_del_informe(&informe);
+        assert_eq!(titulo, Some(t("El titulo")));
+        assert_eq!(cuerpo, t("1. TIPOS DE DIVERGENCIA
+texto"));
+        let sin_titulo = extraer_titulo_del_informe(&t("**ARCHIVO:** no pude leer el archivo adjunto
+cuerpo"));
+        assert_eq!(sin_titulo, (None, t("cuerpo")));
+        assert_eq!(
+            texto_del_informe_integrador(&t("ARCHIVO: x
+TITULO: T
+cuerpo"), None).unwrap(),
+            t("TITULO: T
+cuerpo")
+        );
+        assert!(es_linea_archivo(&t("  ** archivo: x").a_utf16()));
+        assert!(!es_linea_archivo(&t("el archivo: x").a_utf16()));
     }
 
     fn tipos_como_json(rec: &[&str], norec: &[Texto]) -> [(&'static str, Valor); 2] {

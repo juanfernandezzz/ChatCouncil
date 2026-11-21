@@ -104,7 +104,11 @@ fn medir_ronda_e9() {
     let sello: Vec<&Hecho> = hechos.iter().filter(|h| es_de(h, "sello", &id)).collect();
     let mut pool: Vec<String> = Vec::new();
     for s in &sello {
-        let p = s.texto("panelSourceId").unwrap().para_mostrar().into_owned();
+        let p = s
+            .texto("panelSourceId")
+            .unwrap()
+            .para_mostrar()
+            .into_owned();
         if !pool.contains(&p) {
             pool.push(p);
         }
@@ -170,7 +174,12 @@ fn medir_ronda_e9() {
             o.filas_sin_juntar += 1;
             if !vistas.insert((
                 op.clone(),
-                format!("{}|{}|{:?}|{desc}", g("categoria"), g("eje"), h.valor("etiquetas")),
+                format!(
+                    "{}|{}|{:?}|{desc}",
+                    g("categoria"),
+                    g("eje"),
+                    h.valor("etiquetas")
+                ),
             )) {
                 o.filas_identicas += 1;
             }

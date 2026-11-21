@@ -189,6 +189,9 @@ const TIPOS: &[(&str, &[Campo])] = &[
             c("titulo", Texto),
             c("recibidaEn", Texto),
             c("html", Texto),
+            // PART-022, B4: las marcas del archivo que leyó el integrador.
+            omitible("marcaPrimera", Texto),
+            omitible("marcaUltima", Texto),
         ],
     ),
     (

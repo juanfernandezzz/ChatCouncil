@@ -763,14 +763,24 @@ pub(crate) fn prompt_operacion_utf16(pregunta: &Texto, respuestas: &[(String, Te
         &[
             ("{{PREGUNTA}}", &pregunta.a_utf16()),
             ("{{CUERPO}}", &cuerpo_de(respuestas)),
+            ("{{N}}", &cifras(respuestas.len())),
         ],
     )
 }
 
-pub(crate) fn prompt_con_archivo(pregunta: &Texto) -> Texto {
+/// PART-022, R05: la cantidad de respuestas que recibe ese operador, en cifras.
+fn cifras(n: usize) -> Vec<u16> {
+    u(&n.to_string())
+}
+
+/// `n` es la cantidad de respuestas que trae el archivo de ese operador (PART-022, R05).
+pub(crate) fn prompt_con_archivo(pregunta: &Texto, n: usize) -> Texto {
     Texto::desde_utf16(&sustituir(
         &plantilla("PLANTILLA_CON_ARCHIVO"),
-        &[("{{PREGUNTA}}", &pregunta.a_utf16())],
+        &[
+            ("{{PREGUNTA}}", &pregunta.a_utf16()),
+            ("{{N}}", &cifras(n)),
+        ],
     ))
 }
 
@@ -781,7 +791,7 @@ pub fn armar_prompt_operacion_con_archivo(
     respuestas: &[(String, Texto)],
 ) -> (Texto, Texto) {
     (
-        prompt_con_archivo(pregunta),
+        prompt_con_archivo(pregunta, respuestas.len()),
         Texto::desde_utf16(&cuerpo_de(respuestas)),
     )
 }
@@ -1469,7 +1479,23 @@ mod pruebas {
             .collect()
     }
 
+    /// PART-022, B5: la cantidad de respuestas la pone la ronda; ninguna plantilla dice "seis".
     #[test]
+    fn operacion_el_prompt_lleva_la_cantidad_de_respuestas_de_la_ronda() {
+        let respuestas = respuestas_etiquetadas();
+        let n = respuestas.len();
+        let pregunta = Texto::from("¿Qué dice la evidencia sobre X?");
+        let sin_archivo = armar_prompt_operacion(&pregunta, &respuestas).para_mostrar().into_owned();
+        let (con_archivo, _) = armar_prompt_operacion_con_archivo(&pregunta, &respuestas);
+        let con_archivo = con_archivo.para_mostrar().into_owned();
+        for t in [&sin_archivo, &con_archivo] {
+            assert!(t.starts_with(&format!("Vas a leer {n} respuestas")));
+            assert!(!t.contains("seis") && !t.contains("{{N}}"));
+        }
+    }
+
+    #[test]
+    #[ignore = "PART-022: los prompts se apartaron de la Unity a propósito (D35 a D38); el vector de la Unity ya no es el criterio, ver DESVIACIONES.md"]
     fn operacion_los_prompts_de_operacion_son_los_de_la_unity() {
         let v = vector("Prompts");
         let respuestas = respuestas_etiquetadas();

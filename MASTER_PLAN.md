@@ -113,10 +113,10 @@
   - Outcome: Enviar a todos con confirmación en las cinco etapas
   - Evidence: recorded
 
-- [ ] Part 22: Read `plans/PART22_PLAN.ai.md`
+- [x] Part 22: Read `plans/PART22_PLAN.ai.md`
   - Scenario: SCN-022
   - Outcome: Plan de mejora de la ronda E9
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 23: Read `plans/PART23_PLAN.ai.md`
   - Scenario: SCN-023

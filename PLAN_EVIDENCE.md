@@ -660,3 +660,12 @@ D33 Enviar a todos con confirmacion (ESC-014..017, INV-ESC-001). Rojo: pruebaron
 Artifacts:
 - C:\cc-target\tmp\pr21-fin
 - C:\cc-target\tmp\pr21-rojo\ronda.txt
+
+### PART-022
+
+PART-022 (D35-D38). A: medicion base E9 (bench/resultados/e9-ronda-base.json). B1-B6 prompts literales; C1-C12 nucleo/app. D1 despues en el mismo json: filas 1179 -> 403 tras juntar (776 identicas, todas de perplexity), prompt integrador 198346 -> 89891 B + archivo integrador 81537 B, archivo redactor 359687 -> 239610 B; descartadas y ejes invalidos sin cambio (mismo parser sobre la salida cruda). D2: cargo test --workspace 24/11/197(9 ign)/15/14(1 ign) ok; autoprueba 66/66; pruebainterfaz 16/16, 9/9, 9/9; pruebaronda 101/101 en verde, 99/101 en rojo (C10-5 doble clic y C11 aviso viejo revertidos), 100/101 con solo C11 revertido; fmt --check 0; clippy -D warnings 0. D3 ABAB mediana de 5, release, A=50aa7e3 B=rama: integrador 106.4 -> 111.9 ms (+5.2 %, dentro del 10 % D16), redactor 8.4 -> 6.5 ms (-22 %), informe 33.3 -> 26.6 ms (-20 %); orientativo D16. C12: la fila ya abre con un clic (TouchArea.clicked -> seleccionar); sin cambio.
+
+Artifacts:
+- bench/resultados/e9-ronda-base.json
+- bench/resultados/e9-tiempos.json
+- C:\cc-target\tmp\p22\ronda-final.log

@@ -8,6 +8,8 @@ pub mod dominio;
 pub mod importar;
 pub mod informe;
 pub mod json;
+#[cfg(test)]
+mod medicion_e9;
 mod nfd;
 pub mod operacion;
 pub mod parseos;

@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: COMPLETE
+Next: plans/PART22_PLAN.ai.md
 
 ## Parts
 
@@ -113,6 +113,21 @@ Next: COMPLETE
   - Scenario: SCN-021
   - Outcome: Enviar a todos con confirmación en las cinco etapas
   - Evidence: recorded
+
+- [ ] Part 22: plans/PART22_PLAN.ai.md
+  - Scenario: SCN-022
+  - Outcome: Plan de mejora de la ronda E9
+  - Evidence: pending
+
+- [ ] Part 23: plans/PART23_PLAN.ai.md
+  - Scenario: SCN-023
+  - Outcome: Prueba de roles, selectores y renombre
+  - Evidence: pending
+
+- [ ] Part 24: plans/PART24_PLAN.ai.md
+  - Scenario: SCN-024
+  - Outcome: Relevo: desinstalar y limpiar la Unity
+  - Evidence: pending
 
 ## Notes
 

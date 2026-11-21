@@ -313,8 +313,8 @@ pub fn parsear_hallazgos<S: AsRef<str>>(salida: &Texto, validas: &[S]) -> Hallaz
         r.ultima_cortada = false;
         let et = etiquetas(c[c.len() - 2]);
         // PART-022, R30: un eje que no es HECHOS, FUENTES ni CONCLUSIONES se marca igual que una etiqueta inválida.
-        let eje_invalido = con_eje.is_some()
-            && !EJES.iter().any(|e| es(&mayusculas(trim(c[1])), e));
+        let eje_invalido =
+            con_eje.is_some() && !EJES.iter().any(|e| es(&mayusculas(trim(c[1])), e));
         r.hallazgos.push(Hallazgo {
             categoria,
             eje: con_eje.map(|_| texto(trim(c[1]))),
@@ -522,11 +522,7 @@ fn sin_vineta_antes_de(l: &U, clave: impl Fn(&U, usize) -> bool) -> &U {
             b(c) || digito(c) || matches!(c, 0x3E | 0x2A | 0x23 | 0x2D | 0x2022 | 0x2E | 0x29)
         })
         .count();
-    if n > 0 && clave(l, n) {
-        &l[n..]
-    } else {
-        l
-    }
+    if n > 0 && clave(l, n) { &l[n..] } else { l }
 }
 
 /// Los inicios de Clave sin solaparse: (?<![A-Za-z_])(PALABRAS)\*{0,2}[B]*\|.
@@ -1445,9 +1441,9 @@ fn vacio(t: Option<&Texto>) -> bool {
 
 /// TextoDeHtml.TextoDelInformeIntegrador: el re-derivado del html, o el crudo si no hay html.
 pub fn texto_del_informe_integrador(crudo: &Texto, html: Option<&Texto>) -> io::Result<Texto> {
-    Ok(quitar_linea_archivo(&texto_del_informe_integrador_con_linea(
-        crudo, html,
-    )?))
+    Ok(quitar_linea_archivo(
+        &texto_del_informe_integrador_con_linea(crudo, html)?,
+    ))
 }
 
 /// Lo mismo, con la línea ARCHIVO: de ahí sale el control de lectura.
@@ -1948,15 +1944,23 @@ TITULO: El titulo
 texto");
         let (titulo, cuerpo) = extraer_titulo_del_informe(&informe);
         assert_eq!(titulo, Some(t("El titulo")));
-        assert_eq!(cuerpo, t("1. TIPOS DE DIVERGENCIA
-texto"));
-        let sin_titulo = extraer_titulo_del_informe(&t("**ARCHIVO:** no pude leer el archivo adjunto
+        assert_eq!(
+            cuerpo,
+            t("1. TIPOS DE DIVERGENCIA
+texto")
+        );
+        let sin_titulo =
+            extraer_titulo_del_informe(&t("**ARCHIVO:** no pude leer el archivo adjunto
 cuerpo"));
         assert_eq!(sin_titulo, (None, t("cuerpo")));
         assert_eq!(
-            texto_del_informe_integrador(&t("ARCHIVO: x
+            texto_del_informe_integrador(
+                &t("ARCHIVO: x
 TITULO: T
-cuerpo"), None).unwrap(),
+cuerpo"),
+                None
+            )
+            .unwrap(),
             t("TITULO: T
 cuerpo")
         );

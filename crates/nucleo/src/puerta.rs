@@ -1246,7 +1246,8 @@ impl Puerta {
             let marca_fin = format!("[[CC-MARCA-FIN-{token}]]");
             // Cuerpo y marcas siguen en UTF-16 hasta el final: un solo paso a Texto.
             if con_archivo {
-                let prompt = operacion::prompt_con_archivo(&pregunta, cuerpo.respuestas_para_operador.len());
+                let prompt =
+                    operacion::prompt_con_archivo(&pregunta, cuerpo.respuestas_para_operador.len());
                 let (mut unidades, mut marcas) = operacion::marcas_intercaladas(
                     &operacion::cuerpo_de(&cuerpo.respuestas_para_operador),
                     &token,
@@ -2101,7 +2102,7 @@ impl Puerta {
             self.prompt_verificador = None;
             self.prompt_redactor = None;
             self.marcas_redactor = None;
-        self.marcas_integrador = None;
+            self.marcas_integrador = None;
             self.sello_verificaciones = None;
             Ok(format!(
                 "Ronda nueva abierta ({}) con {} respuestas copiadas de la ronda {}. Recaptura con \"Capturar este panel\" lo que quieras corregir.",
@@ -2421,7 +2422,9 @@ impl Puerta {
             Ok((
                 etapa,
                 aviso_prompts_de_captura(
-                    lecturas.iter().map(|l| (l.id.as_str(), l.user_text.as_ref())),
+                    lecturas
+                        .iter()
+                        .map(|l| (l.id.as_str(), l.user_text.as_ref())),
                     pregunta,
                     etapa,
                 ),
@@ -4121,7 +4124,10 @@ mod pruebas {
     fn captura_una_salida_con_bucle_o_cortada_avisa_y_una_normal_no() {
         let linea = |d: &str| format!("DIVERGENCIA|HECHOS|P1,P2|{d}");
         let normal = Texto::from(
-            (0..10).map(|i| linea(&format!("d{i}"))).collect::<Vec<_>>().join("\n"),
+            (0..10)
+                .map(|i| linea(&format!("d{i}")))
+                .collect::<Vec<_>>()
+                .join("\n"),
         );
         assert_eq!(aviso_de_bucle(&normal), None);
         // 3 repetidas de 10: justo el 30 %.
@@ -4159,7 +4165,10 @@ mod pruebas {
             assert!(n.starts_with("respuestas-") && n.ends_with(".txt"), "{n}");
             assert!(!n.contains("operacion"), "{n}");
             let azar = resto.rsplit_once('-').unwrap().1.trim_end_matches(".txt");
-            assert!(azar.len() == 6 && azar.chars().all(|c| c.is_ascii_hexdigit()), "{n}");
+            assert!(
+                azar.len() == 6 && azar.chars().all(|c| c.is_ascii_hexdigit()),
+                "{n}"
+            );
         }
     }
 
@@ -4189,8 +4198,6 @@ mod pruebas {
             todas[13..20],
             "los siete sellos, byte a byte"
         );
-        let hechos = registro::leer(&format!("{}\n", todas.join("\n"))).hechos;
-        let es = |h: &Hecho, k: &str, v: &str| h.texto(k).and_then(Texto::como_str) == Some(v);
         assert!(
             operaciones
                 .iter()
@@ -6025,16 +6032,29 @@ Ronda: r{i}
     fn captura_el_aviso_de_prompts_compara_cada_mensaje_con_la_pregunta() {
         let q = Texto::from("¿Qué dice la evidencia sobre la dosis?");
         let con = |m: &[(&str, &str)], etapa: &str| {
-            let t: Vec<(String, Texto)> = m.iter().map(|(i, t)| (i.to_string(), Texto::from(*t))).collect();
-            aviso_prompts_de_captura(t.iter().map(|(i, t)| (i.as_str(), Some(t))), Some(&q), etapa)
+            let t: Vec<(String, Texto)> = m
+                .iter()
+                .map(|(i, t)| (i.to_string(), Texto::from(*t)))
+                .collect();
+            aviso_prompts_de_captura(
+                t.iter().map(|(i, t)| (i.as_str(), Some(t))),
+                Some(&q),
+                etapa,
+            )
         };
         // Con prefijo, sufijo y saltos aplanados coincide.
         assert!(
             con(
                 &[
-                    ("chatgpt", "Tú dijiste: ¿Qué dice la evidencia sobre la dosis?"),
-                    ("kimi", "¿Qué dice la evidencia
-sobre la dosis? Mostrar más"),
+                    (
+                        "chatgpt",
+                        "Tú dijiste: ¿Qué dice la evidencia sobre la dosis?"
+                    ),
+                    (
+                        "kimi",
+                        "¿Qué dice la evidencia
+sobre la dosis? Mostrar más"
+                    ),
                 ],
                 "investigacion"
             )
@@ -6042,7 +6062,10 @@ sobre la dosis? Mostrar más"),
         );
         // Con texto distinto no: nombra al proveedor.
         let aviso = con(
-            &[("chatgpt", "¿Qué dice la evidencia sobre la dosis?"), ("kimi", "otra cosa")],
+            &[
+                ("chatgpt", "¿Qué dice la evidencia sobre la dosis?"),
+                ("kimi", "otra cosa"),
+            ],
             "investigacion",
         );
         assert_eq!(
@@ -6050,7 +6073,10 @@ sobre la dosis? Mostrar más"),
             "⚠ El mensaje enviado en Kimi no coincide con la pregunta pegada: revisa esos paneles antes de comparar respuestas."
         );
         // Sin mensaje capturado, el proveedor no entra; fuera de investigación no hay aviso.
-        assert_eq!(aviso_prompts_de_captura([("kimi", None)], Some(&q), "investigacion"), "");
+        assert_eq!(
+            aviso_prompts_de_captura([("kimi", None)], Some(&q), "investigacion"),
+            ""
+        );
         assert_eq!(con(&[("kimi", "otra cosa")], "operacion"), "");
     }
 }

@@ -1289,10 +1289,13 @@ async fn perfiles(
     p.navegar("about:blank").await?;
     let envio = p.pulsar_enviar("{}", &"x".into()).await;
     a.anotar(
-        envio
-            .as_ref()
-            .is_err_and(|e| e.starts_with("en las pruebas solo se envía en las páginas de prueba")),
-        "enviar se niega fuera de las páginas de prueba",
+        envio.as_ref().is_err_and(|e| {
+            e.mensaje
+                    .starts_with("en las pruebas solo se envía en las páginas de prueba")
+                    // Negado antes del pedido: no pulsó nada, así que no se marca como pulsado (hallazgo 6).
+                    && !e.tras_el_pedido
+        }),
+        "enviar se niega fuera de las páginas de prueba, antes del pedido",
         &format!("{envio:?}"),
     );
 

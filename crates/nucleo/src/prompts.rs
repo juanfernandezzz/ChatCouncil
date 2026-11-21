@@ -195,8 +195,14 @@ pub fn armar_tabla_hallazgos(
     }
     // R14: las filas de un mismo operador iguales en todo salvo el ID se juntan en la primera; el registro no cambia.
     let mut juntos: Vec<(&HallazgoParaTabla, Vec<String>)> = Vec::new();
-    let mut lugar: HashMap<(&str, &Texto, &Option<Texto>, &Vec<Texto>, &Texto), usize> =
-        HashMap::new();
+    type Clave<'a> = (
+        &'a str,
+        &'a Texto,
+        &'a Option<Texto>,
+        &'a Vec<Texto>,
+        &'a Texto,
+    );
+    let mut lugar: HashMap<Clave, usize> = HashMap::new();
     for h in hallazgos {
         let clave = (
             h.operador_id_original.as_str(),
@@ -679,7 +685,11 @@ mod pruebas {
             1,
         )
         .unwrap();
-        let ids: Vec<&str> = t.filas.iter().map(|f| f.hallazgo_id_original.as_str()).collect();
+        let ids: Vec<&str> = t
+            .filas
+            .iter()
+            .map(|f| f.hallazgo_id_original.as_str())
+            .collect();
         assert_eq!(ids, ["a1", "a3", "a4"]);
         assert_eq!(t.filas[0].repetidos, ["a2", "a5"]);
         assert!(t.filas[1].repetidos.is_empty());

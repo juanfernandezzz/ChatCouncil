@@ -204,7 +204,9 @@ mod pruebas {
     #[test]
     fn plantillas_de_operacion_comparten_el_bloque_de_categorias() {
         let bloque = |nombre: &str| {
-            let t = plantilla(PROMPT_OPERACION, nombre).expect(nombre).to_string();
+            let t = plantilla(PROMPT_OPERACION, nombre)
+                .expect(nombre)
+                .to_string();
             let ini = t.find("LAS CINCO CATEGORIAS").expect("inicio");
             let fin = "Registrar una limitacion es tan valido como registrar un hallazgo.";
             let f = t.find(fin).expect("fin") + fin.len();

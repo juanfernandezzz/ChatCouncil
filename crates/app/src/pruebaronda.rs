@@ -537,8 +537,7 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
     en(i, "perplexity", "document.body.dataset.tragar = '1'; 'ok'").await?;
     let (dialogo_si, visto_si) = con_el_boton(i, "investigacion", true).await;
     // Grok sigue «Con problema» tras volver a pegar (su intento falló): no es elegible y se envía a mano.
-    let parcial =
-        "Enviado en 2 de 6. Los que no se enviaron dicen por qué en su cabecera; envíalos a mano.";
+    let parcial = "Enviado en 2 de 6. Revisa la cabecera de cada uno de los demás: si dice que no se pudo comprobar, mira el panel antes de volver a enviar; si dice que no se envió, envíalo a mano.";
     let llego = hasta(60, || resultado() == parcial).await;
     let mut clics = Vec::new();
     for id in POOL {
@@ -579,12 +578,32 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
             .collect::<Vec<_>>()
             .join("; "),
     );
+    // Revisión PART-021, hallazgo 5: un doble clic en «Enviar a todos» (con un respiro en medio, mientras se
+    // sondean los estados) abre una sola ventana: al cancelarla no queda otra detrás ni la acción tomada.
+    ui.invoke_enviar_a_todos();
+    esperar(5).await;
+    ui.invoke_enviar_a_todos();
+    let abrio = hasta(10, || ui.get_capa_abierta()).await;
+    ui.invoke_dialogo_cancelar();
+    esperar(600).await;
+    a.anotar(
+        abrio && !ui.get_capa_abierta() && !ui.get_ocupado(),
+        "enviar a todos: un doble clic abre una sola ventana",
+        &format!(
+            "abrió {abrio}, capa {}, ocupado {}",
+            ui.get_capa_abierta(),
+            ui.get_ocupado()
+        ),
+    );
     // ESC-017: Perplexity se pulsó sin comprobación: un segundo «Enviar a todos» no lo vuelve a pulsar.
     let (_, visto_otra) = con_el_boton(i, "investigacion", true).await;
-    hasta(60, || resultado().starts_with("Enviado en 0 de 3")).await;
+    let segundo = hasta(60, || resultado().starts_with("Enviado en 0 de 3")).await;
     let (n_perplexity, _) = envios(i, "perplexity").await;
     a.anotar(
-        n_perplexity == 1 && !visto_otra.contains("Perplexity") && visto_otra.contains("Mistral"),
+        segundo
+            && n_perplexity == 1
+            && !visto_otra.contains("Perplexity")
+            && visto_otra.contains("Mistral"),
         "enviar a todos: sin comprobar no se reintenta",
         &format!(
             "{visto_otra}; «{}»; Perplexity {n_perplexity} clic",
@@ -2485,11 +2504,17 @@ async fn teclado_y_lector(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), Stri
     // Mantenimiento del panel visible (DIA-001).
     let id = visible();
     let n = nombre(&id);
+    // C11: el aviso de una primera carga fallida se borra cuando la página carga bien.
+    r.falla_al_abrir
+        .borrow_mut()
+        .insert(id.clone(), "no respondió a tiempo.".into());
     let recargar = renglon(i, "panel", "Recargar la página", true);
     let esperado = format!("Se recargó la página de {n}.");
     hasta(30, || resultado() == esperado).await;
     a.anotar(
-        recargar == Some(true) && resultado() == esperado,
+        recargar == Some(true)
+            && resultado() == esperado
+            && !r.falla_al_abrir.borrow().contains_key(&id),
         "recargar la página",
         &format!("«{}»", resultado()),
     );

@@ -777,10 +777,7 @@ fn cifras(n: usize) -> Vec<u16> {
 pub(crate) fn prompt_con_archivo(pregunta: &Texto, n: usize) -> Texto {
     Texto::desde_utf16(&sustituir(
         &plantilla("PLANTILLA_CON_ARCHIVO"),
-        &[
-            ("{{PREGUNTA}}", &pregunta.a_utf16()),
-            ("{{N}}", &cifras(n)),
-        ],
+        &[("{{PREGUNTA}}", &pregunta.a_utf16()), ("{{N}}", &cifras(n))],
     ))
 }
 
@@ -1485,7 +1482,9 @@ mod pruebas {
         let respuestas = respuestas_etiquetadas();
         let n = respuestas.len();
         let pregunta = Texto::from("¿Qué dice la evidencia sobre X?");
-        let sin_archivo = armar_prompt_operacion(&pregunta, &respuestas).para_mostrar().into_owned();
+        let sin_archivo = armar_prompt_operacion(&pregunta, &respuestas)
+            .para_mostrar()
+            .into_owned();
         let (con_archivo, _) = armar_prompt_operacion_con_archivo(&pregunta, &respuestas);
         let con_archivo = con_archivo.para_mostrar().into_owned();
         for t in [&sin_archivo, &con_archivo] {

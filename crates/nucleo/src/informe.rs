@@ -21,6 +21,8 @@ pub struct HallazgoResuelto {
     pub respuestas_reales: Vec<String>,
     pub descripcion: Texto,
     pub operador_real: String,
+    /// PART-022, R14: cuántas filas iguales del mismo operador se juntaron en esta.
+    pub repetido_veces: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -292,7 +294,14 @@ fn entrada_hallazgo(h: &HallazgoResuelto) -> Texto {
             .s("\nRespuestas que lo sostienen: ")
             .s(&nombres.join(", "));
     }
-    l.s("\n> ").t(&h.descripcion).0
+    l = l.s("\n> ").t(&h.descripcion);
+    if h.repetido_veces > 0 {
+        l = l.s(&format!(
+            "\n\nRepetido {} veces por el mismo operador.",
+            h.repetido_veces
+        ));
+    }
+    l.0
 }
 
 fn fila_condicion(c: &CondicionProveedor) -> Texto {
@@ -931,6 +940,7 @@ pub(crate) mod pruebas {
             respuestas_reales: strs(campo(h, "respuestasReales")),
             descripcion: tx(campo(h, "descripcion")),
             operador_real: st(campo(h, "operadorReal")),
+            repetido_veces: 0,
         }
     }
 

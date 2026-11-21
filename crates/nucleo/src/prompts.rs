@@ -42,6 +42,8 @@ pub struct FilaTabla {
     pub eje: Option<Texto>,
     pub etiquetas: Vec<Texto>,
     pub descripcion: Texto,
+    /// PART-022, R14: los IDs de las filas del mismo operador que eran iguales en todo salvo el ID.
+    pub repetidos: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -191,10 +193,30 @@ pub fn armar_tabla_hallazgos(
     {
         codigo_de.insert(p, format!("O{}", i + 1));
     }
-    let filas = hallazgos
-        .iter()
+    // R14: las filas de un mismo operador iguales en todo salvo el ID se juntan en la primera; el registro no cambia.
+    let mut juntos: Vec<(&HallazgoParaTabla, Vec<String>)> = Vec::new();
+    let mut lugar: HashMap<(&str, &Texto, &Option<Texto>, &Vec<Texto>, &Texto), usize> =
+        HashMap::new();
+    for h in hallazgos {
+        let clave = (
+            h.operador_id_original.as_str(),
+            &h.categoria,
+            &h.eje,
+            &h.etiquetas,
+            &h.descripcion,
+        );
+        match lugar.get(&clave) {
+            Some(&i) => juntos[i].1.push(h.hallazgo_id_original.clone()),
+            None => {
+                lugar.insert(clave, juntos.len());
+                juntos.push((h, Vec::new()));
+            }
+        }
+    }
+    let filas = juntos
+        .into_iter()
         .enumerate()
-        .map(|(i, h)| {
+        .map(|(i, (h, repetidos))| {
             let codigo = codigo_de
                 .get(h.operador_id_original.as_str())
                 .ok_or_else(|| {
@@ -212,6 +234,7 @@ pub fn armar_tabla_hallazgos(
                 eje: h.eje.clone(),
                 etiquetas: h.etiquetas.clone(),
                 descripcion: h.descripcion.clone(),
+                repetidos,
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
@@ -631,6 +654,38 @@ mod pruebas {
                 )
             })
             .collect()
+    }
+
+    /// PART-022, R14: las filas de un mismo operador iguales en todo salvo el ID se juntan en la primera.
+    #[test]
+    fn prompts_las_filas_iguales_del_mismo_operador_se_juntan() {
+        let h = |id: &str, op: &str, d: &str| HallazgoParaTabla {
+            hallazgo_id_original: id.into(),
+            categoria: "DIVERGENCIA".into(),
+            eje: Some("HECHOS".into()),
+            etiquetas: vec!["P1".into()],
+            descripcion: d.into(),
+            operador_id_original: op.into(),
+        };
+        let t = armar_tabla_hallazgos(
+            &[
+                h("a1", "kimi", "x"),
+                h("a2", "kimi", "x"),
+                h("a3", "chatgpt", "x"),
+                h("a4", "kimi", "y"),
+                h("a5", "kimi", "x"),
+            ],
+            &["kimi", "chatgpt"],
+            1,
+        )
+        .unwrap();
+        let ids: Vec<&str> = t.filas.iter().map(|f| f.hallazgo_id_original.as_str()).collect();
+        assert_eq!(ids, ["a1", "a3", "a4"]);
+        assert_eq!(t.filas[0].repetidos, ["a2", "a5"]);
+        assert!(t.filas[1].repetidos.is_empty());
+        assert_eq!(t.filas[0].codigo_hallazgo, "H1");
+        assert_eq!(t.filas[2].codigo_hallazgo, "H3");
+        assert_eq!(t.para_prompt.len(), 3);
     }
 
     /// INT-003, VER-001, RED-004 e INV-VER-001: los tres prompts de rol, carácter por carácter.

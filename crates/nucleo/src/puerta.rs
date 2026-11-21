@@ -1674,7 +1674,21 @@ impl Puerta {
                 });
                 let (estado, detalle) = match (v, s) {
                     (Some(v), Some(_)) if !v.hallazgos.is_empty() => {
-                        ("ok", format!("{} hallazgos", v.hallazgos.len()))
+                        let repetidos: usize = tabla
+                            .filas
+                            .iter()
+                            .filter(|f| f.operador_id_original == *op)
+                            .map(|f| f.repetidos.len())
+                            .sum();
+                        let detalle = if repetidos > 0 {
+                            format!(
+                                "{} hallazgos, {repetidos} repetidos (se cuentan una vez)",
+                                v.hallazgos.len()
+                            )
+                        } else {
+                            format!("{} hallazgos", v.hallazgos.len())
+                        };
+                        ("ok", detalle)
                     }
                     (Some(_), Some(s)) => {
                         let descartadas = dominio::etiquetas_validas_del_operador(op, pool, &sello)
@@ -1745,6 +1759,7 @@ impl Puerta {
                         .collect(),
                     descripcion: f.descripcion.clone(),
                     operador_real: f.operador_id_original.clone(),
+                    repetido_veces: f.repetidos.len(),
                 })
                 .collect();
             let ids_validos: Vec<&str> = tabla

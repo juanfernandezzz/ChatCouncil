@@ -189,7 +189,7 @@ fn medir_ronda_e9() {
     }
 
     // Lo que arma la app y sus bytes.
-    let integrador = puerta.armar_prompt_integrador();
+    let integrador = puerta.armar_integrador();
     let redactor = puerta.armar_redactor();
     let suma = |f: fn(&Operador) -> usize| por_operador.values().map(f).sum::<usize>();
     let (total, identicas) = (suma(|o| o.filas_sin_juntar), suma(|o| o.filas_identicas));
@@ -200,15 +200,19 @@ fn medir_ronda_e9() {
     } else {
         con_dato as f64 * 100.0 / registrados as f64
     };
-    let (integrador_bytes, integrador_utf16) = match &integrador {
-        Ok(t) => (t.bytes().len() as i64, t.largo_utf16() as i64),
-        Err(_) => (-1, -1),
+    let (integrador_bytes, integrador_utf16, integrador_archivo) = match &integrador {
+        Ok(a) => (
+            a.prompt_completo.bytes().len() as i64,
+            a.prompt_completo.largo_utf16() as i64,
+            a.peso_del_archivo() as i64,
+        ),
+        Err(_) => (-1, -1, -1),
     };
     let redactor_bytes = redactor
         .as_ref()
         .map_or(-1, |r| r.cuerpo_archivo.bytes().len() as i64);
     let json = format!(
-        "{{\"ronda\":\"8cc12458\",\"operadores\":{},\"totales\":{{\"filas_sin_juntar\":{total},\"filas_identicas\":{identicas},\"hallazgos_registrados\":{registrados},\"con_operacion_p\":{con_op_p},\"con_dato\":{con_dato},\"pct_con_dato\":{pct:.1}}},\"bytes\":{{\"prompt_integrador\":{integrador_bytes},\"prompt_integrador_utf16\":{integrador_utf16},\"archivo_redactor\":{redactor_bytes}}}}}",
+        "{{\"ronda\":\"8cc12458\",\"operadores\":{},\"totales\":{{\"filas_sin_juntar\":{total},\"filas_identicas\":{identicas},\"hallazgos_registrados\":{registrados},\"con_operacion_p\":{con_op_p},\"con_dato\":{con_dato},\"pct_con_dato\":{pct:.1}}},\"bytes\":{{\"prompt_integrador\":{integrador_bytes},\"prompt_integrador_utf16\":{integrador_utf16},\"archivo_integrador\":{integrador_archivo},\"archivo_redactor\":{redactor_bytes}}}}}",
         json_operadores(&por_operador),
     );
     fs::write(&destino, &json).unwrap();

@@ -581,13 +581,15 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
     // Revisión PART-021, hallazgo 5: un doble clic en «Enviar a todos» (con un respiro en medio, mientras se
     // sondean los estados) abre una sola ventana: al cancelarla no queda otra detrás ni la acción tomada.
     ui.invoke_enviar_a_todos();
-    esperar(5).await;
+    esperar(0).await;
+    // Mientras se sondean los estados la acción sigue tomada (la ventana aún no abrió).
+    let tomada = ui.get_capa_abierta() || ui.get_ocupado();
     ui.invoke_enviar_a_todos();
     let abrio = hasta(10, || ui.get_capa_abierta()).await;
     ui.invoke_dialogo_cancelar();
     esperar(600).await;
     a.anotar(
-        abrio && !ui.get_capa_abierta() && !ui.get_ocupado(),
+        tomada && abrio && !ui.get_capa_abierta() && !ui.get_ocupado(),
         "enviar a todos: un doble clic abre una sola ventana",
         &format!(
             "abrió {abrio}, capa {}, ocupado {}",
@@ -1279,7 +1281,7 @@ async fn armado(i: &Interfaz, etapa: &'static str) -> String {
     };
     r.nucleo
         .pedir(move |p| match etapa {
-            "integracion" => p.armar_prompt_integrador(),
+            "integracion" => p.armar_integrador().map(|a| a.prompt),
             "verificacion" => p.armar_prompt_verificador(),
             _ => p.armar_redactor().map(|a| a.prompt),
         })
@@ -1370,7 +1372,8 @@ async fn roles(
     hasta(10, || estado_en_la_lista(i, "deepseek") == deepseek_pegado).await;
     let vacio = chat_vacio(i, "deepseek").await;
     a.anotar(
-        resultado() == "Prompt pegado en DeepSeek. Revísalo y envíalo."
+        resultado()
+            == "Prompt pegado en DeepSeek. Comprueba que el archivo quedó adjunto, revísalo y envíalo."
             && vacio
             && !prompt_integrador.is_empty()
             && compositor(i, "deepseek").await == prompt_integrador
@@ -1431,8 +1434,8 @@ async fn roles(
         titulo_informe == "Informe de prueba"
             && informe
                 .and_then(|x| texto_de(x, "promptCompleto"))
-                .as_deref()
-                == Some(prompt_integrador.as_str())
+                // El prompt completo lleva además el archivo adjunto, con sus marcas de ese pegado.
+                .is_some_and(|t| t.starts_with(prompt_integrador.as_str()))
             && estado_en_la_lista(i, "deepseek") == capturado,
         "capturar el integrador",
         &format!(
@@ -1599,7 +1602,16 @@ async fn roles(
     ui.invoke_paso();
     hasta(90, pegado).await;
     let archivos: Vec<std::path::PathBuf> = std::fs::read_dir(i.datos.join("redactor"))
-        .map(|d| d.flatten().map(|e| e.path()).collect())
+        .map(|d| {
+            d.flatten()
+                .map(|e| e.path())
+                // La carpeta también guarda el archivo del integrador (integrador-…).
+                .filter(|p| {
+                    p.file_name()
+                        .is_some_and(|n| n.to_string_lossy().starts_with("redactor-"))
+                })
+                .collect()
+        })
         .unwrap_or_default();
     let adjunto = texto_en(
         i,

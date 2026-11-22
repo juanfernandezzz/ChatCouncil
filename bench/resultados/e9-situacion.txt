@@ -1,0 +1,10 @@
+investigacion/con-problema repeticion=1 paneles=10 total_ms=161.933 por_panel_ms=16.193 bytes_registro=18466408
+investigacion/con-problema repeticion=2 paneles=10 total_ms=1.240 por_panel_ms=0.124 bytes_registro=18466408
+investigacion/con-problema repeticion=3 paneles=10 total_ms=1.205 por_panel_ms=0.120 bytes_registro=18466408
+investigacion/con-problema repeticion=4 paneles=10 total_ms=1.190 por_panel_ms=0.119 bytes_registro=18466408
+investigacion/con-problema repeticion=5 paneles=10 total_ms=1.087 por_panel_ms=0.109 bytes_registro=18466408
+operacion/capturado repeticion=1 paneles=10 total_ms=9.619 por_panel_ms=0.962 bytes_registro=18466408
+operacion/capturado repeticion=2 paneles=10 total_ms=6.716 por_panel_ms=0.672 bytes_registro=18466408
+operacion/capturado repeticion=3 paneles=10 total_ms=9.417 por_panel_ms=0.942 bytes_registro=18466408
+operacion/capturado repeticion=4 paneles=10 total_ms=6.922 por_panel_ms=0.692 bytes_registro=18466408
+operacion/capturado repeticion=5 paneles=10 total_ms=10.046 por_panel_ms=1.005 bytes_registro=18466408

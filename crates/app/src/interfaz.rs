@@ -2255,6 +2255,13 @@ impl Interfaz {
         if let Err(e) = r.nucleo.pedir(move |p| p.operacion_pegada(&pegada)).await {
             return Some(e);
         }
+        // PART-026 (4.3): las marcas quedan junto al archivo para el control de lectura del operador
+        // (lo usa medicion_e9; la captura en vivo aún no lo tiene). Un fallo aquí no es de la operación,
+        // que ya quedó pegada y registrada: reintentar pegaría dos veces. Sin .marcas la lectura sigue
+        // siendo «sin-marcas-registradas», que es lo honesto.
+        if let Some(ruta) = ruta.as_deref() {
+            let _ = nucleo::operacion::guardar_marcas(ruta, &op.marcas);
+        }
         r.operaciones.borrow_mut().insert(id.into(), op);
         None
     }

@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART23_PLAN.ai.md
+Next: plans/PART26_PLAN.ai.md
 
 ## Parts
 
@@ -119,14 +119,19 @@ Next: plans/PART23_PLAN.ai.md
   - Outcome: Plan de mejora de la ronda E9
   - Evidence: recorded
 
-- [ ] Part 23: plans/PART23_PLAN.ai.md
+- [x] Part 23: plans/PART23_PLAN.ai.md
   - Scenario: SCN-023
   - Outcome: Prueba de roles, selectores y renombre
-  - Evidence: pending
+  - Evidence: recorded
 
-- [ ] Part 24: plans/PART24_PLAN.ai.md
+- [x] Part 24: plans/PART24_PLAN.ai.md
   - Scenario: SCN-024
   - Outcome: Relevo: desinstalar y limpiar la Unity
+  - Evidence: recorded
+
+- [ ] Part 26: plans/PART26_PLAN.ai.md
+  - Scenario: SCN-026
+  - Outcome: Pendientes técnicos de la auditoría E9 resueltos y medidos
   - Evidence: pending
 
 ## Notes

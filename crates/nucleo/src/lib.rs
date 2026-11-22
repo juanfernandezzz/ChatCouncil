@@ -11,6 +11,8 @@ pub mod json;
 #[cfg(test)]
 mod medicion_e9;
 #[cfg(test)]
+mod medicion_roles;
+#[cfg(test)]
 mod medicion_tiempos_e9;
 mod nfd;
 pub mod operacion;

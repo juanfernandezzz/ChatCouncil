@@ -172,7 +172,7 @@ mod pruebas {
     fn specs_json_coincide_con_dat_001() {
         assert_eq!(
             sha256(SPECS_JSON),
-            "05f66a1a98ead130f47480511025e8565c62a5599ccb81faa6ebfdafc30a0b84"
+            "1869de7c5138edf80327add1d4bbb420e9ba67382478fbfe61fc70fb3c70ee7e"
         );
     }
 

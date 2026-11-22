@@ -4894,9 +4894,12 @@ mod pruebas {
         let b = p.armar_integrador().unwrap().nombre_archivo;
         assert_ne!(a, b, "dos pegados en el mismo minuto");
         for n in [&a, &b] {
+            // La hora del sello es la local: la prueba no depende de la zona horaria de quien la corre.
             let resto = n
-                .strip_prefix("integrador-2026-10-06-0900-")
+                .strip_prefix("integrador-2026-10-06-")
                 .and_then(|r| r.strip_suffix(".txt"))
+                .and_then(|r| r.get(4..))
+                .and_then(|r| r.strip_prefix('-'))
                 .unwrap_or_else(|| panic!("nombre inesperado: {n}"));
             assert_eq!(resto.len(), 6, "{n}");
             assert!(resto.chars().all(|c| c.is_ascii_hexdigit()), "{n}");

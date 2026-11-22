@@ -1053,8 +1053,13 @@ async fn operacion(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
             (Some(b), Some(c)) => b.as_slice() == c.as_bytes(),
             _ => false,
         };
+        // PART-026 (4.3): las marcas de la operación quedan en disco, una por línea, junto al archivo.
+        let marcas_en_disco =
+            nucleo::operacion::leer_marcas(&i.datos.join("operaciones").join(&nombre));
+        let con_marcas = marcas_en_disco.as_ref() == Some(&op.marcas) && !op.marcas.is_empty();
         if navs == 1
             && vacio
+            && con_marcas
             && compositor(i, id).await == op.texto.para_mostrar()
             && igual
             && en_disco.is_some_and(|b| adjunto == format!("{nombre}|{}", b.len()))

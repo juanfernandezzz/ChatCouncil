@@ -934,11 +934,129 @@ pub fn anonimizar_verificaciones(
     )
 }
 
+/// PART-026 (4.3): junto al archivo de operación, mismo nombre y extensión .marcas.
+pub fn ruta_de_marcas(archivo: &std::path::Path) -> std::path::PathBuf {
+    archivo.with_extension("marcas")
+}
+
+/// Guarda las marcas del archivo de operación (una por línea) para que el control de lectura las
+/// encuentre aunque la app se reinicie entre pegar y capturar. El registro no cambia de formato.
+pub fn guardar_marcas(archivo: &std::path::Path, marcas: &[String]) -> std::io::Result<()> {
+    std::fs::write(ruta_de_marcas(archivo), marcas.join("\n"))
+}
+
+/// Las marcas guardadas por `guardar_marcas`, o None si no hay archivo (operación pegada antes de
+/// este cambio) o no se pudo leer.
+pub fn leer_marcas(archivo: &std::path::Path) -> Option<Vec<String>> {
+    let texto = std::fs::read_to_string(ruta_de_marcas(archivo)).ok()?;
+    let marcas: Vec<String> = texto.lines().map(str::to_string).collect();
+    (!marcas.is_empty()).then_some(marcas)
+}
+
+/// El nombre del archivo adjunto que el prompt pegado declara en su cabecera.
+pub fn nombre_de_archivo_adjunto(prompt: &Texto) -> Option<String> {
+    const ABRE: &str = "=== ARCHIVO ADJUNTO: ";
+    let texto = prompt.para_mostrar();
+    let desde = texto.rfind(ABRE)? + ABRE.len();
+    let nombre = texto[desde..].lines().next()?.strip_suffix(" ===")?;
+    // Solo un nombre de archivo: nunca una ruta que salga de la carpeta de operaciones.
+    (!nombre.is_empty() && nombre != ".." && !nombre.contains(['/', '\\', ':']))
+        .then(|| nombre.to_string())
+}
+
+/// El control de lectura de un operador: las marcas salen del archivo guardado junto al adjunto.
+pub fn lectura_de_operador(
+    operaciones: &std::path::Path,
+    prompt_completo: &Texto,
+    cruda: &Texto,
+    html: Option<&Texto>,
+) -> &'static str {
+    let marcas =
+        nombre_de_archivo_adjunto(prompt_completo).and_then(|n| leer_marcas(&operaciones.join(n)));
+    let (primera, ultima) = match &marcas {
+        Some(m) => (m.first().map(String::as_str), m.last().map(String::as_str)),
+        None => (None, None),
+    };
+    crate::prompts::controles_redaccion(cruda, html, primera, ultima, &[], &[])
+        .map_or("sin-marcas-registradas", |c| c.lectura_archivo)
+}
+
 #[cfg(test)]
 mod pruebas {
     use super::*;
     use crate::json::{self, Valor, vector};
     use crate::registro::pruebas::{campo, lista, str_de, texto_de};
+
+    // PART-026 (4.3): tras reiniciar, el control sale de lo guardado junto al archivo.
+    #[test]
+    fn marcas_guardadas_sobreviven_al_reinicio_y_dan_la_lectura_real() {
+        let dir = std::env::temp_dir().join(format!("cc-marcas-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let nombre = "respuestas-2026-10-06-1200-abc123.txt";
+        let archivo = dir.join(nombre);
+        let marcas = vec![
+            "[[CC-MARCA-0000-TK]]".to_string(),
+            "[[CC-MARCA-0001-TK]]".to_string(),
+            "[[CC-MARCA-FIN-TK]]".to_string(),
+        ];
+        guardar_marcas(&archivo, &marcas).unwrap();
+        assert_eq!(
+            ruta_de_marcas(&archivo),
+            dir.join("respuestas-2026-10-06-1200-abc123.marcas")
+        );
+        assert_eq!(leer_marcas(&archivo), Some(marcas));
+        let prompt = t(&format!(
+            "Haz esto.\n\n=== ARCHIVO ADJUNTO: {nombre} ===\ncuerpo"
+        ));
+        assert_eq!(nombre_de_archivo_adjunto(&prompt).as_deref(), Some(nombre));
+        let lectura = |cruda: &str| lectura_de_operador(&dir, &prompt, &t(cruda), None);
+        assert_eq!(
+            lectura("ARCHIVO: [[CC-MARCA-0000-TK]] y [[CC-MARCA-FIN-TK]]\nH01 ..."),
+            "entero"
+        );
+        assert_eq!(
+            lectura("ARCHIVO: [[CC-MARCA-0000-OTRO]] y [[CC-MARCA-FIN-OTRO]]\nH01 ..."),
+            "marcas-distintas"
+        );
+        assert_eq!(lectura("H01 sin la línea de archivo"), "sin-linea");
+        assert_eq!(
+            lectura("ARCHIVO: no pude leer el archivo adjunto"),
+            "no-pudo-leer"
+        );
+        // Una operación pegada antes de este cambio no tiene .marcas: sigue sin poder comprobarse.
+        let antigua = t(
+            "Haz esto.\n\n=== ARCHIVO ADJUNTO: respuestas-2026-10-05-0900-ffffff.txt ===\ncuerpo",
+        );
+        assert_eq!(
+            lectura_de_operador(
+                &dir,
+                &antigua,
+                &t("ARCHIVO: [[CC-MARCA-0000-TK]] y [[CC-MARCA-FIN-TK]]"),
+                None
+            ),
+            "sin-marcas-registradas"
+        );
+        // Nombres que salen de la carpeta, con unidad o sin cierre: no se usan.
+        for malo in ["../x.txt", "a\\b.txt", "C:x.txt", ".."] {
+            let p = t(&format!("=== ARCHIVO ADJUNTO: {malo} ==="));
+            assert_eq!(nombre_de_archivo_adjunto(&p), None, "{malo}");
+        }
+        assert_eq!(
+            nombre_de_archivo_adjunto(&t("=== ARCHIVO ADJUNTO: x.txt")),
+            None
+        );
+        // Un .marcas vacío no cuenta, y uno con CRLF se lee igual.
+        let vacio = dir.join("vacio.txt");
+        guardar_marcas(&vacio, &[]).unwrap();
+        assert_eq!(leer_marcas(&vacio), None);
+        std::fs::write(dir.join("crlf.marcas"), "a\r\nb").unwrap();
+        assert_eq!(
+            leer_marcas(&dir.join("crlf.txt")),
+            Some(vec!["a".into(), "b".into()])
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     fn t(s: &str) -> Texto {
         Texto::from(s)

@@ -669,3 +669,26 @@ Artifacts:
 - bench/resultados/e9-ronda-base.json
 - bench/resultados/e9-tiempos.json
 - C:\cc-target\tmp\p22\ronda-final.log
+
+### PART-023
+
+PART-023 (E-I, lote anterior y cierre en este lote). Selectores, prueba de roles (gana GLM, D38.1; roles por defecto glm integra, qwen verifica 1, deepseek verifica 2, glm redacta), renombre a ChatCouncil. PR 2 mergeado (e3fff8b); PR 3 (UsePreviousGroup=no en el .iss y su prueba) mergeado en este lote como 4a20d35 con ci y publicar verdes. Release chatcouncil-v1 publico 0.2.14 (19:52Z) y el registro de Windows de la app real muestra 0.2.14; en disco existe el grupo de Inicio ChatCouncil y ya no existe ChatCouncil (nueva). Huecos: la version en Ayuda y el grupo en pantalla no se vieron con agent-desktop (bloqueado por PERM_DENIED: DACL de ~/.agent-desktop con CodexSandboxUsers); Juan pulso Actualizar. Gates (cargo test, autoprueba, pruebaronda, pruebainterfaz, fmt, clippy) corridos en el lote anterior y respaldados por el ci verde del PR 3.
+
+Artifacts:
+- gh pr 3 merged 4a20d35; ci y publicar success; release 0.2.14
+
+### PART-024
+
+PART-024 (J-L). J1 inventario de la Unity (2 accesos en ProgramData Start Menu, entrada de desinstalacion 0.1.42; sin acceso en Escritorio). J2: los primeros 15527937 B del registro REAL dan sha256 dacfde9dd921fccf004ed7ccd417fe526151e10bd15ffcf05336cf5bc02e82fb, igual al .jsonl de la Unity; REAL completo 18466408 B 1b393488c1fcf7026bb4b6ad80973dce7096fa327c188c9525f13f1b3e9c4700. J3: zip unity-datos-2026-11-22.zip (10692879 B) sin navegador/, 109 archivos, al abrirlo 0 faltantes, 0 sobrantes, 0 huellas distintas. K1: Juan aprobo la lista con si. K2: Juan desinstalo la Unity (comprobado: sin clave de desinstalacion, sin Program Files\ChatCouncil, sin sus accesos). K3: borrados datos de la Unity, base-rel, rama-rel, perfil-prueba, perfil-prueba-e9, los 4 de tmp, worktree wt-base y 3 ramas locales. Un hook de git y una proteccion de rutas del sistema me bloquearon el borrado de las ramas de origin y de las carpetas en la raiz de C:; Juan los ejecuto con el prefijo ! (comprobado: origin solo tiene e3-webviews, e4-slint y main; las 8 carpetas ya no existen). K4: REAL 18466408 B con el mismo sha256, zip e informes\e9 (17 archivos) intactos, app 0.2.14. L1/L2: commit 6fecc7f (ADR-0009 y AGENTS.md). Hueco: la ronda E9 en el historial no se vio en pantalla (agent-desktop bloqueado).
+
+Artifacts:
+- commits 717a9fe 6fecc7f; zip 109/0/0/0
+
+## PART-026 · evidencia (2026-11-22)
+- Rojo 4.2/4.3: `cargo test -p nucleo --lib -- marcas_guardadas_sobreviven integrador_dos_pegados` falló ambos antes del código (left: None / mismo nombre `integrador-2026-10-06-0900.txt`).
+- Verde: los dos pasan; `cargo test --workspace` ok (nucleo 199 passed, 11 ignored); `cargo fmt --check` 0; `cargo clippy --workspace --all-targets -- -D warnings` 0.
+- Autoprueba 66/66; pruebainterfaz fases 16/16, 9/9, 9/9; pruebaronda 101/101 (todas exit 0, build debug desde C:\cc-repo).
+- 4.4 D3 redactor: ABAB, release, mediana de 5, A=50aa7e3 B=part-026, sellos filtrados por ronda. Integrador 141,34→137,38 ms (-2,8 %); redactor 52,41→47,65 ms (-9,1 %; antes inválido por error); informe 45,32→49,80 ms (+9,9 %). CPU de la máquina 22-67 %: orientativo (D16). bench/resultados/e9-tiempos.json.
+- 4.5 Situación por panel (10 paneles, registro E9 18.466.408 B): investigación mediana 0,12 ms, operación 0,94 ms (caliente); primera llamada en frío 16,2 ms/panel (lectura única del registro). Sin caché nueva: ya hay caché de lectura. bench/resultados/e9-situacion.txt.
+- 4.7 revisión: docs/revisiones/PART-026-rust-reviewer.md.
+- 4.3 en la app: pruebaronda exige el .marcas por operación; rojo 100/101 (0 de 6) sin la llamada, verde 101/101. Revisión: arreglos 2, 3, 7, 8 aplicados; 1 fuera de alcance. Real E9 intacto: 18.466.408 B sha 1b393488c1fc.

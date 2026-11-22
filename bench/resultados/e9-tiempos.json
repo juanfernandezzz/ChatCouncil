@@ -1,85 +1,94 @@
 {
- "ronda": "8cc12458",
- "metodo": "ABAB intercalado, un proceso por muestra, release, mediana de 5; A=50aa7e3 (antes), B=rama part-022-024 (despues). Redactor sin verificacion en E9: devuelve error, se mide ese camino. Orientativo D16 (CPU de la maquina no fijada).",
- "muestras_ms": {
-  "A": [
-   {
-    "integrador_ms": "106.398",
-    "redactor_ms": "7.874",
-    "informe_ms": "37.385",
-    "ok": "true/false/true"
-   },
-   {
-    "integrador_ms": "133.015",
-    "redactor_ms": "14.977",
-    "informe_ms": "53.482",
-    "ok": "true/false/true"
-   },
-   {
-    "integrador_ms": "103.959",
-    "redactor_ms": "7.096",
-    "informe_ms": "32.476",
-    "ok": "true/false/true"
-   },
-   {
-    "integrador_ms": "103.760",
-    "redactor_ms": "8.352",
-    "informe_ms": "33.341",
-    "ok": "true/false/true"
-   },
-   {
-    "integrador_ms": "109.239",
-    "redactor_ms": "8.667",
-    "informe_ms": "31.926",
-    "ok": "true/false/true"
-   }
-  ],
-  "B": [
-   {
-    "integrador_ms": "119.101",
-    "redactor_ms": "11.956",
-    "informe_ms": "38.425",
-    "ok": "true/false/true"
-   },
-   {
-    "integrador_ms": "114.151",
-    "redactor_ms": "6.505",
-    "informe_ms": "25.317",
-    "ok": "true/false/true"
-   },
-   {
-    "integrador_ms": "97.851",
-    "redactor_ms": "6.153",
-    "informe_ms": "27.501",
-    "ok": "true/false/true"
-   },
-   {
-    "integrador_ms": "111.944",
-    "redactor_ms": "7.637",
-    "informe_ms": "26.580",
-    "ok": "true/false/true"
-   },
-   {
-    "integrador_ms": "97.527",
-    "redactor_ms": "5.697",
-    "informe_ms": "25.836",
-    "ok": "true/false/true"
-   }
-  ]
- },
- "integrador_ms": {
-  "mediana_antes": 106.398,
-  "mediana_despues": 111.944,
-  "cambio_pct": 5.2
- },
- "redactor_ms": {
-  "mediana_antes": 8.352,
-  "mediana_despues": 6.505,
-  "cambio_pct": -22.1
- },
- "informe_ms": {
-  "mediana_antes": 33.341,
-  "mediana_despues": 26.58,
-  "cambio_pct": -20.3
- }
+    "ronda":  "8cc12458",
+    "metodo":  "PART-026 (4.4). ABAB intercalado, un proceso por muestra, release, mediana de 5; A=50aa7e3 (antes), B=rama part-026 (despues). Conjunto de sellos filtrado por la ronda medida (antes se tomaban los de todas las rondas y el redactor devolvia error, medido el camino de error: valor invalido). Registro: copia del registro real E9 en solo lectura (sha256 1b393488c1fc...). CPU de la maquina entre 22 y 67 % antes/despues de cada muestra: orientativo (D16, regla del 10 %).",
+    "cpu_maquina_pct":  "A1:36/35 B1:23/48 A2:27/67 B2:43/62 A3:34/33 B3:46/57 A4:42/48 B4:40/40 A5:22/43 B5:62/56",
+    "muestras_ms":  {
+                        "A":  [
+                                  {
+                                      "integrador_ms":  "141.340",
+                                      "redactor_ms":  "47.605",
+                                      "informe_ms":  "41.847",
+                                      "ok":  "true/true/true"
+                                  },
+                                  {
+                                      "integrador_ms":  "208.140",
+                                      "redactor_ms":  "62.386",
+                                      "informe_ms":  "82.522",
+                                      "ok":  "true/true/true"
+                                  },
+                                  {
+                                      "integrador_ms":  "135.192",
+                                      "redactor_ms":  "103.559",
+                                      "informe_ms":  "131.884",
+                                      "ok":  "true/true/true"
+                                  },
+                                  {
+                                      "integrador_ms":  "163.192",
+                                      "redactor_ms":  "50.172",
+                                      "informe_ms":  "41.859",
+                                      "ok":  "true/true/true"
+                                  },
+                                  {
+                                      "integrador_ms":  "137.384",
+                                      "redactor_ms":  "52.411",
+                                      "informe_ms":  "45.323",
+                                      "ok":  "true/true/true"
+                                  }
+                              ],
+                        "B":  [
+                                  {
+                                      "integrador_ms":  "137.376",
+                                      "redactor_ms":  "42.798",
+                                      "informe_ms":  "45.712",
+                                      "ok":  "true/true/true"
+                                  },
+                                  {
+                                      "integrador_ms":  "128.297",
+                                      "redactor_ms":  "58.498",
+                                      "informe_ms":  "148.742",
+                                      "ok":  "true/true/true"
+                                  },
+                                  {
+                                      "integrador_ms":  "174.180",
+                                      "redactor_ms":  "47.647",
+                                      "informe_ms":  "40.560",
+                                      "ok":  "true/true/true"
+                                  },
+                                  {
+                                      "integrador_ms":  "122.960",
+                                      "redactor_ms":  "47.478",
+                                      "informe_ms":  "49.802",
+                                      "ok":  "true/true/true"
+                                  },
+                                  {
+                                      "integrador_ms":  "196.563",
+                                      "redactor_ms":  "62.606",
+                                      "informe_ms":  "74.613",
+                                      "ok":  "true/true/true"
+                                  }
+                              ]
+                    },
+    "integrador_ms":  {
+                          "mediana_antes":  141.34,
+                          "mediana_despues":  137.376,
+                          "cambio_pct":  -2.8
+                      },
+    "redactor_ms":  {
+                        "mediana_antes":  52.411,
+                        "mediana_despues":  47.647,
+                        "cambio_pct":  -9.1
+                    },
+    "informe_ms":  {
+                       "mediana_antes":  45.323,
+                       "mediana_despues":  49.802,
+                       "cambio_pct":  9.9
+                   },
+    "anterior_invalido":  {
+                              "nota":  "PART-022 D3: el redactor devolvio error (pool de sellos sin filtrar por ronda); su redactor_ms medio el camino de error y no vale.",
+                              "redactor_ms":  {
+                                                  "mediana_antes":  8.352,
+                                                  "mediana_despues":  6.505,
+                                                  "cambio_pct":  -22.1
+                                              }
+                          }
 }

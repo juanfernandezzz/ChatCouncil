@@ -1206,6 +1206,16 @@ impl Puerta {
         .map_err(falla)
     }
 
+    // PART-026 (4.2): 6 hexadecimales nuevos por pegado, para que un nombre no se repita dentro del minuto.
+    fn azar_de_nombre(&mut self) -> String {
+        (self.nuevo_id)()
+            .chars()
+            .filter(char::is_ascii_hexdigit)
+            .rev()
+            .take(6)
+            .collect()
+    }
+
     // "AAAA-MM-DD-HHMM" con la hora local, para los nombres de archivo que ve Juan.
     fn sello_de_archivo(&self) -> String {
         let t = (self.reloj)();
@@ -1257,12 +1267,7 @@ impl Puerta {
                 marcas.push(marca_fin);
                 let archivo = Texto::desde_utf16(&unidades);
                 // PART-022, R27: ningún código estable en el nombre; 6 hexadecimales nuevos por panel.
-                let azar: String = (self.nuevo_id)()
-                    .chars()
-                    .filter(char::is_ascii_hexdigit)
-                    .rev()
-                    .take(6)
-                    .collect();
+                let azar = self.azar_de_nombre();
                 let nombre = format!("respuestas-{}-{azar}.txt", self.sello_de_archivo());
                 let cabecera = Texto::from(format!("\n\n=== ARCHIVO ADJUNTO: {nombre} ===\n"));
                 return Ok(Operacion {
@@ -1339,7 +1344,11 @@ impl Puerta {
         let marca_fin = format!("[[CC-MARCA-FIN-{token}]]");
         unidades.extend(format!("\n{marca_fin}\n").encode_utf16());
         let archivo = Texto::desde_utf16(&unidades);
-        let nombre = format!("integrador-{}.txt", self.sello_de_archivo());
+        let nombre = format!(
+            "integrador-{}-{}.txt",
+            self.sello_de_archivo(),
+            self.azar_de_nombre()
+        );
         let prompt = prompts::armar_prompt_integrador(&pregunta);
         let cabecera = Texto::from(format!("\n\n=== ARCHIVO ADJUNTO: {nombre} ===\n"));
         Ok(ArchivoRedactor {
@@ -4874,6 +4883,24 @@ mod pruebas {
         p.registrar_capturas(&lote(&lotes, "operadores2"), &confirmada)
             .unwrap();
         (p, lotes)
+    }
+
+    // PART-026 (4.2): el archivo del integrador no repite nombre en el mismo minuto (R27: ningún código estable).
+    #[test]
+    fn integrador_dos_pegados_en_el_mismo_minuto_dan_nombres_distintos() {
+        let c = Carpeta::nueva("integrador-nombres");
+        let (mut p, _) = ronda_hasta_la_integracion(&c.0);
+        let a = p.armar_integrador().unwrap().nombre_archivo;
+        let b = p.armar_integrador().unwrap().nombre_archivo;
+        assert_ne!(a, b, "dos pegados en el mismo minuto");
+        for n in [&a, &b] {
+            let resto = n
+                .strip_prefix("integrador-2026-10-06-0900-")
+                .and_then(|r| r.strip_suffix(".txt"))
+                .unwrap_or_else(|| panic!("nombre inesperado: {n}"));
+            assert_eq!(resto.len(), 6, "{n}");
+            assert!(resto.chars().all(|c| c.is_ascii_hexdigit()), "{n}");
+        }
     }
 
     // Medido en la ronda real (2026-10-22): seis capturas de chatgpt en 0 caracteres cerraron la investigación con 6 de 7.

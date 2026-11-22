@@ -11,9 +11,8 @@ use std::fs;
 use std::time::{Duration, UNIX_EPOCH};
 
 use crate::dominio;
-use crate::operacion::CONOCIDOS;
+use crate::operacion::{self, CONOCIDOS};
 use crate::parseos;
-use crate::prompts;
 use crate::puerta::Puerta;
 use crate::registro::{self, Hecho};
 use crate::ronda::RolesElegidos;
@@ -116,6 +115,8 @@ fn medir_ronda_e9() {
     pool.sort_by_key(|p| CONOCIDOS.iter().position(|c| c == p));
     let pool_refs: Vec<&str> = pool.iter().map(String::as_str).collect();
 
+    let operaciones =
+        std::env::var("CC_E9_OPERACIONES").map_or_else(|_| carpeta.join("operaciones"), Into::into);
     let mut n = 0u64;
     let mut puerta = Puerta::new(
         carpeta.clone(),
@@ -158,11 +159,10 @@ fn medir_ronda_e9() {
                 })
             })
             .count();
-        // Las marcas del operador no se persisten: solo se sabe si trae la línea ARCHIVO.
-        o.lectura = prompts::controles_redaccion(&cruda, None, None, None, &[], &[])
-            .unwrap()
-            .lectura_archivo
-            .to_string();
+        // PART-026 (4.3): las marcas salen del .marcas guardado junto al adjunto (CC_E9_OPERACIONES
+        // es la carpeta operaciones/); sin él, solo se sabe si trae la línea ARCHIVO.
+        let prompt = salida.texto("promptCompleto").cloned().unwrap_or_default();
+        o.lectura = operacion::lectura_de_operador(&operaciones, &prompt, &cruda, None).to_string();
         // Filas idénticas: iguales en todo salvo el ID, dentro de un mismo operador.
         for h in &v.hallazgos {
             let g = |c: &str| {

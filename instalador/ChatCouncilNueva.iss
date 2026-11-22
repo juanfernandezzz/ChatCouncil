@@ -15,6 +15,8 @@ AppPublisher=ChatCouncil
 DefaultDirName={autopf}\ChatCouncilNueva
 DefaultGroupName=ChatCouncil
 DisableProgramGroupPage=yes
+; D38.2: sin esto Inno reutiliza el grupo anterior y el acceso nuevo cae en «ChatCouncil (nueva)».
+UsePreviousGroup=no
 OutputDir=..\salida
 OutputBaseFilename=ChatCouncilNueva-instalador
 UninstallDisplayIcon={app}\ChatCouncilNueva.exe

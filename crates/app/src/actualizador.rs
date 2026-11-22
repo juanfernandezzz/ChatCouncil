@@ -137,7 +137,12 @@ mod pruebas {
         assert!(s.contains("Description: \"Crear un acceso directo en el escritorio\""));
         assert!(s.contains("Flags: nowait runasoriginaluser; Check: WizardSilent"));
         assert!(s.contains("AppId=cl.juanfernandez.chatcouncil\n"));
-        assert!(s.contains("AppName=ChatCouncil (nueva)\n"));
+        assert!(s.contains("AppName=ChatCouncil\n"));
+        // D38.2: el nombre visible es ChatCouncil y el instalador borra los accesos viejos «(nueva)».
+        assert!(s.contains("AppVerName=ChatCouncil {#Version}\n"));
+        assert!(s.contains("[InstallDelete]"));
+        assert!(s.contains("Name: \"{userdesktop}\\ChatCouncil (nueva).lnk\""));
+        assert!(!s.contains("Name: \"{group}\\ChatCouncil (nueva)\""));
         // Una app nueva y la Unity conviven: ni el AppId ni la carpeta de la Unity.
         assert!(!s.contains("8C2B4E57"));
         assert!(!s.contains("DefaultDirName={autopf}\\ChatCouncil\n"));

@@ -3,7 +3,8 @@
 // un mensaje enviado. Usa las funciones de pagina.js (inyectado antes); sin ellas no envía.
 (() => {
     const w = window;
-    if (w.__ccEnviar)
+    // La huella distingue este objeto de uno que la página haya definido con el mismo nombre.
+    if (w.__ccEnviar?.huella === "cc-enviar")
         return;
     const COMPROBAR_MS = 15000;
     // La misma comparación con que pagina.js verifica lo escrito (INV-ESC-003).
@@ -24,8 +25,12 @@
         const antes = enviados();
         if (spec.submit.kind === "key") {
             const c = buscar(spec.composer.selector);
+            if (!c)
+                return { estado: "compositor-vacio" };
             c.focus();
-            c.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+            const tecla = spec.submit.key ?? "Enter";
+            const codigo = tecla === "Enter" ? 13 : 0;
+            c.dispatchEvent(new KeyboardEvent("keydown", { key: tecla, code: tecla, keyCode: codigo, which: codigo, bubbles: true, cancelable: true }));
         }
         else {
             // Con techo de 15 s: la espera de la app (40 s) cubre esto más los 15 s de comprobación.
@@ -57,6 +62,7 @@
     }
     const pedidos = new Map();
     w.__ccEnviar = {
+        huella: "cc-enviar",
         pedir(json) {
             let p;
             try {
@@ -65,6 +71,8 @@
             catch (e) {
                 return `error: el pedido no es JSON (${e instanceof Error ? e.message : String(e)})`;
             }
+            // Un pedido que Rust dejó de consultar (venció a los 40 s) no se acumula.
+            pedidos.clear();
             pedidos.set(p.id, { estado: "pendiente" });
             enviar(p.spec, p.texto ?? "").then((resultado) => pedidos.set(p.id, { estado: "listo", resultado }), (e) => pedidos.set(p.id, { estado: "error", error: e instanceof Error ? e.message : String(e) }));
             return "ok";

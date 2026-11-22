@@ -42,6 +42,8 @@ pub struct FilaTabla {
     pub eje: Option<Texto>,
     pub etiquetas: Vec<Texto>,
     pub descripcion: Texto,
+    /// PART-022, R14: los IDs de las filas del mismo operador que eran iguales en todo salvo el ID.
+    pub repetidos: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -138,14 +140,13 @@ pub fn tabla_de(hallazgos: &[HallazgoParaIntegrador]) -> Texto {
 }
 
 /// INT-003: {{PREGUNTA}} y {{HALLAZGOS}} en la plantilla del integrador.
-pub fn armar_prompt_integrador(pregunta: &Texto, hallazgos: &[HallazgoParaIntegrador]) -> Texto {
-    armar(
-        datos::PROMPT_INTEGRADOR,
-        &[
-            ("{{PREGUNTA}}", pregunta),
-            ("{{HALLAZGOS}}", &tabla_de(hallazgos)),
-        ],
-    )
+pub fn armar_prompt_integrador(pregunta: &Texto) -> Texto {
+    armar(datos::PROMPT_INTEGRADOR, &[("{{PREGUNTA}}", pregunta)])
+}
+
+/// PART-022, B4: la tabla de hallazgos, que el integrador lee en un archivo adjunto (las marcas las intercala quien llama).
+pub fn armar_archivo_integrador(hallazgos: &[HallazgoParaIntegrador]) -> Texto {
+    tabla_de(hallazgos)
 }
 
 /// VER-001: el rescate tal cual y solo los hallazgos que cita, en su orden: H##|CATEGORIA|EJE|DESCRIPCION.
@@ -192,10 +193,36 @@ pub fn armar_tabla_hallazgos(
     {
         codigo_de.insert(p, format!("O{}", i + 1));
     }
-    let filas = hallazgos
-        .iter()
+    // R14: las filas de un mismo operador iguales en todo salvo el ID se juntan en la primera; el registro no cambia.
+    let mut juntos: Vec<(&HallazgoParaTabla, Vec<String>)> = Vec::new();
+    type Clave<'a> = (
+        &'a str,
+        &'a Texto,
+        &'a Option<Texto>,
+        &'a Vec<Texto>,
+        &'a Texto,
+    );
+    let mut lugar: HashMap<Clave, usize> = HashMap::new();
+    for h in hallazgos {
+        let clave = (
+            h.operador_id_original.as_str(),
+            &h.categoria,
+            &h.eje,
+            &h.etiquetas,
+            &h.descripcion,
+        );
+        match lugar.get(&clave) {
+            Some(&i) => juntos[i].1.push(h.hallazgo_id_original.clone()),
+            None => {
+                lugar.insert(clave, juntos.len());
+                juntos.push((h, Vec::new()));
+            }
+        }
+    }
+    let filas = juntos
+        .into_iter()
         .enumerate()
-        .map(|(i, h)| {
+        .map(|(i, (h, repetidos))| {
             let codigo = codigo_de
                 .get(h.operador_id_original.as_str())
                 .ok_or_else(|| {
@@ -213,6 +240,7 @@ pub fn armar_tabla_hallazgos(
                 eje: h.eje.clone(),
                 etiquetas: h.etiquetas.clone(),
                 descripcion: h.descripcion.clone(),
+                repetidos,
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
@@ -501,7 +529,7 @@ fn enlaces_n(n: usize) -> String {
 pub fn lineas_de_control(c: &ControlesRedaccion) -> Vec<String> {
     let lectura = match c.lectura_archivo {
         "entero" => {
-            "Leyó el archivo entero: la primera línea trae la primera y la última marca correctas."
+            "Reprodujo la primera y la última marca del archivo: es un indicio de que lo recorrió entero, no una prueba."
         }
         "no-pudo-leer" => "No pudo leer el archivo: respondió \"no pude leer el archivo adjunto\".",
         "marcas-distintas" => {
@@ -634,6 +662,42 @@ mod pruebas {
             .collect()
     }
 
+    /// PART-022, R14: las filas de un mismo operador iguales en todo salvo el ID se juntan en la primera.
+    #[test]
+    fn prompts_las_filas_iguales_del_mismo_operador_se_juntan() {
+        let h = |id: &str, op: &str, d: &str| HallazgoParaTabla {
+            hallazgo_id_original: id.into(),
+            categoria: "DIVERGENCIA".into(),
+            eje: Some("HECHOS".into()),
+            etiquetas: vec!["P1".into()],
+            descripcion: d.into(),
+            operador_id_original: op.into(),
+        };
+        let t = armar_tabla_hallazgos(
+            &[
+                h("a1", "kimi", "x"),
+                h("a2", "kimi", "x"),
+                h("a3", "chatgpt", "x"),
+                h("a4", "kimi", "y"),
+                h("a5", "kimi", "x"),
+            ],
+            &["kimi", "chatgpt"],
+            1,
+        )
+        .unwrap();
+        let ids: Vec<&str> = t
+            .filas
+            .iter()
+            .map(|f| f.hallazgo_id_original.as_str())
+            .collect();
+        assert_eq!(ids, ["a1", "a3", "a4"]);
+        assert_eq!(t.filas[0].repetidos, ["a2", "a5"]);
+        assert!(t.filas[1].repetidos.is_empty());
+        assert_eq!(t.filas[0].codigo_hallazgo, "H1");
+        assert_eq!(t.filas[2].codigo_hallazgo, "H3");
+        assert_eq!(t.para_prompt.len(), 3);
+    }
+
     /// INT-003, VER-001, RED-004 e INV-VER-001: los tres prompts de rol, carácter por carácter.
     #[test]
     fn prompts_los_de_los_roles_son_los_mismos_que_en_la_unity() {
@@ -642,20 +706,18 @@ mod pruebas {
         let rescate = texto_de(&vector("Rescate")).clone();
         for caso in lista(&vector("Prompts")) {
             let pregunta = texto_de(campo(caso, "pregunta"));
-            assert_eq!(
-                armar_prompt_integrador(pregunta, &hallazgos),
-                *texto_de(campo(caso, "integrador")),
-                "integrador: {pregunta:?}"
-            );
+            // PART-022 (B4, B1 a B3): el integrador y el redactor se apartan de la Unity a propósito:
+            // llevan la pregunta; el verificador sigue igual que la Unity.
+            for (rol, p) in [
+                ("integrador", armar_prompt_integrador(pregunta)),
+                ("redactor", armar_prompt_redactor(pregunta)),
+            ] {
+                assert!(contiene(&p, pregunta), "{rol}: {pregunta:?}");
+            }
             assert_eq!(
                 armar_prompt_verificador(pregunta, &rescate, &para_verificador),
                 *texto_de(campo(caso, "verificador")),
                 "verificador: {pregunta:?}"
-            );
-            assert_eq!(
-                armar_prompt_redactor(pregunta),
-                *texto_de(campo(caso, "redactor")),
-                "redactor: {pregunta:?}"
             );
         }
     }
@@ -667,10 +729,8 @@ mod pruebas {
         let pregunta = texto_de(campo(&lista(&vector("Prompts"))[1], "pregunta")).clone();
         let rescate = texto_de(&vector("Rescate")).clone();
         let hallazgos = hallazgos_integrador();
-        assert!(contiene(
-            &armar_prompt_integrador(&pregunta, &hallazgos),
-            &pregunta
-        ));
+        let _ = hallazgos;
+        assert!(contiene(&armar_prompt_integrador(&pregunta), &pregunta));
         assert!(contiene(&armar_prompt_redactor(&pregunta), &pregunta));
         let verificador = armar_prompt_verificador(&pregunta, &rescate, &[]);
         assert!(contiene(&verificador, &pregunta));

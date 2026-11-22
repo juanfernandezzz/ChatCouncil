@@ -269,7 +269,7 @@ mod pruebas {
         assert_eq!(ronda::leer_seleccion(None, &CONOCIDOS), None);
         assert_eq!(
             ronda::leer_roles(None, &CONOCIDOS),
-            RolesElegidos::new("deepseek", "glm", "qwen", "deepseek")
+            RolesElegidos::new("glm", "qwen", "deepseek", "glm")
         );
         assert_eq!(ETIQUETAS_DE_ROL.len(), 4);
         assert!(ETIQUETAS_DE_ROL[0].starts_with("Integrador: "));

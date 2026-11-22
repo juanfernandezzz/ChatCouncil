@@ -14,7 +14,7 @@ use nucleo::dominio::{estado_de_sesion, nombre_proveedor};
 use nucleo::puerta::{self, Lectura, Operacion, Paso, Situacion};
 use nucleo::ronda::{self, RolesElegidos};
 use nucleo::texto::Texto;
-use paneles::{EstadoPagina, Navegador, Panel};
+use paneles::{ErrorEnvio, EstadoPagina, Navegador, Panel};
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
 use crate::hilo::HiloNucleo;
@@ -69,7 +69,7 @@ pub struct Ronda {
     /// En la operación y en los roles la Puerta no conoce los pegados fallidos: los sabe la interfaz, que los intentó.
     falla_operacion: RefCell<HashMap<String, String>>,
     falla_rol: RefCell<HashMap<String, String>>,
-    falla_al_abrir: RefCell<HashMap<String, String>>,
+    pub(crate) falla_al_abrir: RefCell<HashMap<String, String>>,
     /// ESC-008: la ronda que ya vio el aviso de la operación y la vía que se eligió en él.
     aviso_operacion: RefCell<Option<String>>,
     operacion_por_texto: Cell<bool>,
@@ -1775,10 +1775,10 @@ impl Interfaz {
         let yo = self.yo();
         let _ = slint::spawn_local(async move {
             let Some(x) = yo.upgrade() else { return };
-            // El diálogo suelta la acción; «Sí, enviar» la vuelve a tomar.
-            x.ocupar(&r, false);
+            // La acción sigue tomada mientras se sondean los estados (revisión PART-021, hallazgo 5): un doble clic
+            // no abre dos tareas. Se suelta en cada salida temprana y justo antes de abrir la ventana.
             let Some((titulo, indicacion)) = confirmacion_de_envio(r.etapa.get()) else {
-                return;
+                return x.ocupar(&r, false);
             };
             let ids: Vec<String> = match x.estados(&r).await {
                 Ok(e) => e
@@ -1788,12 +1788,18 @@ impl Interfaz {
                     })
                     .map(|(id, _)| id)
                     .collect(),
-                Err(e) => return x.resultado(&e, true),
+                Err(e) => {
+                    x.ocupar(&r, false);
+                    return x.resultado(&e, true);
+                }
             };
             if ids.is_empty() {
+                x.ocupar(&r, false);
                 return x.resultado("No hay nada pegado sin enviar en esta etapa.", false);
             }
             let nombres: Vec<String> = ids.iter().map(|id| nombre_proveedor(id)).collect();
+            // El diálogo suelta la acción; «Sí, enviar» la vuelve a tomar.
+            x.ocupar(&r, false);
             x.abrir_dialogo(
                 titulo,
                 &format!(
@@ -1850,10 +1856,16 @@ impl Interfaz {
                 slint::spawn_local(async move {
                     match (panel, texto) {
                         (Some(p), Some(t)) => p.pulsar_enviar(&spec, &t).await,
-                        (None, _) => Err("el panel no está abierto".into()),
+                        (None, _) => Err(ErrorEnvio {
+                            mensaje: "el panel no está abierto".into(),
+                            tras_el_pedido: false,
+                        }),
                         // Sin saber qué se pegó no se puede comprobar que el compositor sigue igual.
                         (_, None) => {
-                            Err("la app no tiene registrado qué pegó en este panel: no se envía. Envíalo a mano.".into())
+                            Err(ErrorEnvio {
+                                mensaje: "la app no tiene registrado qué pegó en este panel: no se envía. Envíalo a mano.".into(),
+                                tras_el_pedido: false,
+                            })
                         }
                     }
                 })
@@ -1863,7 +1875,10 @@ impl Interfaz {
         for (tarea, id) in tareas.into_iter().zip(&ids) {
             let res = match tarea {
                 Ok(t) => t.await,
-                Err(e) => Err(e.to_string()),
+                Err(e) => Err(ErrorEnvio {
+                    mensaje: e.to_string(),
+                    tras_el_pedido: false,
+                }),
             };
             let falla = match res {
                 Ok((estado, comprobado)) => {
@@ -1878,11 +1893,14 @@ impl Interfaz {
                         ),
                     }
                 }
-                // Un error puede llegar después del clic (la página se recargó y perdió el script): se cuenta
-                // como pulsado para no ofrecerlo otra vez; se envía a mano o se vuelve a pegar.
+                // Solo un error posterior al pedido pudo llegar después del clic (la página se recargó y perdió el
+                // script): ese se cuenta como pulsado para no ofrecerlo otra vez. Uno anterior no pulsó nada y el
+                // panel sigue ofreciéndose (revisión PART-021, hallazgo 6).
                 Err(e) => {
-                    r.pulsados.borrow_mut().insert(id.clone());
-                    Some(Err(e))
+                    if e.tras_el_pedido {
+                        r.pulsados.borrow_mut().insert(id.clone());
+                    }
+                    Some(Err(e.mensaje))
                 }
             };
             match falla {
@@ -1904,7 +1922,7 @@ impl Interfaz {
             format!("Enviado en los {n} paneles. Captura cuando terminen.")
         } else {
             format!(
-                "Enviado en {ok} de {n}. Los que no se enviaron dicen por qué en su cabecera; envíalos a mano."
+                "Enviado en {ok} de {n}. Revisa la cabecera de cada uno de los demás: si dice que no se pudo comprobar, mira el panel antes de volver a enviar; si dice que no se envió, envíalo a mano."
             )
         };
         self.resultado(&t, ok < n);
@@ -2472,8 +2490,11 @@ impl Interfaz {
             .pedir(
                 move |p| -> std::io::Result<(Texto, Option<puerta::ArchivoRedactor>)> {
                     Ok(match etapa {
-                        "integracion" => (p.armar_prompt_integrador()?, None),
                         "verificacion" => (p.armar_prompt_verificador()?, None),
+                        "integracion" => {
+                            let a = p.armar_integrador()?;
+                            (a.prompt.clone(), Some(a))
+                        }
                         _ => {
                             let a = p.armar_redactor()?;
                             (a.prompt.clone(), Some(a))
@@ -2487,7 +2508,49 @@ impl Interfaz {
             Ok(a) => a,
             Err(e) => return self.resultado(&format!("No se armó el prompt: {e}."), true),
         };
-        // D62: en la verificación, el mismo prompt va a los dos verificadores, uno después del otro.
+        // PART-022, R17: un archivo más grande de lo que el proveedor lee se avisa antes de pegarlo.
+        let excedido = archivo.as_ref().and_then(|a| {
+            ids.iter().find_map(|id| {
+                let lim = datos::limite_archivo_bytes(&self.specs, id)?;
+                let peso = a.peso_del_archivo();
+                (peso > lim).then(|| (nombre_proveedor(id), peso, lim))
+            })
+        });
+        let Some((nombre, peso, lim)) = excedido else {
+            return self.pegar_rol_armado(r, etapa, ids, prompt, archivo).await;
+        };
+        let (kb, lim_kb) = (peso.div_ceil(1000), lim / 1000);
+        let (r, ids_, prompt_, archivo_) =
+            (r.clone(), ids.clone(), prompt.clone(), archivo.clone());
+        self.abrir_dialogo(
+            &format!("El archivo no cabe en {nombre}"),
+            &format!(
+                "El archivo pesa {kb} KB y {nombre} lee hasta unos {lim_kb} KB por archivo: leería solo una parte. Asigna este rol a otro proveedor, o pega igual si quieres probar."
+            ),
+            false,
+            None,
+            "Pegar igual",
+            Box::new(move |x, _, _| {
+                let (ids, prompt, archivo) = (ids_.clone(), prompt_.clone(), archivo_.clone());
+                let _ = r.clone();
+                x.en_accion(move |x, r| async move {
+                    x.pegar_rol_armado(&r, etapa, ids, prompt, archivo).await
+                })
+            }),
+        );
+        self.ui.set_dialogo_cancelar_texto("No pegar".into());
+        self.ui.set_dialogo_foco_en_cancelar(true);
+    }
+
+    /// El pegado del rol ya armado, en los paneles de `ids` (D62: en la verificación el mismo prompt va a los dos).
+    async fn pegar_rol_armado(
+        &self,
+        r: &Rc<Ronda>,
+        etapa: &'static str,
+        ids: Vec<String>,
+        prompt: Texto,
+        archivo: Option<puerta::ArchivoRedactor>,
+    ) {
         for id in &ids {
             let nombre = nombre_proveedor(id);
             self.resultado(&format!("Pegando el prompt en {nombre}…"), false);
@@ -2530,7 +2593,8 @@ impl Interfaz {
         let anotado = r
             .nucleo
             .pedir(move |p| match (etapa, archivo) {
-                ("integracion", _) => p.integrador_pegado(pegado),
+                ("integracion", Some(a)) => p.integrador_pegado_con_archivo(&a),
+                ("integracion", None) => p.integrador_pegado(pegado),
                 ("verificacion", _) => p.verificador_pegado(pegado),
                 (_, Some(a)) => p.redactor_pegado(&a),
                 _ => {}
@@ -2695,7 +2759,10 @@ impl Interfaz {
         let nombre = nombre_proveedor(&id);
         let panel = r.paneles.borrow().get(&id).cloned();
         let res = match panel {
-            Some(p) => p.recargar().await,
+            // La página existe pero su primera carga falló: si ahora carga bien, el aviso viejo se borra.
+            Some(p) => p.recargar().await.map(|()| {
+                r.falla_al_abrir.borrow_mut().remove(&id);
+            }),
             // La primera carga no respondió a tiempo: se vuelve a abrir sin reiniciar la app.
             None => self.crear_panel_de(r, &id).await.map(|()| {
                 r.falla_al_abrir.borrow_mut().remove(&id);

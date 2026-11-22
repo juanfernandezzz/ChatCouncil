@@ -205,6 +205,7 @@ pub struct Puerta {
     prompt_verificador: Option<Texto>,
     prompt_redactor: Option<Texto>,
     marcas_redactor: Option<(String, String)>,
+    marcas_integrador: Option<(String, String)>,
     sello_verificaciones: Option<Vec<(String, String)>>,
     // El informe armado en este proceso: el paso pasa a abrir su carpeta en vez de armar otro.
     informe_armado: Option<(String, PathBuf)>,
@@ -344,6 +345,13 @@ pub struct ArchivoRedactor {
     pub aviso: Option<String>,
     /// Lo que se registra como promptCompleto de la respuesta del redactor.
     pub prompt_completo: Texto,
+}
+
+impl ArchivoRedactor {
+    /// Lo que pesa el archivo adjunto, en bytes (R17: el límite de lectura de cada proveedor).
+    pub fn peso_del_archivo(&self) -> usize {
+        self.cuerpo_archivo.bytes().len()
+    }
 }
 
 fn falla(mensaje: impl Into<String>) -> io::Error {
@@ -706,6 +714,7 @@ impl Puerta {
             prompt_verificador: None,
             prompt_redactor: None,
             marcas_redactor: None,
+            marcas_integrador: None,
             sello_verificaciones: None,
             informe_armado: None,
         }
@@ -940,6 +949,7 @@ impl Puerta {
         self.prompt_verificador = None;
         self.prompt_redactor = None;
         self.marcas_redactor = None;
+        self.marcas_integrador = None;
         self.sello_verificaciones = None;
     }
 
@@ -1236,13 +1246,8 @@ impl Puerta {
             let marca_fin = format!("[[CC-MARCA-FIN-{token}]]");
             // Cuerpo y marcas siguen en UTF-16 hasta el final: un solo paso a Texto.
             if con_archivo {
-                let codigo = &resultado
-                    .sello
-                    .iter()
-                    .find(|s| s.panel_source_id == operador_id)
-                    .expect("una entrada del sello por operador")
-                    .codigo_estable;
-                let prompt = operacion::prompt_con_archivo(&pregunta);
+                let prompt =
+                    operacion::prompt_con_archivo(&pregunta, cuerpo.respuestas_para_operador.len());
                 let (mut unidades, mut marcas) = operacion::marcas_intercaladas(
                     &operacion::cuerpo_de(&cuerpo.respuestas_para_operador),
                     &token,
@@ -1251,7 +1256,14 @@ impl Puerta {
                 unidades.extend(format!("\n{marca_fin}\n").encode_utf16());
                 marcas.push(marca_fin);
                 let archivo = Texto::desde_utf16(&unidades);
-                let nombre = format!("operacion-{codigo}-{}.txt", self.sello_de_archivo());
+                // PART-022, R27: ningún código estable en el nombre; 6 hexadecimales nuevos por panel.
+                let azar: String = (self.nuevo_id)()
+                    .chars()
+                    .filter(char::is_ascii_hexdigit)
+                    .rev()
+                    .take(6)
+                    .collect();
+                let nombre = format!("respuestas-{}-{azar}.txt", self.sello_de_archivo());
                 let cabecera = Texto::from(format!("\n\n=== ARCHIVO ADJUNTO: {nombre} ===\n"));
                 return Ok(Operacion {
                     operador_id: operador_id.to_string(),
@@ -1313,14 +1325,38 @@ impl Puerta {
         Ok((leido, ronda, pregunta, tabla))
     }
 
-    /// INT-003: el prompt del integrador con la tabla de hallazgos de la ronda.
-    pub fn armar_prompt_integrador(&mut self) -> io::Result<Texto> {
+    /// INT-003 y PART-022 (B4): el prompt del integrador y, en un archivo adjunto con marcas, la tabla
+    /// de hallazgos de la ronda. No escribe nada.
+    pub fn armar_integrador(&mut self) -> io::Result<ArchivoRedactor> {
         let pool = self.pool.clone();
         let (_, _, pregunta, tabla) = self.tabla_de_ronda(&strs(&pool), "integrador")?;
-        Ok(prompts::armar_prompt_integrador(
-            &pregunta,
-            &tabla.para_prompt,
-        ))
+        let token = (self.nuevo_id)();
+        let (mut unidades, marcas) = operacion::marcas_intercaladas(
+            &prompts::armar_archivo_integrador(&tabla.para_prompt).a_utf16(),
+            &token,
+            INTERVALO_MARCA,
+        );
+        let marca_fin = format!("[[CC-MARCA-FIN-{token}]]");
+        unidades.extend(format!("\n{marca_fin}\n").encode_utf16());
+        let archivo = Texto::desde_utf16(&unidades);
+        let nombre = format!("integrador-{}.txt", self.sello_de_archivo());
+        let prompt = prompts::armar_prompt_integrador(&pregunta);
+        let cabecera = Texto::from(format!("\n\n=== ARCHIVO ADJUNTO: {nombre} ===\n"));
+        Ok(ArchivoRedactor {
+            prompt_completo: concatenar(&[&prompt, &cabecera, &archivo]),
+            prompt,
+            cuerpo_archivo: archivo,
+            nombre_archivo: nombre,
+            marca_primera: marcas.first().cloned().unwrap_or_else(|| marca_fin.clone()),
+            marca_ultima: marca_fin,
+            sello_verificaciones: Vec::new(),
+            aviso: None,
+        })
+    }
+
+    /// El prompt del integrador tal como lo lee el operador, con el archivo adjunto incluido.
+    pub fn armar_prompt_integrador(&mut self) -> io::Result<Texto> {
+        Ok(self.armar_integrador()?.prompt_completo)
     }
 
     /// VER-001, INT-006: la sección QUE CONVIENE RESCATAR del último informe del integrador, tal
@@ -1641,7 +1677,21 @@ impl Puerta {
                 });
                 let (estado, detalle) = match (v, s) {
                     (Some(v), Some(_)) if !v.hallazgos.is_empty() => {
-                        ("ok", format!("{} hallazgos", v.hallazgos.len()))
+                        let repetidos: usize = tabla
+                            .filas
+                            .iter()
+                            .filter(|f| f.operador_id_original == *op)
+                            .map(|f| f.repetidos.len())
+                            .sum();
+                        let detalle = if repetidos > 0 {
+                            format!(
+                                "{} hallazgos, {repetidos} repetidos (se cuentan una vez)",
+                                v.hallazgos.len()
+                            )
+                        } else {
+                            format!("{} hallazgos", v.hallazgos.len())
+                        };
+                        ("ok", detalle)
                     }
                     (Some(_), Some(s)) => {
                         let descartadas = dominio::etiquetas_validas_del_operador(op, pool, &sello)
@@ -1712,6 +1762,7 @@ impl Puerta {
                         .collect(),
                     descripcion: f.descripcion.clone(),
                     operador_real: f.operador_id_original.clone(),
+                    repetido_veces: f.repetidos.len(),
                 })
                 .collect();
             let ids_validos: Vec<&str> = tabla
@@ -2051,6 +2102,7 @@ impl Puerta {
             self.prompt_verificador = None;
             self.prompt_redactor = None;
             self.marcas_redactor = None;
+            self.marcas_integrador = None;
             self.sello_verificaciones = None;
             Ok(format!(
                 "Ronda nueva abierta ({}) con {} respuestas copiadas de la ronda {}. Recaptura con \"Capturar este panel\" lo que quieras corregir.",
@@ -2363,9 +2415,19 @@ impl Puerta {
                 }
                 _ => {}
             }
+            let pregunta = hechos
+                .iter()
+                .find(|h| h.tipo() == "ronda" && h.texto("id") == Some(&id))
+                .and_then(|r| dominio::pregunta_efectiva_de_ronda(hechos, r));
             Ok((
                 etapa,
-                aviso_prompts_de_captura(lecturas.iter().map(|l| l.user_text.as_ref()), etapa),
+                aviso_prompts_de_captura(
+                    lecturas
+                        .iter()
+                        .map(|l| (l.id.as_str(), l.user_text.as_ref())),
+                    pregunta,
+                    etapa,
+                ),
             ))
         })();
         self.asentar(r)
@@ -2495,19 +2557,21 @@ impl Puerta {
             l.html.as_ref(),
         )?)
         .0;
-        let h = Hecho::nuevo(
-            "informe-integrador",
-            &[
-                ("id", Valor::Texto(id.into())),
-                ("rondaId", Valor::Texto(ronda_id.into())),
-                ("operadorId", Valor::Texto(l.id.as_str().into())),
-                ("promptCompleto", prompt),
-                ("informeCrudo", Valor::Texto(l.text.clone())),
-                ("titulo", opcional(titulo.as_ref())),
-                ("recibidaEn", Valor::Texto(self.ahora().into())),
-                ("html", opcional(l.html.as_ref())),
-            ],
-        )?;
+        let mut campos = vec![
+            ("id", Valor::Texto(id.into())),
+            ("rondaId", Valor::Texto(ronda_id.into())),
+            ("operadorId", Valor::Texto(l.id.as_str().into())),
+            ("promptCompleto", prompt),
+            ("informeCrudo", Valor::Texto(l.text.clone())),
+            ("titulo", opcional(titulo.as_ref())),
+            ("recibidaEn", Valor::Texto(self.ahora().into())),
+            ("html", opcional(l.html.as_ref())),
+        ];
+        if let Some((a, b)) = &self.marcas_integrador {
+            campos.push(("marcaPrimera", Valor::Texto(a.as_str().into())));
+            campos.push(("marcaUltima", Valor::Texto(b.as_str().into())));
+        }
+        let h = Hecho::nuevo("informe-integrador", &campos)?;
         self.escribir(&h)
     }
 
@@ -2616,6 +2680,13 @@ impl Puerta {
 
     pub fn integrador_pegado(&mut self, prompt: Texto) {
         self.prompt_integrador = Some(prompt);
+    }
+
+    /// B4: el integrador quedó pegado con su archivo: su respuesta se registra con ese prompt y esas marcas.
+    pub fn integrador_pegado_con_archivo(&mut self, archivo: &ArchivoRedactor) {
+        self.prompt_integrador = Some(archivo.prompt_completo.clone());
+        self.marcas_integrador =
+            Some((archivo.marca_primera.clone(), archivo.marca_ultima.clone()));
     }
 
     pub fn verificador_pegado(&mut self, prompt: Texto) {
@@ -2903,6 +2974,28 @@ impl Puerta {
             });
         }
         if etapa == "operacion" {
+            if estado == "capturado" {
+                // R15: lo que ese panel devolvió, ya registrado, se revisa por si fue un bucle.
+                let ronda = Texto::from(self.ronda_actual.clone().unwrap_or_default().as_str());
+                let leido = self.leer_registro()?;
+                let aviso = leido
+                    .hechos
+                    .iter()
+                    .rev()
+                    .find(|h| {
+                        es_de(h, "salida-operador", &ronda)
+                            && h.texto("operadorId").and_then(Texto::como_str) == Some(id)
+                    })
+                    .and_then(|h| h.texto("salidaCruda"))
+                    .and_then(aviso_de_bucle);
+                // La acción de capturar sigue ofrecida mientras la página esté terminada: el aviso de bucle
+                // pide volver a capturar.
+                return Ok(Situacion {
+                    problema: aviso,
+                    accion: terminado.then_some(CAPTURAR_ESTE),
+                    ..Default::default()
+                });
+            }
             return Ok(match estado {
                 "por-pegar" => accion(PEGAR_OPERACION_AQUI),
                 _ if terminado => accion(CAPTURAR_ESTE),
@@ -3093,39 +3186,83 @@ fn prompt_coincide_en_pool<'a>(prompts: impl Iterator<Item = Option<&'a Texto>>)
     )
 }
 
-/// CAP-008 (AvisoPromptsDeCaptura): el aviso de "Capturar" sobre si los prompts coinciden. Solo en
-/// investigación, donde todos reciben la misma pregunta; en operación cada operador recibe a
-/// propósito un texto distinto. "" = sin aviso.
+/// Solo letras y cifras, en minúsculas: lo que sobrevive a los saltos aplanados y a los textos que cada sitio agrega.
+fn letras_y_cifras(t: &Texto) -> String {
+    t.para_mostrar()
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// CAP-008 y PART-022 (R18): el aviso de "Capturar" sobre si el mensaje de usuario que leyó cada panel es la pregunta
+/// pegada. Solo en investigación, donde todos reciben la misma pregunta; en operación cada operador recibe a
+/// propósito un texto distinto. Coincide si uno contiene al otro; sin mensaje capturado, el proveedor no entra.
+/// "" = sin aviso.
 pub fn aviso_prompts_de_captura<'a>(
-    prompts: impl IntoIterator<Item = Option<&'a Texto>>,
+    mensajes: impl IntoIterator<Item = (&'a str, Option<&'a Texto>)>,
+    pregunta: Option<&Texto>,
     etapa: &str,
 ) -> String {
+    let Some(pregunta) = pregunta.map(letras_y_cifras).filter(|p| !p.is_empty()) else {
+        return String::new();
+    };
     if etapa != "investigacion" {
         return String::new();
     }
-    let con_prompt: Vec<&Texto> = prompts
+    let leidos: Vec<(&str, String)> = mensajes
         .into_iter()
-        .flatten()
-        .filter(|t| !t.bytes().is_empty())
+        .filter_map(|(id, t)| Some((id, letras_y_cifras(t?))))
+        .filter(|(_, t)| !t.is_empty())
         .collect();
-    if con_prompt.len() < 2 {
-        return String::new();
-    }
-    let distintos = con_prompt
+    let distintos: Vec<String> = leidos
         .iter()
-        .map(|t| normalizar_prompt(t))
-        .collect::<HashSet<_>>()
-        .len();
-    if distintos > 1 {
-        format!(
-            "⚠ Los prompts de usuario capturados NO coinciden entre proveedores ({distintos} versiones distintas) — revisar antes de comparar respuestas."
-        )
-    } else {
-        format!(
+        // El mensaje leído contiene la pregunta (los sitios agregan texto), o es casi toda la pregunta
+        // (saltos aplanados): un fragmento corto o cortado a la mitad no coincide.
+        .filter(|(_, t)| {
+            !(t.contains(&pregunta)
+                || (pregunta.contains(t.as_str()) && t.len() * 10 >= pregunta.len() * 9))
+        })
+        .map(|(id, _)| dominio::nombre_proveedor(id))
+        .collect();
+    match distintos.as_slice() {
+        [] if leidos.is_empty() => String::new(),
+        [] => format!(
             "Prompt de usuario: coincide en los {} proveedores donde se pudo leer.",
-            con_prompt.len()
-        )
+            leidos.len()
+        ),
+        [solo] => format!(
+            "⚠ El mensaje enviado en {solo} no coincide con la pregunta pegada: revisa esos paneles antes de comparar respuestas."
+        ),
+        [resto @ .., ultimo] => format!(
+            "⚠ El mensaje enviado en {} y {ultimo} no coincide con la pregunta pegada: revisa esos paneles antes de comparar respuestas.",
+            resto.join(", ")
+        ),
     }
+}
+
+/// D35.5: inferido, se revisa con datos. La fracción de líneas de hallazgo idénticas desde la que se avisa.
+const FRACCION_BUCLE: (usize, usize) = (3, 10);
+/// Con pocas líneas, una sola repetición no es un bucle: se piden al menos tres.
+const MIN_REPETIDAS: usize = 3;
+
+/// PART-022, R15: una salida con muchas líneas de hallazgo idénticas, o cuya última línea quedó a medias,
+/// puede ser un bucle del modelo. None si no hay motivo para avisar.
+pub fn aviso_de_bucle(salida: &Texto) -> Option<String> {
+    let r = parseos::parsear_hallazgos(salida, &Vec::<&str>::new());
+    let n = r.hallazgos.len();
+    let mut vistos = HashSet::new();
+    let repetidas = r
+        .hallazgos
+        .iter()
+        .filter(|h| !vistos.insert((h.categoria, &h.eje, &h.etiquetas, &h.descripcion)))
+        .count();
+    let (num, den) = FRACCION_BUCLE;
+    (r.ultima_cortada || (repetidas >= MIN_REPETIDAS && repetidas * den >= n * num)).then(|| {
+        format!(
+            "la salida repite muchas líneas iguales ({repetidas} de {n}) o viene cortada: puede ser un bucle del modelo. Vuelve a capturar o repite la operación en este panel antes de integrar."
+        )
+    })
 }
 
 /// Corto: los primeros 8 caracteres (unidades UTF-16, como Substring) de un id.
@@ -3994,6 +4131,67 @@ mod pruebas {
     }
 
     #[test]
+    fn captura_una_salida_con_bucle_o_cortada_avisa_y_una_normal_no() {
+        let linea = |d: &str| format!("DIVERGENCIA|HECHOS|P1,P2|{d}");
+        let normal = Texto::from(
+            (0..10)
+                .map(|i| linea(&format!("d{i}")))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+        assert_eq!(aviso_de_bucle(&normal), None);
+        // 3 repetidas de 10: justo el 30 %.
+        let mut v: Vec<String> = (0..6).map(|i| linea(&format!("d{i}"))).collect();
+        v.extend(vec![linea("x"); 4]);
+        let en_el_limite = aviso_de_bucle(&Texto::from(v.join("\n"))).unwrap();
+        assert!(en_el_limite.contains("(3 de 10)"), "{en_el_limite}");
+        // 2 repetidas de 10 (20 %): no avisa.
+        let mut v: Vec<String> = (0..7).map(|i| linea(&format!("d{i}"))).collect();
+        v.extend(vec![linea("x"); 3]);
+        assert_eq!(aviso_de_bucle(&Texto::from(v.join("\n"))), None);
+        // Un bucle de verdad.
+        let bucle = Texto::from(vec![linea("igual"); 20].join("\n"));
+        assert!(aviso_de_bucle(&bucle).unwrap().contains("(19 de 20)"));
+        // Pocas líneas: una repetida de 3 (33 %) y una de 2 (50 %) no avisan.
+        let poco = Texto::from(format!(
+            "{0}
+{0}
+{1}",
+            linea("a"),
+            linea("b")
+        ));
+        assert_eq!(aviso_de_bucle(&poco), None);
+        // Última línea a medias.
+        let cortada = Texto::from(format!("{}\nDIVERGENCIA|HECHOS|P1", linea("a")));
+        assert!(aviso_de_bucle(&cortada).is_some());
+    }
+
+    /// PART-022, R27: el nombre del archivo no lleva ningún código estable, y siete paneles dan siete nombres.
+    #[test]
+    fn operacion_el_nombre_del_archivo_no_lleva_codigo_estable_y_es_distinto_por_panel() {
+        let c = Carpeta::nueva("operacion-nombres");
+        let todas = lineas_corrida();
+        let pool = pool_puerta();
+        let mut p = puerta_en_corrida(&c.0, &todas[..=12]);
+        let nombres: Vec<String> = pool
+            .iter()
+            .map(|op| p.armar_operacion(op, true).unwrap().nombre_archivo.unwrap())
+            .collect();
+        assert_eq!(nombres.len(), 7);
+        assert_eq!(nombres.iter().collect::<HashSet<_>>().len(), 7);
+        for n in &nombres {
+            let (_, resto) = n.split_once('-').unwrap();
+            assert!(n.starts_with("respuestas-") && n.ends_with(".txt"), "{n}");
+            assert!(!n.contains("operacion"), "{n}");
+            let azar = resto.rsplit_once('-').unwrap().1.trim_end_matches(".txt");
+            assert!(
+                azar.len() == 6 && azar.chars().all(|c| c.is_ascii_hexdigit()),
+                "{n}"
+            );
+        }
+    }
+
+    #[test]
     fn operacion_la_corrida_de_la_unity_da_los_mismos_sellos_y_prompts() {
         let c = Carpeta::nueva("operacion-corrida");
         let todas = lineas_corrida();
@@ -4018,34 +4216,6 @@ mod pruebas {
             escritas[13..20],
             todas[13..20],
             "los siete sellos, byte a byte"
-        );
-        let hechos = registro::leer(&format!("{}\n", todas.join("\n"))).hechos;
-        let es = |h: &Hecho, k: &str, v: &str| h.texto(k).and_then(Texto::como_str) == Some(v);
-        for o in &operaciones {
-            let salida = hechos
-                .iter()
-                .find(|h| {
-                    h.tipo() == "salida-operador"
-                        && es(h, "rondaId", RONDA_CORRIDA)
-                        && es(h, "operadorId", &o.operador_id)
-                })
-                .unwrap();
-            assert_eq!(
-                Some(&o.prompt_completo),
-                salida.texto("promptCompleto"),
-                "{}",
-                o.operador_id
-            );
-        }
-        let kimi = operaciones
-            .iter()
-            .find(|o| o.operador_id == "kimi")
-            .unwrap();
-        assert_eq!(
-            kimi.nombre_archivo.as_deref(),
-            Some(crate::registro::pruebas::str_de(&crate::json::vector(
-                "ArchivoKimi"
-            )))
         );
         assert!(
             operaciones
@@ -4177,6 +4347,7 @@ mod pruebas {
     /// promptCompleto que la Unity registró, byte a byte. Línea 49: informe sin rescate; 50: el
     /// recapturado; 51 y 52: las verificaciones de glm y qwen; 53: la respuesta del redactor.
     #[test]
+    #[ignore = "PART-022: los prompts se apartaron de la Unity a propósito (D35 a D38); el vector de la Unity ya no es el criterio, ver DESVIACIONES.md"]
     fn prompts_los_de_los_roles_en_la_corrida_son_los_de_la_unity() {
         let todas = lineas_corrida();
         let prompt_de = |i: usize| {
@@ -4964,6 +5135,7 @@ mod pruebas {
     }
 
     #[test]
+    #[ignore = "PART-022: los prompts se apartaron de la Unity a propósito (D35 a D38); el vector de la Unity ya no es el criterio, ver DESVIACIONES.md"]
     fn ronda_entera_deja_los_mismos_hechos_que_la_unity() {
         use std::cell::Cell;
         use std::rc::Rc;
@@ -5874,25 +6046,61 @@ Ronda: r{i}
         assert!(nueva_puerta(&c.0).declarar_pregunta("x").is_err());
     }
 
+    /// PART-022, R18: cada mensaje de usuario se compara con la pregunta pegada, solo letras y cifras.
     #[test]
-    fn ronda_el_aviso_de_prompts_es_el_de_la_unity() {
-        use crate::registro::pruebas::{campo, lista, str_de};
-        for caso in lista(&json_de("AvisosPrompts")) {
-            let textos: Vec<Option<Texto>> = lista(campo(caso, "textos"))
+    fn captura_el_aviso_de_prompts_compara_cada_mensaje_con_la_pregunta() {
+        let q = Texto::from("¿Qué dice la evidencia sobre la dosis?");
+        let con = |m: &[(&str, &str)], etapa: &str| {
+            let t: Vec<(String, Texto)> = m
                 .iter()
-                .map(|t| match t {
-                    Valor::Texto(t) => Some(t.clone()),
-                    _ => None,
-                })
+                .map(|(i, t)| (i.to_string(), Texto::from(*t)))
                 .collect();
-            assert_eq!(
-                aviso_prompts_de_captura(
-                    textos.iter().map(Option::as_ref),
-                    str_de(campo(caso, "etapa"))
-                ),
-                str_de(campo(caso, "aviso")),
-                "{textos:?}"
-            );
-        }
+            aviso_prompts_de_captura(
+                t.iter().map(|(i, t)| (i.as_str(), Some(t))),
+                Some(&q),
+                etapa,
+            )
+        };
+        // Con prefijo, sufijo y saltos aplanados coincide.
+        assert!(
+            con(
+                &[
+                    (
+                        "chatgpt",
+                        "Tú dijiste: ¿Qué dice la evidencia sobre la dosis?"
+                    ),
+                    (
+                        "kimi",
+                        "¿Qué dice la evidencia
+sobre la dosis? Mostrar más"
+                    ),
+                ],
+                "investigacion"
+            )
+            .starts_with("Prompt de usuario: coincide en los 2")
+        );
+        // Un fragmento corto o cortado a la mitad no coincide: justo lo que el aviso debe detectar.
+        assert!(
+            con(&[("chatgpt", "Qué dice"), ("kimi", "Tú")], "investigacion")
+                .starts_with("⚠ El mensaje enviado en")
+        );
+        // Con texto distinto no: nombra al proveedor.
+        let aviso = con(
+            &[
+                ("chatgpt", "¿Qué dice la evidencia sobre la dosis?"),
+                ("kimi", "otra cosa"),
+            ],
+            "investigacion",
+        );
+        assert_eq!(
+            aviso,
+            "⚠ El mensaje enviado en Kimi no coincide con la pregunta pegada: revisa esos paneles antes de comparar respuestas."
+        );
+        // Sin mensaje capturado, el proveedor no entra; fuera de investigación no hay aviso.
+        assert_eq!(
+            aviso_prompts_de_captura([("kimi", None)], Some(&q), "investigacion"),
+            ""
+        );
+        assert_eq!(con(&[("kimi", "otra cosa")], "operacion"), "");
     }
 }

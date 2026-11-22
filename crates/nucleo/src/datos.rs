@@ -92,9 +92,29 @@ pub fn url_de(specs: &str, id: &str) -> Option<String> {
     }
 }
 
+/// PART-022, R17: cuántos bytes de archivo adjunto lee el proveedor, si se midió (limiteArchivoBytes).
+pub fn limite_archivo_bytes(specs: &str, id: &str) -> Option<usize> {
+    match spec(specs, id)? {
+        crate::json::Valor::Objeto(o) => o.into_iter().find_map(|(k, v)| match v {
+            crate::json::Valor::Entero(n) if k.como_str() == Some("limiteArchivoBytes") => {
+                usize::try_from(n).ok()
+            }
+            _ => None,
+        }),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod pruebas {
     use super::*;
+
+    #[test]
+    fn el_limite_de_archivo_solo_lo_tiene_deepseek() {
+        assert_eq!(limite_archivo_bytes(SPECS_JSON, "deepseek"), Some(90000));
+        assert_eq!(limite_archivo_bytes(SPECS_JSON, "kimi"), None);
+        assert_eq!(limite_archivo_bytes(SPECS_JSON, "no-existe"), None);
+    }
 
     #[test]
     fn los_proveedores_salen_de_las_specs_en_el_orden_del_pool() {
@@ -152,7 +172,7 @@ mod pruebas {
     fn specs_json_coincide_con_dat_001() {
         assert_eq!(
             sha256(SPECS_JSON),
-            "23f6142a766d2052bcb7b5ce9bed7ed6b84e1687e9605181e500aa5a442829ba"
+            "1869de7c5138edf80327add1d4bbb420e9ba67382478fbfe61fc70fb3c70ee7e"
         );
     }
 
@@ -161,11 +181,11 @@ mod pruebas {
         for (fuente, esperado) in [
             (
                 PROMPT_OPERACION,
-                "d633e7551b6d3ff0f0f04efd02e18225a82f907114bc70585faf22c0670b9302",
+                "df13bb9edd20164f080734d2f04f8d422461be63bc3200e7ed6e36b6761f8ed9",
             ),
             (
                 PROMPT_INTEGRADOR,
-                "838ba7b42d0a317f6d2a8de00da9a02d665da8afb978c14ae5e81c4021708e23",
+                "dc9afcae3f7f2327273fce5c50a7485362f72534ce224e3020749f6c981365a4",
             ),
             (
                 PROMPT_VERIFICADOR,
@@ -173,21 +193,36 @@ mod pruebas {
             ),
             (
                 PROMPT_REDACTOR,
-                "c3963ba140cbf07e9419658130071b908bd3b4856aa51b238258a370ac7bb8fb",
+                "7475126cc2d653a2a203b466bd2c171bcc5447e5b1ecc7cfc2727302863a843d",
             ),
         ] {
             assert_eq!(sha256(fuente), esperado);
         }
     }
 
+    /// PART-022, R33: el bloque de categorías es el mismo en las dos plantillas de operación.
+    #[test]
+    fn plantillas_de_operacion_comparten_el_bloque_de_categorias() {
+        let bloque = |nombre: &str| {
+            let t = plantilla(PROMPT_OPERACION, nombre)
+                .expect(nombre)
+                .to_string();
+            let ini = t.find("LAS CINCO CATEGORIAS").expect("inicio");
+            let fin = "Registrar una limitacion es tan valido como registrar un hallazgo.";
+            let f = t.find(fin).expect("fin") + fin.len();
+            t[ini..f].to_string()
+        };
+        assert_eq!(bloque("PLANTILLA"), bloque("PLANTILLA_CON_ARCHIVO"));
+    }
+
     #[test]
     fn plantillas_se_leen_tal_cual() {
         for (fuente, nombre, inicio) in [
-            (PROMPT_OPERACION, "PLANTILLA", "Vas a leer seis respuestas"),
+            (PROMPT_OPERACION, "PLANTILLA", "Vas a leer {{N}} respuestas"),
             (
                 PROMPT_OPERACION,
                 "PLANTILLA_CON_ARCHIVO",
-                "Vas a leer seis respuestas",
+                "Vas a leer {{N}} respuestas",
             ),
             (PROMPT_INTEGRADOR, "PLANTILLA", "Vas a leer una tabla"),
             (PROMPT_VERIFICADOR, "PLANTILLA", "Un grupo de sistemas"),

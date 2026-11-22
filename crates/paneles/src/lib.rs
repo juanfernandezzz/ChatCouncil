@@ -514,6 +514,14 @@ impl Navegaciones {
     }
 }
 
+/// Un envío que falló. `tras_el_pedido`: el pedido ya salió hacia la página, así que el clic pudo ocurrir; antes
+/// del pedido (panel sin abrir, guarda de pruebas, script que no cargó) se sabe que no se pulsó nada.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErrorEnvio {
+    pub mensaje: String,
+    pub tras_el_pedido: bool,
+}
+
 pub struct Panel {
     webview: WebView,
     nav: Rc<RefCell<Navegaciones>>,
@@ -688,21 +696,32 @@ impl Panel {
                 "{op} no es una operación permitida del script de página."
             ));
         }
-        self.pedir_al_script(None, op, spec, texto, espera).await
+        self.pedir_al_script(None, op, spec, texto, espera, &Cell::new(false))
+            .await
     }
 
     /// ESC-016 y ESC-017: pulsa enviar con enviar.js solo si el compositor sigue con `texto` y el chat no tiene
     /// un mensaje enviado; responde el estado de enviar.js y si se comprobó que salió. Nunca reintenta.
     /// INV-ESC-001: en las pruebas, solo en las páginas de prueba.
-    pub async fn pulsar_enviar(&self, spec: &str, texto: &Texto) -> Result<(String, bool), String> {
+    pub async fn pulsar_enviar(
+        &self,
+        spec: &str,
+        texto: &Texto,
+    ) -> Result<(String, bool), ErrorEnvio> {
+        let pedido_hecho = Cell::new(false);
+        let error = |mensaje: String| ErrorEnvio {
+            mensaje,
+            tras_el_pedido: pedido_hecho.get(),
+        };
         if self.de_prueba {
             let host = self
                 .ejecutar_o("location.hostname", ESPERA_CORTA, "sin host".into())
-                .await?;
+                .await
+                .map_err(error)?;
             if !HOSTS_DE_PRUEBA.iter().any(|h| host == format!("\"{h}\"")) {
-                return Err(format!(
+                return Err(error(format!(
                     "en las pruebas solo se envía en las páginas de prueba, no en {host}"
-                ));
+                )));
             }
         }
         let r = self
@@ -712,8 +731,10 @@ impl Panel {
                 spec,
                 Some(texto),
                 ESPERA_ENVIAR,
+                &pedido_hecho,
             )
-            .await?;
+            .await
+            .map_err(error)?;
         Ok((
             texto_de(campo(&r, "estado")).unwrap_or_default(),
             campo(&r, "comprobado") == Some(&Valor::Bool(true)),
@@ -728,6 +749,7 @@ impl Panel {
         spec: &str,
         texto: Option<&Texto>,
         espera: Duration,
+        pedido_hecho: &Cell<bool>,
     ) -> Result<Valor, String> {
         // Revisión PART-011, hallazgo 3: cada script de adentro corta en lo que le queda a la operación,
         // así una página colgada no estira la espera hasta el techo de 90 s de cada ejecutar.
@@ -750,7 +772,7 @@ impl Panel {
         }
         let objeto = extra.map_or("__cc", |(o, _)| o);
         if let Some((o, js)) = extra
-            && ejecutar(&format!("typeof window.{o}")).await? != "\"object\""
+            && ejecutar(&format!("window.{o}?.huella")).await? != "\"cc-enviar\""
         {
             let r = ejecutar(&format!("{js}\n;'ok'")).await?;
             if r != "\"ok\"" {
@@ -771,6 +793,8 @@ impl Panel {
             json::escapar(t, &mut pedido);
         }
         pedido.push(b'}');
+        // Desde aquí el clic pudo ocurrir aunque la respuesta falle (revisión PART-021, hallazgo 6).
+        pedido_hecho.set(true);
         let pedir = llamada("pedir", &String::from_utf8_lossy(&pedido), objeto);
         let r = ejecutar(&pedir).await?;
         if r != "\"ok\"" {

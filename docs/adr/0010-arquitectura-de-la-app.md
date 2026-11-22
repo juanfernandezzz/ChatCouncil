@@ -39,3 +39,7 @@ El punto 10 fijaba DOM.setFileInputFiles sin haber leído Paneles.cs. En la Unit
 ## Enmienda · 2026-11-20 · D33 y D34 · Corrige el punto 7
 
 El punto 7 queda así: «7. La app envía solo con confirmación (ADR-0011). paneles expone una sola función de envío, enviar_a_todos, que solo llama la interfaz después del «Sí» de la ventana de la etapa; no expone otras funciones de clic ni de teclas sobre la página. Una prueba fija la lista de funciones del script que la app llama contra la lista permitida, y otra garantiza que solo la interfaz llama a enviar_a_todos.» El punto 8 no cambia: no contradice D33.
+
+## Enmienda · 2026-11-22 · D36 y D38 · Corrige el punto 11
+
+El punto 11 queda así: «11. Nombre. La ventana, los accesos y la entrada de desinstalación dicen «ChatCouncil». El binario sigue llamándose ChatCouncilNueva.exe y la carpeta de instalación ChatCouncilNueva, para no tocar el actualizador ni las rutas (D38.2).»

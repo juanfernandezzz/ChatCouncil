@@ -8,10 +8,10 @@ pub const ALTO_MINIMO_PANEL: f32 = 200.0;
 slint::slint! {
     import { Button, CheckBox, ComboBox, LineEdit, ScrollView, TextEdit, AboutSlint, Palette } from "std-widgets.slint";
 
-    // ADR-0010, punto 11: «ChatCouncil (nueva)» hasta el relevo (E9).
+    // ADR-0010, punto 11 (enmienda D38.2): la ventana dice «ChatCouncil».
     // ARR-007: con -autoprueba no se arma la interfaz; el panel va en una ventana sola.
     export component Lienzo inherits Window {
-        title: "ChatCouncil (nueva)";
+        title: "ChatCouncil";
         width: 800px;
         height: 600px;
     }
@@ -329,7 +329,7 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
     }
 
     export component Ventana inherits Window {
-        title: "ChatCouncil (nueva)";
+        title: "ChatCouncil";
         // main.rs abrir_maximizada usa este tamaño: si cambia, cambia allá también.
         preferred-width: 1280px;
         preferred-height: 800px;

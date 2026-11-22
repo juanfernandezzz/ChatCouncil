@@ -8,11 +8,12 @@
 
 [Setup]
 AppId=cl.juanfernandez.chatcouncil
-AppName=ChatCouncil (nueva)
+AppName=ChatCouncil
+AppVerName=ChatCouncil {#Version}
 AppVersion={#Version}
 AppPublisher=ChatCouncil
 DefaultDirName={autopf}\ChatCouncilNueva
-DefaultGroupName=ChatCouncil (nueva)
+DefaultGroupName=ChatCouncil
 DisableProgramGroupPage=yes
 OutputDir=..\salida
 OutputBaseFilename=ChatCouncilNueva-instalador
@@ -49,9 +50,14 @@ Source: "..\target\release\ChatCouncilNueva.exe"; DestDir: "{app}"; Flags: ignor
 Source: "abrir-depurando.bat"; DestDir: "{app}"; Flags: ignoreversion; Components: depuracion
 
 [Icons]
-Name: "{group}\ChatCouncil (nueva)"; Filename: "{app}\ChatCouncilNueva.exe"
+Name: "{group}\ChatCouncil"; Filename: "{app}\ChatCouncilNueva.exe"
 Name: "{group}\ChatCouncil (depuración)"; Filename: "{app}\abrir-depurando.bat"; IconFilename: "{app}\ChatCouncilNueva.exe"; Components: depuracion
-Name: "{autodesktop}\ChatCouncil (nueva)"; Filename: "{app}\ChatCouncilNueva.exe"; Tasks: escritorio
+Name: "{autodesktop}\ChatCouncil"; Filename: "{app}\ChatCouncilNueva.exe"; Tasks: escritorio
+
+[InstallDelete]
+; D38.2: el nombre visible pasa de «ChatCouncil (nueva)» a «ChatCouncil»: se borran la carpeta vieja de Inicio y el acceso viejo del Escritorio.
+Type: filesandordirs; Name: "{userprograms}\ChatCouncil (nueva)"
+Type: files; Name: "{userdesktop}\ChatCouncil (nueva).lnk"
 
 [Run]
 Filename: "{app}\ChatCouncilNueva.exe"; Description: "Abrir ChatCouncil"; Flags: nowait postinstall skipifsilent

@@ -48,8 +48,8 @@ Solo puedes usar el material del archivo. No busques en internet aunque tengas c
 Cuando el material no coincide, decide en este orden:
 1. Compara primero las dos verificaciones entre si, hallazgo por hallazgo:
    - Si A y B coinciden (las dos CONFIRMA, o las dos CONTRADICE), esa verificacion es firme. Con CONFIRMA vale lo verificado; con CONTRADICE vale lo que dice la fuente, no lo que decian las respuestas. Di de que tipo es la fuente tal como lo registran; si difieren en el tipo, da los dos.
-   - Si A y B difieren (una CONFIRMA y la otra CONTRADICE o NO_ENCONTRADA, o se contradicen entre si), la verificacion quedo EN DISPUTA: no elijas. Marca el hallazgo como verificacion en disputa, di que encontro cada una, y no lo trates como firme.
-   - Si solo una se pronuncio y la otra es NO_ENCONTRADA, la verificacion es parcial: usala, pero di que una sola de las dos la sostiene.
+   - Si A y B difieren porque una CONFIRMA y la otra CONTRADICE, o porque se contradicen entre si, la verificacion quedo EN DISPUTA: no elijas. Marca el hallazgo como verificacion en disputa, di que encontro cada una, y no lo trates como firme.
+   - Si una CONFIRMA o CONTRADICE y la otra es NO_ENCONTRADA, la verificacion es parcial: usala, pero di que una sola de las dos la sostiene. No la marques en disputa.
 2. Lo que el INFORME presenta como firme o como coincidencia entre respuestas es la base.
 3. Lo que dice una sola respuesta lo puedes usar, pero dilo: viene de una sola respuesta.
 4. Si dos o mas respuestas discrepan y las verificaciones no lo resolvieron, no elijas. Presenta las versiones, di que respuestas sostienen cada una y que haria falta para decidir, como lo dice el INFORME.

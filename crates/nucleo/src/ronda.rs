@@ -59,9 +59,9 @@ impl RolesElegidos {
         }
     }
 
-    /// RON-002: deepseek integra y redacta; glm y qwen verifican.
+    /// RON-002: glm integra y redacta; qwen y deepseek verifican (D38.1, prueba del 2026-11-22).
     pub fn por_defecto() -> Self {
-        Self::new("deepseek", "glm", "qwen", "deepseek")
+        Self::new("glm", "qwen", "deepseek", "glm")
     }
 
     /// Los dos verificadores, en orden: el 1 es el que recibe el redactor.
@@ -444,15 +444,21 @@ mod pruebas {
 
     #[test]
     fn ronda_los_roles_por_defecto_son_los_de_la_version_electron() {
+        // D38.1: la prueba de roles del 2026-11-22 cambió el defecto de la Unity (deepseek integraba y
+        // redactaba); el vector RolesPorDefecto queda como referencia histórica de la Unity.
         let d = RolesElegidos::por_defecto();
         assert_eq!(
-            strs(&vector("RolesPorDefecto")),
             [
                 d.integrador.as_str(),
                 &d.verificador1,
                 &d.verificador2,
                 &d.redactor
-            ]
+            ],
+            ["glm", "qwen", "deepseek", "glm"]
+        );
+        assert_eq!(
+            strs(&vector("RolesPorDefecto")),
+            ["deepseek", "glm", "qwen", "deepseek"]
         );
         assert_eq!(validar_seleccion(&CONOCIDOS, &CONOCIDOS, &d), None);
     }
@@ -469,11 +475,48 @@ mod pruebas {
             });
             assert_eq!(leida, esperada, "{contenido:?}");
             let roles = json::leer(str_de(de(caso, "roles"))).unwrap();
-            assert_eq!(
-                leer_roles(contenido, &CONOCIDOS),
-                roles_de(&roles),
-                "{contenido:?}"
-            );
+            // D38.1: donde la Unity espera el defecto de un rol (deepseek integra, glm y qwen verifican,
+            // deepseek redacta), aquí va el defecto nuevo de ese rol.
+            let u = RolesElegidos::new("deepseek", "glm", "qwen", "deepseek");
+            let n = RolesElegidos::por_defecto();
+            let e = roles_de(&roles);
+            let l = leer_roles(contenido, &CONOCIDOS);
+            let pares = [
+                (&l.integrador, &e.integrador, &u.integrador, &n.integrador),
+                (
+                    &l.verificador1,
+                    &e.verificador1,
+                    &u.verificador1,
+                    &n.verificador1,
+                ),
+                (
+                    &l.verificador2,
+                    &e.verificador2,
+                    &u.verificador2,
+                    &n.verificador2,
+                ),
+                (&l.redactor, &e.redactor, &u.redactor, &n.redactor),
+            ];
+            let a_igual =
+                |(leido, esperado, unity, nuevo): &(&String, &String, &String, &String)| {
+                    leido == esperado || (esperado == unity && leido == nuevo)
+                };
+            // Con el defecto nuevo, un rol dado puede chocar distinto que en la Unity (por ejemplo qwen
+            // como integrador ya no choca con su verificador 2). Solo esos dos contenidos, listados, se
+            // comparan por validez; todos los demás, rol a rol, con igualdad exacta salvo el defecto.
+            const CHOQUES: [&str; 2] = [
+                "{\"integrador\":\"qwen\",\"verificador1\":\"glm\"}",
+                "{\"integrador\":\"claude\",\"verificador1\":null,\"verificador2\":\"qwen\"}",
+            ];
+            if contenido.is_some_and(|c| CHOQUES.contains(&c)) {
+                assert_eq!(
+                    validar_seleccion(&CONOCIDOS, &CONOCIDOS, &l),
+                    None,
+                    "{contenido:?}: {l:?}"
+                );
+            } else {
+                assert!(pares.iter().all(a_igual), "{contenido:?}: {l:?} vs {e:?}");
+            }
         }
     }
 
@@ -554,10 +597,10 @@ mod pruebas {
             ("pregunta", vec![]),
             ("investigacion", vec![]),
             ("operacion", vec![]),
-            ("integracion", vec!["deepseek"]),
-            ("verificacion", vec!["glm", "qwen"]),
-            ("redaccion", vec!["deepseek"]),
-            ("informe", vec!["deepseek"]),
+            ("integracion", vec!["glm"]),
+            ("verificacion", vec!["qwen", "deepseek"]),
+            ("redaccion", vec!["glm"]),
+            ("informe", vec!["glm"]),
         ];
         for (etapa, roles) in etapas {
             assert_eq!(d.de_la_etapa(etapa), roles, "{etapa}");

@@ -14,8 +14,9 @@ Propósito: decidir qué proveedores investigan y cuáles cumplen los roles, y g
 - Plataforma: ambas
 
 ### RON-002 · Roles por defecto
-- Qué hace: sin selección guardada, el integrador es deepseek, los verificadores son glm (1) y qwen (2) y el redactor es deepseek.
-- Condición y resultado observable: en la primera apertura, la lista de roles muestra deepseek «Integra y redacta», glm y qwen «Verifica».
+- Qué hace: sin selección guardada, el integrador es glm, los verificadores son qwen (1) y deepseek (2) y el redactor es glm.
+- Condición y resultado observable: en la primera apertura, la lista de roles muestra glm «Integra y redacta», qwen y deepseek «Verifica».
+- RON-002 · Roles por defecto: glm integra y redacta; qwen y deepseek verifican (D38.1, prueba del 2026-11-22).
 - Fuente: motor/Runtime/Roles.cs:45-50 ; unity/Assets/Interfaz/PantallaRonda.cs:203-206
 - Prueba: vector — motor/Tests/PromptsPruebas.cs:177 (LosRolesPorDefectoSonLosDeLaVersionElectronYCumplenSusReglas) ; motor/Tests/Referencias.g.cs:240 (RolesPorDefecto)
 - Plataforma: ambas

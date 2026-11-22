@@ -236,7 +236,13 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
     let paso = || ui.get_paso_texto().to_string();
     let resultado = || ui.get_resultado().to_string();
 
-    // El primer arranque, con lo que viene marcado: los diez y los roles por defecto.
+    // El primer arranque, con los diez marcados. Los roles se fijan como los de esta prueba (deepseek integra y
+    // redacta; glm y qwen verifican): el defecto de la app pasó a glm (D38.1) y esta prueba no depende del defecto.
+    let idx = |id: &str| i.conocidos.iter().position(|c| c == id).map_or(-1, |p| p as i32);
+    ui.set_idx_integrador(idx("deepseek"));
+    ui.set_idx_verificador1(idx("glm"));
+    ui.set_idx_verificador2(idx("qwen"));
+    ui.set_idx_redactor(idx("deepseek"));
     ui.invoke_guardar();
     ui.invoke_empezar();
     let abiertos = hasta(60, || POOL.iter().all(|id| i.panel_de(id).is_some())).await;

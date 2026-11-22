@@ -14,8 +14,16 @@ use crate::registro;
 use crate::ronda::RolesElegidos;
 
 fn escribir(dir: &std::path::Path, caso: &str, a: &ArchivoRedactor) {
-    fs::write(dir.join(format!("{caso}-prompt.txt")), a.prompt.para_mostrar().as_ref()).unwrap();
-    fs::write(dir.join(&a.nombre_archivo), a.cuerpo_archivo.para_mostrar().as_ref()).unwrap();
+    fs::write(
+        dir.join(format!("{caso}-prompt.txt")),
+        a.prompt.para_mostrar().as_ref(),
+    )
+    .unwrap();
+    fs::write(
+        dir.join(&a.nombre_archivo),
+        a.cuerpo_archivo.para_mostrar().as_ref(),
+    )
+    .unwrap();
     fs::write(
         dir.join(format!("{caso}-meta.json")),
         format!(
@@ -36,7 +44,8 @@ fn armar_materiales_roles() {
     let origen = std::env::var("CC_E9_REGISTRO")
         .unwrap_or_else(|_| r"C:\cc-target\tmp\e9-registro.jsonl".into());
     let salida = std::path::PathBuf::from(
-        std::env::var("CC_ROLES_SALIDA").unwrap_or_else(|_| r"C:\cc-target\tmp\prueba-roles".into()),
+        std::env::var("CC_ROLES_SALIDA")
+            .unwrap_or_else(|_| r"C:\cc-target\tmp\prueba-roles".into()),
     );
     fs::create_dir_all(&salida).unwrap();
     let bytes = fs::read(&origen).expect("la copia del registro");
@@ -62,11 +71,18 @@ fn armar_materiales_roles() {
         .into_owned();
     // Solo los sellos de la ronda E9: los de otras rondas del registro agregarían proveedores al pool.
     let mut pool: Vec<String> = Vec::new();
-    for s in hechos
-        .iter()
-        .filter(|h| h.tipo() == "sello" && h.texto("rondaId").map(|t| t.para_mostrar().into_owned()).as_deref() == Some(ronda_id.as_str()))
-    {
-        let p = s.texto("panelSourceId").unwrap().para_mostrar().into_owned();
+    for s in hechos.iter().filter(|h| {
+        h.tipo() == "sello"
+            && h.texto("rondaId")
+                .map(|t| t.para_mostrar().into_owned())
+                .as_deref()
+                == Some(ronda_id.as_str())
+    }) {
+        let p = s
+            .texto("panelSourceId")
+            .unwrap()
+            .para_mostrar()
+            .into_owned();
         if !pool.contains(&p) {
             pool.push(p);
         }
@@ -86,7 +102,15 @@ fn armar_materiales_roles() {
     );
     puerta.restaurar_ronda_activa();
     assert_eq!(puerta.ronda_actual(), Some(ronda_id.as_str()));
-    escribir(&salida, "t2", &puerta.armar_integrador().expect("armar el integrador"));
-    escribir(&salida, "t3", &puerta.armar_redactor().expect("armar el redactor"));
+    escribir(
+        &salida,
+        "t2",
+        &puerta.armar_integrador().expect("armar el integrador"),
+    );
+    escribir(
+        &salida,
+        "t3",
+        &puerta.armar_redactor().expect("armar el redactor"),
+    );
     let _ = fs::remove_dir_all(&carpeta);
 }

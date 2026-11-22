@@ -2988,8 +2988,11 @@ impl Puerta {
                     })
                     .and_then(|h| h.texto("salidaCruda"))
                     .and_then(aviso_de_bucle);
+                // La acción de capturar sigue ofrecida mientras la página esté terminada: el aviso de bucle
+                // pide volver a capturar.
                 return Ok(Situacion {
                     problema: aviso,
+                    accion: terminado.then_some(CAPTURAR_ESTE),
                     ..Default::default()
                 });
             }
@@ -3214,7 +3217,12 @@ pub fn aviso_prompts_de_captura<'a>(
         .collect();
     let distintos: Vec<String> = leidos
         .iter()
-        .filter(|(_, t)| !(t.contains(&pregunta) || pregunta.contains(t.as_str())))
+        // El mensaje leído contiene la pregunta (los sitios agregan texto), o es casi toda la pregunta
+        // (saltos aplanados): un fragmento corto o cortado a la mitad no coincide.
+        .filter(|(_, t)| {
+            !(t.contains(&pregunta)
+                || (pregunta.contains(t.as_str()) && t.len() * 10 >= pregunta.len() * 9))
+        })
         .map(|(id, _)| dominio::nombre_proveedor(id))
         .collect();
     match distintos.as_slice() {
@@ -3235,6 +3243,8 @@ pub fn aviso_prompts_de_captura<'a>(
 
 /// D35.5: inferido, se revisa con datos. La fracción de líneas de hallazgo idénticas desde la que se avisa.
 const FRACCION_BUCLE: (usize, usize) = (3, 10);
+/// Con pocas líneas, una sola repetición no es un bucle: se piden al menos tres.
+const MIN_REPETIDAS: usize = 3;
 
 /// PART-022, R15: una salida con muchas líneas de hallazgo idénticas, o cuya última línea quedó a medias,
 /// puede ser un bucle del modelo. None si no hay motivo para avisar.
@@ -3248,7 +3258,7 @@ pub fn aviso_de_bucle(salida: &Texto) -> Option<String> {
         .filter(|h| !vistos.insert((h.categoria, &h.eje, &h.etiquetas, &h.descripcion)))
         .count();
     let (num, den) = FRACCION_BUCLE;
-    (r.ultima_cortada || (n > 0 && repetidas * den >= n * num)).then(|| {
+    (r.ultima_cortada || (repetidas >= MIN_REPETIDAS && repetidas * den >= n * num)).then(|| {
         format!(
             "la salida repite muchas líneas iguales ({repetidas} de {n}) o viene cortada: puede ser un bucle del modelo. Vuelve a capturar o repite la operación en este panel antes de integrar."
         )
@@ -4142,6 +4152,15 @@ mod pruebas {
         // Un bucle de verdad.
         let bucle = Texto::from(vec![linea("igual"); 20].join("\n"));
         assert!(aviso_de_bucle(&bucle).unwrap().contains("(19 de 20)"));
+        // Pocas líneas: una repetida de 3 (33 %) y una de 2 (50 %) no avisan.
+        let poco = Texto::from(format!(
+            "{0}
+{0}
+{1}",
+            linea("a"),
+            linea("b")
+        ));
+        assert_eq!(aviso_de_bucle(&poco), None);
         // Última línea a medias.
         let cortada = Texto::from(format!("{}\nDIVERGENCIA|HECHOS|P1", linea("a")));
         assert!(aviso_de_bucle(&cortada).is_some());
@@ -6059,6 +6078,11 @@ sobre la dosis? Mostrar más"
                 "investigacion"
             )
             .starts_with("Prompt de usuario: coincide en los 2")
+        );
+        // Un fragmento corto o cortado a la mitad no coincide: justo lo que el aviso debe detectar.
+        assert!(
+            con(&[("chatgpt", "Qué dice"), ("kimi", "Tú")], "investigacion")
+                .starts_with("⚠ El mensaje enviado en")
         );
         // Con texto distinto no: nombra al proveedor.
         let aviso = con(

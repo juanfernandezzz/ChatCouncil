@@ -456,7 +456,10 @@ mod pruebas {
             ],
             ["glm", "qwen", "deepseek", "glm"]
         );
-        assert_eq!(strs(&vector("RolesPorDefecto")), ["deepseek", "glm", "qwen", "deepseek"]);
+        assert_eq!(
+            strs(&vector("RolesPorDefecto")),
+            ["deepseek", "glm", "qwen", "deepseek"]
+        );
         assert_eq!(validar_seleccion(&CONOCIDOS, &CONOCIDOS, &d), None);
     }
 
@@ -480,18 +483,39 @@ mod pruebas {
             let l = leer_roles(contenido, &CONOCIDOS);
             let pares = [
                 (&l.integrador, &e.integrador, &u.integrador, &n.integrador),
-                (&l.verificador1, &e.verificador1, &u.verificador1, &n.verificador1),
-                (&l.verificador2, &e.verificador2, &u.verificador2, &n.verificador2),
+                (
+                    &l.verificador1,
+                    &e.verificador1,
+                    &u.verificador1,
+                    &n.verificador1,
+                ),
+                (
+                    &l.verificador2,
+                    &e.verificador2,
+                    &u.verificador2,
+                    &n.verificador2,
+                ),
                 (&l.redactor, &e.redactor, &u.redactor, &n.redactor),
             ];
-            let a_igual = |(leido, esperado, unity, nuevo): &(&String, &String, &String, &String)| {
-                leido == esperado || (esperado == unity && leido == nuevo)
-            };
+            let a_igual =
+                |(leido, esperado, unity, nuevo): &(&String, &String, &String, &String)| {
+                    leido == esperado || (esperado == unity && leido == nuevo)
+                };
             // Con el defecto nuevo, un rol dado puede chocar distinto que en la Unity (por ejemplo qwen
-            // como integrador ya no choca con su verificador 2); ahí solo se exige que el resultado sea
-            // una asignación válida, porque el vector de la Unity ya no es la referencia exacta.
-            if !pares.iter().all(a_igual) {
-                assert_eq!(validar_seleccion(&CONOCIDOS, &CONOCIDOS, &l), None, "{contenido:?}: {l:?}");
+            // como integrador ya no choca con su verificador 2). Solo esos dos contenidos, listados, se
+            // comparan por validez; todos los demás, rol a rol, con igualdad exacta salvo el defecto.
+            const CHOQUES: [&str; 2] = [
+                "{\"integrador\":\"qwen\",\"verificador1\":\"glm\"}",
+                "{\"integrador\":\"claude\",\"verificador1\":null,\"verificador2\":\"qwen\"}",
+            ];
+            if contenido.is_some_and(|c| CHOQUES.contains(&c)) {
+                assert_eq!(
+                    validar_seleccion(&CONOCIDOS, &CONOCIDOS, &l),
+                    None,
+                    "{contenido:?}: {l:?}"
+                );
+            } else {
+                assert!(pares.iter().all(a_igual), "{contenido:?}: {l:?} vs {e:?}");
             }
         }
     }

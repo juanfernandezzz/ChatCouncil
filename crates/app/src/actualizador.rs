@@ -148,6 +148,17 @@ mod pruebas {
         assert!(!s.contains("DefaultDirName={autopf}\\ChatCouncil\n"));
     }
 
+    // D38.2: el grupo de Inicio es el del nombre nuevo aunque haya una instalación anterior con otro grupo.
+    #[test]
+    fn el_instalador_no_reutiliza_el_grupo_anterior() {
+        let s = iss();
+        assert!(s.contains(
+            "DefaultGroupName=ChatCouncil
+"
+        ));
+        assert!(s.contains("UsePreviousGroup=no"));
+    }
+
     // ARR-012: el aviso literal si falta WebView2 y la oferta de abrir la descarga; la instalación sigue igual.
     #[test]
     fn el_instalador_avisa_si_falta_webview2() {

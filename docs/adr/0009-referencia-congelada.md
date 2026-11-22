@@ -10,3 +10,7 @@ ChatCouncil-Unity queda congelado en el tag «referencia-port-chatcouncil» hast
 
 ## Consecuencias
 La referencia que lee cada parte del port es ese tag. Las dos apps podrán convivir en la misma máquina cuando Pocket Party cambie su nombre, su id y sus carpetas. En este repo, «ChatCouncil-Unity» sigue nombrando a la referencia.
+
+## Enmienda · 2026-11-22 · D35, D36, D38 y D39 · Relevo
+
+La app nueva reemplazó a la Unity: la Unity se desinstaló y sus datos de investigación quedaron en la carpeta de datos de la app nueva y en un respaldo comprobado. El repo ChatCouncil-Unity no se archiva: sigue como base de Pocket Party, en otro proyecto, y ChatCouncil no lo toca. La referencia de funciones queda en el tag referencia-port-chatcouncil, solo para leer. Las comparaciones de rendimiento usan las líneas base guardadas en bench/resultados.

@@ -2,7 +2,7 @@
 
 ChatCouncil es un consejo de modelos de IA que investigan en las páginas web reales de cada proveedor, con las cuentas de Juan, y producen un informe trazable. Esquema 7-1-2-1: siete investigadores, un integrador, dos verificadores y un redactor. Este repo lo reconstruye en Rust, todo lo posible, con una interfaz Slint: un solo código para Windows, macOS, Linux, Android e iOS, de escritorio, móvil y tableta (ADR-0004). Glosario: CONTEXT.md.
 
-La referencia de funciones es github.com/juanfernandezzz/ChatCouncil-Unity: todo lo que funciona ahí se mantiene, de la misma forma. Ninguna versión anterior es criterio de diseño de la interfaz.
+La referencia de funciones es el tag referencia-port-chatcouncil de github.com/juanfernandezzz/ChatCouncil-Unity, solo para leer: todo lo que funciona ahí se mantiene, salvo lo que cambie el paso 1 por evidencia. Ese repo sigue como Pocket Party y no se toca. Ninguna versión anterior es criterio de diseño de la interfaz.
 
 ## Arranque
 

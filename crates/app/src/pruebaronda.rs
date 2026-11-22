@@ -238,7 +238,12 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
 
     // El primer arranque, con los diez marcados. Los roles se fijan como los de esta prueba (deepseek integra y
     // redacta; glm y qwen verifican): el defecto de la app pasó a glm (D38.1) y esta prueba no depende del defecto.
-    let idx = |id: &str| i.conocidos.iter().position(|c| c == id).map_or(-1, |p| p as i32);
+    let idx = |id: &str| {
+        i.conocidos
+            .iter()
+            .position(|c| c == id)
+            .map_or(-1, |p| p as i32)
+    };
     ui.set_idx_integrador(idx("deepseek"));
     ui.set_idx_verificador1(idx("glm"));
     ui.set_idx_verificador2(idx("qwen"));

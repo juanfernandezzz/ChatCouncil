@@ -15,7 +15,7 @@ La referencia de funciones es github.com/juanfernandezzz/ChatCouncil-Unity: todo
 
 1. **Rendimiento** por sobre todo, con las mismas funciones. Se demuestra midiendo contra la línea base de ChatCouncil-Unity: misma máquina, mismas condiciones, tres corridas. Toda afirmación de rendimiento trae su medición.
 2. **Autonomía dentro del lote.** Un error o una mejora dentro del alcance del lote: lo aplicas e informas qué decidiste y por qué. Fuera del alcance: lo reportas y lo dejas como está.
-3. **Juan decide; Code ejecuta.** Los textos (prompts de los modelos, specs, planes, textos de la interfaz, documentación) llegan redactados desde el chat y se copian literal. Juan hace solo lo que exige su cuenta: login, captchas, pulsar «Enviar a todos» y «Sí» (o enviar en un panel) y decidir cuándo capturar. Todo otro input en la app o el escritorio lo haces tú con agent-desktop; nunca le pides a Juan un clic.
+3. **Juan decide y supervisa; Code ejecuta (human-on-the-loop).** Code trabaja en Claude Code CLI con Code Mode y corre cada lote de punta a punta, sin pedir aprobación paso a paso. Para solo en los puntos que marca el lote y en lo que exige la cuenta de Juan: login, captchas, elegir modelo, el aviso de administrador de Windows, pulsar «Enviar a todos» y «Sí», los merge que Juan no haya autorizado y la aprobación de borrados. Los textos (prompts de los modelos, specs, planes, textos de la interfaz, documentación) llegan redactados desde el chat y se copian literal. Todo otro input en la app o el escritorio lo haces tú con agent-desktop; nunca le pides a Juan un clic.
 
 ## Lo que no se negocia
 

@@ -1,0 +1,21 @@
+{
+  "parte": "PART-028 C2 (hallazgo 2 de la revisión de PART-027)",
+  "que_se_midio": "operacion::lectura_registrada (lectura de .marcas + parseo de la salida y del HTML) y situacion_de_panel (operación/capturado) con la ronda E9 copiada a C:\\cc-target\\tmp; .marcas escrito solo en la copia, sacado de las marcas de cada archivo",
+  "build": "cargo test -p nucleo --release medir_sondeo_e9 -- --ignored, desde C:\\cc-repo",
+  "cpu_de_la_maquina_porcentaje": {
+    "antes": 53,
+    "despues": 47
+  },
+  "orientativo_por_D16": true,
+  "sondeos_por_panel": 20,
+  "paneles_con_lectura": 7,
+  "llamadas_con_lectura": 140,
+  "por_panel_ms_mediana": 3.3167,
+  "de_ese_total_leer_marcas_ms_mediana": 0.3685,
+  "siete_paneles_juntos_ms_mediana": 69.8363,
+  "siete_paneles_juntos_ms_maximo": 308.352,
+  "situacion_de_panel_siete_paneles_ms_mediana": 73.087,
+  "umbral_ms_por_sondeo": 16,
+  "decision": "sin caché: el sondeo real (interfaz.rs, sondear) llama a situacion_de_panel solo para el panel visible; un sondeo cuesta la mediana de un panel, 3.3 ms, bajo 16. Los 7 juntos (69.8 ms) son un peor caso que la app no ejecuta. Cachear .marcas ahorraría 0.37 ms de esos 3.3: el costo está en el parseo, no en la lectura.",
+  "bytes_registro": 18466408
+}

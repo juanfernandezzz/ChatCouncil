@@ -715,3 +715,52 @@ Corrección (D45): B, C y G1 sí se hicieron. agent-desktop funciona con AGENT_D
 
 Artifacts:
 - handoff PART-027 y D45
+
+### PART-028
+
+PART-028 · rojo C3 y C4 (pruebainterfaz, debug desde C:\cc-repo, carpeta de datos de prueba): fase 1 16/16, fase 2 9/9, fase 3 11/13 con exit 1. FALLA «Buscar actualizaciones no se queda en Buscando…»: buscando: true; a los 800 ms dice la falla: false; el resultado tardío no la pisa: false; línea: «Tienes la última versión (0.1.0).» (el resultado tardío pisó la línea; no hubo techo). FALLA «la línea de Buscar actualizaciones se limpia al salir de Ayuda»: tras salir: «con texto»; al volver: «Tienes la última versión (0.2.5).». Pasan de una vez las comprobaciones nuevas de C6 (textos literales, foco en Más tarde, Esc, camino ofrecer): su rojo es por mutación y va más abajo.
+
+Artifacts:
+- pruebainterfaz fase 3: 11/13 (rojo C3 y C4)
+
+### PART-028
+
+PART-028 · rojo por mutación de C6 y C5 (cada mutación se revirtió; el diff de interfaz.rs final solo trae al_salir_de_ayuda). C6: con set_dialogo_foco_en_cancelar(false) en dialogo_version_nueva, pruebainterfaz fase 3 da 12/13 con exit 1: FALLA «la ventana de versión nueva: foco en Más tarde y Esc no instala: abierta con sus textos: false; sigue abierta tras Esc: false; descargando: false». C5: con `return actualizador::actualizar_ahora(&self.ui, nueva);` en lugar de ofrecer en dialogo_version_nueva, `cargo test -p app solo_el_boton_instala` da FAILED: «solo el diálogo «Actualizar ahora» instala desde interfaz.rs  left: 2 right: 1» (exit 101). Esa mutación solo se compiló para cargo test; ningún binario con ella se ejecutó.
+
+Artifacts:
+- rojo C5 (cargo test) y C6 (pruebainterfaz 12/13)
+
+### PART-028
+
+PART-028 · rojo C7 (cargo test -p nucleo --lib -- operacion::pruebas puerta::pruebas, desde C:\cc-repo): con las pruebas ya en minúscula tras los dos puntos, 2 FAILED, 85 passed: operacion::pruebas::el_control_de_lectura_en_vivo_avisa_solo_con_marcas_y_si_no_dio_entero (left «…entero: Las marcas de la primera línea…», right «…entero: las marcas de la primera línea…») y puerta::pruebas::la_cabecera_del_operador_avisa_si_no_confirmo_la_lectura (starts_with «…entero: se saltó la primera línea ARCHIVO»). Verde tras el arreglo en aviso_de_lectura: 87 passed, 0 failed, 6 ignored.
+
+Artifacts:
+- rojo C7: 2 failed; verde 87 passed
+
+### PART-028
+
+PART-028 · rojo de pruebaronda por C7 (binario de depuración, carpeta de datos de prueba): tras el arreglo de aviso_de_lectura, pruebaronda dio 101/102 con exit 1: FALLA «control de lectura del operador en la cabecera» porque la propia comprobación seguía pidiendo «Las marcas de la primera línea…» y «Se saltó la primera línea ARCHIVO» con mayúscula; la cabecera real decía «…entero: las marcas de la primera línea no son las del archivo…» y «…entero: se saltó la primera línea ARCHIVO: no se puede saber…». Se ajustó la comprobación a minúscula (es el texto que corrige C7) y dio 102/102 con exit 0. Había quedado fuera de mi búsqueda previa porque buscaba el nombre de la función y no el texto.
+
+Artifacts:
+- pruebaronda 101/102 -> 102/102
+
+### PART-028
+
+PART-028 · C9 verde (desde C:\cc-repo, binario de depuración, carpetas de prueba, perfil real fuera): cargo fmt --all --check exit 0; cargo clippy --workspace -- -D warnings exit 0; cargo test --workspace exit 0 (app 25, informe-pdf 11, nucleo 203 + 12 ignorados, paneles 15, verificacion 14 + 1 ignorado; 0 fallos); autoprueba 66/66 exit 0; pruebaronda 102/102 exit 0 (tras el ajuste de C7 en pruebaronda, ver el rojo 101/102 arriba); pruebainterfaz fases 1/2/3 sobre la misma carpeta: 16/16, 9/9, 13/13, exit 0 (incluye C3, C4, C6 con las correcciones de la revisión). Orden: autoprueba y pruebaronda corrieron antes de las tres correcciones de la revisión (techo de la línea +2 s en actualizador.rs, y dos retoques de pruebainterfaz.rs); esas correcciones solo tocan actualizador.rs y pruebainterfaz.rs, y tras ellas se repitieron fmt, clippy, cargo test --workspace y pruebainterfaz. C10: revisión en docs/revisiones/PART-028-rust-reviewer.md (ecc:rust-reviewer + ponytail-review): 1 bug menor corregido (techo de la línea igual al de la red), 3 mejoras de prueba/doc aplicadas, 4 nits reportados sin cambio.
+
+Artifacts:
+- docs/revisiones/PART-028-rust-reviewer.md
+
+### PART-028
+
+PART-028 · rojo de la parte nueva de C4 (resultado tardío tras salir de Ayuda), mutación: se quitó BUSQUEDA.fetch_add de al_salir_de_ayuda y se corrió pruebainterfaz sobre una carpeta nueva. Fase 1 16/16, fase 2 9/9, fase 3 exit 1: «FALLA la línea de Buscar actualizaciones se limpia al salir de Ayuda: tras salir: «»; resultado tardío no la pisa: false; al volver: «Tienes la última versión (0.1.0).»», Resultado 12/13. Mutación revertida a continuación. Además, el techo de la línea volvió a TECHO_VERSION (15 s, como fija C3): la corrección +2 s del hallazgo 1 de la revisión se revirtió y el hallazgo queda reportado en docs/revisiones/PART-028-rust-reviewer.md.
+
+Artifacts:
+- pruebainterfaz fase 3: 12/13 con la mutación
+
+### PART-028
+
+PART-028 · C9 verde final, sobre el código que se commitea (techo de la línea = TECHO_VERSION, 15 s; mutación de C4 revertida): cargo fmt --all --check exit 0; cargo clippy --workspace -- -D warnings exit 0; cargo test --workspace exit 0 (app 25, informe-pdf 11, nucleo 203 + 12 ignorados, paneles 15, verificacion 14 + 1 ignorado; 0 fallos); pruebainterfaz fases 1/2/3 sobre la misma carpeta: 16/16, 9/9, 13/13, exit 0. Autoprueba (66/66) y pruebaronda (102/102) corrieron antes de las últimas correcciones, que solo tocan actualizador.rs y pruebainterfaz.rs; no se repiten aquí y las corre el CI en el PR. Esta entrada sustituye a la «C9 verde» anterior, que correspondía al código con el techo de +2 s.
+
+Artifacts:
+- C9 verde final: fmt, clippy, test --workspace, pruebainterfaz 16/9/13

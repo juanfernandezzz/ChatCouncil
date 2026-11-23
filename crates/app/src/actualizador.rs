@@ -4,6 +4,7 @@
 //! La lógica de qué ofrecer y los textos están en nucleo::actualizacion; la red, en verificacion.
 
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use nucleo::actualizacion as act;
@@ -23,24 +24,64 @@ fn publicada() -> Option<String> {
     HttpSinCookies::nuevo().texto(&url, TECHO_VERSION)
 }
 
+/// Cuenta las búsquedas. Una búsqueda solo pinta su resultado mientras siga siendo la última: si venció el
+/// techo o se salió de Ayuda, el número cambió y lo que llegue tarde se descarta.
+static BUSQUEDA: AtomicU64 = AtomicU64::new(0);
+
 /// PART-027 (D44): «Buscar actualizaciones» en Ayuda. Busca en otro hilo, con el mismo techo; la línea de
 /// estado dice el resultado y una versión nueva abre su ventana. Nunca instala: eso lo hace «Actualizar ahora».
 pub(crate) fn buscar(ui: &Ventana) {
+    buscar_con(ui, TECHO_VERSION, || {
+        act::buscar(env!("CARGO_PKG_VERSION"), publicada)
+    });
+}
+
+/// `buscar` con la búsqueda y el techo de la línea de estado inyectados (las pruebas no tocan la red).
+/// El techo de la red es el de `publicada`; este es el de la línea: si el hilo se cuelga o muere, a los
+/// `techo` la línea deja «Buscando…» y dice que no se pudo revisar.
+pub(crate) fn buscar_con(
+    ui: &Ventana,
+    techo: Duration,
+    buscar: impl FnOnce() -> act::Busqueda + Send + 'static,
+) {
     if ui.get_busqueda_estado() == act::BUSCANDO || ui.get_aviso_progreso() >= 0.0 {
         return;
     }
     ui.set_busqueda_estado(act::BUSCANDO.into());
+    let numero = BUSQUEDA.fetch_add(1, Ordering::SeqCst) + 1;
     let debil = ui.as_weak();
+    slint::Timer::single_shot(techo, {
+        let debil = debil.clone();
+        move || {
+            if let Some(ui) = debil.upgrade()
+                && BUSQUEDA
+                    .compare_exchange(numero, numero + 1, Ordering::SeqCst, Ordering::SeqCst)
+                    .is_ok()
+            {
+                ui.set_busqueda_estado(act::SIN_REVISION.into());
+            }
+        }
+    });
     std::thread::spawn(move || {
         let actual = env!("CARGO_PKG_VERSION");
-        let r = act::buscar(actual, publicada);
+        let r = buscar();
         let _ = debil.upgrade_in_event_loop(move |ui| {
+            if BUSQUEDA.load(Ordering::SeqCst) != numero {
+                return;
+            }
+            BUSQUEDA.fetch_add(1, Ordering::SeqCst);
             ui.set_busqueda_estado(act::estado_de_busqueda(&r, actual).into());
             if let act::Busqueda::Nueva(nueva) = r {
                 ui.invoke_version_encontrada(nueva.as_str().into());
             }
         });
     });
+}
+
+/// Salir de Ayuda cierra la búsqueda: la línea de estado se limpia y lo que llegue después no se pinta.
+pub(crate) fn al_salir_de_ayuda(ui: &Ventana) {
+    BUSQUEDA.fetch_add(1, Ordering::SeqCst);
+    ui.set_busqueda_estado("".into());
 }
 
 /// «Actualizar ahora» de la ventana: el mismo camino que el botón del aviso de arriba (descargar e instalar),
@@ -264,5 +305,34 @@ mod pruebas {
             "solo su definición: la llama la ventana desde interfaz.rs"
         );
         assert!(codigo.contains("on_aviso_accion"));
+
+        // PART-028 (C5): lo que interfaz.rs llama de este módulo. «Actualizar ahora» es la única llamada a
+        // actualizar_ahora (el diálogo de la versión nueva); el resto no instala.
+        let interfaz = include_str!("interfaz.rs");
+        let interfaz = interfaz.split("#[cfg(test)]").next().unwrap();
+        let llamadas: Vec<&str> = interfaz
+            .match_indices("actualizador::")
+            .map(|(i, p)| {
+                let resto = &interfaz[i + p.len()..];
+                let fin = resto
+                    .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+                    .unwrap_or(resto.len());
+                &resto[..fin]
+            })
+            .collect();
+        for nombre in &llamadas {
+            assert!(
+                ["buscar", "ofrecer", "actualizar_ahora", "al_salir_de_ayuda"].contains(nombre),
+                "interfaz.rs llama a actualizador::{nombre}, que no está entre lo que no instala"
+            );
+        }
+        assert_eq!(
+            llamadas
+                .iter()
+                .filter(|n| **n == "actualizar_ahora")
+                .count(),
+            1,
+            "solo el diálogo «Actualizar ahora» instala desde interfaz.rs"
+        );
     }
 }

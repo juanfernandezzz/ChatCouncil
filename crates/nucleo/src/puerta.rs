@@ -4935,7 +4935,7 @@ mod pruebas {
             .unwrap();
         // Sin línea ARCHIVO.
         assert!(aviso(&mut p).unwrap().starts_with(
-            "el operador no confirmó que leyó el archivo entero: Se saltó la primera línea ARCHIVO"
+            "el operador no confirmó que leyó el archivo entero: se saltó la primera línea ARCHIVO"
         ));
         // Marcas distintas.
         l.text = Texto::from(format!(
@@ -4946,7 +4946,7 @@ mod pruebas {
         assert_eq!(
             aviso(&mut p).as_deref(),
             Some(
-                "el operador no confirmó que leyó el archivo entero: Las marcas de la primera línea no son las del archivo: leyó parcial o resumió. Revisa el panel o repite la operación en él."
+                "el operador no confirmó que leyó el archivo entero: las marcas de la primera línea no son las del archivo: leyó parcial o resumió. Revisa el panel o repite la operación en él."
             )
         );
         // Marcas correctas: sin aviso.

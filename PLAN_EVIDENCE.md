@@ -700,3 +700,11 @@ PART-026 cerrada: 4.2 a 4.8 con rojo/verde, mediciones y revisión
 
 Artifacts:
 - docs/revisiones/PART-026-rust-reviewer.md
+
+### PART-027
+
+PART-027 (agent-desktop, control de lectura del operador, boton Buscar actualizaciones, limpieza). B/C y G1: agent-desktop sigue rechazando la carpeta de estado por el DACL (PERM_DENIED); el lote prohibe cambiar ACL, asi que se omitieron (pregunta Serie E en el informe). D: control de lectura (lectura entero/no-pudo-leer/marcas-distintas/sin-linea/sin-marcas-registradas) en cabecera del operador e informe; pruebaronda con D6 y 7 distintos. E: boton Buscar actualizaciones, nunca instala solo (INV-ARR-001, ARR-013, IFZ-016); pruebainterfaz fase 3 10/10. PR 6 mergeado (fe2b3dd..6ffc587), publicado 0.2.18. F: limpieza, PR 7 mergeado (04d9ec7): borra docs/D18-asignacion.tsv (sin referencias); cargo-machete 0.10.1 sin dependencias sin uso; clippy sin codigo muerto; release limpio antes 1922 s/58599424 B, despues 1871 s/58599424 B (sin cambio de Rust, ruido, orientativo D16). Revisiones: docs/revisiones/PART-027-rust-reviewer.md y PART-027-limpieza.md. CI ci y publicar success en 04d9ec7; version.txt 0.2.19. Sin verificar: Actualizar y Buscar actualizaciones en la app real (agent-desktop bloqueado).
+
+Artifacts:
+- gh pr 6 merged 6ffc587; gh pr 7 merged 04d9ec7; ci y publicar success; version.txt 0.2.19
+- docs/revisiones/PART-027-limpieza.md

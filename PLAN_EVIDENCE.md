@@ -692,3 +692,11 @@ Artifacts:
 - 4.5 Situación por panel (10 paneles, registro E9 18.466.408 B): investigación mediana 0,12 ms, operación 0,94 ms (caliente); primera llamada en frío 16,2 ms/panel (lectura única del registro). Sin caché nueva: ya hay caché de lectura. bench/resultados/e9-situacion.txt.
 - 4.7 revisión: docs/revisiones/PART-026-rust-reviewer.md.
 - 4.3 en la app: pruebaronda exige el .marcas por operación; rojo 100/101 (0 de 6) sin la llamada, verde 101/101. Revisión: arreglos 2, 3, 7, 8 aplicados; 1 fuera de alcance. Real E9 intacto: 18.466.408 B sha 1b393488c1fc.
+- 4.8: PR 4 mergeado (b8a7746), CI y publicar en verde; Release chatcouncil-v1 con version.txt 0.2.16. «Actualizar» y la versión en Ayuda de la app real: sin verificar (agent-desktop bloqueado por el DACL); lo comprueba Juan.
+
+### PART-026
+
+PART-026 cerrada: 4.2 a 4.8 con rojo/verde, mediciones y revisión
+
+Artifacts:
+- docs/revisiones/PART-026-rust-reviewer.md

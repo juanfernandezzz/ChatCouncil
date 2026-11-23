@@ -130,7 +130,7 @@
 
 ## Phase 5: Post-E9 · Pendientes técnicos
 
-- [ ] Part 26: Read `plans/PART26_PLAN.ai.md`
+- [x] Part 26: Read `plans/PART26_PLAN.ai.md`
   - Scenario: SCN-026
   - Outcome: Pendientes técnicos de la auditoría E9 resueltos y medidos
-  - Evidence: pending
+  - Evidence: recorded

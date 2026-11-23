@@ -135,7 +135,7 @@
   - Outcome: Pendientes técnicos de la auditoría E9 resueltos y medidos
   - Evidence: recorded
 
-- [ ] Part 27: Read `plans/PART27_PLAN.ai.md`
+- [x] Part 27: Read `plans/PART27_PLAN.ai.md`
   - Scenario: SCN-027
   - Outcome: Control de lectura del operador y buscar actualizaciones
-  - Evidence: pending
+  - Evidence: recorded

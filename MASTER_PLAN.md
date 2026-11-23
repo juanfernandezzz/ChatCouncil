@@ -140,6 +140,7 @@
   - Outcome: Control de lectura del operador y buscar actualizaciones
   - Evidence: recorded
 
-- [ ] Part 28: Read `plans/PART28_PLAN.ai.md`
+- [x] Part 28: Read `plans/PART28_PLAN.ai.md`
   - Scenario: SCN-028
   - Outcome: Arrastres de PART-027
+  - Evidence: recorded

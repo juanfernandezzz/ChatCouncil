@@ -57,10 +57,17 @@ Propósito: abrir la app en la carpeta de datos correcta, guiar el primer arranq
 
 ### ARR-008 · Buscar versión nueva al abrir
 - Qué hace: al abrir, pide `version.txt` del Release con techo de 15 s; sin red o sin Release no muestra nada; solo ofrece si la publicada es mayor y la local no es una compilación local (0.1.0).
-- Condición y resultado observable: aviso «Hay una versión nueva ({v}); tienes la {actual}. La app se cierra y se vuelve a abrir; tus rondas se conservan.» con el botón «Actualizar».
+- Condición y resultado observable: aviso «Hay una versión nueva ({v}); tienes la {actual}. Lo capturado queda guardado; antes de actualizar, captura lo que un panel siga generando.» con el botón «Actualizar» (PART-027, E5: el texto anterior prometía que las rondas se conservaban y no decía qué se pierde).
 - Fuente: unity/Assets/Interfaz/Actualizador.cs:20 ; unity/Assets/Interfaz/Actualizador.cs:38-55 ; motor/Runtime/Actualizacion.cs:5-13
 - Prueba: vector — motor/Tests/ActualizacionPruebas.cs:15 (SoloEsNuevaUnaVersionPublicadaMayor)
 - Plataforma: ambas
+
+### ARR-013 · Buscar actualizaciones a pedido
+- Qué hace: el botón «Buscar actualizaciones» de Ayuda pide `version.txt` con el mismo techo de 15 s y dice el resultado en una línea bajo el botón: «Buscando actualizaciones…», «Tienes la última versión ({v}).», «No se pudo revisar si hay una versión nueva. Revisa tu conexión e inténtalo otra vez.» (sin red, sin respuesta o con una respuesta que no es una versión) o, en una compilación local, «Esta es una compilación local ({v}): no busca actualizaciones.». Con una versión nueva abre la ventana «Hay una versión nueva» con «Actualizar ahora» y «Más tarde»; el foco inicial y Esc van a «Más tarde», y el texto dice que se pierde la pregunta escrita sin pegar y la respuesta que un panel siga generando sin capturar.
+- Condición y resultado observable: buscar nunca instala; solo «Actualizar ahora» descarga e instala (mismo camino que ARR-009). Si ya hay otro diálogo abierto, la versión nueva se ofrece en el aviso de arriba.
+- Fuente: PART-027 (D44)
+- Prueba: vector — crates/nucleo/src/actualizacion.rs (buscar_actualizaciones_dice_cada_estado); interfaz — crates/app/src/pruebainterfaz.rs (fase 3: la ventana de versión nueva); código — crates/app/src/actualizador.rs (solo_el_boton_instala)
+- Plataforma: windows
 
 ### ARR-009 · Instalar la actualización en Windows
 - Qué hace: al tocar «Actualizar», descarga el instalador al temporal con barra «Descargando la versión {v}… {p} %»; si la descarga queda incompleta o falla, «No se pudo descargar la actualización. Revisa tu conexión.» con «Reintentar»; si no, «Instalando… la app se reinicia sola.», corre el instalador con /SILENT y cierra la app; si el instalador no abre, «No se pudo abrir el instalador (error {n}).».
@@ -93,7 +100,7 @@ Propósito: abrir la app en la carpeta de datos correcta, guiar el primer arranq
 ## Invariantes
 
 ### INV-ARR-001 · La app nunca instala sola
-- Qué nunca pasa: la actualización se instala sin que la persona toque «Actualizar».
+- Qué nunca pasa: la actualización se instala sin que la persona toque «Actualizar» o «Actualizar ahora». Buscar actualizaciones tampoco instala.
 - Fuente: unity/Assets/Interfaz/Actualizador.cs:13-14 ; unity/Assets/Interfaz/Actualizador.cs:35
 - Prueba: manual — 1. Abrir una versión anterior con un perfil de prueba. 2. Esperar 5 minutos sin tocar el aviso. 3. Comprobar que la versión no cambió.
 

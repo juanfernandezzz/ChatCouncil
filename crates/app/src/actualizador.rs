@@ -17,6 +17,57 @@ const TECHO_VERSION: Duration = Duration::from_secs(15);
 /// Como el HttpClient de la Unity: 10 minutos para bajar el instalador.
 const TECHO_DESCARGA: Duration = Duration::from_secs(600);
 
+/// La versión que dice version.txt del Release, o None sin red o sin respuesta.
+fn publicada() -> Option<String> {
+    let url = format!("{}{}", act::RELEASE, act::ARCHIVO_VERSION);
+    HttpSinCookies::nuevo().texto(&url, TECHO_VERSION)
+}
+
+/// PART-027 (D44): «Buscar actualizaciones» en Ayuda. Busca en otro hilo, con el mismo techo; la línea de
+/// estado dice el resultado y una versión nueva abre su ventana. Nunca instala: eso lo hace «Actualizar ahora».
+pub(crate) fn buscar(ui: &Ventana) {
+    if ui.get_busqueda_estado() == act::BUSCANDO || ui.get_aviso_progreso() >= 0.0 {
+        return;
+    }
+    ui.set_busqueda_estado(act::BUSCANDO.into());
+    let debil = ui.as_weak();
+    std::thread::spawn(move || {
+        let actual = env!("CARGO_PKG_VERSION");
+        let r = act::buscar(actual, publicada);
+        let _ = debil.upgrade_in_event_loop(move |ui| {
+            ui.set_busqueda_estado(act::estado_de_busqueda(&r, actual).into());
+            if let act::Busqueda::Nueva(nueva) = r {
+                ui.invoke_version_encontrada(nueva.as_str().into());
+            }
+        });
+    });
+}
+
+/// «Actualizar ahora» de la ventana: el mismo camino que el botón del aviso de arriba (descargar e instalar),
+/// con su barra de avance en el aviso.
+pub(crate) fn actualizar_ahora(ui: &Ventana, nueva: &str) {
+    // Ya hay una descarga en curso: otra escribiría el mismo instalador.
+    if ui.get_aviso_progreso() >= 0.0 {
+        return;
+    }
+    ui.set_aviso_nueva(nueva.into());
+    ui.set_aviso_visible(true);
+    descargar(ui.as_weak());
+}
+
+/// Con otro diálogo abierto la ventana no se pisa: la versión nueva se ofrece en el aviso de arriba.
+pub(crate) fn ofrecer(ui: &Ventana, nueva: &str) {
+    if ui.get_aviso_progreso() >= 0.0 {
+        return;
+    }
+    ui.set_aviso_nueva(nueva.into());
+    mostrar(
+        ui,
+        &act::aviso(nueva, env!("CARGO_PKG_VERSION")),
+        act::BOTON_ACTUALIZAR,
+    );
+}
+
 /// Busca la versión publicada en otro hilo y, solo si es mayor, muestra el aviso. Sin red o sin Release no
 /// pasa nada. Se llama una vez, con la interfaz armada y fuera de toda prueba (ARR-007).
 pub(crate) fn iniciar(ui: &Ventana) {
@@ -26,8 +77,7 @@ pub(crate) fn iniciar(ui: &Ventana) {
         move || descargar(debil.clone())
     });
     std::thread::spawn(move || {
-        let url = format!("{}{}", act::RELEASE, act::ARCHIVO_VERSION);
-        let Some(publicada) = HttpSinCookies::nuevo().texto(&url, TECHO_VERSION) else {
+        let Some(publicada) = publicada() else {
             return;
         };
         let nueva = publicada.trim().to_string();
@@ -186,9 +236,9 @@ mod pruebas {
         );
     }
 
-    // INV-ARR-001: la actualización solo arranca con el botón. La búsqueda de `iniciar` no llama a
-    // `lanzar`; la única llamada a `lanzar` está en `instalar`, a la que solo llega `descargar`, que solo
-    // corre desde `on_aviso_accion`.
+    // INV-ARR-001: la actualización solo arranca con un botón. Ni la búsqueda de `iniciar` ni la de `buscar`
+    // llaman a `lanzar`; la única llamada a `lanzar` está en `instalar`, a la que solo llega `descargar`, que
+    // solo corre desde `on_aviso_accion` (el aviso de arriba) o desde `actualizar_ahora` (la ventana).
     #[test]
     fn solo_el_boton_instala() {
         let fuente = include_str!("actualizador.rs");
@@ -205,8 +255,13 @@ mod pruebas {
         );
         assert_eq!(
             codigo.matches("descargar(").count(),
-            3,
-            "su definición, el botón y la llamada a la red"
+            4,
+            "su definición, el botón, la llamada a la red y actualizar_ahora"
+        );
+        assert_eq!(
+            codigo.matches("actualizar_ahora(").count(),
+            1,
+            "solo su definición: la llama la ventana desde interfaz.rs"
         );
         assert!(codigo.contains("on_aviso_accion"));
     }

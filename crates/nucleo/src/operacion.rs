@@ -981,6 +981,33 @@ pub fn lectura_de_operador(
         .map_or("sin-marcas-registradas", |c| c.lectura_archivo)
 }
 
+/// PART-027 (D2): el control de lectura de un operador YA registrado: Some(lectura) si la operación
+/// tiene su .marcas, None si no (pegada antes de 0.2.16, D5) o si no se pudo leer la salida.
+pub fn lectura_registrada(
+    operaciones: &std::path::Path,
+    prompt_completo: &Texto,
+    cruda: &Texto,
+    html: Option<&Texto>,
+) -> Option<&'static str> {
+    let marcas = leer_marcas(&operaciones.join(nombre_de_archivo_adjunto(prompt_completo)?))?;
+    let primera = marcas.first().map(String::as_str);
+    let ultima = marcas.last().map(String::as_str);
+    crate::prompts::controles_redaccion(cruda, html, primera, ultima, &[], &[])
+        .ok()
+        .map(|c| c.lectura_archivo)
+}
+
+/// PART-027 (D3): lo que dice la cabecera del panel si el operador no confirmó la lectura entera.
+/// La línea de control ya termina en punto: se le quita para que no queden dos.
+pub fn aviso_de_lectura(lectura: &str) -> Option<String> {
+    (lectura != "entero").then(|| {
+        format!(
+            "el operador no confirmó que leyó el archivo entero: {}. Revisa el panel o repite la operación en él.",
+            crate::prompts::texto_de_lectura(lectura).trim_end_matches('.')
+        )
+    })
+}
+
 #[cfg(test)]
 mod pruebas {
     use super::*;
@@ -1054,6 +1081,49 @@ mod pruebas {
         assert_eq!(
             leer_marcas(&dir.join("crlf.txt")),
             Some(vec!["a".into(), "b".into()])
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // PART-027 (D2 a D5): el control de lectura de la captura en vivo y lo que dice la cabecera.
+    #[test]
+    fn el_control_de_lectura_en_vivo_avisa_solo_con_marcas_y_si_no_dio_entero() {
+        let dir = std::env::temp_dir().join(format!("cc-lectura-vivo-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let nombre = "respuestas-2026-11-23-0900-aaaaaa.txt";
+        guardar_marcas(
+            &dir.join(nombre),
+            &["[[CC-MARCA-0000-TK]]".into(), "[[CC-MARCA-FIN-TK]]".into()],
+        )
+        .unwrap();
+        let prompt = t(&format!(
+            "Haz esto.\n\n=== ARCHIVO ADJUNTO: {nombre} ===\ncuerpo"
+        ));
+        let lectura = |cruda: &str| lectura_registrada(&dir, &prompt, &t(cruda), None);
+        let entero = lectura("ARCHIVO: [[CC-MARCA-0000-TK]] y [[CC-MARCA-FIN-TK]]\nH01 ...");
+        assert_eq!(entero, Some("entero"));
+        assert_eq!(aviso_de_lectura("entero"), None);
+        let distintas = lectura("ARCHIVO: [[CC-MARCA-0000-X]] y [[CC-MARCA-FIN-X]]\nH01 ...");
+        assert_eq!(distintas, Some("marcas-distintas"));
+        assert_eq!(
+            aviso_de_lectura("marcas-distintas").as_deref(),
+            Some(
+                "el operador no confirmó que leyó el archivo entero: Las marcas de la primera línea no son las del archivo: leyó parcial o resumió. Revisa el panel o repite la operación en él."
+            )
+        );
+        let sin_linea = lectura("H01 sin la línea de archivo");
+        assert_eq!(sin_linea, Some("sin-linea"));
+        assert!(aviso_de_lectura("sin-linea").unwrap().starts_with(
+            "el operador no confirmó que leyó el archivo entero: Se saltó la primera línea ARCHIVO"
+        ));
+        // D5: sin .marcas (pegada antes de 0.2.16) no hay control ni aviso nuevo, diga lo que diga la salida.
+        let antigua = t(
+            "Haz esto.\n\n=== ARCHIVO ADJUNTO: respuestas-2026-10-05-0900-ffffff.txt ===\ncuerpo",
+        );
+        assert_eq!(
+            lectura_registrada(&dir, &antigua, &t("H01 sin la línea de archivo"), None),
+            None
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -1673,6 +1673,7 @@ impl Puerta {
             )
             .map_err(falla)?;
             // Un operador nunca desaparece del informe por haber fallado o no dar hallazgos: los tres estados son hechos.
+            let operaciones = self.carpeta.join("operaciones");
             let participacion = pool
             .iter()
             .map(|op| {
@@ -1727,6 +1728,9 @@ impl Puerta {
                     operador_id: op.to_string(),
                     estado: estado.into(),
                     detalle,
+                    lectura: s
+                        .and_then(|s| lectura_de_salida(&operaciones, s))
+                        .map(|l| prompts::texto_de_lectura(l).to_string()),
                 }
             })
             .collect();
@@ -2987,16 +2991,21 @@ impl Puerta {
                 // R15: lo que ese panel devolvió, ya registrado, se revisa por si fue un bucle.
                 let ronda = Texto::from(self.ronda_actual.clone().unwrap_or_default().as_str());
                 let leido = self.leer_registro()?;
-                let aviso = leido
-                    .hechos
-                    .iter()
-                    .rev()
-                    .find(|h| {
-                        es_de(h, "salida-operador", &ronda)
-                            && h.texto("operadorId").and_then(Texto::como_str) == Some(id)
-                    })
+                let salida = leido.hechos.iter().rev().find(|h| {
+                    es_de(h, "salida-operador", &ronda)
+                        && h.texto("operadorId").and_then(Texto::como_str) == Some(id)
+                });
+                let bucle = salida
                     .and_then(|h| h.texto("salidaCruda"))
                     .and_then(aviso_de_bucle);
+                // PART-027 (D3): además, si el operador no confirmó que leyó el archivo entero.
+                let lectura = salida
+                    .and_then(|h| lectura_de_salida(&self.carpeta.join("operaciones"), h))
+                    .and_then(operacion::aviso_de_lectura);
+                let aviso = match (bucle, lectura) {
+                    (Some(a), Some(b)) => Some(format!("{a} {b}")),
+                    (a, b) => a.or(b),
+                };
                 // La acción de capturar sigue ofrecida mientras la página esté terminada: el aviso de bucle
                 // pide volver a capturar.
                 return Ok(Situacion {
@@ -3254,6 +3263,16 @@ pub fn aviso_prompts_de_captura<'a>(
 const FRACCION_BUCLE: (usize, usize) = (3, 10);
 /// Con pocas líneas, una sola repetición no es un bucle: se piden al menos tres.
 const MIN_REPETIDAS: usize = 3;
+
+/// PART-027 (D2): el control de lectura de una salida de operador ya registrada; None sin su .marcas (D5).
+fn lectura_de_salida(operaciones: &Path, salida: &Hecho) -> Option<&'static str> {
+    operacion::lectura_registrada(
+        operaciones,
+        salida.texto("promptCompleto")?,
+        salida.texto("salidaCruda")?,
+        salida.texto("html"),
+    )
+}
 
 /// PART-022, R15: una salida con muchas líneas de hallazgo idénticas, o cuya última línea quedó a medias,
 /// puede ser un bucle del modelo. None si no hay motivo para avisar.
@@ -4883,6 +4902,62 @@ mod pruebas {
         p.registrar_capturas(&lote(&lotes, "operadores2"), &confirmada)
             .unwrap();
         (p, lotes)
+    }
+
+    // PART-027 (D2, D3, D5): la cabecera del panel avisa si el operador no confirmó que leyó el archivo entero.
+    #[test]
+    fn la_cabecera_del_operador_avisa_si_no_confirmo_la_lectura() {
+        let c = Carpeta::nueva("lectura-operador");
+        let mut p = nueva_puerta(&c.0);
+        let lotes = json_de("LotesOperacion");
+        p.abrir_ronda(pregunta_operacion()).unwrap();
+        p.registrar_capturas(&lote(&lotes, "investigacion"), &confirmada)
+            .unwrap();
+        let o = p.armar_operacion("chatgpt", true).unwrap();
+        p.operacion_pegada(&o);
+        let mut l = lote(&lotes, "operadores1")
+            .into_iter()
+            .find(|l| l.id == "chatgpt")
+            .unwrap();
+        let cuerpo = l.text.para_mostrar().into_owned();
+        let aviso = |p: &mut Puerta| {
+            p.situacion_de_panel("chatgpt", "operacion", "capturado", true)
+                .unwrap()
+                .problema
+        };
+        p.registrar_capturas(std::slice::from_ref(&l), &confirmada)
+            .unwrap();
+        // D5: sin .marcas (pegada antes de 0.2.16) no hay aviso nuevo.
+        assert_eq!(aviso(&mut p), None);
+        let dir = c.0.join("operaciones");
+        fs::create_dir_all(&dir).unwrap();
+        operacion::guardar_marcas(&dir.join(o.nombre_archivo.as_ref().unwrap()), &o.marcas)
+            .unwrap();
+        // Sin línea ARCHIVO.
+        assert!(aviso(&mut p).unwrap().starts_with(
+            "el operador no confirmó que leyó el archivo entero: Se saltó la primera línea ARCHIVO"
+        ));
+        // Marcas distintas.
+        l.text = Texto::from(format!(
+            "ARCHIVO: [[CC-MARCA-0000-X]] y [[CC-MARCA-FIN-X]]\n{cuerpo}"
+        ));
+        p.registrar_capturas(std::slice::from_ref(&l), &confirmada)
+            .unwrap();
+        assert_eq!(
+            aviso(&mut p).as_deref(),
+            Some(
+                "el operador no confirmó que leyó el archivo entero: Las marcas de la primera línea no son las del archivo: leyó parcial o resumió. Revisa el panel o repite la operación en él."
+            )
+        );
+        // Marcas correctas: sin aviso.
+        l.text = Texto::from(format!(
+            "ARCHIVO: {} y {}\n{cuerpo}",
+            o.marcas.first().unwrap(),
+            o.marcas.last().unwrap()
+        ));
+        p.registrar_capturas(std::slice::from_ref(&l), &confirmada)
+            .unwrap();
+        assert_eq!(aviso(&mut p), None);
     }
 
     // PART-026 (4.2): el archivo del integrador no repite nombre en el mismo minuto (R27: ningún código estable).

@@ -525,9 +525,9 @@ fn enlaces_n(n: usize) -> String {
     }
 }
 
-/// InformeFinal.LineasDeControl: las tres líneas que van bajo el encabezado del redactor.
-pub fn lineas_de_control(c: &ControlesRedaccion) -> Vec<String> {
-    let lectura = match c.lectura_archivo {
+/// La línea de control de la lectura del archivo (la misma para el redactor y, desde PART-027, para el operador).
+pub fn texto_de_lectura(lectura: &str) -> &'static str {
+    match lectura {
         "entero" => {
             "Reprodujo la primera y la última marca del archivo: es un indicio de que lo recorrió entero, no una prueba."
         }
@@ -542,7 +542,12 @@ pub fn lineas_de_control(c: &ControlesRedaccion) -> Vec<String> {
             "No se puede comprobar la lectura: la app se reinició entre pegar y capturar."
         }
         otra => unreachable!("lectura del archivo desconocida: {otra}"),
-    };
+    }
+}
+
+/// InformeFinal.LineasDeControl: las tres líneas que van bajo el encabezado del redactor.
+pub fn lineas_de_control(c: &ControlesRedaccion) -> Vec<String> {
+    let lectura = texto_de_lectura(c.lectura_archivo);
     // Lo que se mide son ENLACES en el html, no una salida a la red: solo uno que el material no
     // traía es indicio.
     let enlaces = match (c.enlaces_externos, c.enlaces_fuera_del_material) {

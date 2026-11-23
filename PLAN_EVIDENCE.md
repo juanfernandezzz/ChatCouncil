@@ -764,3 +764,10 @@ PART-028 · C9 verde final, sobre el código que se commitea (techo de la línea
 
 Artifacts:
 - C9 verde final: fmt, clippy, test --workspace, pruebainterfaz 16/9/13
+
+### PART-028
+
+PART-028 · D, app real instalada (C:\Users\...\Programs\ChatCouncilNueva, perfil real; no se tocó ninguna ronda ni panel; agent-desktop solo sobre la ventana ChatCouncil). Había una instancia 0.2.22 ya abierta (desde las 10:36, respondiendo; no la terminé ni abrí una segunda). Publicada 0.2.24 (publicar en verde, version.txt = 0.2.24). Como esa instancia se abrió antes de publicarse la versión, el aviso de arriba no estaba: se usó «Buscar actualizaciones» de Ayuda (0.2.22), que abrió «Hay una versión nueva», y «Actualizar ahora» instaló 0.2.24 sin UAC; el proceso nuevo arrancó a las 14:51:45 y el registro de desinstalación dice 0.2.24. En Ayuda: «ChatCouncil, versión 0.2.24.»; «Buscar actualizaciones» → «Tienes la última versión (0.2.24).»; salir a Ajustes y volver a Ayuda: la línea de estado vacía. %LOCALAPPDATA%\ChatCouncil existe y el contenedor de Claude no tiene carpeta ChatCouncil (0).
+
+Artifacts:
+- D: 0.2.22 -> 0.2.24, Tienes la última versión (0.2.24), línea vacía al volver

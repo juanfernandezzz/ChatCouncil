@@ -47,6 +47,22 @@ pub struct ParticipacionOperador {
     /// ok, sin-hallazgos o fallo.
     pub estado: String,
     pub detalle: String,
+    /// PART-027 (D4): la línea de control de lectura del operador; None sin .marcas (D5).
+    pub lectura: Option<String>,
+}
+
+/// La línea de «Participación de operadores» de un operador.
+fn linea_de_participacion(p: &ParticipacionOperador) -> String {
+    let lectura = p
+        .lectura
+        .as_deref()
+        .map_or(String::new(), |l| format!(" · lectura: {l}"));
+    format!(
+        "**{}** — {}: {}{lectura}",
+        nombre_proveedor(&p.operador_id),
+        p.estado,
+        p.detalle
+    )
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -528,14 +544,7 @@ pub fn armar(input: &InformeFinalInput) -> Texto {
         input
             .participacion_operadores
             .iter()
-            .map(|p| {
-                format!(
-                    "**{}** — {}: {}",
-                    nombre_proveedor(&p.operador_id),
-                    p.estado,
-                    p.detalle
-                )
-            })
+            .map(linea_de_participacion)
             .collect::<Vec<_>>()
             .join("\n")
             .into()
@@ -897,6 +906,26 @@ pub fn nombre_archivo_respuesta(indice_en_pool: usize, proveedor_id: &str) -> St
 
 #[cfg(test)]
 pub(crate) mod pruebas {
+    // PART-027 (D4): la línea de cada operador lleva al final su control de lectura, si lo hay.
+    #[test]
+    fn la_participacion_agrega_la_lectura_al_final_de_la_linea() {
+        let mut p = super::ParticipacionOperador {
+            operador_id: "chatgpt".into(),
+            estado: "ok".into(),
+            detalle: "3 hallazgos, 1 repetidos (se cuentan una vez)".into(),
+            lectura: None,
+        };
+        assert_eq!(
+            super::linea_de_participacion(&p),
+            "**ChatGPT** — ok: 3 hallazgos, 1 repetidos (se cuentan una vez)"
+        );
+        p.lectura = Some("Reprodujo la primera y la última marca.".into());
+        assert_eq!(
+            super::linea_de_participacion(&p),
+            "**ChatGPT** — ok: 3 hallazgos, 1 repetidos (se cuentan una vez) · lectura: Reprodujo la primera y la última marca."
+        );
+    }
+
     use super::*;
     use crate::json::{self, Valor, vector};
     use crate::registro::pruebas::{campo, lista, str_de};
@@ -999,6 +1028,7 @@ pub(crate) mod pruebas {
                     operador_id: st(campo(p, "operadorId")),
                     estado: st(campo(p, "estado")),
                     detalle: st(campo(p, "detalle")),
+                    lectura: None,
                 })
                 .collect(),
             condiciones: lista(campo(e, "condiciones"))

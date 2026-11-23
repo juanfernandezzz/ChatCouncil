@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak};
 use std::time::{Duration, Instant, SystemTime};
 
+use nucleo::actualizacion as act;
 use nucleo::ajustes::{self, Apariencia};
 use nucleo::datos;
 use nucleo::dominio::{estado_de_sesion, nombre_proveedor};
@@ -17,11 +18,9 @@ use nucleo::texto::Texto;
 use paneles::{ErrorEnvio, EstadoPagina, Navegador, Panel};
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
+use crate::actualizador;
 use crate::hilo::HiloNucleo;
 use crate::ventana::{Anterior, Cuenta, Fila, Marca, Renglon, Ventana};
-
-/// IFZ-016: la página de las versiones publicadas.
-pub const PAGINA_DE_VERSIONES: &str = "https://github.com/juanfernandezzz/ChatCouncil/releases";
 
 /// IFZ-016: los crates enlazados y su licencia, de `cargo tree -p app -e normal`.
 const LICENCIAS: &str = include_str!("licencias.txt");
@@ -619,11 +618,9 @@ impl Interfaz {
         });
         al!(on_abrir_informe, |x, carpeta: SharedString| x
             .abrir_carpeta(Path::new(carpeta.as_str())));
-        al!(on_ver_versiones, |_x| {
-            if let Err(e) = abrir_en_el_sistema(PAGINA_DE_VERSIONES) {
-                eprintln!("{e}");
-            }
-        });
+        al!(on_buscar_actualizaciones, |x| actualizador::buscar(&x.ui));
+        al!(on_version_encontrada, |x, nueva: SharedString| x
+            .dialogo_version_nueva(&nueva));
         al!(on_seccion_cambiada, |x, s: SharedString| x
             .seccion_cambiada(&s));
         al!(on_tecla, |x, t: SharedString| x.tecla(&t));
@@ -3253,6 +3250,26 @@ impl Interfaz {
         *self.al_aceptar.borrow_mut() = Some(accion);
         ui.set_capa_abierta(true);
         self.ubicar_ronda();
+    }
+
+    /// PART-027 (D44): la ventana de una versión nueva hallada con «Buscar actualizaciones». El foco inicial y
+    /// Esc van a «Más tarde»: actualizar cierra la app, y eso solo pasa si la persona lo pide.
+    pub fn dialogo_version_nueva(&self, nueva: &str) {
+        if self.ui.get_capa_abierta() {
+            return actualizador::ofrecer(&self.ui, nueva);
+        }
+        let nueva = nueva.to_string();
+        self.abrir_dialogo(
+            act::TITULO_VERSION_NUEVA,
+            &act::cuerpo_version_nueva(&nueva, env!("CARGO_PKG_VERSION")),
+            false,
+            None,
+            act::BOTON_ACTUALIZAR_AHORA,
+            Box::new(move |x, _, _| actualizador::actualizar_ahora(&x.ui, &nueva)),
+        );
+        self.ui
+            .set_dialogo_cancelar_texto(act::BOTON_MAS_TARDE.into());
+        self.ui.set_dialogo_foco_en_cancelar(true);
     }
 
     /// «Cancelar», el fondo o el cierre tras aceptar: un diálogo cerrado no deja su acción para el siguiente.

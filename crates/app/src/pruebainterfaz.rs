@@ -521,6 +521,35 @@ async fn fase3(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
         &format!("alto de la barra: {barra} px"),
     );
 
+    // PART-027 (E6): la ventana de «Buscar actualizaciones» abre con el foco en «Más tarde», Esc la cierra sin
+    // instalar y «Actualizar ahora» es solo del botón. El texto nombra lo que se pierde.
+    i.dialogo_version_nueva("0.2.99");
+    esperar(100).await;
+    let abierta = ui.get_capa_abierta()
+        && ui.get_dialogo_titulo() == nucleo::actualizacion::TITULO_VERSION_NUEVA
+        && ui.get_dialogo_aceptar_texto() == nucleo::actualizacion::BOTON_ACTUALIZAR_AHORA
+        && ui.get_dialogo_cancelar_texto() == nucleo::actualizacion::BOTON_MAS_TARDE
+        && ui.get_dialogo_foco_en_cancelar()
+        && ui.get_dialogo_texto().contains("sin pegar");
+    let esc: SharedString = Key::Escape.into();
+    ui.window()
+        .dispatch_event(WindowEvent::KeyPressed { text: esc.clone() });
+    ui.window()
+        .dispatch_event(WindowEvent::KeyReleased { text: esc });
+    esperar(100).await;
+    a.anotar(
+        abierta
+            && !ui.get_capa_abierta()
+            && !ui.get_aviso_visible()
+            && ui.get_aviso_progreso() < 0.0,
+        "la ventana de versión nueva: foco en Más tarde y Esc no instala",
+        &format!(
+            "abierta con sus textos: {abierta}; sigue abierta tras Esc: {}; descargando: {}",
+            ui.get_capa_abierta(),
+            ui.get_aviso_visible()
+        ),
+    );
+
     // D27, A3: el asa no deja el panel por debajo de su alto mínimo; con lugar de sobra, el tope es 600.
     for (h, tope) in [(600.0, false), (1400.0, true)] {
         ui.window().set_size(slint::LogicalSize::new(1280.0, h));

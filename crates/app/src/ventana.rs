@@ -505,7 +505,10 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
         in-out property <string> aviso-nueva;
         callback aviso-accion();
         in property <string> licencias;
-        callback ver-versiones();
+        // PART-027 (D44): «Buscar actualizaciones» en Ayuda, con su línea de estado; la versión nueva abre su ventana.
+        callback buscar-actualizaciones();
+        callback version-encontrada(string);
+        in-out property <string> busqueda-estado;
 
         // D27, A3: el menor entre 600 y el alto que deja al panel su alto mínimo (200: ALTO_MINIMO_PANEL).
         public pure function maximo-del-asa() -> length {
@@ -939,8 +942,9 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                                 Secundario { text: "Ninguno usa Enter ni Ctrl+Enter, que en las páginas envían."; }
                                 TituloBloque { text: "Acerca de ChatCouncil"; }
                                 Parrafo { text: root.version; }
-                                Parrafo { text: "Al abrirse, la app busca una versión nueva y te la ofrece arriba. Las versiones publicadas están en la página del proyecto."; }
-                                HorizontalLayout { alignment: start; Boton { text: "Ver las versiones publicadas"; clicked => { root.ver-versiones(); } } }
+                                Parrafo { text: "Al abrirse, la app busca una versión nueva y te la ofrece arriba. También puedes buscarla ahora con este botón."; }
+                                HorizontalLayout { alignment: start; Boton { text: "Buscar actualizaciones"; clicked => { root.buscar-actualizaciones(); } } }
+                                if root.busqueda-estado != "" : Secundario { text: root.busqueda-estado; }
                                 Text { text: "Licencias de terceros"; font-weight: 600; color: Palette.foreground; }
                                 // La licencia libre de Slint pide mostrar este aviso (Royalty-free 2.0).
                                 HorizontalLayout { alignment: start; AboutSlint { } }

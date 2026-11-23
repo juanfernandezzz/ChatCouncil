@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: COMPLETE
+Next: plans/PART27_PLAN.ai.md
 
 ## Parts
 
@@ -133,6 +133,11 @@ Next: COMPLETE
   - Scenario: SCN-026
   - Outcome: Pendientes técnicos de la auditoría E9 resueltos y medidos
   - Evidence: recorded
+
+- [ ] Part 27: plans/PART27_PLAN.ai.md
+  - Scenario: SCN-027
+  - Outcome: Control de lectura del operador y buscar actualizaciones
+  - Evidence: pending
 
 ## Notes
 

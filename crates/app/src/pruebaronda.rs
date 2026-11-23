@@ -1149,13 +1149,75 @@ async fn operacion(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
             resultado()
         ),
     );
+    // PART-027 (D6): el control de lectura del operador, en vivo. Tres operadores devuelven la primera línea
+    // ARCHIVO con las marcas correctas, con otras y sin la línea; cada uno se captura solo y su cabecera
+    // avisa, o no, que no se pudo confirmar la lectura. La captura de todos de abajo sigue siendo la que cierra la etapa.
+    let tres: Vec<&str> = POOL
+        .iter()
+        .copied()
+        .filter(|id| *id != "mistral")
+        .take(3)
+        .collect();
+    let mut lecturas = Vec::new();
     for id in POOL {
-        let t = format!(
+        let hallazgo = format!(
             "CONVERGENCIA|ALCANCE|P1,P2|Las respuestas coinciden en el punto central ({id})."
         );
-        responder(i, id, &t).await?;
+        let marcas = operacion_de(i, id).map(|o| o.marcas).unwrap_or_default();
+        let linea = match tres.iter().position(|x| *x == id) {
+            Some(0) => marcas
+                .first()
+                .zip(marcas.last())
+                .map(|(p, u)| format!("ARCHIVO: {p} {u}")),
+            Some(1) => Some("ARCHIVO: [[CC-OTRA-1]] [[CC-OTRA-2]]".to_string()),
+            _ => None,
+        };
+        match (tres.contains(&id), linea) {
+            (true, Some(l)) => {
+                responder_en_parrafos(i, id, &[l.as_str(), hallazgo.as_str()]).await?
+            }
+            (true, None) => responder_en_parrafos(i, id, &[hallazgo.as_str()]).await?,
+            (false, _) => responder(i, id, &hallazgo).await?,
+        };
     }
     hasta(30, || paso() == "Capturar los que terminaron (7)").await;
+    for id in &tres {
+        i.seleccionar(id);
+        hasta(30, || {
+            ui.get_accion_texto().starts_with("Capturar este panel")
+        })
+        .await;
+        ui.invoke_accion_panel();
+        hasta(30, || ui.get_resultado().starts_with("Capturado")).await;
+        // El sondeo de estado corre cada 1500 ms: se espera a que la cabecera se actualice.
+        if *id == tres[0] {
+            // Sin aviso que esperar: se deja pasar un ciclo entero del sondeo (1500 ms) para que la cabecera se refresque.
+            esperar(3000).await;
+        } else {
+            hasta(8, || {
+                ui.get_cabecera_problema().contains("no confirmó que leyó")
+            })
+            .await;
+        }
+        lecturas.push((*id, ui.get_cabecera_problema().to_string()));
+    }
+    let aviso = |n: usize| {
+        lecturas
+            .get(n)
+            .is_some_and(|(_, c)| c.contains("no confirmó que leyó el archivo entero"))
+    };
+    a.anotar(
+        lecturas.len() == 3
+            && !aviso(0)
+            && aviso(1)
+            && aviso(2)
+            && lecturas[1]
+                .1
+                .contains("Las marcas de la primera línea no son las del archivo")
+            && lecturas[2].1.contains("Se saltó la primera línea ARCHIVO"),
+        "control de lectura del operador en la cabecera",
+        &format!("{lecturas:?}"),
+    );
     ui.invoke_paso();
     hasta(60, || ui.get_barra_titulo() == "Integración · 4 de 7").await;
     let h = hechos(i).await;
@@ -1171,15 +1233,22 @@ async fn operacion(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
             texto_de(s, "promptCompleto") == Some(o.prompt_completo.para_mostrar().into_owned())
         })
     });
+    let mut ops: Vec<String> = salidas
+        .iter()
+        .filter_map(|s| texto_de(s, "operadorId"))
+        .collect();
+    ops.sort();
+    ops.dedup();
+    let distintos = ops.len();
     let con_archivo = salidas
         .iter()
         .find(|s| texto_de(s, "operadorId").as_deref() == Some("chatgpt"))
         .and_then(|s| texto_de(s, "promptCompleto"))
         .is_some_and(|p| p.contains("=== ARCHIVO ADJUNTO:"));
     a.anotar(
-        salidas.len() == 7
+        distintos == 7
             && prompts_iguales
-            && hallazgos == 7
+            && hallazgos == salidas.len()
             && con_archivo
             && ui.get_barra_titulo() == "Integración · 4 de 7",
         "capturar la operación",

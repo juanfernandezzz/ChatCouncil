@@ -112,10 +112,10 @@ Propósito: mostrar la ronda por etapas con el estado de cada panel, dar navegac
 - Plataforma: android
 
 ### IFZ-016 · Versión y licencias en Ayuda
-- Qué hace: Ayuda muestra «ChatCouncil, versión {v}.», el texto «Al abrirse, la app busca una versión nueva y te la ofrece arriba. Las versiones publicadas están en la página del proyecto.», el botón «Ver las versiones publicadas» (abre la página de Releases del proyecto) y «Licencias de terceros».
-- Condición y resultado observable: tocar «Ver las versiones publicadas» abre la página de versiones en el navegador.
+- Qué hace: Ayuda muestra «ChatCouncil, versión {v}.», el texto «Al abrirse, la app busca una versión nueva y te la ofrece arriba. También puedes buscarla ahora con este botón.», el botón «Buscar actualizaciones» (con su línea de estado, ARR-013) y «Licencias de terceros». PART-027 (D44) reemplazó «Ver las versiones publicadas».
+- Condición y resultado observable: tocar «Buscar actualizaciones» muestra el resultado bajo el botón; no abre el navegador.
 - Fuente: unity/Assets/Interfaz/Aplicacion.cs:292-296 ; unity/Assets/Interfaz/Resources/Interfaz/Ronda.uxml:174-178
-- Prueba: manual — 1. Ir a Ayuda. 2. Comprobar la versión. 3. Tocar «Ver las versiones publicadas» y comprobar el navegador.
+- Prueba: manual — 1. Ir a Ayuda. 2. Comprobar la versión. 3. Tocar «Buscar actualizaciones» y comprobar la línea de estado.
 - Plataforma: ambas
 
 ### IFZ-017 · Menús propios con grupos y motivos

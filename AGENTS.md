@@ -28,7 +28,9 @@ La referencia de funciones es el tag referencia-port-chatcouncil de github.com/j
 - Todo resultado es real; nunca se simula.
 - En la interfaz se dice «consejo».
 - Las pruebas usan perfiles de prueba y el modelo más barato de la cuenta de Juan; el perfil real queda fuera de todo diagnóstico.
-- La app se abre siempre fuera del paquete de Claude (vía explorer.exe) y se comprueba que escribe en %LOCALAPPDATA%\ChatCouncil; abierta desde Code sin eso, sus datos quedan dentro del contenedor de Claude (D34).
+- Code trabaja desde Claude Code CLI, fuera del paquete de Claude, así que la app que abre escribe en %LOCALAPPDATA%\ChatCouncil. Desde la pestaña Code de Claude Desktop no se abre la app: sus datos quedarían dentro del contenedor de Claude (D34, D39, D45.3).
+- Code no termina procesos de la app que no lanzó él. Si una instancia colgada bloquea algo, lo salta y lo reporta (D45.5).
+- navegador\ no se lee, no se copia y no se lista, ni siquiera por nombres (D45.4).
 
 ## Evidencia
 

@@ -708,3 +708,10 @@ PART-027 (agent-desktop, control de lectura del operador, boton Buscar actualiza
 Artifacts:
 - gh pr 6 merged 6ffc587; gh pr 7 merged 04d9ec7; ci y publicar success; version.txt 0.2.19
 - docs/revisiones/PART-027-limpieza.md
+
+### PART-027
+
+Corrección (D45): B, C y G1 sí se hicieron. agent-desktop funciona con AGENT_DESKTOP_HOME=C:\cc-target\ad-home. El actualizador se probó en la app real 0.2.20 → 0.2.21 → 0.2.22, y Buscar actualizaciones respondió "Tienes la última versión (0.2.21)". La versión publicada al cierre fue 0.2.22. Las pruebas en rojo de D y E no se registraron.
+
+Artifacts:
+- handoff PART-027 y D45

@@ -525,12 +525,17 @@ async fn fase3(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
     // instalar y «Actualizar ahora» es solo del botón. El texto nombra lo que se pierde.
     i.dialogo_version_nueva("0.2.99");
     esperar(100).await;
+    // PART-028 (C6): los textos van literales, no por sus constantes: si alguien las cambia, la prueba lo dice.
+    let actual = env!("CARGO_PKG_VERSION");
+    let cuerpo = format!(
+        "Hay una versión nueva (0.2.99); tienes la {actual}. Al actualizar, la app se cierra y se vuelve a abrir. Lo que ya capturaste queda guardado; se pierde la pregunta que hayas escrito sin pegar y la respuesta que un panel siga generando sin capturar. Si un panel está respondiendo, espera, captura y actualiza después."
+    );
     let abierta = ui.get_capa_abierta()
-        && ui.get_dialogo_titulo() == nucleo::actualizacion::TITULO_VERSION_NUEVA
-        && ui.get_dialogo_aceptar_texto() == nucleo::actualizacion::BOTON_ACTUALIZAR_AHORA
-        && ui.get_dialogo_cancelar_texto() == nucleo::actualizacion::BOTON_MAS_TARDE
+        && ui.get_dialogo_titulo() == "Hay una versión nueva"
+        && ui.get_dialogo_aceptar_texto() == "Actualizar ahora"
+        && ui.get_dialogo_cancelar_texto() == "Más tarde"
         && ui.get_dialogo_foco_en_cancelar()
-        && ui.get_dialogo_texto().contains("sin pegar");
+        && ui.get_dialogo_texto() == cuerpo.as_str();
     let esc: SharedString = Key::Escape.into();
     ui.window()
         .dispatch_event(WindowEvent::KeyPressed { text: esc.clone() });
@@ -548,6 +553,38 @@ async fn fase3(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
             ui.get_capa_abierta(),
             ui.get_aviso_visible()
         ),
+    );
+
+    // PART-028 (C6, hallazgo 4): con otro diálogo abierto la versión nueva no pisa la ventana: se ofrece en el
+    // aviso de arriba, con «Actualizar», sin descargar nada. Esc cierra el diálogo que estaba y no instala.
+    i.dialogo_version_nueva("0.2.99");
+    esperar(100).await;
+    i.dialogo_version_nueva("0.2.98");
+    esperar(100).await;
+    let ofrecida = ui.get_dialogo_titulo() == "Hay una versión nueva"
+        && ui.get_aviso_visible()
+        && ui.get_aviso_boton() == "Actualizar"
+        && ui.get_aviso_progreso() < 0.0
+        && ui.get_aviso_texto()
+            == format!(
+                "Hay una versión nueva (0.2.98); tienes la {actual}. Lo capturado queda guardado; antes de actualizar, captura lo que un panel siga generando."
+            )
+            .as_str();
+    let esc: SharedString = Key::Escape.into();
+    ui.window()
+        .dispatch_event(WindowEvent::KeyPressed { text: esc.clone() });
+    ui.window()
+        .dispatch_event(WindowEvent::KeyReleased { text: esc });
+    esperar(100).await;
+    let sin_instalar = !ui.get_capa_abierta() && ui.get_aviso_progreso() < 0.0;
+    ui.set_aviso_visible(false);
+    ui.set_aviso_texto(SharedString::new());
+    ui.set_aviso_boton(SharedString::new());
+    ui.set_aviso_nueva(SharedString::new());
+    a.anotar(
+        ofrecida && sin_instalar,
+        "con otro diálogo abierto, la versión nueva se ofrece arriba y no instala",
+        &format!("ofrecida en el aviso: {ofrecida}; sin instalar tras Esc: {sin_instalar}"),
     );
 
     // D27, A3: el asa no deja el panel por debajo de su alto mínimo; con lugar de sobra, el tope es 600.
@@ -587,6 +624,57 @@ async fn fase3(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
             "compacta sin riel: {sin_riel}; página apartada: {apartada}; cajón abierto: {}; sección: {}",
             ui.get_cajon_abierto(),
             ui.get_seccion()
+        ),
+    );
+
+    // PART-028 (C3, hallazgo 6): «Buscando actualizaciones…» no se queda pegado. Una búsqueda que no vuelve
+    // (hilo colgado, red sin respuesta) pasa, al vencer el techo, a la falla; y cuando el hilo por fin
+    // termine, su resultado tardío no pisa esa línea.
+    let sin_revision =
+        "No se pudo revisar si hay una versión nueva. Revisa tu conexión e inténtalo otra vez.";
+    ui.set_busqueda_estado(SharedString::new());
+    crate::actualizador::buscar_con(ui, Duration::from_millis(300), || {
+        std::thread::sleep(Duration::from_millis(1500));
+        nucleo::actualizacion::Busqueda::AlDia
+    });
+    let buscando = ui.get_busqueda_estado() == "Buscando actualizaciones…";
+    esperar(800).await;
+    let vencida = ui.get_busqueda_estado() == sin_revision;
+    esperar(1500).await;
+    let tardia = ui.get_busqueda_estado() == sin_revision;
+    a.anotar(
+        buscando && vencida && tardia,
+        "Buscar actualizaciones no se queda en «Buscando…»",
+        &format!(
+            "buscando: {buscando}; a los 800 ms dice la falla: {vencida}; el resultado tardío no la pisa: {tardia}; línea: «{}»",
+            ui.get_busqueda_estado()
+        ),
+    );
+
+    // PART-028 (C4, hallazgo 7): la línea de estado se limpia al salir de Ayuda.
+    ui.invoke_ir(SharedString::from("ayuda"));
+    ui.set_busqueda_estado(SharedString::from("Tienes la última versión (0.2.5)."));
+    ui.invoke_ir(SharedString::from("ajustes"));
+    esperar(50).await;
+    let limpia = ui.get_busqueda_estado().is_empty();
+    // Una búsqueda en curso al salir de Ayuda tampoco pinta su resultado cuando llega tarde.
+    ui.invoke_ir(SharedString::from("ayuda"));
+    crate::actualizador::buscar_con(ui, Duration::from_secs(30), || {
+        std::thread::sleep(Duration::from_millis(500));
+        nucleo::actualizacion::Busqueda::AlDia
+    });
+    ui.invoke_ir(SharedString::from("ajustes"));
+    esperar(1200).await;
+    let tarde_limpia = ui.get_busqueda_estado().is_empty();
+    ui.invoke_ir(SharedString::from("ayuda"));
+    esperar(50).await;
+    a.anotar(
+        limpia && tarde_limpia && ui.get_busqueda_estado().is_empty(),
+        "la línea de Buscar actualizaciones se limpia al salir de Ayuda",
+        &format!(
+            "tras salir: «{}»; resultado tardío no la pisa: {tarde_limpia}; al volver: «{}»",
+            if limpia { "" } else { "con texto" },
+            ui.get_busqueda_estado()
         ),
     );
     Ok(())

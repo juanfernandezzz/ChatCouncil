@@ -1213,8 +1213,8 @@ async fn operacion(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
             && aviso(2)
             && lecturas[1]
                 .1
-                .contains("Las marcas de la primera línea no son las del archivo")
-            && lecturas[2].1.contains("Se saltó la primera línea ARCHIVO"),
+                .contains("las marcas de la primera línea no son las del archivo")
+            && lecturas[2].1.contains("se saltó la primera línea ARCHIVO"),
         "control de lectura del operador en la cabecera",
         &format!("{lecturas:?}"),
     );

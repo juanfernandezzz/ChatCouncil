@@ -930,6 +930,9 @@ impl Interfaz {
         if seccion != "ajustes" {
             self.ocultar_cuentas();
         }
+        if seccion != "ayuda" {
+            actualizador::al_salir_de_ayuda(&self.ui);
+        }
         if seccion == "historial" {
             self.armar_historial();
         }

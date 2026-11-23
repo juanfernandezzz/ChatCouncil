@@ -1001,9 +1001,13 @@ pub fn lectura_registrada(
 /// La línea de control ya termina en punto: se le quita para que no queden dos.
 pub fn aviso_de_lectura(lectura: &str) -> Option<String> {
     (lectura != "entero").then(|| {
+        let texto = crate::prompts::texto_de_lectura(lectura).trim_end_matches('.');
+        // Tras los dos puntos va minúscula; ninguna línea de lectura empieza con un nombre propio.
+        let mut letras = texto.chars();
+        let primera: String = letras.next().into_iter().flat_map(char::to_lowercase).collect();
         format!(
-            "el operador no confirmó que leyó el archivo entero: {}. Revisa el panel o repite la operación en él.",
-            crate::prompts::texto_de_lectura(lectura).trim_end_matches('.')
+            "el operador no confirmó que leyó el archivo entero: {primera}{}. Revisa el panel o repite la operación en él.",
+            letras.as_str()
         )
     })
 }
@@ -1109,14 +1113,28 @@ mod pruebas {
         assert_eq!(
             aviso_de_lectura("marcas-distintas").as_deref(),
             Some(
-                "el operador no confirmó que leyó el archivo entero: Las marcas de la primera línea no son las del archivo: leyó parcial o resumió. Revisa el panel o repite la operación en él."
+                "el operador no confirmó que leyó el archivo entero: las marcas de la primera línea no son las del archivo: leyó parcial o resumió. Revisa el panel o repite la operación en él."
             )
         );
         let sin_linea = lectura("H01 sin la línea de archivo");
         assert_eq!(sin_linea, Some("sin-linea"));
         assert!(aviso_de_lectura("sin-linea").unwrap().starts_with(
-            "el operador no confirmó que leyó el archivo entero: Se saltó la primera línea ARCHIVO"
+            "el operador no confirmó que leyó el archivo entero: se saltó la primera línea ARCHIVO"
         ));
+        // PART-028 (C7): tras los dos puntos va minúscula, en cada texto de lectura que avisa.
+        for lectura in [
+            "no-pudo-leer",
+            "marcas-distintas",
+            "sin-linea",
+            "sin-marcas-registradas",
+        ] {
+            let aviso = aviso_de_lectura(lectura).unwrap();
+            let tras = aviso.split_once(": ").unwrap().1;
+            assert!(
+                tras.chars().next().unwrap().is_lowercase(),
+                "mayúscula tras los dos puntos en «{aviso}»"
+            );
+        }
         // D5: sin .marcas (pegada antes de 0.2.16) no hay control ni aviso nuevo, diga lo que diga la salida.
         let antigua = t(
             "Haz esto.\n\n=== ARCHIVO ADJUNTO: respuestas-2026-10-05-0900-ffffff.txt ===\ncuerpo",

@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: COMPLETE
+Next: plans/PART28_PLAN.ai.md
 
 ## Parts
 
@@ -137,6 +137,11 @@ Next: COMPLETE
 - [x] Part 27: plans/PART27_PLAN.ai.md
   - Scenario: SCN-027
   - Outcome: Control de lectura del operador y buscar actualizaciones
+  - Evidence: recorded
+
+- [ ] Part 28: plans/PART28_PLAN.ai.md
+  - Scenario: SCN-028
+  - Outcome: Arrastres de PART-027
   - Evidence: recorded
 
 ## Notes

@@ -771,3 +771,24 @@ PART-028 · D, app real instalada (C:\Users\...\Programs\ChatCouncilNueva, perfi
 
 Artifacts:
 - D: 0.2.22 -> 0.2.24, Tienes la última versión (0.2.24), línea vacía al volver
+
+### PART-029
+
+PART-029 · rojo (cargo test -p nucleo --lib invocacion, desde C:\cc-repo, con una función que devolvía el texto igual): 1 FAILED, «la_invocacion_de_una_skill_al_comienzo_no_cuenta_como_texto_distinto», left «/research-protocol ¿Qué dice?», right «¿Qué dice?». Rojo de pruebaronda (binario de depuración, carpeta de datos de prueba) con la prueba nueva y enviar.js sin cambio: 98/103 con exit 1; FALLA «enviar a todos: la invocación de una skill delante de lo pegado se envía: chatgpt (0, "")», con las dos que dependen del envío de ChatGPT (un clic por panel elegible y «respondiendo»).
+
+Artifacts:
+- rojo: nucleo 1 FAILED; pruebaronda 98/103
+
+### PART-029
+
+PART-029 · diagnóstico del registro real (copia en C:\cc-target\tmp, ya borrada; solo cuentas y largos): 20 mensajes de usuario capturados en 6 rondas; 16 coinciden con la comparación R18 de antes y 4 no (Gemini 5881915a y 48e5d7bb, ChatGPT 5881915a, Claude e21ad9a4; ninguno con una invocación de skill). Solo 1 de los 20 empieza con «/» (Claude, ronda 0f31dbec, 19 caracteres de sobra al comienzo, coincide); 0 con «@»; 0 con research-protocol sin signo; Gemini deja 114 a 133 caracteres de sobra al comienzo («Tu dijiste» y similares), ChatGPT 0 a 23 al comienzo y 13 al final, Claude 0 al comienzo salvo el caso de «/» y 1 al final. Por eso no se agregó skillsConocidas a specs.json (ningún proveedor deja el nombre sin signo). R18 ya coincidía por contención con el texto entero; el arreglo cubre la pregunta casi entera con la invocación delante.
+
+Artifacts:
+- diagnóstico R18: 20 mensajes, 1 con /
+
+### PART-029
+
+PART-029 · verde final (desde C:\cc-repo, binario de depuración, carpetas de prueba, perfil real fuera): cargo fmt --all --check exit 0; cargo clippy --workspace -- -D warnings exit 0; cargo test --workspace exit 0 (app 25, informe-pdf 11, nucleo 204 + 12 ignorados, paneles 15, verificacion 14 + 1 ignorado; 0 fallos); autoprueba 66/66 exit 0; pruebaronda 103/103 exit 0 (ChatGPT se envía con «/research-protocol » delante de lo pegado; el registro guarda el mensaje leído tal cual); pruebainterfaz fases 16/16, 9/9, 13/13 exit 0. Revisión: docs/revisiones/PART-029-rust-reviewer.md (hallazgos 1, 2, 4 y 6 aplicados; 3 y 5 sin cambio, con motivo). Restos: C:\cc-repo\target (11 GB) NO se borró: cargo metadata da target_directory C:\cc-repo\target y CARGO_TARGET_DIR está vacío, así que la comprobación del lote no se cumple; ronda2-135215 en C:\cc-target\tmp no calza con ronda-* y quedó.
+
+Artifacts:
+- gates: test 204, autoprueba 66/66, pruebaronda 103/103, pruebainterfaz 16/9/13

@@ -546,6 +546,13 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
     )
     .await?;
     en(i, "perplexity", "document.body.dataset.tragar = '1'; 'ok'").await?;
+    // ESC-018: la invocación de una skill delante de lo pegado no es un texto cambiado: ChatGPT se envía igual.
+    en(
+        i,
+        "chatgpt",
+        "(() => { const c = document.getElementById('compositor'); c.value = '/research-protocol ' + c.value; return 'ok'; })()",
+    )
+    .await?;
     let (dialogo_si, visto_si) = con_el_boton(i, "investigacion", true).await;
     // Grok sigue «Con problema» tras volver a pegar (su intento falló): no es elegible y se envía a mano.
     let parcial = "Enviado en 2 de 6. Revisa la cabecera de cada uno de los demás: si dice que no se pudo comprobar, mira el panel antes de volver a enviar; si dice que no se envió, envíalo a mano.";
@@ -564,6 +571,12 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
             && !visto_si.contains("Grok"),
         "enviar a todos: «Sí», un clic por panel elegible y Kimi con Enter",
         &format!("{visto_si}; «{}»; {clics}", resultado()),
+    );
+    let chatgpt = envios(i, "chatgpt").await;
+    a.anotar(
+        chatgpt.0 == 1 && chatgpt.1 == "boton",
+        "enviar a todos: la invocación de una skill delante de lo pegado se envía",
+        &format!("chatgpt {chatgpt:?}"),
     );
     let mut cabeceras = Vec::new();
     for (id, estado) in [
@@ -723,8 +736,14 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
     a.anotar(
         de == esperados
             && respuestas.iter().all(|r| {
+                // ESC-018: el registro guarda lo leído tal cual: ChatGPT lleva la invocación delante.
+                let esperado = if texto_de(r, "proveedorId").as_deref() == Some("chatgpt") {
+                    format!("/research-protocol {LA_PREGUNTA}")
+                } else {
+                    LA_PREGUNTA.to_string()
+                };
                 r.valor("error") == &Valor::Nulo
-                    && texto_de(r, "promptUsuarioLeido").as_deref() == Some(LA_PREGUNTA)
+                    && texto_de(r, "promptUsuarioLeido").as_deref() == Some(esperado.as_str())
             }),
         "capturar los que terminaron",
         &format!("respuestas de [{}]; \"{}\"", de.join(","), resultado()),

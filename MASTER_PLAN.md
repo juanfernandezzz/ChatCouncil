@@ -144,3 +144,14 @@
   - Scenario: SCN-028
   - Outcome: Arrastres de PART-027
   - Evidence: recorded
+
+- [x] Part 29: Read `plans/PART29_PLAN.ai.md`
+  - Scenario: SCN-029
+  - Outcome: Skills como texto extra
+  - Evidence: recorded
+
+- [ ] Part 30: Read `plans/PART30_PLAN.ai.md`
+  - Scenario: SCN-030
+  - Outcome: Muse de Meta como proveedor
+  - Evidence: pending
+

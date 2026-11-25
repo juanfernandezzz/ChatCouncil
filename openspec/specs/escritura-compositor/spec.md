@@ -117,6 +117,11 @@ Propósito: pegar pregunta, operación y prompts de rol en el compositor de cada
 - Fuente: ADR-0011
 - Prueba: pruebaronda
 
+### ESC-018 · La invocación de una skill al comienzo no cuenta como texto distinto: ni en Enviar a todos ni en el aviso de mensaje distinto
+- Condición y resultado observable: un token de skill al comienzo del texto («/» o «@» pegada a un nombre que empieza con letra o cifra y sigue con letras, cifras, «-», «_», «.» o «:», seguido de espacio o salto; uno o más) se ignora al comparar. En «Enviar a todos», un compositor con «/research-protocol » delante de lo pegado se envía; en el aviso de «Capturar» (R18), el mensaje de usuario leído con la invocación delante coincide con la pregunta. «/research-protocol <otra cosa>» no coincide, y «/ruta/archivo» (sin espacio tras el nombre) no se toca.
+- Fuente: PART-029 (lote CC-2); el diagnóstico del registro real mostró un caso con «/» al comienzo (Claude) y ninguno con el nombre sin signo, por eso no hay lista de skills conocidas.
+- Prueba: nucleo (puerta::pruebas::la_invocacion_de_una_skill_al_comienzo_no_cuenta_como_texto_distinto) y pruebaronda (ChatGPT con la invocación delante).
+
 ## Invariantes
 
 ### INV-ESC-001 · La app envía solo con confirmación

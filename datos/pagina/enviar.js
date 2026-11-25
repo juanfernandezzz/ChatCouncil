@@ -9,6 +9,14 @@
     const COMPROBAR_MS = 15000;
     // La misma comparación con que pagina.js verifica lo escrito (INV-ESC-003).
     const normal = (t) => t.replace(/\s+/g, " ").trim();
+    // ESC-018: la invocación de una skill al comienzo del compositor no es texto distinto. La misma regla que
+    // sin_invocaciones_de_skill en crates/nucleo/src/puerta.rs: «/» o «@» y un nombre, seguidos de espacio o salto.
+    const sinSkill = (t) => {
+        let r = t.replace(/^\s+/, "");
+        for (let m = /^[/@][\p{Alphabetic}\p{N}][\p{Alphabetic}\p{N}\-_.:]*\s+/u.exec(r); m; m = /^[/@][\p{Alphabetic}\p{N}][\p{Alphabetic}\p{N}\-_.:]*\s+/u.exec(r))
+            r = r.slice(m[0].length);
+        return r;
+    };
     const desactivado = (b) => b.disabled === true || b.getAttribute("aria-disabled") === "true";
     async function enviar(spec, texto) {
         if (typeof leerCompositor !== "function" || typeof chatVacio !== "function" || typeof buscar !== "function"
@@ -17,7 +25,7 @@
         const actual = leerCompositor(spec);
         if (actual === null || normal(actual) === "")
             return { estado: "compositor-vacio" };
-        if (normal(actual) !== normal(texto))
+        if (normal(actual) !== normal(texto) && normal(sinSkill(actual)) !== normal(texto))
             return { estado: "compositor-distinto" };
         if (!chatVacio(spec))
             return { estado: "ya-enviado" };
@@ -45,7 +53,8 @@
                 await dormir(120);
             }
             // Mientras se esperaba el botón el texto pudo cambiar: se compara otra vez justo antes de pulsar.
-            if (normal(leerCompositor(spec) ?? "") !== normal(texto))
+            const ahora = leerCompositor(spec) ?? "";
+            if (normal(ahora) !== normal(texto) && normal(sinSkill(ahora)) !== normal(texto))
                 return { estado: "compositor-distinto" };
             boton.click();
         }

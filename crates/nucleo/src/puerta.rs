@@ -3204,10 +3204,31 @@ fn prompt_coincide_en_pool<'a>(prompts: impl Iterator<Item = Option<&'a Texto>>)
     )
 }
 
+/// ESC-018 (PART-029): quita del comienzo, tras los espacios, uno o más tokens de invocación de skill: «/» o «@»
+/// pegada a un nombre que empieza con letra o cifra y sigue con letras, cifras, «-», «_», «.» o «:», y después
+/// un espacio o salto. «/ruta/archivo» (sin espacio tras el nombre) no se toca. enviar.js tiene la misma regla.
+pub fn sin_invocaciones_de_skill(t: &str) -> &str {
+    let mut resto = t.trim_start();
+    while let Some(cuerpo) = resto.strip_prefix(['/', '@']) {
+        let fin = cuerpo
+            .find(|c: char| !(c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | ':')))
+            .unwrap_or(cuerpo.len());
+        let empieza_bien = cuerpo.chars().next().is_some_and(char::is_alphanumeric);
+        if !empieza_bien || !cuerpo[fin..].starts_with(char::is_whitespace) {
+            break;
+        }
+        resto = cuerpo[fin..].trim_start();
+    }
+    resto
+}
+
 /// Solo letras y cifras, en minúsculas: lo que sobrevive a los saltos aplanados y a los textos que cada sitio agrega.
 fn letras_y_cifras(t: &Texto) -> String {
-    t.para_mostrar()
-        .chars()
+    letras_y_cifras_de(&t.para_mostrar())
+}
+
+fn letras_y_cifras_de(t: &str) -> String {
+    t.chars()
         .filter(|c| c.is_alphanumeric())
         .flat_map(char::to_lowercase)
         .collect()
@@ -3228,18 +3249,32 @@ pub fn aviso_prompts_de_captura<'a>(
     if etapa != "investigacion" {
         return String::new();
     }
-    let leidos: Vec<(&str, String)> = mensajes
+    // Cada mensaje, tal cual y sin la invocación de skill del comienzo (una pregunta que empieza con «@algo» coincide tal cual).
+    let leidos: Vec<(&str, [String; 2])> = mensajes
         .into_iter()
-        .filter_map(|(id, t)| Some((id, letras_y_cifras(t?))))
-        .filter(|(_, t)| !t.is_empty())
+        .filter_map(|(id, t)| {
+            let t = t?.para_mostrar();
+            Some((
+                id,
+                [
+                    letras_y_cifras_de(&t),
+                    letras_y_cifras_de(sin_invocaciones_de_skill(&t)),
+                ],
+            ))
+        })
+        .filter(|(_, t)| !t[0].is_empty())
         .collect();
     let distintos: Vec<String> = leidos
         .iter()
         // El mensaje leído contiene la pregunta (los sitios agregan texto), o es casi toda la pregunta
         // (saltos aplanados): un fragmento corto o cortado a la mitad no coincide.
-        .filter(|(_, t)| {
-            !(t.contains(&pregunta)
-                || (pregunta.contains(t.as_str()) && t.len() * 10 >= pregunta.len() * 9))
+        .filter(|(_, ts)| {
+            !ts.iter().any(|t| {
+                t.contains(&pregunta)
+                    || (!t.is_empty()
+                        && pregunta.contains(t.as_str())
+                        && t.len() * 10 >= pregunta.len() * 9)
+            })
         })
         .map(|(id, _)| dominio::nombre_proveedor(id))
         .collect();
@@ -6207,5 +6242,54 @@ sobre la dosis? Mostrar más"
             ""
         );
         assert_eq!(con(&[("kimi", "otra cosa")], "operacion"), "");
+    }
+
+    /// PART-029, ESC-018: la invocación de una skill al comienzo no es texto distinto.
+    #[test]
+    fn la_invocacion_de_una_skill_al_comienzo_no_cuenta_como_texto_distinto() {
+        use super::sin_invocaciones_de_skill as sin;
+        assert_eq!(sin("/research-protocol ¿Qué dice?"), "¿Qué dice?");
+        assert_eq!(sin("@research-protocol ¿Qué dice?"), "¿Qué dice?");
+        assert_eq!(sin("  /plugin:skill\n¿Qué dice?"), "¿Qué dice?");
+        assert_eq!(sin("/a.b_c-1 @otra ¿Qué dice?"), "¿Qué dice?");
+        // Sin espacio tras el nombre, o con un nombre que no empieza con letra o cifra, no se toca.
+        assert_eq!(sin("/ruta/archivo"), "/ruta/archivo");
+        assert_eq!(sin("/ruta/archivo y más"), "/ruta/archivo y más");
+        assert_eq!(sin("/research-protocol"), "/research-protocol");
+        assert_eq!(sin("/-x ¿Qué dice?"), "/-x ¿Qué dice?");
+        assert_eq!(sin("/ ¿Qué dice?"), "/ ¿Qué dice?");
+        // Solo al comienzo.
+        assert_eq!(sin("¿Qué /dice? x"), "¿Qué /dice? x");
+        // En el aviso de captura: la pregunta casi entera con la invocación delante coincide; otra cosa no.
+        let pregunta = "¿Qué dice la evidencia sobre la dosis de este fármaco en adultos mayores?";
+        let q = Texto::from(pregunta);
+        let casi = &pregunta[..pregunta.len() - 4];
+        let aviso = |m: &str| {
+            let t = Texto::from(m);
+            aviso_prompts_de_captura([("kimi", Some(&t))], Some(&q), "investigacion")
+        };
+        for prefijo in [
+            "/research-protocol ",
+            "@research-protocol ",
+            "/plugin:skill ",
+        ] {
+            assert!(
+                aviso(&format!("{prefijo}{casi}")).starts_with("Prompt de usuario: coincide"),
+                "{prefijo}"
+            );
+        }
+        assert!(aviso("/research-protocol otra cosa").starts_with("⚠ El mensaje enviado en Kimi"));
+        assert_eq!(sin("/investigación ¿Qué dice?"), "¿Qué dice?");
+        // Una pregunta que empieza con «@algo» coincide tal cual, aunque el sitio la aplane.
+        let q2 = Texto::from(
+            "@ana ¿Qué dice la evidencia sobre la dosis de este fármaco en adultos mayores?",
+        );
+        let t2 = Texto::from(
+            "@ana ¿Qué dice la evidencia sobre la dosis de este fármaco en adultos mayores",
+        );
+        assert!(
+            aviso_prompts_de_captura([("kimi", Some(&t2))], Some(&q2), "investigacion")
+                .starts_with("Prompt de usuario: coincide")
+        );
     }
 }

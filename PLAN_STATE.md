@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: COMPLETE
+Next: plans/PART30_PLAN.ai.md
 
 ## Parts
 
@@ -143,6 +143,16 @@ Next: COMPLETE
   - Scenario: SCN-028
   - Outcome: Arrastres de PART-027
   - Evidence: recorded
+
+- [x] Part 29: plans/PART29_PLAN.ai.md
+  - Scenario: SCN-029
+  - Outcome: Skills como texto extra
+  - Evidence: recorded
+
+- [ ] Part 30: plans/PART30_PLAN.ai.md
+  - Scenario: SCN-030
+  - Outcome: Muse de Meta como proveedor
+  - Evidence: pending
 
 ## Notes
 

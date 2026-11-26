@@ -792,3 +792,10 @@ PART-029 · verde final (desde C:\cc-repo, binario de depuración, carpetas de p
 
 Artifacts:
 - gates: test 204, autoprueba 66/66, pruebaronda 103/103, pruebainterfaz 16/9/13
+
+### PART-030
+
+PART-030 · verde final desde C:\cc-repo sobre 7492c40 (binario de depuración, carpetas de prueba, perfil real fuera): cargo fmt --all --check exit 0; cargo clippy --workspace -- -D warnings exit 0; cargo test --workspace exit 0 (app 25, informe-pdf 11, nucleo 204 + 12 ignorados, paneles 15, verificacion 14 + 1 ignorado; 0 fallos); autoprueba 67/67 exit 0; pruebainterfaz fases 16/16, 9/9, 13/13 exit 0 sobre la misma carpeta; pruebaronda 103/103 exit 0; cargo build --release -p app exit 0 (21 min 54 s; C:\cc-repo\target\release\ChatCouncilNueva.exe, 58 651 648 bytes). Muse queda como proveedor 11 solo panel (enLaRonda false, selectores vacíos hasta la Parte 2), con leer-todos.js; pagina.js sin cambio. Revisión: docs/revisiones/PART-030-rust-reviewer.md. Pendiente de la Parte 2: medir estadoDeGeneracion de Muse (solo mide el último mensaje) y los selectores en un perfil de prueba. Versión publicada: version.txt del Release chatcouncil-v1 = 0.2.26.
+
+Artifacts:
+- gates: test 204, autoprueba 67/67, pruebaronda 103/103, pruebainterfaz 16/9/13, release build exit 0

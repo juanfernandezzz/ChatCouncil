@@ -12,3 +12,16 @@ Alcance: git diff HEAD de PART-030 (Muse como proveedor 11, solo panel). Solo le
 | 6 | Selectores vacíos no lanzan excepción; escribir/enviar darán «no se encontró el compositor» hasta medirlos. | Esperado. |
 | 7 | La prueba de varios.html depende del orden de los nodos. | El orden está fijado en la página; sin cambio. |
 | 8 | Hash de specs.json. | Verificado por cargo test (verde). |
+
+## Parte 2 · revisión de ecc:rust-reviewer (Muse medido)
+
+Alcance: git diff de la Parte 2 (specs.json de Muse, prueba nueva en datos.rs, spec.md). Solo lectura. Sin bloqueantes.
+
+| # | Hallazgo | Decisión |
+|---|---|---|
+| 1 | Media: con element-gone el motor marca «observado» en cuanto el botón Detener no está (pagina.js:319-323); quiescenceMs no entra, y el botón desaparece ~1 s antes del fin. | Aplicado: Muse usa completion quiescence 4000 ms; la nota lo explica. pagina.js sin cambio. |
+| 2 | Media: la prueba nueva era débil (find sobre todo el archivo, contains que acepta notas). | Aplicado: lee la spec de muse con el parser JSON y compara campo a campo. |
+| 3 | Baja: el composer usa aria-label localizado. | Anotado en _notaSelectores; comentario de la prueba corregido. |
+| 4 | Baja: no se midió si Enviar se deshabilita con el composer vacío. | Anotado en _notaComposer: medirlo antes del primer uso real en una ronda. |
+| 5 | Baja: oración duplicada en spec.md. | Sin cambio de fondo; el hash vigente se actualizó. |
+| 6 | Info: «Nuevo documento de texto.txt» sin seguimiento. | No se agrega al commit. |

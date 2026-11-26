@@ -432,30 +432,34 @@
       "_notaEnLaRonda": "Solo panel: no entra en la seleccion, los roles ni el pool de la ronda CC-2 (D48.1). La entrada de CONOCIDOS (operacion.rs) sigue con los diez de la Unity.",
       "_notaMemoria": "Según la ayuda oficial de Meta (consultada el 2026-11-25), Muse \"stays aware across the main chat and side chats\". Se mide en PART-030 antes de darle un rol (D47).",
       "_notaSkills": "La app de consumo no permite subir skills propias (fuentes secundarias, 2026-11-25). No usa research-protocol.",
-      "_notaSelectores": "Vacios hasta medirlos por CDP en un perfil de prueba (PART-030, Parte 2).",
+      "_notaSelectores": "Medidos por CDP el 2026-11-26 en un perfil de prueba (PART-030, Parte 2), con la cuenta de Juan en espanol y muse.ai ('Muse, Your Personal AI Agent from Meta'). Todos van por atributos que no cambian con el idioma: data-message-role, data-pel-click y data-hatch-*. El composer (textarea) solo tiene aria-label=Mensaje, que si es localizado: si la cuenta cambia de idioma, hay que volver a medirlo. Hay un input[type=file] (sr-only) y un boton 'Adjuntar archivo' (data-pel-click=chat_tap_attachment); no se probo subir archivos.",
+      "_notaComposer": "textarea[aria-label=Mensaje]; el boton de enviar (button[data-pel-click=chat_send_message], aria 'Enviar') existe en el DOM aunque el composer este vacio. Con el texto de CC-2 entero (9134 caracteres) en un chat nuevo, el composer lo conservo completo e identico al archivo (T3). No se midio si Muse deshabilita Enviar con el composer vacio: antes del primer uso real en una ronda hay que medirlo.",
+      "_notaFin": "Mientras responde hay un boton button[data-pel-click=chat_stop_response] (aria 'Detener') junto al de enviar. En T2 ese boton desaparecio y volvio a aparecer 1,3 s despues, y el ultimo mensaje terminaba de llegar ~1 s despues de que el boton se fuera por ultima vez (3 -> 138 caracteres): por eso el fin se deduce por quietud del texto (quiescence, 4000 ms) y no por la desaparicion del boton: con element-gone el motor solo mira si el boton existe y marcaria 'observado' con el mensaje a medias (revision independiente, 2026-11-26). Si algun dia se prefiere element-gone, el selector seria button[data-pel-click=chat_stop_response]. El indicador data-hatch-markdown-streaming=true dura ~0,5 s y no sirve como fin.",
+      "_notaMensajes": "Cada mensaje es un [data-message-role=assistant] o [data-message-role=user] (data-message-item=true). Una respuesta puede venir en varios mensajes del asistente: T2 llego en 2 (el texto y una tarjeta de fuente con el enlace); T1 en 1 cada una. La captura con pick todosDesdeUsuario (leer-todos.js) junto los dos de T2 en una sola lectura (374 caracteres).",
+      "_notaRoles": "T1 (aislamiento) NO aprueba: en un chat paralelo nuevo Muse contesto 'girasol-47' (la memoria cruza los chats, como dice su ayuda). T2 (busqueda web) aprueba: dio fecha, titular y la URL de ellibero.cl, que abre (HTTP 200). T3 (largo) aprueba: el composer conservo los 9134 caracteres iguales al archivo. T4: respuestas en uno o varios mensajes; el pick nuevo los junta. Regla del lote: investigador posible si T1, T3 y T4 aprueban (no: falla T1); verificador posible si T1 y T2 aprueban (no: falla T1). Decide Juan en una ronda futura.",
       "escritura": "pegado",
       "composer": {
-        "selector": "",
-        "kind": "contenteditable"
+        "selector": "textarea[aria-label=Mensaje]",
+        "kind": "textarea"
       },
       "submit": {
         "kind": "click",
-        "selector": ""
+        "selector": "button[data-pel-click=chat_send_message]"
       },
       "responseRoot": {
-        "selector": "main"
+        "selector": "[data-hatch-vt-pane=chat-feed]"
       },
       "assistantMessage": {
-        "selector": "",
+        "selector": "[data-message-role=assistant]",
         "pick": "todosDesdeUsuario"
       },
       "userMessage": {
-        "selector": "",
+        "selector": "[data-message-role=user]",
         "pick": "last"
       },
       "completion": {
         "kind": "quiescence",
-        "quiescenceMs": 20000
+        "quiescenceMs": 4000
       },
       "timeouts": {
         "submitReadyMs": 8000,

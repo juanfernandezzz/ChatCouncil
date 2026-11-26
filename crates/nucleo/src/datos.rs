@@ -196,10 +196,56 @@ mod pruebas {
     }
 
     #[test]
+    fn muse_trae_los_selectores_medidos_en_el_perfil_de_prueba() {
+        // PART-030, Parte 2: medidos por CDP el 2026-11-26. Todos por atributos que no dependen del idioma salvo el
+        // composer (aria-label=Mensaje, localizado y anotado en _notaSelectores).
+        use crate::json::Valor;
+        let muse = crate::json::leer(&spec_de(SPECS_JSON, "muse").expect("muse está en las specs"))
+            .expect("la spec de muse es JSON");
+        let texto = |ruta: &[&str]| {
+            let mut v = &muse;
+            for k in ruta {
+                let Valor::Objeto(o) = v else { return None };
+                v = &o.iter().find(|(n, _)| n.como_str() == Some(*k))?.1;
+            }
+            match v {
+                Valor::Texto(t) => t.como_str().map(str::to_string),
+                _ => None,
+            }
+        };
+        for (ruta, esperado) in [
+            (["composer", "selector"], "textarea[aria-label=Mensaje]"),
+            (["composer", "kind"], "textarea"),
+            (
+                ["submit", "selector"],
+                "button[data-pel-click=chat_send_message]",
+            ),
+            (
+                ["responseRoot", "selector"],
+                "[data-hatch-vt-pane=chat-feed]",
+            ),
+            (
+                ["assistantMessage", "selector"],
+                "[data-message-role=assistant]",
+            ),
+            (["assistantMessage", "pick"], "todosDesdeUsuario"),
+            (["userMessage", "selector"], "[data-message-role=user]"),
+            (["completion", "kind"], "quiescence"),
+        ] {
+            assert_eq!(
+                texto(&ruta).as_deref(),
+                Some(esperado),
+                "muse.{}",
+                ruta.join(".")
+            );
+        }
+    }
+
+    #[test]
     fn specs_json_coincide_con_dat_001() {
         assert_eq!(
             sha256(SPECS_JSON),
-            "f5b40cdc06d3aca0fa8e09606afd2829374c67ff53379fbc89f9cc3d2bb5a791"
+            "66ab423bb1fbaaf62dd585bf27b601793dc14f3e76838e584923dbf570b56936"
         );
     }
 

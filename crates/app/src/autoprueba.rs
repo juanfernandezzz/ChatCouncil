@@ -15,6 +15,13 @@ use crate::hilo::HiloNucleo;
 /// La spec mínima que el script de página necesita para un textarea (la de Autoprueba.cs).
 const SPEC_TEXTAREA: &str = "{\"composer\":{\"selector\":\"#compositor\",\"kind\":\"textarea\"},\"escritura\":\"insertText\",\"assistantMessage\":{\"selector\":\".respuesta\",\"pick\":\"last\"},\"completion\":{\"kind\":\"quiescence\",\"quiescenceMs\":10000},\"version\":1}";
 
+/// La spec mínima de tests/paginas/varios.html, con el pick que se prueba.
+fn spec_varios(pick: &str) -> String {
+    format!(
+        r##"{{"composer":{{"selector":"#compositor","kind":"textarea"}},"escritura":"insertText","assistantMessage":{{"selector":".respuesta","pick":"{pick}"}},"userMessage":{{"selector":".usuario","pick":"last"}},"completion":{{"kind":"quiescence","quiescenceMs":10000}},"version":1}}"##
+    )
+}
+
 #[derive(Default)]
 pub struct Anotador {
     lineas: Vec<String>,
@@ -482,6 +489,36 @@ async fn lectura(
             num(en(&l, &["fuentesHref"])),
             en(&l, &["informeEnIframe"]),
             en(&l, &["generating"])
+        ),
+    );
+    // PART-030: pick «todosDesdeUsuario»: solo los mensajes del asistente posteriores al último del usuario.
+    let v = abrir(navegador, ventana, "prueba-l-varios", "varios.html").await?;
+    let todos = v.leer("varios", &spec_varios("todosDesdeUsuario")).await;
+    let ultimo = v.leer("varios", &spec_varios("last")).await;
+    let t = |l: &nucleo::puerta::Lectura| l.text.para_mostrar().into_owned();
+    v.ejecutar("document.querySelectorAll('.respuesta')[1].remove(); document.querySelectorAll('.respuesta')[1].remove(); 'ok'")
+        .await?;
+    let sin_respuesta = v.leer("varios", &spec_varios("todosDesdeUsuario")).await;
+    a.anotar(
+        todos.error.is_none()
+            && t(&todos).contains("Primero")
+            && t(&todos).contains("Segundo")
+            && !t(&todos).contains("vieja")
+            && todos
+                .user_text
+                .as_ref()
+                .map(|u| u.para_mostrar().into_owned())
+                .as_deref()
+                == Some("Pregunta nueva")
+            && t(&ultimo) == "Segundo"
+            && t(&sin_respuesta).is_empty(),
+        "lectura de varios mensajes del asistente (pick todosDesdeUsuario)",
+        &format!(
+            "todos «{}»; last «{}»; sin respuesta nueva «{}»; error {:?}",
+            t(&todos),
+            t(&ultimo),
+            t(&sin_respuesta),
+            todos.error
         ),
     );
     // Estado de generación en el tiempo: con el botón de detener, generando; sin él y con texto, fin observado.

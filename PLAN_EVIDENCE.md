@@ -792,3 +792,17 @@ PART-029 · verde final (desde C:\cc-repo, binario de depuración, carpetas de p
 
 Artifacts:
 - gates: test 204, autoprueba 66/66, pruebaronda 103/103, pruebainterfaz 16/9/13
+
+### PART-030
+
+PART-030 · verde final desde C:\cc-repo sobre 7492c40 (binario de depuración, carpetas de prueba, perfil real fuera): cargo fmt --all --check exit 0; cargo clippy --workspace -- -D warnings exit 0; cargo test --workspace exit 0 (app 25, informe-pdf 11, nucleo 204 + 12 ignorados, paneles 15, verificacion 14 + 1 ignorado; 0 fallos); autoprueba 67/67 exit 0; pruebainterfaz fases 16/16, 9/9, 13/13 exit 0 sobre la misma carpeta; pruebaronda 103/103 exit 0; cargo build --release -p app exit 0 (21 min 54 s; C:\cc-repo\target\release\ChatCouncilNueva.exe, 58 651 648 bytes). Muse queda como proveedor 11 solo panel (enLaRonda false, selectores vacíos hasta la Parte 2), con leer-todos.js; pagina.js sin cambio. Revisión: docs/revisiones/PART-030-rust-reviewer.md. Pendiente de la Parte 2: medir estadoDeGeneracion de Muse (solo mide el último mensaje) y los selectores en un perfil de prueba. Versión publicada: version.txt del Release chatcouncil-v1 = 0.2.26.
+
+Artifacts:
+- gates: test 204, autoprueba 67/67, pruebaronda 103/103, pruebainterfaz 16/9/13, release build exit 0
+
+### PART-030
+
+PART-030 · Parte 2 (Muse medido en un perfil de prueba, 2026-11-26; navegador del perfil real fuera; puerto de depuración solo en ese proceso; en el perfil de prueba solo se cargó Muse, el objetivo CDP listado era únicamente muse.ai). Rojo 1: la prueba nueva muse_trae_los_selectores_medidos_en_el_perfil_de_prueba falló con la entrada de Muse sin selectores. Rojo 2: tras completar specs.json, specs_json_coincide_con_dat_001 falló (left 3668622594d9d4c2…, right f5b40cdc…); se actualizó el hash. Medido: T1 FALLA (la palabra de memoria girasol-47 pasó de un chat a otro), T2 PASA (ellibero.cl, HTTP 200), T3 PASA (9134 caracteres idénticos), T4 el pick todosDesdeUsuario junta los varios mensajes del asistente (374 caracteres en T2). Señal de fin: el botón Detener desaparece ~1 s antes de que termine el último mensaje y parpadea 1,3 s; la revisión independiente (ecc:rust-reviewer) mostró que con element-gone el motor solo mira si el botón existe (pagina.js:319-323), así que se dejó completion quiescence con 4000 ms. Verde: cargo fmt --all --check, clippy -D warnings, cargo test --workspace (nucleo 205 + 12 ignorados), autoprueba 67/67, pruebainterfaz 16/16, 9/9, 13/13, pruebaronda 103/103 (binario de depuración, carpetas de prueba). specs.json sha256 66ab423bb1fbaaf62dd585bf27b601793dc14f3e76838e584923dbf570b56936. Registrada tras plannable complete (la Parte 2 llegó después del cierre de la Parte 1).
+
+Artifacts:
+- rojo: muse_trae… y specs_json_coincide…; verde: test 205, autoprueba 67/67, pruebaronda 103/103, pruebainterfaz 16/9/13

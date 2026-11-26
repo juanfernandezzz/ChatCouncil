@@ -211,6 +211,8 @@ pub struct Interfaz {
     pub datos: PathBuf,
     specs: String,
     pub conocidos: Vec<String>,
+    /// PART-030: los proveedores que son solo panel (Muse): sin rol ni lugar en la ronda.
+    pub solo_panel: Vec<String>,
     prueba: bool,
     paginas_de_prueba: bool,
     prueba_ronda: bool,
@@ -458,7 +460,8 @@ impl Interfaz {
         let specs = calientes
             .clone()
             .unwrap_or_else(|| datos::SPECS_JSON.to_string());
-        let conocidos = datos::ids_de_specs(&specs);
+        let conocidos = datos::ids_de_la_ronda(&specs);
+        let solo_panel = datos::ids_solo_panel(&specs);
         let contenido = leer(&o.datos.join(ronda::ARCHIVO_SELECCION));
         let primer_arranque = !o.datos.join(ronda::ARCHIVO_SELECCION).exists();
         let c = refs(&conocidos);
@@ -481,6 +484,7 @@ impl Interfaz {
             datos: o.datos,
             specs,
             conocidos,
+            solo_panel,
             prueba: o.prueba,
             paginas_de_prueba: o.paginas_de_prueba,
             prueba_ronda: o.prueba_ronda,
@@ -650,9 +654,11 @@ impl Interfaz {
         self.ui.set_texto_paso_guia(texto(ajustes::paso_guia(paso)));
     }
 
+    /// Los de la ronda marcados y, al final, los que son solo panel (Muse): se puede entrar a su cuenta.
     fn armar_cuentas(&self, ids: &[String]) {
         self.cuentas.set_vec(
             ids.iter()
+                .chain(&self.solo_panel)
                 .map(|id| Cuenta {
                     id: texto(id),
                     nombre: texto(&nombre_proveedor(id)),

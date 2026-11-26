@@ -150,8 +150,8 @@
   - Outcome: Skills como texto extra
   - Evidence: recorded
 
-- [ ] Part 30: Read `plans/PART30_PLAN.ai.md`
+- [x] Part 30: Read `plans/PART30_PLAN.ai.md`
   - Scenario: SCN-030
   - Outcome: Muse de Meta como proveedor
-  - Evidence: pending
+  - Evidence: recorded
 

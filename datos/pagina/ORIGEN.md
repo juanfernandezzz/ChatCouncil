@@ -17,3 +17,9 @@
 - Usa las funciones de `pagina.js` (`leerCompositor`, `chatVacio`, `buscar`, `buscarTodos`, `dormir`), que se inyecta antes; sin ellas no envía.
 - sha256 1f14adcf851139012ac2785fc3d9e5685e33615720e109f28a84f4510822b938 (PART-021). `crates/paneles` lo incluye con `include_str!`; el instalador no cambia.
 - PART-029 (ESC-018): el compositor se compara sin las invocaciones de skill del comienzo (`sinSkill`, acepta el texto tal cual o sin la invocación; la misma regla que `sin_invocaciones_de_skill` de crates/nucleo/src/puerta.rs). sha256 4d0d0f457ad9a5e0f549c52cc699b2949af85fbf889430180f3c775740b2870e.
+
+# Origen de leer-todos.js (PART-030)
+
+- Nuevo en este repo, no viene de la Unity. Escrito a mano en JavaScript. Lo pide `crates/paneles` (`leer_crudo`) en lugar de `leer` solo cuando `assistantMessage.pick` es `todosDesdeUsuario` (Muse responde en varios mensajes): junta los mensajes del asistente posteriores al último mensaje del usuario. No envía nada.
+- Usa las funciones de `pagina.js` (`leer`, `buscarTodos`, `textoDelAsistente`), que se inyecta antes. `pagina.js` no se toca.
+- sha256 c9a8e7612b2878b5ca2820e2e6dc1ce749748c125e33a2f704f2a1c4faa6a007. `crates/paneles` lo incluye con `include_str!`.

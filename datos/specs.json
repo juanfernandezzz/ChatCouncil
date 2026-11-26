@@ -424,6 +424,45 @@
         "pick": "first"
       },
       "_notaUsuario": "Medido el perfil de prueba (cuenta de pruebas), 2026-11-21 (PART-023 F): mensaje de usuario con el texto \"Responde solo con la palabra: listo.\", una sola coincidencia que devolvio el texto exacto por leerMensajeUsuario. El div[data-message-bubble=right] trae solo el texto enviado."
+    },
+    "muse": {
+      "nombre": "Muse (Meta)",
+      "newConversationUrl": "https://muse.ai/",
+      "enLaRonda": false,
+      "_notaEnLaRonda": "Solo panel: no entra en la seleccion, los roles ni el pool de la ronda CC-2 (D48.1). La entrada de CONOCIDOS (operacion.rs) sigue con los diez de la Unity.",
+      "_notaMemoria": "Según la ayuda oficial de Meta (consultada el 2026-11-25), Muse \"stays aware across the main chat and side chats\". Se mide en PART-030 antes de darle un rol (D47).",
+      "_notaSkills": "La app de consumo no permite subir skills propias (fuentes secundarias, 2026-11-25). No usa research-protocol.",
+      "_notaSelectores": "Vacios hasta medirlos por CDP en un perfil de prueba (PART-030, Parte 2).",
+      "escritura": "pegado",
+      "composer": {
+        "selector": "",
+        "kind": "contenteditable"
+      },
+      "submit": {
+        "kind": "click",
+        "selector": ""
+      },
+      "responseRoot": {
+        "selector": "main"
+      },
+      "assistantMessage": {
+        "selector": "",
+        "pick": "todosDesdeUsuario"
+      },
+      "userMessage": {
+        "selector": "",
+        "pick": "last"
+      },
+      "completion": {
+        "kind": "quiescence",
+        "quiescenceMs": 20000
+      },
+      "timeouts": {
+        "submitReadyMs": 8000,
+        "submitConfirmMs": 30000,
+        "emptyResponseMs": 90000,
+        "composerMs": 45000
+      }
     }
   }
 }

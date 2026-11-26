@@ -25,6 +25,8 @@ use wry::{Rect, WebContext, WebView, WebViewBuilder};
 pub const PAGINA_JS: &str = include_str!("../../../datos/pagina/pagina.js");
 /// ESC-016 (ADR-0011): el envío, aparte de pagina.js y nuevo (no viene de la Unity).
 const ENVIAR_JS: &str = include_str!("../../../datos/pagina/enviar.js");
+/// PART-030: la lectura de pick «todosDesdeUsuario» (Muse), aparte de pagina.js; no viene de la Unity ni envía nada.
+const LEER_TODOS_JS: &str = include_str!("../../../datos/pagina/leer-todos.js");
 /// Lo que espera un envío: el botón hasta submitReadyMs (8 s) más la comprobación de 15 s, con margen.
 const ESPERA_ENVIAR: Duration = Duration::from_secs(40);
 
@@ -726,7 +728,7 @@ impl Panel {
         }
         let r = self
             .pedir_al_script(
-                Some(("__ccEnviar", ENVIAR_JS)),
+                Some(("__ccEnviar", ENVIAR_JS, "cc-enviar")),
                 "enviar",
                 spec,
                 Some(texto),
@@ -744,7 +746,7 @@ impl Panel {
     /// Inyecta pagina.js (y, si viene, el script de `extra` con su objeto global) y hace el pedido al objeto.
     async fn pedir_al_script(
         &self,
-        extra: Option<(&str, &str)>,
+        extra: Option<(&str, &str, &str)>,
         op: &str,
         spec: &str,
         texto: Option<&Texto>,
@@ -770,9 +772,9 @@ impl Panel {
                 return Err(format!("el script de página no cargó: {r}"));
             }
         }
-        let objeto = extra.map_or("__cc", |(o, _)| o);
-        if let Some((o, js)) = extra
-            && ejecutar(&format!("window.{o}?.huella")).await? != "\"cc-enviar\""
+        let objeto = extra.map_or("__cc", |(o, _, _)| o);
+        if let Some((o, js, huella)) = extra
+            && ejecutar(&format!("window.{o}?.huella")).await? != format!("\"{huella}\"")
         {
             let r = ejecutar(&format!("{js}\n;'ok'")).await?;
             if r != "\"ok\"" {
@@ -1027,6 +1029,24 @@ return { x: Math.round(r.left + r.width / 2), y: Math.round((arriba + abajo) / 2
             .await
     }
 
+    /// La operación leer de pagina.js o, con assistantMessage.pick = «todosDesdeUsuario», la de leer-todos.js (PART-030).
+    #[cfg(windows)]
+    async fn leer_crudo(&self, spec: &str) -> Result<Valor, String> {
+        if pick_del_asistente(spec).as_deref() != Some("todosDesdeUsuario") {
+            return self.correr("leer", spec, None, ESPERA_LEER).await;
+        }
+        let pedido_hecho = Cell::new(false);
+        self.pedir_al_script(
+            Some(("__ccTodos", LEER_TODOS_JS, "cc-todos")),
+            "leer",
+            spec,
+            None,
+            ESPERA_LEER,
+            &pedido_hecho,
+        )
+        .await
+    }
+
     /// CAP-001 y CAP-002, como PantallaRonda.Leer: la respuesta con su html crudo y, si el informe está en un
     /// iframe, el informe a continuación. Un fallo queda en el error de la lectura.
     #[cfg(windows)]
@@ -1037,7 +1057,7 @@ return { x: Math.round(r.left + r.width / 2), y: Math.round((arriba + abajo) / 2
             error: Some(e.into()),
             ..Default::default()
         };
-        let j = match self.correr("leer", spec, None, ESPERA_LEER).await {
+        let j = match self.leer_crudo(spec).await {
             Ok(j) => j,
             Err(e) => return con_fallo(e),
         };
@@ -1232,6 +1252,12 @@ fn campo<'a>(objeto: &'a Valor, nombre: &str) -> Option<&'a Valor> {
             .map(|(_, v)| v),
         _ => None,
     }
+}
+
+/// assistantMessage.pick de una spec («last» por defecto; «todosDesdeUsuario» para los que responden en varios mensajes).
+fn pick_del_asistente(spec: &str) -> Option<String> {
+    let spec = json::leer(spec)?;
+    texto_de(campo(campo(&spec, "assistantMessage")?, "pick"))
 }
 
 fn texto_de(v: Option<&Valor>) -> Option<String> {

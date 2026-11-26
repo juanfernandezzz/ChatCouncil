@@ -72,6 +72,28 @@ pub fn ids_de_specs(specs: &str) -> Vec<String> {
     v
 }
 
+/// PART-030: una spec con `"enLaRonda": false` es solo un panel (Muse): no entra en la selección, los roles
+/// ni el pool de la ronda.
+fn en_la_ronda(specs: &str, id: &str) -> bool {
+    use crate::json::Valor;
+    !matches!(spec(specs, id), Some(Valor::Objeto(o))
+        if o.iter().any(|(k, v)| k.como_str() == Some("enLaRonda") && *v == Valor::Bool(false)))
+}
+
+/// Los proveedores que pueden estar en una ronda: los de las specs menos los que son solo panel.
+pub fn ids_de_la_ronda(specs: &str) -> Vec<String> {
+    let mut v = ids_de_specs(specs);
+    v.retain(|id| en_la_ronda(specs, id));
+    v
+}
+
+/// Los que son solo panel, en el orden de las specs.
+pub fn ids_solo_panel(specs: &str) -> Vec<String> {
+    let mut v = ids_de_specs(specs);
+    v.retain(|id| !en_la_ronda(specs, id));
+    v
+}
+
 /// La spec de un proveedor, tal cual, en JSON compacto.
 pub fn spec_de(specs: &str, id: &str) -> Option<String> {
     let mut b = Vec::new();
@@ -118,7 +140,12 @@ mod pruebas {
 
     #[test]
     fn los_proveedores_salen_de_las_specs_en_el_orden_del_pool() {
-        assert_eq!(ids_de_specs(SPECS_JSON), crate::operacion::CONOCIDOS);
+        // Muse es el proveedor 11, solo panel (PART-030): sale de las specs pero no entra en la ronda.
+        let mut todos = crate::operacion::CONOCIDOS.map(String::from).to_vec();
+        todos.push("muse".into());
+        assert_eq!(ids_de_specs(SPECS_JSON), todos);
+        assert_eq!(ids_de_la_ronda(SPECS_JSON), crate::operacion::CONOCIDOS);
+        assert_eq!(ids_solo_panel(SPECS_JSON), ["muse"]);
         let otra = r#"{"specs":{"nuevo":{},"glm":{},"chatgpt":{}}}"#;
         assert_eq!(ids_de_specs(otra), ["chatgpt", "glm", "nuevo"]);
         assert!(ids_de_specs("no").is_empty());
@@ -172,7 +199,7 @@ mod pruebas {
     fn specs_json_coincide_con_dat_001() {
         assert_eq!(
             sha256(SPECS_JSON),
-            "1869de7c5138edf80327add1d4bbb420e9ba67382478fbfe61fc70fb3c70ee7e"
+            "f5b40cdc06d3aca0fa8e09606afd2829374c67ff53379fbc89f9cc3d2bb5a791"
         );
     }
 

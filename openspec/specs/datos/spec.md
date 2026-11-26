@@ -8,7 +8,7 @@ Propósito: que la app nueva use los mismos datos que ChatCouncil-Unity, sin ree
 
 ### DAT-001 · specs.json idéntico
 - Qué hace: la app nueva carga packages/providers/src/specs.json con contenido idéntico al de ChatCouncil-Unity.
-- Condición y resultado observable: el sha256 del specs.json que trae la app nueva es 23f6142a766d2052bcb7b5ce9bed7ed6b84e1687e9605181e500aa5a442829ba.
+- Condición y resultado observable: el sha256 del specs.json que trae la app nueva es 23f6142a766d2052bcb7b5ce9bed7ed6b84e1687e9605181e500aa5a442829ba. Desde entonces el archivo de la app creció (PART-030: la entrada «muse», solo panel, sin selectores hasta medirlos); la prueba `specs_json_coincide_con_dat_001` de crates/nucleo guarda el sha256 vigente, f5b40cdc06d3aca0fa8e09606afd2829374c67ff53379fbc89f9cc3d2bb5a791 (antes de Muse, 1869de7c…); los diez proveedores de la Unity siguen idénticos. Desde entonces el archivo de la app creció (PART-030: la entrada «muse», solo panel, sin selectores hasta medirlos); la prueba `specs_json_coincide_con_dat_001` de crates/nucleo guarda el sha256 vigente, f5b40cdc06d3aca0fa8e09606afd2829374c67ff53379fbc89f9cc3d2bb5a791 (antes de Muse, 1869de7c…), y los diez proveedores de la Unity siguen idénticos.
 - Fuente: packages/providers/src/specs.json:1-406
 - Prueba: nueva (comparación de hash) — calcular el sha256 del specs.json empaquetado en la app nueva y compararlo con el de arriba.
 - Plataforma: ambas

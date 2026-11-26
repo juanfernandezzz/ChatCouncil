@@ -24,7 +24,7 @@ use crate::ventana::Lienzo;
 
 /// Las páginas de prueba viajan dentro del ejecutable (ADR-0010, consecuencias) y se escriben en la
 /// carpeta de datos que se esté usando, para servirlas como cc-prueba.test.
-const PAGINAS_DE_PRUEBA: [(&str, &[u8]); 12] = [
+const PAGINAS_DE_PRUEBA: [(&str, &[u8]); 13] = [
     (
         "adjuntar.html",
         include_bytes!("../../../tests/paginas/adjuntar.html"),
@@ -72,6 +72,10 @@ const PAGINAS_DE_PRUEBA: [(&str, &[u8]); 12] = [
     (
         "textarea.html",
         include_bytes!("../../../tests/paginas/textarea.html"),
+    ),
+    (
+        "varios.html",
+        include_bytes!("../../../tests/paginas/varios.html"),
     ),
 ];
 

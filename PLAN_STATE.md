@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: COMPLETE
+Next: plans/PART31_PLAN.ai.md
 
 ## Parts
 
@@ -152,6 +152,11 @@ Next: COMPLETE
 - [x] Part 30: plans/PART30_PLAN.ai.md
   - Scenario: SCN-030
   - Outcome: Muse de Meta como proveedor
+  - Evidence: recorded
+
+- [ ] Part 31: plans/PART31_PLAN.ai.md
+  - Scenario: SCN-031
+  - Outcome: Guarda de anonimato, botón de roles, Muse como integrador y fin de CC-2
   - Evidence: recorded
 
 ## Notes

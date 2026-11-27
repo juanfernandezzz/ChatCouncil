@@ -436,18 +436,45 @@ fn es_interfaz_propia(url: &[u16]) -> bool {
     {
         return false;
     }
-    // shortcut: solo /blog (www.kimi.ai, 2026-10-23), /help-center (2026-10-27) y /hub (2026-11-02,
-    // www.perplexity.ai) medidos como contenido público en un host de interfaz; sumar rutas si aparecen otras.
+    // shortcut: solo /blog (www.kimi.ai, 2026-10-23), /help-center (2026-10-27), /hub (2026-11-02,
+    // www.perplexity.ai) y, desde PART-031, /changelog y /docs medidos como contenido público en un host de
+    // interfaz, con un prefijo de idioma opcional (/xx, /xx-YY, /xx-NNN); sumar rutas si aparecen otras.
     let desde = buscar(url, &u("//"), 0).unwrap_or(0) + 2 + host.len();
     let l = minusculas(url);
-    let ruta = l.get(desde..).unwrap_or(&[]);
-    !["/blog", "/help-center", "/hub"].iter().any(|r| {
+    let ruta = sin_prefijo_de_idioma(l.get(desde..).unwrap_or(&[]));
+    !["/blog", "/help-center", "/hub", "/changelog", "/docs"].iter().any(|r| {
         let r = u(r);
         ruta == &r[..]
             || ["/", "?", "#"]
                 .iter()
                 .any(|c| ruta.starts_with(&[&r[..], &u(c)[..]].concat()))
     })
+}
+
+/// «/en-gb/changelog/x» -> «/changelog/x»: quita un primer segmento /xx, /xx-yy o /xx-nnn (la ruta ya viene en
+/// minúsculas) solo si lo sigue otra ruta; «/en» a secas se queda como está.
+fn sin_prefijo_de_idioma(ruta: &[u16]) -> &[u16] {
+    let fin = ruta
+        .iter()
+        .skip(1)
+        .position(|&c| c == b'/' as u16 || c == b'?' as u16 || c == b'#' as u16)
+        .map(|p| p + 1);
+    let Some(fin) = fin.filter(|&f| ruta[f] == b'/' as u16 && ruta[0] == b'/' as u16) else {
+        return ruta;
+    };
+    let seg = &ruta[1..fin];
+    let letras = |s: &[u16]| s.iter().all(|&c| (b'a' as u16..=b'z' as u16).contains(&c));
+    let es_idioma = match seg.len() {
+        2 => letras(seg),
+        5 => letras(&seg[..2]) && seg[2] == b'-' as u16 && letras(&seg[3..]),
+        6 => {
+            letras(&seg[..2])
+                && seg[2] == b'-' as u16
+                && seg[3..].iter().all(|&c| (b'0' as u16..=b'9' as u16).contains(&c))
+        }
+        _ => false,
+    };
+    if es_idioma { &ruta[fin..] } else { ruta }
 }
 
 fn query_de(url: &[u16]) -> Vec<u16> {
@@ -1426,6 +1453,45 @@ mod pruebas {
             fugas_de_proveedor_en_urls(&t(&format!("ver {url} y sigue"))),
             vec![t(url)]
         );
+    }
+
+    /// PART-031 (D49.2): las páginas públicas del proveedor (/blog, /help-center, /hub, /changelog, /docs) pasan
+    /// con un prefijo de idioma opcional (/xx, /xx-YY, /xx-NNN); la interfaz de chat sigue siendo fuga, también
+    /// con ese prefijo.
+    #[test]
+    fn operacion_paginas_publicas_con_prefijo_de_idioma_no_son_fuga() {
+        for url in [
+            "https://www.perplexity.ai/en-GB/changelog/x",
+            "https://www.perplexity.ai/changelog/x",
+            "https://chatgpt.com/es-419/docs/x",
+            "https://claude.ai/help-center/x",
+            "https://claude.ai/EN-us/Help-Center/x",
+            "https://www.kimi.ai/en/blog/x",
+            "https://www.perplexity.ai/fr/hub",
+        ] {
+            assert_eq!(
+                fugas_de_proveedor_en_urls(&t(&format!("ver {url} y sigue"))),
+                Vec::<Texto>::new(),
+                "{url}"
+            );
+        }
+        for url in [
+            "https://www.perplexity.ai/search/abc123",
+            "https://www.perplexity.ai/en-GB/search/abc123",
+            "https://chatgpt.com/c/abc123",
+            "https://chatgpt.com/es-419/c/abc123",
+            "https://chatgpt.com/share/abc123",
+            "https://claude.ai/chat/abc123",
+            "https://gemini.google.com/app/abc123",
+            "https://www.kimi.ai/en",
+            "https://www.kimi.ai/en/docsx/x",
+        ] {
+            assert_eq!(
+                fugas_de_proveedor_en_urls(&t(&format!("ver {url} y sigue"))),
+                vec![t(url)],
+                "{url}"
+            );
+        }
     }
 
     #[test]

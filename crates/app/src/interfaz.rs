@@ -1201,6 +1201,19 @@ impl Interfaz {
     }
 
     pub fn seleccionar(&self, id: &str) {
+        // Un clic en un rol cuya página todavía no está la abre (D49.3); si ya falló al abrir, no se reintenta aquí.
+        let sin_pagina = self.ronda.borrow().clone().filter(|r| {
+            r.roles_de_la_ronda().iter().any(|x| x == id)
+                && !r.paneles.borrow().contains_key(id)
+                && !r.falla_al_abrir.borrow().contains_key(id)
+        });
+        if let (Some(r), Some(x)) = (sin_pagina, self.yo().upgrade()) {
+            let id = id.to_string();
+            let _ = slint::spawn_local(async move {
+                x.mostrar_rol(&r, &id, true).await;
+            });
+            return;
+        }
         if let Some(r) = self.ronda.borrow().as_ref() {
             *r.visible.borrow_mut() = Some(id.to_string());
         }
@@ -2442,8 +2455,9 @@ impl Interfaz {
         let Some(x) = self.yo().upgrade() else { return };
         let r = r.clone();
         let _ = slint::spawn_local(async move {
-            for id in r.roles_de_la_ronda() {
-                x.mostrar_rol(&r, &id, false).await;
+            // El primero queda al frente: sin eso el botón parece no hacer nada (D49.3).
+            for (n, id) in r.roles_de_la_ronda().iter().enumerate() {
+                x.mostrar_rol(&r, id, n == 0).await;
             }
         });
     }

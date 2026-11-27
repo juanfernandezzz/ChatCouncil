@@ -111,6 +111,16 @@ pub fn leer_seleccion(contenido: Option<&str>, conocidos: &[&str]) -> Option<Vec
 /// verificadores coinciden vuelven todos los defectos; un redactor ausente o igual a un verificador
 /// pasa a ser el integrador. Un archivo anterior a D62 trae "verificador": es el 1.
 pub fn leer_roles(contenido: Option<&str>, conocidos: &[&str]) -> RolesElegidos {
+    leer_roles_con(contenido, conocidos, &[])
+}
+
+/// Como `leer_roles`, y además el integrador y el redactor pueden ser uno de los `solo_panel` (Muse): nunca un
+/// verificador.
+pub fn leer_roles_con(
+    contenido: Option<&str>,
+    conocidos: &[&str],
+    solo_panel: &[&str],
+) -> RolesElegidos {
     let defecto = RolesElegidos::por_defecto();
     let Some(json) = contenido.and_then(json::leer) else {
         return defecto;
@@ -120,24 +130,28 @@ pub fn leer_roles(contenido: Option<&str>, conocidos: &[&str]) -> RolesElegidos 
         Valor::Objeto(o) => o,
         _ => &[],
     };
-    let valido = |nombre: &str, por_defecto: &str| match campo(o, nombre) {
-        Some(Valor::Texto(t)) if t.como_str().is_some_and(|s| conocidos.contains(&s)) => {
+    let valido_en = |nombre: &str, por_defecto: &str, extra: &[&str]| match campo(o, nombre) {
+        Some(Valor::Texto(t))
+            if t.como_str()
+                .is_some_and(|s| conocidos.contains(&s) || extra.contains(&s)) =>
+        {
             t.para_mostrar().into_owned()
         }
         _ => por_defecto.to_string(),
     };
+    let valido = |nombre: &str, por_defecto: &str| valido_en(nombre, por_defecto, &[]);
     // verificador1 ?? verificador de TypeScript: solo un null o un campo ausente pasan al viejo.
     let campo1 = match campo(o, "verificador1") {
         None | Some(Valor::Nulo) => "verificador",
         _ => "verificador1",
     };
-    let integrador = valido("integrador", &defecto.integrador);
+    let integrador = valido_en("integrador", &defecto.integrador, solo_panel);
     let verificador1 = valido(campo1, &defecto.verificador1);
     let verificador2 = valido("verificador2", &defecto.verificador2);
     if integrador == verificador1 || integrador == verificador2 || verificador1 == verificador2 {
         return defecto;
     }
-    let redactor = valido("redactor", &integrador);
+    let redactor = valido_en("redactor", &integrador, solo_panel);
     let redactor = if redactor == verificador1 || redactor == verificador2 {
         integrador.clone()
     } else {
@@ -157,6 +171,16 @@ pub fn validar_seleccion(
     marcados: &[&str],
     roles: &RolesElegidos,
 ) -> Option<&'static str> {
+    validar_seleccion_con(conocidos, marcados, roles, &[])
+}
+
+/// Como `validar_seleccion`, y el integrador y el redactor pueden ser uno de los `solo_panel` aunque no se marquen.
+pub fn validar_seleccion_con(
+    conocidos: &[&str],
+    marcados: &[&str],
+    roles: &RolesElegidos,
+    solo_panel: &[&str],
+) -> Option<&'static str> {
     let validos: Vec<&str> = conocidos
         .iter()
         .copied()
@@ -170,11 +194,13 @@ pub fn validar_seleccion(
         Some(ERROR_VERIFICADORES_IGUALES)
     } else if i == v1 || i == v2 {
         Some(ERROR_ROLES_IGUALES)
-    } else if ![i, v1, v2].iter().all(|x| validos.contains(x)) {
+    } else if ![v1, v2].iter().all(|x| validos.contains(x))
+        || !(validos.contains(&i) || solo_panel.contains(&i))
+    {
         Some(ERROR_ROLES_DESMARCADOS)
     } else if r == v1 || r == v2 {
         Some(ERROR_REDACTOR_VERIFICADOR)
-    } else if !validos.contains(&r) {
+    } else if !(validos.contains(&r) || solo_panel.contains(&r)) {
         Some(ERROR_REDACTOR_DESMARCADO)
     } else {
         None
@@ -189,7 +215,18 @@ pub fn guardar(
     roles: &RolesElegidos,
     guardado_en: &str,
 ) -> Result<String, &'static str> {
-    if let Some(e) = validar_seleccion(conocidos, marcados, roles) {
+    guardar_con(conocidos, marcados, roles, guardado_en, &[])
+}
+
+/// Como `guardar`, con los `solo_panel` admitidos como integrador o redactor.
+pub fn guardar_con(
+    conocidos: &[&str],
+    marcados: &[&str],
+    roles: &RolesElegidos,
+    guardado_en: &str,
+    solo_panel: &[&str],
+) -> Result<String, &'static str> {
+    if let Some(e) = validar_seleccion_con(conocidos, marcados, roles, solo_panel) {
         return Err(e);
     }
     let cadena = |s: &str| {
@@ -609,6 +646,80 @@ mod pruebas {
         assert_eq!(
             recordatorio("verificacion"),
             "En el panel de cada verificador, activa la búsqueda web y el razonamiento, no la investigación profunda (devuelve un informe, no las líneas que pide el prompt); revisa y envía."
+        );
+    }
+
+    /// PART-031 (E1 B): un proveedor que es solo panel (Muse) puede ser integrador o redactor, nunca verificador ni
+    /// investigador, y sin él en los roles todo queda como estaba.
+    #[test]
+    fn ronda_un_proveedor_solo_panel_puede_ser_integrador_o_redactor_y_nada_mas() {
+        let solo = ["muse"];
+        let marcados = CONOCIDOS;
+        let en_roles = RolesElegidos::new("muse", "qwen", "deepseek", "glm");
+        assert_eq!(
+            validar_seleccion_con(&CONOCIDOS, &marcados, &en_roles, &solo),
+            None
+        );
+        assert_eq!(
+            validar_seleccion(&CONOCIDOS, &marcados, &en_roles),
+            Some(ERROR_ROLES_DESMARCADOS)
+        );
+        let redacta = RolesElegidos::new("glm", "qwen", "deepseek", "muse");
+        assert_eq!(
+            validar_seleccion_con(&CONOCIDOS, &marcados, &redacta, &solo),
+            None
+        );
+        let verifica = RolesElegidos::new("glm", "muse", "deepseek", "glm");
+        assert_eq!(
+            validar_seleccion_con(&CONOCIDOS, &marcados, &verifica, &solo),
+            Some(ERROR_ROLES_DESMARCADOS)
+        );
+
+        let contenido = guardar_con(
+            &CONOCIDOS,
+            &marcados,
+            &en_roles,
+            "2026-11-27T12:00:00.000Z",
+            &solo,
+        )
+        .unwrap();
+        assert_eq!(
+            leer_roles_con(Some(&contenido), &CONOCIDOS, &solo),
+            en_roles
+        );
+        assert_eq!(
+            leer_seleccion(Some(&contenido), &CONOCIDOS).unwrap().len(),
+            10
+        );
+        // Sin pasar los solo panel, Muse no es un rol conocido y cae al defecto.
+        assert_ne!(leer_roles(Some(&contenido), &CONOCIDOS).integrador, "muse");
+        // Muse de verificador en el archivo no vale: ese campo vuelve a su defecto (RON-005) y Muse no verifica.
+        let malo = contenido.replace("\"verificador1\": \"qwen\"", "\"verificador1\": \"muse\"");
+        assert_eq!(leer_roles_con(Some(&malo), &CONOCIDOS, &solo), en_roles);
+        let [v1, v2] = leer_roles_con(Some(&malo), &CONOCIDOS, &solo)
+            .verificadores()
+            .map(str::to_string);
+        assert!(v1 != "muse" && v2 != "muse");
+        assert_eq!(
+            leer_roles_con(None, &CONOCIDOS, &solo),
+            RolesElegidos::por_defecto()
+        );
+        // Muse nunca entra al pool: los siete investigadores de siempre.
+        assert_eq!(
+            pool_de_investigadores(&CONOCIDOS, &en_roles),
+            [
+                "chatgpt",
+                "gemini",
+                "claude",
+                "grok",
+                "mistral",
+                "kimi",
+                "perplexity"
+            ]
+        );
+        assert_eq!(
+            funciones_de_roles(&en_roles)[0],
+            ("muse".to_string(), "Integra")
         );
     }
 }

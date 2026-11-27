@@ -89,7 +89,19 @@ pub fn guardar_seleccion(
     roles: &RolesElegidos,
     guardado_en: &str,
 ) -> Result<(), String> {
-    let contenido = ronda::guardar(conocidos, marcados, roles, guardado_en)?;
+    guardar_seleccion_con(carpeta_datos, conocidos, marcados, roles, guardado_en, &[])
+}
+
+/// Como `guardar_seleccion`, con los `solo_panel` (Muse) admitidos como integrador o redactor.
+pub fn guardar_seleccion_con(
+    carpeta_datos: &Path,
+    conocidos: &[&str],
+    marcados: &[&str],
+    roles: &RolesElegidos,
+    guardado_en: &str,
+    solo_panel: &[&str],
+) -> Result<(), String> {
+    let contenido = ronda::guardar_con(conocidos, marcados, roles, guardado_en, solo_panel)?;
     reemplazar(&carpeta_datos.join(ronda::ARCHIVO_SELECCION), |f| {
         f.write_all(contenido.as_bytes())
     })

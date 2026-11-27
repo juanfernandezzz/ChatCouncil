@@ -437,6 +437,43 @@ async fn fase2(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
     let mensaje = ui.get_mensaje();
     a.anotar(mensaje == ajustes::GUARDADO, "cambio guardado", &mensaje);
 
+    // E1 B: un proveedor que es solo panel (Muse) se elige de integrador y se guarda; los verificadores no lo ofrecen.
+    let nombres_rol: Vec<SharedString> = ui.get_nombres_rol().iter().collect();
+    let idx_muse = nombres_rol
+        .iter()
+        .position(|n| n == "Muse (Meta)")
+        .map_or(-1, |p| p as i32);
+    let integrador_antes = ui.get_idx_integrador();
+    ui.set_idx_integrador(idx_muse);
+    ui.invoke_guardar();
+    esperar(50).await;
+    let con_muse = (
+        ui.get_mensaje() == ajustes::GUARDADO,
+        std::fs::read_to_string(seleccion(i)).unwrap_or_default(),
+    );
+    let sin_muse_en_verificadores = !ui.get_nombres().iter().any(|n| n == "Muse (Meta)");
+    ui.set_idx_integrador(integrador_antes);
+    ui.invoke_guardar();
+    esperar(50).await;
+    a.anotar(
+        idx_muse >= 0
+            && con_muse.0
+            && con_muse.1.contains("\"integrador\": \"muse\"")
+            && sin_muse_en_verificadores
+            && ui.get_mensaje() == ajustes::GUARDADO,
+        "Muse (solo panel) se elige de integrador y se guarda",
+        &format!(
+            "opciones de rol {}, de verificador {}; guardó {} ({:?}); en el archivo {}; sin Muse en verificadores {}; al restaurar {:?}",
+            nombres_rol.len(),
+            ui.get_nombres().row_count(),
+            con_muse.0,
+            ui.get_mensaje().to_string(),
+            con_muse.1.contains("\"integrador\": \"muse\""),
+            sin_muse_en_verificadores,
+            ui.get_mensaje().to_string()
+        ),
+    );
+
     // D25: un cambio de apariencia se guarda y avisa; el tema no cambia antes de reabrir.
     let antes = ui.get_oscuro_aplicado();
     ui.set_idx_tema(1);

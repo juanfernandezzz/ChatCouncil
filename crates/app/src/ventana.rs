@@ -451,6 +451,8 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
         in property <string> texto-paso-guia;
         in property <[Marca]> marcas;
         in property <[string]> nombres;
+        // Integrador y redactor: los mismos y, al final, los que son solo panel (Muse).
+        in property <[string]> nombres-rol;
         in-out property <int> idx-integrador;
         in-out property <int> idx-verificador1;
         in-out property <int> idx-verificador2;
@@ -814,10 +816,10 @@ export struct Renglon { grupo: string, texto: string, motivo: string }
                                     for m in root.marcas : Marcar { text: m.nombre; checked <=> m.marcado; }
                                     Text { text: "Roles"; font-weight: 600; color: Palette.foreground; }
                                     Secundario { text: "Los proveedores sin rol investigan y operan."; }
-                                    integrador := Elegir { etiqueta: root.etiquetas-rol[0]; opciones: root.nombres; indice <=> root.idx-integrador; }
+                                    integrador := Elegir { etiqueta: root.etiquetas-rol[0]; opciones: root.nombres-rol; indice <=> root.idx-integrador; }
                                     Elegir { etiqueta: root.etiquetas-rol[1]; opciones: root.nombres; indice <=> root.idx-verificador1; }
                                     Elegir { etiqueta: root.etiquetas-rol[2]; opciones: root.nombres; indice <=> root.idx-verificador2; }
-                                    Elegir { etiqueta: root.etiquetas-rol[3]; opciones: root.nombres; indice <=> root.idx-redactor; }
+                                    Elegir { etiqueta: root.etiquetas-rol[3]; opciones: root.nombres-rol; indice <=> root.idx-redactor; }
                                     if !root.primer-arranque : Secundario { text: root.aviso-reabrir; }
                                     HorizontalLayout { alignment: start; Boton { text: "Guardar"; primario: true; clicked => { root.guardar(); } } }
                                     Parrafo {

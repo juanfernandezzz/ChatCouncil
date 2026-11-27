@@ -442,7 +442,16 @@ fn es_interfaz_propia(url: &[u16]) -> bool {
     let desde = buscar(url, &u("//"), 0).unwrap_or(0) + 2 + host.len();
     let l = minusculas(url);
     let ruta = sin_prefijo_de_idioma(l.get(desde..).unwrap_or(&[]));
-    !["/blog", "/help-center", "/hub", "/changelog", "/docs", "/help"].iter().any(|r| {
+    ![
+        "/blog",
+        "/help-center",
+        "/hub",
+        "/changelog",
+        "/docs",
+        "/help",
+    ]
+    .iter()
+    .any(|r| {
         let r = u(r);
         ruta == &r[..]
             || ["/", "?", "#"]
@@ -470,7 +479,9 @@ fn sin_prefijo_de_idioma(ruta: &[u16]) -> &[u16] {
         6 => {
             letras(&seg[..2])
                 && seg[2] == b'-' as u16
-                && seg[3..].iter().all(|&c| (b'0' as u16..=b'9' as u16).contains(&c))
+                && seg[3..]
+                    .iter()
+                    .all(|&c| (b'0' as u16..=b'9' as u16).contains(&c))
         }
         _ => false,
     };

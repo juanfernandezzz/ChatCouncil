@@ -467,7 +467,8 @@ impl Interfaz {
         let c = refs(&conocidos);
         let activos =
             ronda::leer_seleccion(contenido.as_deref(), &c).unwrap_or_else(|| conocidos.clone());
-        let roles = ronda::leer_roles(contenido.as_deref(), &c);
+        let s: Vec<&str> = refs(&solo_panel);
+        let roles = ronda::leer_roles_con(contenido.as_deref(), &c, &s);
 
         let marcas = Rc::new(VecModel::from(
             conocidos
@@ -524,8 +525,15 @@ impl Interfaz {
             .map(|id| texto(&nombre_proveedor(id)))
             .collect();
         ui.set_nombres(ModelRc::new(VecModel::from(nombres)));
+        // Los conocidos van primero: el índice de cada uno es el mismo en las dos listas.
+        ui.set_nombres_rol(ModelRc::new(VecModel::from(
+            i.ids_de_rol()
+                .iter()
+                .map(|id| texto(&nombre_proveedor(id)))
+                .collect::<Vec<SharedString>>(),
+        )));
         let indice = |id: &str| {
-            i.conocidos
+            i.ids_de_rol()
                 .iter()
                 .position(|c| c == id)
                 .map_or(-1, |p| p as i32)
@@ -676,6 +684,22 @@ impl Interfaz {
             .unwrap_or_default()
     }
 
+    /// Quién puede ser integrador o redactor: los de la ronda y los que son solo panel (E1 B).
+    fn ids_de_rol(&self) -> Vec<String> {
+        self.conocidos
+            .iter()
+            .chain(&self.solo_panel)
+            .cloned()
+            .collect()
+    }
+
+    fn id_de_rol(&self, indice: i32) -> String {
+        usize::try_from(indice)
+            .ok()
+            .and_then(|i| self.ids_de_rol().get(i).cloned())
+            .unwrap_or_default()
+    }
+
     /// AJU-002: valida con las reglas de nucleo::ronda; si pasan, escribe el archivo de selección.
     pub fn guardar(&self) {
         let marcados: Vec<String> = self
@@ -686,18 +710,19 @@ impl Interfaz {
             .collect();
         let ui = &self.ui;
         let roles = RolesElegidos::new(
-            &self.id_de(ui.get_idx_integrador()),
+            &self.id_de_rol(ui.get_idx_integrador()),
             &self.id_de(ui.get_idx_verificador1()),
             &self.id_de(ui.get_idx_verificador2()),
-            &self.id_de(ui.get_idx_redactor()),
+            &self.id_de_rol(ui.get_idx_redactor()),
         );
         let ahora = puerta::formatear_utc(SystemTime::now());
-        match ajustes::guardar_seleccion(
+        match ajustes::guardar_seleccion_con(
             &self.datos,
             &refs(&self.conocidos),
             &refs(&marcados),
             &roles,
             &ahora,
+            &refs(&self.solo_panel),
         ) {
             Err(e) => {
                 ui.set_mensaje(texto(&e));
@@ -1080,7 +1105,7 @@ impl Interfaz {
         let c = refs(&self.conocidos);
         let activos = ronda::leer_seleccion(contenido.as_deref(), &c)
             .unwrap_or_else(|| self.conocidos.clone());
-        let roles = ronda::leer_roles(contenido.as_deref(), &c);
+        let roles = ronda::leer_roles_con(contenido.as_deref(), &c, &refs(&self.solo_panel));
         let pool = ronda::pool_de_investigadores(&c, &roles);
         // La pregunta va solo a los operadores cargados, nunca a los roles (historia 26).
         let operadores: Vec<String> = pool

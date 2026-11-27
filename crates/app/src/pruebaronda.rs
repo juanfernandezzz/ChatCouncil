@@ -1037,6 +1037,27 @@ async fn operacion(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
         .as_ref()
         .map(|r| r.roles_de_la_ronda())
         .unwrap_or_default();
+    // Un clic en un rol que todavía no tiene página la abre y la pone al frente (la rama nueva de `seleccionar`).
+    let sin_pagina = roles_ids.get(1).cloned().unwrap_or_default();
+    let sin_pagina_antes = i.panel_de(&sin_pagina).is_none();
+    i.seleccionar(&sin_pagina);
+    let abierto_por_clic = hasta(60, || {
+        i.panel_de(&sin_pagina).is_some()
+            && i.ronda
+                .borrow()
+                .as_ref()
+                .and_then(|r| r.visible.borrow().clone())
+                .as_deref()
+                == Some(sin_pagina.as_str())
+    })
+    .await;
+    a.anotar(
+        sin_pagina_antes && abierto_por_clic,
+        "un clic en un rol de la lista sin página la abre y la pone al frente",
+        &format!("rol {sin_pagina}; sin página antes {sin_pagina_antes}; abierto y al frente {abierto_por_clic}"),
+    );
+    // Con ese rol a la vista el menú ofrece ocultar: se oculta para probar el botón desde cero.
+    let _ = renglon(i, "ronda", "Ocultar los paneles de los roles", true);
     let mostrar = renglon(i, "ronda", "Mostrar los paneles de los roles", true);
     let abiertos = hasta(60, || {
         !roles_ids.is_empty() && roles_ids.iter().all(|id| i.panel_de(id).is_some())
@@ -1049,7 +1070,10 @@ async fn operacion(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
             .and_then(|r| r.visible.borrow().clone())
     };
     let primero = al_frente(i);
-    let otro = roles_ids.iter().find(|id| Some(*id) != primero.as_ref()).cloned();
+    let otro = roles_ids
+        .iter()
+        .find(|id| Some(*id) != primero.as_ref())
+        .cloned();
     if let Some(o) = &otro {
         i.seleccionar(o);
     }

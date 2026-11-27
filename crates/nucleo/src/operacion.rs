@@ -442,6 +442,13 @@ fn es_interfaz_propia(url: &[u16]) -> bool {
     let desde = buscar(url, &u("//"), 0).unwrap_or(0) + 2 + host.len();
     let l = minusculas(url);
     let ruta = sin_prefijo_de_idioma(l.get(desde..).unwrap_or(&[]));
+    // Una ruta con «..», «.» o %2e puede salir de la página pública hacia el chat: es fuga.
+    if ["/.", "%2e"]
+        .iter()
+        .any(|s| buscar(ruta, &u(s), 0).is_some())
+    {
+        return true;
+    }
     ![
         "/blog",
         "/help-center",
@@ -1501,6 +1508,8 @@ mod pruebas {
             "https://www.kimi.ai/en/docsx/x",
             "https://www.kimi.ai/helpx/features/abc",
             "https://www.kimi.ai/en/helper",
+            "https://www.kimi.ai/help/../chat/abc",
+            "https://www.kimi.ai/docs/%2E%2e/c/abc",
         ] {
             assert_eq!(
                 fugas_de_proveedor_en_urls(&t(&format!("ver {url} y sigue"))),

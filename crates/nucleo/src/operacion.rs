@@ -437,12 +437,12 @@ fn es_interfaz_propia(url: &[u16]) -> bool {
         return false;
     }
     // shortcut: solo /blog (www.kimi.ai, 2026-10-23), /help-center (2026-10-27), /hub (2026-11-02,
-    // www.perplexity.ai) y, desde PART-031, /changelog y /docs medidos como contenido público en un host de
+    // www.perplexity.ai) y, desde PART-031, /changelog, /docs y /help (www.kimi.ai/help/features, 2026-11-26) medidos como contenido público en un host de
     // interfaz, con un prefijo de idioma opcional (/xx, /xx-YY, /xx-NNN); sumar rutas si aparecen otras.
     let desde = buscar(url, &u("//"), 0).unwrap_or(0) + 2 + host.len();
     let l = minusculas(url);
     let ruta = sin_prefijo_de_idioma(l.get(desde..).unwrap_or(&[]));
-    !["/blog", "/help-center", "/hub", "/changelog", "/docs"].iter().any(|r| {
+    !["/blog", "/help-center", "/hub", "/changelog", "/docs", "/help"].iter().any(|r| {
         let r = u(r);
         ruta == &r[..]
             || ["/", "?", "#"]
@@ -1468,6 +1468,9 @@ mod pruebas {
             "https://claude.ai/EN-us/Help-Center/x",
             "https://www.kimi.ai/en/blog/x",
             "https://www.perplexity.ai/fr/hub",
+            "https://www.kimi.ai/help/features/abc",
+            "https://www.kimi.ai/en/help/features/abc",
+            "https://www.kimi.ai/help",
         ] {
             assert_eq!(
                 fugas_de_proveedor_en_urls(&t(&format!("ver {url} y sigue"))),
@@ -1485,6 +1488,8 @@ mod pruebas {
             "https://gemini.google.com/app/abc123",
             "https://www.kimi.ai/en",
             "https://www.kimi.ai/en/docsx/x",
+            "https://www.kimi.ai/helpx/features/abc",
+            "https://www.kimi.ai/en/helper",
         ] {
             assert_eq!(
                 fugas_de_proveedor_en_urls(&t(&format!("ver {url} y sigue"))),

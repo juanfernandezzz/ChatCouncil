@@ -2451,13 +2451,14 @@ impl Interfaz {
         carga.await
     }
 
-    fn mostrar_roles(&self, r: &Rc<Ronda>) {
+    fn mostrar_roles(&self, r: &Rc<Ronda>, al_frente: bool) {
         let Some(x) = self.yo().upgrade() else { return };
         let r = r.clone();
         let _ = slint::spawn_local(async move {
-            // El primero queda al frente: sin eso el botón parece no hacer nada (D49.3).
+            // Desde el botón del menú el primero queda al frente: sin eso parece no hacer nada (D49.3). Al entrar en
+            // la segunda parte no se cambia lo que ya estaba a la vista.
             for (n, id) in r.roles_de_la_ronda().iter().enumerate() {
-                x.mostrar_rol(&r, id, n == 0).await;
+                x.mostrar_rol(&r, id, al_frente && n == 0).await;
             }
         });
     }
@@ -2488,7 +2489,7 @@ impl Interfaz {
                 *visible = None;
             }
             drop(visible);
-            self.mostrar_roles(r);
+            self.mostrar_roles(r, false);
         } else {
             let roles = r.roles_de_la_ronda();
             r.paneles.borrow_mut().retain(|id, _| !roles.contains(id));
@@ -3193,7 +3194,7 @@ impl Interfaz {
                     None,
                     Rc::new(|x: &Rc<Interfaz>| {
                         if let Some(r) = x.ronda.borrow().clone() {
-                            x.mostrar_roles(&r);
+                            x.mostrar_roles(&r, true);
                         }
                     }),
                 )

@@ -1484,12 +1484,13 @@ async fn roles(
     })
     .await;
     a.anotar(
-        cambio && en_la_vista() == roles && !ui.get_investigadores_visibles(),
-        "segunda parte: se cierran los investigadores y se abren los roles",
+        cambio && en_la_vista() == roles && !ui.get_investigadores_visibles() && visible().is_empty(),
+        "segunda parte: se cierran los investigadores y se abren los roles (al frente: ver el detalle)",
         &format!(
-            "cerrados: {} de 7; en el recorrido [{}]",
+            "cerrados: {} de 7; en el recorrido [{}]; al frente \"{}\"",
             POOL.iter().filter(|id| i.panel_de(id).is_none()).count(),
-            en_la_vista().join(",")
+            en_la_vista().join(","),
+            visible()
         ),
     );
     hasta(10, || {

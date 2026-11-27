@@ -155,3 +155,7 @@
   - Outcome: Muse de Meta como proveedor
   - Evidence: recorded
 
+- [ ] Part 31: Read `plans/PART31_PLAN.ai.md`
+  - Scenario: SCN-031
+  - Outcome: Guarda de anonimato, botón de roles, Muse como integrador y fin de CC-2
+  - Evidence: recorded

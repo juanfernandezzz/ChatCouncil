@@ -15,3 +15,15 @@ Cada cambio de este archivo se aparta a propósito del comportamiento de la Unit
 - Cubren lo cambiado: `operacion_el_prompt_lleva_la_cantidad_de_respuestas_de_la_ronda` y la prueba de roles de `prompts.rs`.
 - El aviso de prompts de captura (R18) compara cada mensaje con la pregunta pegada y nombra los paneles que no coinciden: cambió `CorridaAviso.json` y se quitó la prueba con `AvisosPrompts.json`.
 - Las filas iguales de un mismo operador se juntan en la tabla (R14) y el nombre del archivo de operación ya no lleva el código estable (R27).
+
+## CC-2 (2026-11-26): excepción a ADR-0011, solo para este lote
+
+- Juan, verbatim: «quiero sobreescribir esa regla para este lote, envía los mensajes de prueba tú» y «en la parte 3 enviar a todos y "si" hazlos tú también». En este lote Code pulsa «Enviar a todos» y «Sí» en la ronda CC-2 (y envió los mensajes de prueba de Muse). Contradice AGENTS.md y ADR-0011; vale solo para este lote y vuelve a regir después.
+
+> **REVOCADA (2026-11-26, Juan: «ahora sí esos los haré yo, ignora la excepción de antes»).** Lo escrito arriba sobre que Code pulse «Enviar a todos» y «Sí» YA NO APLICA: los pulsa Juan. Rige ADR-0011.
+
+## PART-031 (2026-11-27)
+
+- El prompt prohibía ampliar la guarda de anonimato más allá de lo que fija; Juan levantó esa regla para `/help` con «E1B E2A» (E2 A): `www.kimi.ai/help/features/<id>` es una página pública de ayuda y dejaba «Pegar la operación» en 0 de 7. `/helpx`, `/en/helper` y las rutas con `..`, `.` o `%2e` siguen siendo fuga.
+- Muse (solo panel) es elegible como integrador o redactor desde esta build («E1 B»): se adelantó la elegibilidad al orden del prompt, que la probaba antes (T1 y T2). Nunca investigador ni verificador; los roles por defecto (RON-002) no cambian y CONOCIDOS sigue en 10. Que Muse sea integrador de la app real solo ocurre si T1 y T2 aprueban.
+- La versión sale de publicar.yml (0.2.<run_number>): no hay un parche que subir a mano en Cargo.toml.

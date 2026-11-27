@@ -806,3 +806,10 @@ PART-030 · Parte 2 (Muse medido en un perfil de prueba, 2026-11-26; navegador d
 
 Artifacts:
 - rojo: muse_trae… y specs_json_coincide…; verde: test 205, autoprueba 67/67, pruebaronda 103/103, pruebainterfaz 16/9/13
+
+### PART-031
+
+Build del lote: guarda con prefijo de idioma, /changelog, /docs y /help (copia del registro CC-2: Pegar la operación 0 de 7 -> 7 de 7), botón de roles y clic en rol sin página, Muse elegible como integrador o redactor. Gates: cargo fmt --check OK; cargo clippy --workspace -D warnings OK; cargo test --workspace OK (nucleo 207); autoprueba exit 0; pruebainterfaz fases 16/16, 10/10, 13/13; pruebaronda 105/105. Pendiente: pasos 5 a 7 (Muse T1/T2, cierre de CC-2).
+
+Artifacts:
+- cargo test --workspace

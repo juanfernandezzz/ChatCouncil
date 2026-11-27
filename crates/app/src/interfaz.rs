@@ -467,7 +467,8 @@ impl Interfaz {
         let c = refs(&conocidos);
         let activos =
             ronda::leer_seleccion(contenido.as_deref(), &c).unwrap_or_else(|| conocidos.clone());
-        let roles = ronda::leer_roles(contenido.as_deref(), &c);
+        let s: Vec<&str> = refs(&solo_panel);
+        let roles = ronda::leer_roles_con(contenido.as_deref(), &c, &s);
 
         let marcas = Rc::new(VecModel::from(
             conocidos
@@ -524,8 +525,15 @@ impl Interfaz {
             .map(|id| texto(&nombre_proveedor(id)))
             .collect();
         ui.set_nombres(ModelRc::new(VecModel::from(nombres)));
+        // Los conocidos van primero: el índice de cada uno es el mismo en las dos listas.
+        ui.set_nombres_rol(ModelRc::new(VecModel::from(
+            i.ids_de_rol()
+                .iter()
+                .map(|id| texto(&nombre_proveedor(id)))
+                .collect::<Vec<SharedString>>(),
+        )));
         let indice = |id: &str| {
-            i.conocidos
+            i.ids_de_rol()
                 .iter()
                 .position(|c| c == id)
                 .map_or(-1, |p| p as i32)
@@ -676,6 +684,22 @@ impl Interfaz {
             .unwrap_or_default()
     }
 
+    /// Quién puede ser integrador o redactor: los de la ronda y los que son solo panel (E1 B).
+    fn ids_de_rol(&self) -> Vec<String> {
+        self.conocidos
+            .iter()
+            .chain(&self.solo_panel)
+            .cloned()
+            .collect()
+    }
+
+    fn id_de_rol(&self, indice: i32) -> String {
+        usize::try_from(indice)
+            .ok()
+            .and_then(|i| self.ids_de_rol().get(i).cloned())
+            .unwrap_or_default()
+    }
+
     /// AJU-002: valida con las reglas de nucleo::ronda; si pasan, escribe el archivo de selección.
     pub fn guardar(&self) {
         let marcados: Vec<String> = self
@@ -686,18 +710,19 @@ impl Interfaz {
             .collect();
         let ui = &self.ui;
         let roles = RolesElegidos::new(
-            &self.id_de(ui.get_idx_integrador()),
+            &self.id_de_rol(ui.get_idx_integrador()),
             &self.id_de(ui.get_idx_verificador1()),
             &self.id_de(ui.get_idx_verificador2()),
-            &self.id_de(ui.get_idx_redactor()),
+            &self.id_de_rol(ui.get_idx_redactor()),
         );
         let ahora = puerta::formatear_utc(SystemTime::now());
-        match ajustes::guardar_seleccion(
+        match ajustes::guardar_seleccion_con(
             &self.datos,
             &refs(&self.conocidos),
             &refs(&marcados),
             &roles,
             &ahora,
+            &refs(&self.solo_panel),
         ) {
             Err(e) => {
                 ui.set_mensaje(texto(&e));
@@ -1080,7 +1105,7 @@ impl Interfaz {
         let c = refs(&self.conocidos);
         let activos = ronda::leer_seleccion(contenido.as_deref(), &c)
             .unwrap_or_else(|| self.conocidos.clone());
-        let roles = ronda::leer_roles(contenido.as_deref(), &c);
+        let roles = ronda::leer_roles_con(contenido.as_deref(), &c, &refs(&self.solo_panel));
         let pool = ronda::pool_de_investigadores(&c, &roles);
         // La pregunta va solo a los operadores cargados, nunca a los roles (historia 26).
         let operadores: Vec<String> = pool
@@ -1201,6 +1226,19 @@ impl Interfaz {
     }
 
     pub fn seleccionar(&self, id: &str) {
+        // Un clic en un rol cuya página todavía no está la abre (D49.3); si ya falló al abrir, no se reintenta aquí.
+        let sin_pagina = self.ronda.borrow().clone().filter(|r| {
+            r.roles_de_la_ronda().iter().any(|x| x == id)
+                && !r.paneles.borrow().contains_key(id)
+                && !r.falla_al_abrir.borrow().contains_key(id)
+        });
+        if let (Some(r), Some(x)) = (sin_pagina, self.yo().upgrade()) {
+            let id = id.to_string();
+            let _ = slint::spawn_local(async move {
+                x.mostrar_rol(&r, &id, true).await;
+            });
+            return;
+        }
         if let Some(r) = self.ronda.borrow().as_ref() {
             *r.visible.borrow_mut() = Some(id.to_string());
         }
@@ -2438,12 +2476,14 @@ impl Interfaz {
         carga.await
     }
 
-    fn mostrar_roles(&self, r: &Rc<Ronda>) {
+    fn mostrar_roles(&self, r: &Rc<Ronda>, al_frente: bool) {
         let Some(x) = self.yo().upgrade() else { return };
         let r = r.clone();
         let _ = slint::spawn_local(async move {
-            for id in r.roles_de_la_ronda() {
-                x.mostrar_rol(&r, &id, false).await;
+            // Desde el botón del menú el primero queda al frente: sin eso parece no hacer nada (D49.3). Al entrar en
+            // la segunda parte no se cambia lo que ya estaba a la vista.
+            for (n, id) in r.roles_de_la_ronda().iter().enumerate() {
+                x.mostrar_rol(&r, id, al_frente && n == 0).await;
             }
         });
     }
@@ -2474,7 +2514,7 @@ impl Interfaz {
                 *visible = None;
             }
             drop(visible);
-            self.mostrar_roles(r);
+            self.mostrar_roles(r, false);
         } else {
             let roles = r.roles_de_la_ronda();
             r.paneles.borrow_mut().retain(|id, _| !roles.contains(id));
@@ -3179,7 +3219,7 @@ impl Interfaz {
                     None,
                     Rc::new(|x: &Rc<Interfaz>| {
                         if let Some(r) = x.ronda.borrow().clone() {
-                            x.mostrar_roles(&r);
+                            x.mostrar_roles(&r, true);
                         }
                     }),
                 )

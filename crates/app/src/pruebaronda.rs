@@ -1029,6 +1029,70 @@ async fn operacion(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
         &format!("investigación: {ci:?}; operación: {co:?}"),
     );
 
+    // PART-031 (D49.3): «Mostrar los paneles de los roles» abre las páginas de los roles y pone el primero al frente;
+    // un clic en otro rol de la lista lo pone al frente; «Ocultar» lo deja como estaba.
+    let roles_ids = i
+        .ronda
+        .borrow()
+        .as_ref()
+        .map(|r| r.roles_de_la_ronda())
+        .unwrap_or_default();
+    // Un clic en un rol que todavía no tiene página la abre y la pone al frente (la rama nueva de `seleccionar`).
+    let sin_pagina = roles_ids.get(1).cloned().unwrap_or_default();
+    let sin_pagina_antes = i.panel_de(&sin_pagina).is_none();
+    i.seleccionar(&sin_pagina);
+    let abierto_por_clic = hasta(60, || {
+        i.panel_de(&sin_pagina).is_some()
+            && i.ronda
+                .borrow()
+                .as_ref()
+                .and_then(|r| r.visible.borrow().clone())
+                .as_deref()
+                == Some(sin_pagina.as_str())
+    })
+    .await;
+    a.anotar(
+        sin_pagina_antes && abierto_por_clic,
+        "un clic en un rol de la lista sin página la abre y la pone al frente",
+        &format!("rol {sin_pagina}; sin página antes {sin_pagina_antes}; abierto y al frente {abierto_por_clic}"),
+    );
+    // Con ese rol a la vista el menú ofrece ocultar: se oculta para probar el botón desde cero.
+    let _ = renglon(i, "ronda", "Ocultar los paneles de los roles", true);
+    let mostrar = renglon(i, "ronda", "Mostrar los paneles de los roles", true);
+    let abiertos = hasta(60, || {
+        !roles_ids.is_empty() && roles_ids.iter().all(|id| i.panel_de(id).is_some())
+    })
+    .await;
+    let al_frente = |i: &Rc<Interfaz>| {
+        i.ronda
+            .borrow()
+            .as_ref()
+            .and_then(|r| r.visible.borrow().clone())
+    };
+    let primero = al_frente(i);
+    let otro = roles_ids
+        .iter()
+        .find(|id| Some(*id) != primero.as_ref())
+        .cloned();
+    if let Some(o) = &otro {
+        i.seleccionar(o);
+    }
+    let segundo = al_frente(i);
+    let ocultar = renglon(i, "ronda", "Ocultar los paneles de los roles", true);
+    a.anotar(
+        mostrar == Some(true)
+            && abiertos
+            && primero.as_ref() == roles_ids.first()
+            && otro.is_some()
+            && segundo == otro
+            && ocultar == Some(true),
+        "mostrar los paneles de los roles en la etapa Operación",
+        &format!(
+            "botón {mostrar:?}; roles abiertos {abiertos} ({}); al frente {primero:?} y luego {segundo:?}; ocultar {ocultar:?}",
+            roles_ids.len()
+        ),
+    );
+
     // ESC-008: el aviso; pegar en los siete, de a uno y con el panel al frente.
     ui.invoke_paso();
     hasta(5, || ui.get_capa_abierta()).await;
@@ -1444,12 +1508,13 @@ async fn roles(
     })
     .await;
     a.anotar(
-        cambio && en_la_vista() == roles && !ui.get_investigadores_visibles(),
-        "segunda parte: se cierran los investigadores y se abren los roles",
+        cambio && en_la_vista() == roles && !ui.get_investigadores_visibles() && visible().is_empty(),
+        "segunda parte: se cierran los investigadores y se abren los roles (al frente: ver el detalle)",
         &format!(
-            "cerrados: {} de 7; en el recorrido [{}]",
+            "cerrados: {} de 7; en el recorrido [{}]; al frente \"{}\"",
             POOL.iter().filter(|id| i.panel_de(id).is_none()).count(),
-            en_la_vista().join(",")
+            en_la_vista().join(","),
+            visible()
         ),
     );
     hasta(10, || {

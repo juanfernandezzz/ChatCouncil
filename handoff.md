@@ -201,3 +201,10 @@ Esta sección corrige la de abajo (E1/E2 ya se resolvieron con «E1B E2A»). Lot
 ## PART-035 (2026-11-28, rama part-035)
 
 - Hecho: README.md literal; Muse se llama Muse. Pendiente: actualizar la app real (C6 de PART-034 y PART-035) y guardar los roles (Muse integra, GLM redacta, Qwen y DeepSeek verifican).
+
+
+HANDOFF PARA EL PRÓXIMO LOTE
+- main con los tres PR; Release 0.2.31; app real en 0.2.31 con roles guardados (Muse integra, GLM redacta, Qwen y DeepSeek verifican). Se aplican la próxima vez que abras una ronda nueva.
+- Binario: ChatCouncil.exe; construir desde C:\cc-repo con cargo build -p app. agent-desktop: --app ChatCouncil.
+- agent-desktop: click con --headed; Ajustes se desplaza con rueda física.
+- Pendientes: medir bytes de CC-2; comprobar «Volver a pegar» y el doble clic con ratón real en un perfil de prueba; decidir qué hacer con UsePreviousAppDir=no y con bench\medir.ps1.

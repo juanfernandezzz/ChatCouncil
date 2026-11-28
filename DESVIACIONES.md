@@ -61,3 +61,14 @@ Cada cambio de este archivo se aparta a propósito del comportamiento de la Unit
 - C6: tras 0.2.30 Programs\ChatCouncilNueva quedó vacía hasta la instalación de 0.2.31 (~40 min). Se reporta como carpeta que no se pudo borrar.
 - C4: restos de ChatCouncilNueva en ci.yml, probar-migracion.ps1 y actualizador.rs:242, además de los tres sitios del prompt.
 - Versión en Ayuda confirmada en pantalla solo para 0.2.31.
+
+## PART-036 (2026-11-28)
+
+- Rojo de A2: con la sonda en serie y un cuelgue finito de 5 s en un panel, la captura tardó 5.4 s, no el techo de 90 s; el parche de medición vive fuera del repo (C:\cc-target\medicion). Verde: con TECHO_SONDA de 2 s y sondas en paralelo la captura queda a menos de 3 s más que sin el panel colgado.
+- La Puerta no tenía las specs en uso: se agregó el campo specs (usar_specs) y hilo.rs lo llena con specs_en_uso(datos). El informe usa esas specs para «Lo que se pegó».
+- El prompt decía seccion-proveedores.json; el código usa seleccion-proveedores.json.
+- A5: la prueba que falla el segundo anotado usa un registro de solo lectura de Windows; en Linux con root no falla y la prueba no vale ahí (CI corre en Windows).
+- B3: GLM no tiene limiteArchivoBytes en specs.json, así que el porcentaje sobre el límite de GLM no se puede calcular (null). Referencia: DeepSeek tiene 90000. La ronda CC-2 no capturó el informe del integrador, así que armar_redactor falla con «la ronda todavía no tiene un informe del integrador capturado» y solo se midió el archivo del integrador (55 bytes UTF-8, sha256 0375030e…401b). Dato que falta: un hecho de informe del integrador en la ronda 0e319605…, función informe_vigente de puerta.rs.
+- B2 no se pudo hacer por la interfaz: «Mostrar los paneles de los roles» abre las páginas de los tres roles de una vez (6 a 9 páginas, medido con agent-desktop), y las etapas con roles listados sin página (3 a 7) no se alcanzan en el perfil de prueba sin capturas reales. Con ratón real, clic en Qwen: 9 a 9 páginas y cambió el panel visible; doble clic en DeepSeek: 9 a 9 (la ventana estaba sin foco en esa captura). La guarda de A7 queda cubierta solo por su prueba unitaria.
+- B1: capturas de «Volver a pegar en este panel…» y «Volver a pegar toda la etapa…» hechas con «Cancelar» en cada una, en C:\cc-target\tmp (b1-volver-panel.png, b1-volver-etapa.png). ChatGPT se quitó de la selección del perfil de prueba. Las páginas simuladas no tienen compositor en 5 de 6 paneles, así que «Pegada en 1 de 6».
+- ponytail:ponytail-review se corrió como agente de solo lectura sobre git diff origin/main -- crates (ver el informe).

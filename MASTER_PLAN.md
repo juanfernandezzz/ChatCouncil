@@ -182,5 +182,5 @@
 - [ ] Part 36: Read `plans/PART36_PLAN.ai.md`
   - Scenario: SCN-036
   - Outcome: La captura no se traba y cuenta mensajes; arreglos de la revisión de PART-032/033; capturas, ratón real y bytes de CC-2
-  - Evidence: pending
+  - Evidence: recorded
 

@@ -191,3 +191,9 @@ Esta sección corrige la de abajo (E1/E2 ya se resolvieron con «E1B E2A»). Lot
 - Gates: fmt, clippy -D warnings, test (nucleo 216), autoprueba 67/67, pruebainterfaz 16/10/13, pruebaronda 108/108. pagina.js igual (sha256 39b048ce…).
 - Pendiente de verificar con ratón real (agent-desktop): clic en un rol sin página y capturas de «Volver a pegar». No medido: bytes del integrador y redactor de la ronda 0e319605….
 - Detalle de decisiones: DESVIACIONES.md, sección PART-032 y PART-033.
+
+## PART-034 (2026-11-28, rama part-034)
+
+- Hecho: ChatCouncil.exe, carpeta Programs\ChatCouncil, instalador ChatCouncil-instalador.exe; migración probada en el CI (job migracion); Release con copia ChatCouncilNueva-instalador.exe; ADR-0010 enmendado.
+- Pendiente: actualizar la app real a la versión de esta rama (C6) y comparar el sha256 del registro antes y después.
+- Detalle: DESVIACIONES.md, sección PART-034.

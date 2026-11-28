@@ -426,7 +426,7 @@
       "_notaUsuario": "Medido el perfil de prueba (cuenta de pruebas), 2026-11-21 (PART-023 F): mensaje de usuario con el texto \"Responde solo con la palabra: listo.\", una sola coincidencia que devolvio el texto exacto por leerMensajeUsuario. El div[data-message-bubble=right] trae solo el texto enviado."
     },
     "muse": {
-      "nombre": "Muse (Meta)",
+      "nombre": "Muse",
       "newConversationUrl": "https://muse.ai/",
       "enLaRonda": false,
       "_notaEnLaRonda": "Solo panel: no entra en la seleccion, los roles ni el pool de la ronda CC-2 (D48.1). La entrada de CONOCIDOS (operacion.rs) sigue con los diez de la Unity.",

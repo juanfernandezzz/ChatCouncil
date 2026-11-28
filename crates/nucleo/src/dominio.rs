@@ -153,7 +153,7 @@ pub fn nombre_proveedor(id: &str) -> String {
         "kimi" => "Kimi",
         "qwen" => "Qwen",
         "deepseek" => "DeepSeek",
-        "muse" => "Muse (Meta)",
+        "muse" => "Muse",
         _ => {
             let mut c = id.chars();
             return c

@@ -175,7 +175,7 @@
   - Outcome: La app se llama ChatCouncil en todo: ejecutable, carpeta, instalador y actualizador
   - Evidence: recorded
 
-- [ ] Part 35: Read `plans/PART35_PLAN.ai.md`
+- [x] Part 35: Read `plans/PART35_PLAN.ai.md`
   - Scenario: SCN-035
   - Outcome: README con la skill obligatoria en los siete; Muse se llama «Muse»; Muse como integrador guardado
-  - Evidence: pending
+  - Evidence: recorded

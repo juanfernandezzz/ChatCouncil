@@ -834,3 +834,10 @@ App llamada ChatCouncil: binario, carpeta, instalador, actualizador, Release con
 
 Artifacts:
 - gh run 46127179763 job migracion; cargo test --workspace
+
+### PART-035
+
+README con el texto literal; «Muse (Meta)» pasa a «Muse» en specs.json y dominio.rs. Rojo: pruebainterfaz fase 2 9/10 buscando «Muse» contra el nombre viejo. Verde: fase 2 10/10, 16/16, 13/13; pruebaronda 108/108; autoprueba 67/67; nucleo 216; clippy limpio. Hash de specs.json actualizado a f7554ff9…. Revisión ponytail: diff mínimo, sin hallazgos. Falta guardar los roles en la app real (D5).
+
+Artifacts:
+- cargo test --workspace; pruebainterfaz; pruebaronda; autoprueba

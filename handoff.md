@@ -197,3 +197,7 @@ Esta sección corrige la de abajo (E1/E2 ya se resolvieron con «E1B E2A»). Lot
 - Hecho: ChatCouncil.exe, carpeta Programs\ChatCouncil, instalador ChatCouncil-instalador.exe; migración probada en el CI (job migracion); Release con copia ChatCouncilNueva-instalador.exe; ADR-0010 enmendado.
 - Pendiente: actualizar la app real a la versión de esta rama (C6) y comparar el sha256 del registro antes y después.
 - Detalle: DESVIACIONES.md, sección PART-034.
+
+## PART-035 (2026-11-28, rama part-035)
+
+- Hecho: README.md literal; Muse se llama Muse. Pendiente: actualizar la app real (C6 de PART-034 y PART-035) y guardar los roles (Muse integra, GLM redacta, Qwen y DeepSeek verifican).

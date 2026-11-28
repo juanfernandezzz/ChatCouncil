@@ -37,6 +37,66 @@ pub struct Opciones {
     pub actualizar: bool,
 }
 
+/// PART-036 (A7): la clave de «abriendo» (una página que se está creando). Al soltar la guarda la clave queda libre,
+/// también si la tarea termina antes de tiempo o no llega a correr.
+struct Abriendo {
+    claves: Rc<RefCell<HashSet<String>>>,
+    clave: String,
+}
+
+impl Drop for Abriendo {
+    fn drop(&mut self) {
+        self.claves.borrow_mut().remove(&self.clave);
+    }
+}
+
+impl Abriendo {
+    /// None si esa página ya se está creando.
+    fn tomar(claves: &Rc<RefCell<HashSet<String>>>, clave: &str) -> Option<Abriendo> {
+        claves
+            .borrow_mut()
+            .insert(clave.to_string())
+            .then(|| Abriendo {
+                claves: claves.clone(),
+                clave: clave.to_string(),
+            })
+    }
+}
+
+/// PART-036 (A2): un querySelectorAll responde en milisegundos; si la página no responde en 2 s, no se avisa nada
+/// y la captura sigue sin esperar el techo de 90 s de `ejecutar`.
+const TECHO_SONDA: Duration = Duration::from_secs(2);
+
+// shortcut: si el primer compuesto de una parte es un ancestro común de todos los mensajes (p. ej. `.chat .msg`),
+// la cuenta colapsa a 1; las specs del repo no lo hacen, si una spec de la carpeta de datos sí, ampliar.
+/// PART-033 (B2) y PART-036 (A3): el script de la sonda; responde «mensajes,enlace» o «-1,0». Cuenta mensajes, no
+/// coincidencias: cada coincidencia sube a su contenedor (`closest` del primer compuesto de su parte de la unión),
+/// los contenedores se juntan sin repetir y los que están dentro de otro se descartan.
+pub fn script_de_la_sonda(spec: &str) -> String {
+    SONDA_JS.replace("__SPEC__", spec)
+}
+
+const SONDA_JS: &str = r#"(function(){try{var s=__SPEC__;var n=-1,e=0;var u=s.userMessage&&s.userMessage.selector;if(u){var tz=function(t,f){var o=[''],d=0,q=null;for(var i=0;i<t.length;i++){var h=t[i];if(q){o[o.length-1]+=h;if(h==='\\'){o[o.length-1]+=t[++i]||''}else if(h===q)q=null;continue}if(h==='"'||h==="'")q=h;else if(h==='['||h==='(')d++;else if(h===']'||h===')')d--;else if(!d&&f(h)){o.push('');continue}o[o.length-1]+=h}return o};var cs=[];tz(u,function(h){return h===','}).map(function(p){return p.trim()}).filter(Boolean).forEach(function(p){var c1=tz(p,function(h){return /[\s>+~]/.test(h)})[0];document.querySelectorAll(p).forEach(function(m){var c=null;try{c=c1&&m.closest(c1)}catch(_){}c=c||m;if(cs.indexOf(c)<0)cs.push(c)})});n=cs.filter(function(c){return !cs.some(function(o){return o!==c&&o.contains(c)})}).length}var a=s.assistantMessage&&s.assistantMessage.selector;if(a){var xs=document.querySelectorAll(a);var x=s.assistantMessage.pick==='first'?xs[0]:xs[xs.length-1];if(x&&x.querySelector('a[download],a[href^="blob:"],a[href^="data:"]'))e=1}return n+','+e}catch(_){return '-1,0'}})()"#;
+
+/// PART-033 (B2): cuántos mensajes de la persona tiene la conversación (el selector userMessage de la spec) y si la
+/// última respuesta trae un enlace de descarga. Se mira con un script propio: pagina.js no cambia. Sin selector o
+/// sin poder mirar, no se dice nada.
+// shortcut: ignora `exclude` de la spec y no mira dentro de iframes; si un proveedor deja el enlace ahí, ampliar.
+async fn lo_que_trae_la_conversacion(p: &Panel, spec: &str) -> (Option<i64>, bool) {
+    if spec.is_empty() {
+        return (None, false);
+    }
+    let Ok(r) = p
+        .ejecutar_con_techo(&script_de_la_sonda(spec), TECHO_SONDA)
+        .await
+    else {
+        return (None, false);
+    };
+    let r = r.trim_matches('"');
+    let (n, e) = r.split_once(',').unwrap_or(("-1", "0"));
+    (n.parse::<i64>().ok().filter(|n| *n >= 0), e == "1")
+}
+
 /// PruebaRonda.Spec: la misma para los siete; el fin se observa porque desaparece el botón de detener.
 pub const SPEC_DE_LA_PRUEBA: &str = "{\"composer\":{\"selector\":\"#compositor\",\"kind\":\"textarea\"},\"escritura\":\"insertText\",\"assistantMessage\":{\"selector\":\".respuesta\",\"pick\":\"last\"},\"userMessage\":{\"selector\":\".usuario\",\"pick\":\"first\"},\"completion\":{\"kind\":\"element-gone\",\"selector\":\"#detener\",\"quiescenceMs\":500},\"version\":1}";
 
@@ -225,7 +285,7 @@ pub struct Interfaz {
     pub filas: Rc<VecModel<Fila>>,
     paginas_cuenta: RefCell<HashMap<String, Rc<Panel>>>,
     cuenta_visible: RefCell<Option<String>>,
-    abriendo: RefCell<HashSet<String>>,
+    abriendo: Rc<RefCell<HashSet<String>>>,
     /// PART-032: las páginas de rol creadas, para que la prueba cuente que un doble clic abre una sola.
     pub(crate) paginas_de_rol_creadas: Cell<u32>,
     vueltas: RefCell<HashMap<String, u64>>,
@@ -499,7 +559,7 @@ impl Interfaz {
             filas: Rc::new(VecModel::default()),
             paginas_cuenta: RefCell::default(),
             cuenta_visible: RefCell::default(),
-            abriendo: RefCell::default(),
+            abriendo: Rc::default(),
             paginas_de_rol_creadas: Cell::new(0),
             vueltas: RefCell::default(),
             navegador: RefCell::default(),
@@ -829,11 +889,12 @@ impl Interfaz {
         let _ = slint::spawn_local(async move {
             if !x.paginas_cuenta.borrow().contains_key(&id) {
                 // Un segundo «Entrar» mientras se crea la página no abre otra encima.
-                if !x.abriendo.borrow_mut().insert(id.clone()) {
-                    return;
-                }
-                let r = x.abrir_cuenta(&id).await;
-                x.abriendo.borrow_mut().remove(&id);
+                let r = {
+                    let Some(_marca) = Abriendo::tomar(&x.abriendo, &id) else {
+                        return;
+                    };
+                    x.abrir_cuenta(&id).await
+                };
                 if let Err(e) = r {
                     x.estado_cuenta(&id, &ajustes::no_se_pudo_abrir(&e));
                     return;
@@ -1239,12 +1300,12 @@ impl Interfaz {
             let id = id.to_string();
             // PART-032: un segundo clic mientras la página se crea no abre otra encima.
             let clave = format!("rol:{id}");
-            if !self.abriendo.borrow_mut().insert(clave.clone()) {
+            let Some(marca) = Abriendo::tomar(&self.abriendo, &clave) else {
                 return;
-            }
+            };
             let _ = slint::spawn_local(async move {
+                let _marca = marca;
                 x.mostrar_rol(&r, &id, true).await;
-                x.abriendo.borrow_mut().remove(&clave);
             });
             return;
         }
@@ -1760,36 +1821,47 @@ impl Interfaz {
         let pegado = t.clone();
         let hecho = r
             .nucleo
-            .pedir(move |p| -> std::io::Result<()> {
+            .pedir(move |p| -> std::io::Result<Vec<(String, String)>> {
                 p.abrir_ronda(pregunta.as_str())?;
                 let v: Vec<(&str, bool, Option<&str>)> = registro
                     .iter()
                     .map(|(id, e)| (id.as_str(), e.is_none(), e.as_deref()))
                     .collect();
                 p.registrar_intentos(&v)?;
-                // PART-032: lo que se pegó, por panel, junto a los intentos.
-                for (id, e) in &registro {
-                    if e.is_none() {
-                        p.registrar_pegado("investigacion", id, &pegado, None, false)?;
-                    }
-                }
-                Ok(())
+                // PART-032: lo que se pegó, por panel, junto a los intentos. PART-036 (A5): si el registro no
+                // anota alguno, la ronda ya está abierta: se devuelve cuáles, no se corta.
+                let pegados: Vec<&str> = registro
+                    .iter()
+                    .filter(|(_, e)| e.is_none())
+                    .map(|(id, _)| id.as_str())
+                    .collect();
+                Ok(p.registrar_pegados_de_la_pregunta(&pegados, &pegado))
             })
             .await
             .and_then(|x| x.map_err(|e| e.to_string()));
-        match hecho {
-            Err(e) => self.resultado(&ronda::ronda_no_abierta(&e), true),
-            Ok(()) if ok == n => self.resultado(
-                &format!(
+        let (mut dicho, mut problema) = match &hecho {
+            Err(e) => (ronda::ronda_no_abierta(e), true),
+            Ok(_) if ok == n => (
+                format!(
                     "Pegada en los {ok} paneles. Revísala y envíala con «Enviar a todos» o a mano."
                 ),
                 false,
             ),
-            Ok(()) => self.resultado(
-                &format!("Pegada en {ok} de {n}. Los que fallaron dicen qué hacer en su cabecera."),
+            Ok(_) => (
+                format!("Pegada en {ok} de {n}. Los que fallaron dicen qué hacer en su cabecera."),
                 true,
             ),
+        };
+        if let Some(s) = hecho
+            .as_ref()
+            .ok()
+            .and_then(|f| ronda::pegado_sin_anotar(f))
+        {
+            dicho.push(' ');
+            dicho.push_str(&s);
+            problema = true;
         }
+        self.resultado(&dicho, problema);
         self.refrescar();
     }
 
@@ -2027,16 +2099,27 @@ impl Interfaz {
             });
         }
         // PART-033 (B2): lo que trae cada conversación, mirado desde acá, sin tocar pagina.js.
+        // PART-036 (A2): las sondas corren a la vez, cada una con su techo de 2 s.
+        let sondas: Vec<_> = ids
+            .iter()
+            .zip(&lecturas)
+            .filter(|(_, l)| !l.error.as_ref().is_some_and(|e| e.largo_utf16() > 0))
+            .filter_map(|(id, _)| {
+                let p = r.paneles.borrow().get(id).cloned()?;
+                let spec = self.spec_de(id);
+                Some((
+                    id.clone(),
+                    slint::spawn_local(async move { lo_que_trae_la_conversacion(&p, &spec).await }),
+                ))
+            })
+            .collect();
         let mut avisos: Vec<(String, Option<i64>, bool)> = Vec::new();
-        for (id, l) in ids.iter().zip(&lecturas) {
-            if l.error.as_ref().is_some_and(|e| e.largo_utf16() > 0) {
-                continue;
-            }
-            let panel = r.paneles.borrow().get(id).cloned();
-            if let Some(p) = panel {
-                let (mensajes, enlace) = self.lo_que_trae_la_conversacion(&p, id).await;
-                avisos.push((id.clone(), mensajes, enlace));
-            }
+        for (id, t) in sondas {
+            let (mensajes, enlace) = match t {
+                Ok(t) => t.await,
+                Err(_) => (None, false),
+            };
+            avisos.push((id, mensajes, enlace));
         }
         // La continuidad de hilo y el tamaño del panel al capturar (PantallaRonda.Contexto).
         let contexto: HashMap<String, (Option<String>, Option<String>)> = {
@@ -2088,7 +2171,8 @@ impl Interfaz {
                 let mut dichos: Vec<String> = Vec::new();
                 if let Some(n) = mensajes.filter(|n| *n > 1) {
                     dichos.push(format!(
-                        "Esta conversación tiene {n} mensajes tuyos. El registro guarda el que pegó la app y la última respuesta."
+                        "La conversación de {} tiene {n} mensajes tuyos. El registro guarda el que pegó la app y la última respuesta.",
+                        nombre_proveedor(id)
                     ));
                 }
                 if *enlace {
@@ -2138,26 +2222,6 @@ impl Interfaz {
             }
         }
         self.refrescar();
-    }
-
-    /// PART-033 (B2): cuántos mensajes de la persona tiene la conversación (el selector userMessage de la spec,
-    /// todas las coincidencias) y si la última respuesta trae un enlace de descarga. Se mira con un script propio:
-    /// pagina.js no cambia. Sin selector o sin poder mirar, no se dice nada.
-    // shortcut: ignora `exclude` de la spec y no mira dentro de iframes; si un proveedor deja el enlace ahí, ampliar.
-    async fn lo_que_trae_la_conversacion(&self, p: &Panel, id: &str) -> (Option<i64>, bool) {
-        let spec = self.spec_de(id);
-        if spec.is_empty() {
-            return (None, false);
-        }
-        let js = format!(
-            "(function(){{try{{var s={spec};var n=-1,e=0;var u=s.userMessage&&s.userMessage.selector;if(u)n=document.querySelectorAll(u).length;var a=s.assistantMessage&&s.assistantMessage.selector;if(a){{var xs=document.querySelectorAll(a);var x=s.assistantMessage.pick==='first'?xs[0]:xs[xs.length-1];if(x&&x.querySelector('a[download],a[href^=\"blob:\"],a[href^=\"data:\"]'))e=1;}}return n+','+e;}}catch(_){{return '-1,0';}}}})()"
-        );
-        let Ok(r) = p.ejecutar(&js).await else {
-            return (None, false);
-        };
-        let r = r.trim_matches('"');
-        let (n, e) = r.split_once(',').unwrap_or(("-1", "0"));
-        (n.parse::<i64>().ok().filter(|n| *n >= 0), e == "1")
     }
 
     /// «Capturar lo que ya está en los paneles»: todos los operadores, aunque no se haya pegado nada.
@@ -4113,6 +4177,24 @@ mod pruebas {
         assert!(unity.join("conversaciones").join("a.jsonl").exists());
         assert_eq!(importar_de_la_unity(&local, &datos).unwrap(), 0);
         std::fs::remove_dir_all(&raiz).unwrap();
+    }
+
+    #[test]
+    fn la_marca_abriendo_se_suelta_aunque_la_tarea_termine_antes_de_tiempo() {
+        let claves = Rc::new(RefCell::new(HashSet::new()));
+        let marca = Abriendo::tomar(&claves, "rol:x").unwrap();
+        assert!(
+            Abriendo::tomar(&claves, "rol:x").is_none(),
+            "una sola a la vez"
+        );
+        // La tarea tiene la guarda y se descarta sin llegar a su final.
+        let tarea = async move {
+            let _marca = marca;
+            std::future::pending::<()>().await;
+        };
+        drop(tarea);
+        assert!(claves.borrow().is_empty(), "la clave quedó libre");
+        assert!(Abriendo::tomar(&claves, "rol:x").is_some());
     }
 
     #[test]

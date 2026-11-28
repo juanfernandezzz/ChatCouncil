@@ -37,6 +37,7 @@ impl HiloNucleo {
         pool: Vec<String>,
     ) -> HiloNucleo {
         let (ordenes, recibir) = mpsc::channel::<Orden>();
+        let specs = nucleo::datos::specs_en_uso(&datos);
         let hilo = std::thread::Builder::new()
             .name("nucleo".into())
             .spawn(move || {
@@ -48,6 +49,10 @@ impl HiloNucleo {
                     roles,
                     pool,
                 );
+                // PART-036 (A6): el informe usa las mismas specs que la interfaz (las de la carpeta de datos, si hay).
+                if let Some(specs) = specs {
+                    puerta.usar_specs(specs);
+                }
                 puerta.restaurar_ronda_activa();
                 for orden in recibir {
                     orden(&mut puerta);

@@ -35,6 +35,18 @@ pub fn ronda_no_abierta(e: &str) -> String {
         "La pregunta quedó pegada en los paneles, pero no se pudo abrir la ronda: {e}. No la envíes todavía: vuelve a pegarla cuando esto se resuelva."
     )
 }
+/// PART-036 (A5): la ronda sí se abrió y el pegado sí se hizo, pero el registro no anotó el pegado de esos paneles.
+pub fn pegado_sin_anotar(fallos: &[(String, String)]) -> Option<String> {
+    let (_, error) = fallos.first()?;
+    let paneles: Vec<String> = fallos
+        .iter()
+        .map(|(id, _)| crate::dominio::nombre_proveedor(id))
+        .collect();
+    Some(format!(
+        "Lo que se pegó en {} no quedó anotado en el registro: {error}. La ronda sí se abrió y el pegado sí se hizo.",
+        lista_con_y(&paneles)
+    ))
+}
 pub const DIALOGO_ABANDONAR_TITULO: &str = "Abandonar la ronda";
 pub const DIALOGO_ABANDONAR_TEXTO: &str = "La ronda queda en el registro tal como está y vuelves a la etapa Pregunta. Si cierras la app antes de pegar la pregunta nueva, al abrirla vuelve esta ronda.";
 pub const DIALOGO_ABANDONAR_BOTON: &str = "Abandonar la ronda";
@@ -395,6 +407,21 @@ mod pruebas {
     use super::*;
 
     // D29 (2): la pregunta quedó pegada pero no se pudo abrir la ronda.
+    #[test]
+    fn el_pegado_sin_anotar_nombra_los_paneles_y_el_primer_error() {
+        assert_eq!(pegado_sin_anotar(&[]), None);
+        let f = |id: &str, e: &str| (id.to_string(), e.to_string());
+        assert_eq!(
+            pegado_sin_anotar(&[
+                f("gemini", "disco lleno"),
+                f("claude", "otro"),
+                f("kimi", "otro")
+            ])
+            .unwrap(),
+            "Lo que se pegó en Gemini, Claude y Kimi no quedó anotado en el registro: disco lleno. La ronda sí se abrió y el pegado sí se hizo."
+        );
+    }
+
     #[test]
     fn ronda_no_abierta_dice_que_la_pregunta_quedo_pegada() {
         assert_eq!(

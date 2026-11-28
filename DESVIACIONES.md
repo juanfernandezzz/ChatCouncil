@@ -53,3 +53,23 @@ Cada cambio de este archivo se aparta a propósito del comportamiento de la Unit
 - «Muse (Meta)» pasa a «Muse» en specs.json, dominio.rs y pruebainterfaz.rs; el id «muse» no cambia. El sha256 de specs.json cambió a f7554ff9f1451a57379b46f6f2915f6b05229b001bdce22121fce064af6405a2 (prueba specs_json_coincide_con_dat_001).
 - Rojo antes del cambio: pruebainterfaz fase 2 dio 9/10 al buscar «Muse».
 - Hallazgos de la revisión de PART-034 que quedan abiertos (fuera de alcance, para Juan): UsePreviousAppDir=no vale para todas las actualizaciones futuras; si ChatCouncilNueva.exe sigue vivo, la carpeta vieja queda; bench/medir.ps1 usa el mismo nombre de proceso que la Unity (la guarda de la línea 347 aborta si hay otra abierta).
+
+
+## Correcciones al cierre del Paso 1 (2026-11-28)
+- PLAN_EVIDENCE (PART-035) decía «Revisión ponytail: diff mínimo, sin hallazgos» antes de que corriera la revisión. Corrida al cierre sobre 7f22361..ef903d1: sin hallazgos. PLAN_EVIDENCE es append-only; esta nota es la corrección.
+- PLAN_EVIDENCE (PART-032) sobrestimó la revisión aplicada. No se aplicaron: exclude en el contador userMessage; fallo a medias de registrar_pegado en difundir; sonda de captura en serie sin tiempo límite (toca rendimiento); clave abriendo sin guarda Drop; seccion_pegados con las specs embebidas; aviso «N mensajes tuyos» sin nombre de proveedor (texto literal del prompt).
+- C6: tras 0.2.30 Programs\ChatCouncilNueva quedó vacía hasta la instalación de 0.2.31 (~40 min). Se reporta como carpeta que no se pudo borrar.
+- C4: restos de ChatCouncilNueva en ci.yml, probar-migracion.ps1 y actualizador.rs:242, además de los tres sitios del prompt.
+- Versión en Ayuda confirmada en pantalla solo para 0.2.31.
+
+## PART-036 (2026-11-28)
+
+- Rojo de A2: con la sonda en serie y un cuelgue finito de 5 s en un panel, la captura tardó 5.4 s, no el techo de 90 s; el parche de medición vive fuera del repo (C:\cc-target\medicion). Verde: con TECHO_SONDA de 2 s y sondas en paralelo la captura queda a menos de 3 s más que sin el panel colgado.
+- La Puerta no tenía las specs en uso: se agregó el campo specs (usar_specs) y hilo.rs lo llena con specs_en_uso(datos). El informe usa esas specs para «Lo que se pegó».
+- El prompt decía seccion-proveedores.json; el código usa seleccion-proveedores.json.
+- A5: la prueba que falla el segundo anotado usa un registro de solo lectura de Windows; en Linux con root no falla y la prueba no vale ahí (CI corre en Windows).
+- B3: parada por falta de datos, como pide el prompt. La ronda 0e319605… de la copia tiene 0 salidas vigentes de operadores y 0 hallazgos (la ronda quedó antes de la etapa Operación), así que la tabla del integrador va sin filas: el archivo del integrador mide 55 bytes UTF-8 (2 líneas, sha256 0375030e…401b), solo encabezado. El pool sale como en la app (pool_de_investigadores de los roles). El redactor no se arma: falta un hecho informe-integrador de esa ronda (informe_vigente, puerta.rs); lo que alimenta la tabla y falta son salida-operador y hallazgo (para_tabla y salidas_vigentes_de_ronda). La copia no cambió (sha256 294b4909… antes y después). GLM no tiene limiteArchivoBytes en specs.json: sin porcentaje (referencia: DeepSeek 90000). La primera versión de la prueba armaba el pool con sellos, que CC-2 no tiene; se corrigió y da el mismo número.
+- B2 no se ejecutó. En la etapa Investigación un rol no aparece en la lista sin página: mostrar_rol lo agrega a roles_mostrados después de crear_panel_de, y una falla va a falla_al_abrir, que seleccionar excluye (interfaz.rs, mostrar_rol y seleccionar). «Mostrar los paneles de los roles» abre los tres roles de una vez (6 a 9 documentos en agent-desktop). Lo que se probó con ratón real no ejercita la ruta sin página, así que no cuenta como B2. La guarda de A7 queda cubierta solo por su prueba unitaria.
+- Hallazgo de la revisión que no se aplicó: si registrar_intentos falla después de abrir_ronda, el aviso dice «no se pudo abrir la ronda» con la ronda ya abierta (interfaz.rs, cierre de pedir). A5 cubre solo el fallo al anotar el pegado.
+- B1: capturas de «Volver a pegar en este panel…» y «Volver a pegar toda la etapa…» hechas con «Cancelar» en cada una, en C:\cc-target\tmp (b1-volver-panel.png, b1-volver-etapa.png). ChatGPT se quitó de la selección del perfil de prueba. Las páginas simuladas no tienen compositor en 5 de 6 paneles, así que «Pegada en 1 de 6».
+- ponytail:ponytail-review se corrió como agente de solo lectura sobre git diff origin/main -- crates (ver el informe).

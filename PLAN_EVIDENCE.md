@@ -841,3 +841,13 @@ README con el texto literal; «Muse (Meta)» pasa a «Muse» en specs.json y dom
 
 Artifacts:
 - cargo test --workspace; pruebainterfaz; pruebaronda; autoprueba
+
+### PART-036
+
+Sonda de captura en paralelo (techo 2 s), conteo de mensajes, aviso con proveedor, pegado sin anotar no corta, informe con specs en uso, guarda Drop de abriendo. Rojo antes de cada verde: A2 con sonda en serie y cuelgue de 5 s la captura tardó 5.4 s (rojo) y con sondas en paralelo y techo de 2 s queda a menos de 3 s más que sin el panel colgado (verde); A3 pruebaronda 'la sonda cuenta mensajes' en rojo sin el conteo por union/closest y en verde con él; A5 y A6 y A7 con su prueba en rojo antes del cambio y en verde después. Verde final: cargo test --workspace, clippy --all-targets -D warnings, fmt --check. B3: bench/resultados/cc2-archivos.json (copia sin cambios: sha256 antes y después iguales, integrador 55 bytes; el redactor no se arma porque CC-2 no capturó el informe del integrador). B1 hecha; B2 no alcanzable por la interfaz (ver DESVIACIONES.md). Revisión ponytail-review: sin Must fix; un Should fix abierto (registrar_intentos con ronda abierta dice 'no se pudo abrir la ronda'), anotado para Juan.
+
+Artifacts:
+- cargo test --workspace; pruebaronda; cargo test -p nucleo medir_archivos_cc2 -- --ignored
+
+### Corrección PART-036 (B3)
+La línea de evidencia de PART-036 dice «integrador 55 bytes» como si fuera un archivo con contenido. Es solo el encabezado: la ronda 0e319605… tiene 0 salidas vigentes y 0 hallazgos, así que B3 queda parada por falta de datos (ver DESVIACIONES.md). B2 no se ejecutó (misma nota); la línea de evidencia decía «B2 no alcanzable por la interfaz» sin ese detalle.

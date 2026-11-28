@@ -1748,15 +1748,23 @@ impl Interfaz {
         let n = resultados.len();
         let ok = resultados.iter().filter(|(_, e)| e.is_none()).count();
         let registro = resultados.clone();
+        let pegado = t.clone();
         let hecho = r
             .nucleo
-            .pedir(move |p| {
+            .pedir(move |p| -> std::io::Result<()> {
                 p.abrir_ronda(pregunta.as_str())?;
                 let v: Vec<(&str, bool, Option<&str>)> = registro
                     .iter()
                     .map(|(id, e)| (id.as_str(), e.is_none(), e.as_deref()))
                     .collect();
-                p.registrar_intentos(&v)
+                p.registrar_intentos(&v)?;
+                // PART-032: lo que se pegó, por panel, junto a los intentos.
+                for (id, e) in &registro {
+                    if e.is_none() {
+                        p.registrar_pegado("investigacion", id, &pegado, None, false)?;
+                    }
+                }
+                Ok(())
             })
             .await
             .and_then(|x| x.map_err(|e| e.to_string()));
@@ -1802,7 +1810,13 @@ impl Interfaz {
         let res = if enviada {
             Err("el chat ya tiene un mensaje enviado: no se vuelve a pegar para no duplicar la pregunta".into())
         } else {
-            self.escribir_en(&r, &id, &pregunta).await
+            match self.escribir_en(&r, &id, &pregunta).await {
+                Ok(()) => self
+                    .anotar_pegado_en_el_registro(&r, &id, &pregunta, None, false)
+                    .await
+                    .map_or(Ok(()), Err),
+                e => e,
+            }
         };
         let nombre = nombre_proveedor(&id);
         match res {
@@ -2221,7 +2235,7 @@ impl Interfaz {
                 false,
             );
             self.seleccionar(id);
-            match self.pegar_operacion(r, id, por_texto).await {
+            match self.pegar_operacion(r, id, por_texto, false).await {
                 None => {
                     r.falla_operacion.borrow_mut().remove(id);
                     ok += 1;
@@ -2256,7 +2270,13 @@ impl Interfaz {
 
     /// ESC-007 y ESC-009: la conversación nueva comprobada vacía, la operación por la vía elegida, lo escrito
     /// verificado contra lo armado y, con archivo, el adjunto. El error, o None si quedó pegada.
-    async fn pegar_operacion(&self, r: &Rc<Ronda>, id: &str, por_texto: bool) -> Option<String> {
+    async fn pegar_operacion(
+        &self,
+        r: &Rc<Ronda>,
+        id: &str,
+        por_texto: bool,
+        repetir: bool,
+    ) -> Option<String> {
         let Some(p) = r.paneles.borrow().get(id).cloned() else {
             return Some("el panel no está abierto".into());
         };
@@ -2290,6 +2310,7 @@ impl Interfaz {
                 cuerpo,
                 ruta.as_deref(),
                 " o pega la operación como texto",
+                repetir,
             )
             .await
         {
@@ -2355,6 +2376,7 @@ impl Interfaz {
         cuerpo: Option<&Texto>,
         ruta: Option<&Path>,
         otra_via: &str,
+        repetir: bool,
     ) -> Option<String> {
         let Some(p) = r.paneles.borrow().get(id).cloned() else {
             return Some("el panel no está abierto".into());
@@ -2380,7 +2402,9 @@ impl Interfaz {
         }
         r.anotar_pegado(id, texto_);
         let (Some(cuerpo), Some(ruta)) = (cuerpo, ruta) else {
-            return None;
+            return self
+                .anotar_pegado_en_el_registro(r, id, texto_, None, repetir)
+                .await;
         };
         let escrito = ruta
             .parent()
@@ -2391,12 +2415,37 @@ impl Interfaz {
             Ok(()) => p.adjuntar(&spec, ruta).await,
             Err(e) => Err(e),
         };
-        adjunto.err().map(|e| {
-            format!(
+        if let Some(e) = adjunto.err() {
+            return Some(format!(
                 "el texto quedó pegado pero el archivo no se adjuntó ({e}). Está en {}: adjúntalo a mano{otra_via}",
                 ruta.display()
-            )
-        })
+            ));
+        }
+        self.anotar_pegado_en_el_registro(r, id, texto_, Some(cuerpo), repetir)
+            .await
+    }
+
+    /// PART-032: el hecho «pegado» de lo que ya quedó en el panel. El error, o None si quedó anotado.
+    async fn anotar_pegado_en_el_registro(
+        &self,
+        r: &Ronda,
+        id: &str,
+        texto_: &Texto,
+        archivo: Option<&Texto>,
+        repetir: bool,
+    ) -> Option<String> {
+        let (etapa, id, t, a) = (
+            r.etapa.get(),
+            id.to_string(),
+            texto_.clone(),
+            archivo.cloned(),
+        );
+        r.nucleo
+            .pedir(move |p| p.registrar_pegado(etapa, &id, &t, a.as_ref(), repetir))
+            .await
+            .and_then(|x| x.map_err(|e| e.to_string()))
+            .err()
+            .map(|e| format!("el texto quedó pegado pero no se pudo registrar: {e}"))
     }
 
     /// OPE-016: el operador que lee exactamente lo mismo reutiliza su operación anterior.
@@ -2529,14 +2578,27 @@ impl Interfaz {
     /// vacía, verificado por igualdad; el del redactor, con su archivo adjunto. Nunca un prompt vacío: si no se
     /// puede armar, se dice por qué antes de tocar el panel (INV-INT-002).
     async fn pegar_rol(&self, r: &Rc<Ronda>, etapa: &'static str) {
-        let ids: Vec<String> = r
-            .roles
-            .de_la_etapa(etapa)
-            .into_iter()
-            .map(String::from)
-            .collect();
+        self.pegar_rol_de(r, etapa, None, false).await;
+    }
+
+    /// El pegado del rol en `ids` (por omisión, los de la etapa). Falso si no llegó a pegar: la ventana del
+    /// archivo grande quedó abierta o el prompt no se armó, y ya lo dijeron.
+    async fn pegar_rol_de(
+        &self,
+        r: &Rc<Ronda>,
+        etapa: &'static str,
+        ids: Option<Vec<String>>,
+        repetir: bool,
+    ) -> bool {
+        let ids: Vec<String> = ids.unwrap_or_else(|| {
+            r.roles
+                .de_la_etapa(etapa)
+                .into_iter()
+                .map(String::from)
+                .collect()
+        });
         if ids.is_empty() {
-            return;
+            return false;
         }
         let armado = r
             .nucleo
@@ -2559,7 +2621,10 @@ impl Interfaz {
             .and_then(|x| x.map_err(|e| e.to_string()));
         let (prompt, archivo) = match armado {
             Ok(a) => a,
-            Err(e) => return self.resultado(&format!("No se armó el prompt: {e}."), true),
+            Err(e) => {
+                self.resultado(&format!("No se armó el prompt: {e}."), true);
+                return false;
+            }
         };
         // PART-022, R17: un archivo más grande de lo que el proveedor lee se avisa antes de pegarlo.
         let excedido = archivo.as_ref().and_then(|a| {
@@ -2570,7 +2635,9 @@ impl Interfaz {
             })
         });
         let Some((nombre, peso, lim)) = excedido else {
-            return self.pegar_rol_armado(r, etapa, ids, prompt, archivo).await;
+            self.pegar_rol_armado(r, etapa, ids, prompt, archivo, repetir)
+                .await;
+            return true;
         };
         let (kb, lim_kb) = (peso.div_ceil(1000), lim / 1000);
         let (r, ids_, prompt_, archivo_) =
@@ -2587,12 +2654,14 @@ impl Interfaz {
                 let (ids, prompt, archivo) = (ids_.clone(), prompt_.clone(), archivo_.clone());
                 let _ = r.clone();
                 x.en_accion(move |x, r| async move {
-                    x.pegar_rol_armado(&r, etapa, ids, prompt, archivo).await
+                    x.pegar_rol_armado(&r, etapa, ids, prompt, archivo, repetir)
+                        .await
                 })
             }),
         );
         self.ui.set_dialogo_cancelar_texto("No pegar".into());
         self.ui.set_dialogo_foco_en_cancelar(true);
+        false
     }
 
     /// El pegado del rol ya armado, en los paneles de `ids` (D62: en la verificación el mismo prompt va a los dos).
@@ -2603,7 +2672,9 @@ impl Interfaz {
         ids: Vec<String>,
         prompt: Texto,
         archivo: Option<puerta::ArchivoRedactor>,
+        repetir: bool,
     ) {
+        let mut fallo = false;
         for id in &ids {
             let nombre = nombre_proveedor(id);
             self.resultado(&format!("Pegando el prompt en {nombre}…"), false);
@@ -2626,6 +2697,7 @@ impl Interfaz {
                         archivo.as_ref().map(|a| &a.cuerpo_archivo),
                         ruta.as_deref(),
                         "",
+                        repetir,
                     )
                     .await;
             }
@@ -2636,9 +2708,16 @@ impl Interfaz {
                 Some(e) => {
                     self.resultado(&format!("No se pegó en {nombre}: {e}."), true);
                     r.falla_rol.borrow_mut().insert(id.clone(), e);
-                    return;
+                    // Al volver a pegar, un panel que falla no detiene a los demás.
+                    if !repetir {
+                        return;
+                    }
+                    fallo = true;
                 }
             }
+        }
+        if fallo && ids.iter().all(|id| r.falla_rol.borrow().contains_key(id)) {
+            return;
         }
         let aviso = archivo.as_ref().and_then(|a| a.aviso.clone());
         let con_archivo = archivo.is_some();
@@ -2728,7 +2807,7 @@ impl Interfaz {
         };
         if error.is_none() {
             error = self
-                .escribir_y_adjuntar(r, &id, &prompt, false, None, None, "")
+                .escribir_y_adjuntar(r, &id, &prompt, false, None, None, "", false)
                 .await;
         }
         match error {
@@ -2927,6 +3006,7 @@ impl Interfaz {
         let renglones = match cual {
             "panel" => [
                 self.renglones_del_panel(&r),
+                self.renglones_de_repegado(&r),
                 self.renglones_de_mantenimiento(&r),
                 self.renglones_de_correccion(&r),
             ]
@@ -2934,6 +3014,7 @@ impl Interfaz {
             "ronda" => self.renglones_de_la_ronda(&r),
             "angosta" => [
                 self.renglones_del_panel(&r),
+                self.renglones_de_repegado(&r),
                 self.renglones_de_mantenimiento(&r),
                 self.renglones_de_la_ronda(&r),
             ]
@@ -3083,6 +3164,224 @@ impl Interfaz {
             ),
             (grupo, self.con_fase(r), sin_pagina, capturar),
         ]
+    }
+
+    // ---------------------------------------------------------------- volver a pegar (PART-032)
+
+    /// Los paneles que la etapa actual pega.
+    fn paneles_de_la_etapa(r: &Ronda) -> Vec<String> {
+        match r.etapa.get() {
+            "investigacion" | "operacion" => r.operadores.clone(),
+            e @ ("integracion" | "verificacion" | "redaccion") => r
+                .roles
+                .de_la_etapa(e)
+                .into_iter()
+                .map(String::from)
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// El grupo «Volver a pegar» de los menús «Más…».
+    fn renglones_de_repegado(&self, r: &Rc<Ronda>) -> Vec<RenglonMenu> {
+        let grupo = "Volver a pegar".to_string();
+        let de_etapa = Self::paneles_de_la_etapa(r);
+        let visible = r.visible.borrow().clone().filter(|v| de_etapa.contains(v));
+        let id = visible.clone();
+        vec![
+            (
+                grupo.clone(),
+                "Volver a pegar en este panel…".into(),
+                visible.is_none().then(|| {
+                    "Solo en un panel de la etapa actual. Para una etapa ya cerrada, usa «Corregir…»."
+                        .to_string()
+                }),
+                Rc::new(move |x: &Rc<Interfaz>| {
+                    if let Some(id) = &id {
+                        x.dialogo_repegar(vec![id.clone()], true);
+                    }
+                }),
+            ),
+            (
+                grupo,
+                "Volver a pegar toda la etapa…".into(),
+                de_etapa
+                    .is_empty()
+                    .then(|| "Solo en una etapa que tiene algo que pegar.".to_string()),
+                Rc::new(move |x: &Rc<Interfaz>| x.dialogo_repegar(de_etapa.clone(), false)),
+            ),
+        ]
+    }
+
+    /// La ventana de «Volver a pegar»: lo que se va a hacer y lo que pasa con las respuestas ya enviadas.
+    fn dialogo_repegar(&self, ids: Vec<String>, un_panel: bool) {
+        let Some(r) = self.ronda.borrow().clone() else {
+            return;
+        };
+        let etapa = ronda::nombre_de_etapa(r.etapa.get());
+        let estados = r.vista.borrow().estados.clone();
+        let estado = |id: &String| estados.get(id).copied().unwrap_or("por-pegar");
+        let sin_capturar: Vec<String> = ids
+            .iter()
+            .filter(|i| {
+                let e = estado(i);
+                e == "respondiendo" || terminado(e)
+            })
+            .map(|i| nombre_proveedor(i))
+            .collect();
+        let capturada = ids.iter().any(|i| estado(i) == "capturado");
+        let nombres: Vec<String> = ids.iter().map(|i| nombre_proveedor(i)).collect();
+        let n = nombres.first().cloned().unwrap_or_default();
+        let (titulo, mut cuerpo) = if un_panel {
+            (
+                format!("Volver a pegar en {n}"),
+                format!(
+                    "Se abre una conversación nueva en {n} y se pega lo mismo que pide la etapa {etapa}. No se envía nada: después pulsas «Enviar a todos», como siempre."
+                ),
+            )
+        } else {
+            (
+                format!("Volver a pegar la etapa {etapa}"),
+                format!(
+                    "Se abre una conversación nueva en {} y se pega lo mismo que pide la etapa. No se envía nada: después pulsas «Enviar a todos», como siempre.",
+                    ronda::lista_con_y(&nombres)
+                ),
+            )
+        };
+        if !sin_capturar.is_empty() {
+            cuerpo.push_str("\n\n");
+            cuerpo.push_str(&if un_panel {
+                format!("{n} tiene una respuesta que todavía no capturaste. Esa respuesta queda en el historial de {n}, pero no entra en la ronda.")
+            } else {
+                format!("Tienen una respuesta sin capturar: {}. Esas respuestas quedan en el historial de cada proveedor, pero no entran en la ronda.", ronda::lista_con_y(&sin_capturar))
+            });
+        }
+        if capturada {
+            cuerpo.push_str("\n\n");
+            cuerpo.push_str(if un_panel {
+                "La respuesta que ya capturaste queda en el registro. Si envías y vuelves a capturar, el informe usa la última."
+            } else {
+                "Las respuestas ya capturadas quedan en el registro. Si envías y vuelves a capturar, el informe usa la última."
+            });
+        }
+        self.abrir_dialogo(
+            &titulo,
+            &cuerpo,
+            false,
+            None,
+            "Volver a pegar",
+            Box::new(move |x, _, _| {
+                let ids = ids.clone();
+                x.en_accion(move |x, r| async move { x.volver_a_pegar(&r, ids).await });
+            }),
+        );
+        self.ui
+            .set_dialogo_foco_en_cancelar(!sin_capturar.is_empty());
+    }
+
+    /// Olvida lo que se recordaba del pegado anterior de esos paneles, abre una conversación nueva en cada uno
+    /// y pega lo que la etapa pega. Nunca envía; un panel que falla no detiene a los demás.
+    async fn volver_a_pegar(&self, r: &Rc<Ronda>, ids: Vec<String>) {
+        let etapa = r.etapa.get();
+        for id in &ids {
+            r.pegados.borrow_mut().remove(id);
+            r.pulsados.borrow_mut().remove(id);
+            r.falla_envio.borrow_mut().remove(id);
+            r.falla_operacion.borrow_mut().remove(id);
+            r.falla_rol.borrow_mut().remove(id);
+        }
+        let olvidar = ids.clone();
+        let _ = r
+            .nucleo
+            .pedir(move |p| {
+                for id in &olvidar {
+                    p.olvidar_pegado(etapa, Some(id));
+                }
+            })
+            .await;
+        let mut fallos: Vec<(String, String)> = Vec::new();
+        if etapa == "investigacion" || etapa == "operacion" {
+            let pregunta = if etapa == "investigacion" {
+                match r
+                    .nucleo
+                    .pedir(|p| p.pregunta_de_la_ronda())
+                    .await
+                    .and_then(|x| x.map_err(|e| e.to_string()))
+                {
+                    Ok(Some(t)) => Some(t),
+                    Ok(None) => {
+                        return self.resultado("Esta ronda no tiene una pregunta que pegar.", true);
+                    }
+                    Err(e) => return self.resultado(&e, true),
+                }
+            } else {
+                None
+            };
+            for id in &ids {
+                self.resultado(
+                    &format!("Pegando otra vez en {}…", nombre_proveedor(id)),
+                    false,
+                );
+                self.seleccionar(id);
+                self.refrescar();
+                let error = match self.abrir_chat_nuevo(r, id).await {
+                    Some(e) => Some(e),
+                    None => match &pregunta {
+                        Some(t) => match self.escribir_en(r, id, t).await {
+                            Err(e) => Some(e),
+                            Ok(()) => {
+                                self.anotar_pegado_en_el_registro(r, id, t, None, true)
+                                    .await
+                            }
+                        },
+                        None => {
+                            let e = self
+                                .pegar_operacion(r, id, r.operacion_por_texto.get(), true)
+                                .await;
+                            if let Some(e) = &e {
+                                r.falla_operacion.borrow_mut().insert(id.clone(), e.clone());
+                            }
+                            e
+                        }
+                    },
+                };
+                if let Some(e) = error {
+                    fallos.push((id.clone(), e));
+                }
+            }
+        } else {
+            // Falso: la ventana del archivo grande quedó abierta o el prompt no se armó, y ya lo dijeron.
+            if !self.pegar_rol_de(r, etapa, Some(ids.clone()), true).await {
+                return;
+            }
+            for id in &ids {
+                if let Some(e) = r.falla_rol.borrow().get(id) {
+                    fallos.push((id.clone(), e.clone()));
+                }
+            }
+        }
+        let ok: Vec<String> = ids
+            .iter()
+            .filter(|i| !fallos.iter().any(|(f, _)| f == *i))
+            .map(|i| nombre_proveedor(i))
+            .collect();
+        let mut t: Vec<String> = fallos
+            .iter()
+            .map(|(id, e)| {
+                format!(
+                    "No se pegó en {}: {}.",
+                    nombre_proveedor(id),
+                    e.trim_end_matches('.')
+                )
+            })
+            .collect();
+        if !ok.is_empty() {
+            t.push(format!(
+                "Pegado otra vez en {}. Revísalo y envíalo.",
+                ronda::lista_con_y(&ok)
+            ));
+        }
+        self.resultado(&t.join(" "), !fallos.is_empty());
     }
 
     /// Recargar, el diagnóstico y cerrar la sesión: de emergencia, en cualquier etapa (D6).

@@ -3293,11 +3293,7 @@ fn seccion_pegados(hechos: &[Hecho], ronda: &Texto, specs: &str) -> Option<Strin
             .unwrap_or_default()
             .to_string()
     };
-    let lista = |v: &[String]| match v {
-        [] => String::new(),
-        [a] => a.clone(),
-        [resto @ .., u] => format!("{} y {u}", resto.join(", ")),
-    };
+    let lista = ronda::lista_con_y;
     let tam = |v: &[i64]| {
         let (a, b) = (
             v.iter().min().copied().unwrap_or(0),

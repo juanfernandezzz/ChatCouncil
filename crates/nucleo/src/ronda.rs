@@ -327,6 +327,15 @@ pub const NOMBRES_ETAPA: [&str; 7] = [
     "Informe",
 ];
 
+/// «a, b y c»: los nombres con comas y «y» antes del último.
+pub fn lista_con_y(v: &[String]) -> String {
+    match v {
+        [] => String::new(),
+        [a] => a.clone(),
+        [resto @ .., u] => format!("{} y {u}", resto.join(", ")),
+    }
+}
+
 pub fn nombre_de_etapa(etapa: &str) -> &'static str {
     ETAPAS
         .iter()

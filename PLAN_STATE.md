@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: COMPLETE
+Next: plans/PART36_PLAN.ai.md
 
 ## Parts
 
@@ -178,6 +178,11 @@ Next: COMPLETE
   - Scenario: SCN-035
   - Outcome: README con la skill obligatoria en los siete; Muse se llama «Muse»; Muse como integrador guardado
   - Evidence: recorded
+
+- [ ] Part 36: plans/PART36_PLAN.ai.md
+  - Scenario: SCN-036
+  - Outcome: La captura no se traba y cuenta mensajes; arreglos de la revisión de PART-032/033; capturas, ratón real y bytes de CC-2
+  - Evidence: pending
 
 ## Notes
 

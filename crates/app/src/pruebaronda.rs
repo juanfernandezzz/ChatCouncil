@@ -1015,7 +1015,7 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
         .collect();
     let dicho = resultado();
     a.anotar(
-        dicho.contains("Esta conversación tiene 2 mensajes tuyos. El registro guarda el que pegó la app y la última respuesta.")
+        dicho.contains("La conversación de ChatGPT tiene 2 mensajes tuyos. El registro guarda el que pegó la app y la última respuesta.")
             && dicho.contains("La respuesta de Gemini trae un archivo o un enlace de descarga. La app solo recoge el texto del mensaje: si lo que pediste está en el archivo, pídele que lo escriba en el chat y vuelve a capturar.")
             && avisos
                 == [
@@ -1025,6 +1025,71 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
         "avisos al capturar",
         &format!("\"{dicho}\"; hechos {avisos:?}"),
     );
+
+    // PART-036 (A2): un panel cuya página no responde a la sonda no traba la captura. La página de kimi se queda
+    // ocupada 5 s justo cuando la sonda mira el enlace de descarga (lo único que pagina.js nunca pregunta).
+    en(
+        i,
+        "kimi",
+        "(() => { window.__q = Element.prototype.querySelector; Element.prototype.querySelector = function (s) { if (String(s).startsWith('a[download]')) { const t = Date.now(); while (Date.now() - t < 5000) {} } return window.__q.call(this, s); }; return 'ok'; })()",
+    )
+    .await?;
+    let t0 = Instant::now();
+    i.capturar(vec!["chatgpt".into(), "gemini".into(), "claude".into()])
+        .await;
+    let sin_cuelgue = t0.elapsed();
+    let t0 = Instant::now();
+    i.capturar(vec![
+        "chatgpt".into(),
+        "gemini".into(),
+        "claude".into(),
+        "kimi".into(),
+    ])
+    .await;
+    let con_cuelgue = t0.elapsed();
+    let dicho = resultado();
+    let _ = en(
+        i,
+        "kimi",
+        "(() => { Element.prototype.querySelector = window.__q; return 'ok'; })()",
+    )
+    .await;
+    a.anotar(
+        con_cuelgue < sin_cuelgue + Duration::from_secs(3)
+            && dicho.contains("2 mensajes tuyos")
+            && dicho.contains("La respuesta de Gemini trae un archivo"),
+        "la sonda no traba la captura",
+        &format!(
+            "sin el panel colgado {:.2} s; con él {:.2} s; \"{dicho}\"",
+            sin_cuelgue.as_secs_f64(),
+            con_cuelgue.as_secs_f64()
+        ),
+    );
+
+    // PART-036 (A3): la sonda cuenta mensajes, no coincidencias del selector.
+    let unir = r##"{"userMessage":{"selector":"[data-message-author-role=\"user\"], [data-user-message-bubble=\"true\"]","pick":"last"}}"##;
+    let anidar = r##"{"userMessage":{"selector":"[data-message-author-role=\"user\"] [dir=\"auto\"]","pick":"first"}}"##;
+    let chatgpt = r##"<div data-message-author-role="user"><div data-user-message-bubble="true">hola</div></div>"##;
+    let mistral = r##"<div data-message-author-role="user"><p dir="auto">uno</p><p dir="auto">dos</p></div>"##;
+    let cuentas = [
+        (unir, chatgpt.to_string(), "1,0", "unión (ChatGPT)"),
+        (anidar, mistral.to_string(), "1,0", "descendientes (Mistral)"),
+        (unir, chatgpt.repeat(2), "2,0", "dos mensajes (ChatGPT)"),
+        (anidar, mistral.repeat(2), "2,0", "dos mensajes (Mistral)"),
+    ];
+    for (spec, dom, esperado, caso) in cuentas {
+        let js = format!(
+            "(() => {{ const c = document.createElement('div'); c.innerHTML = {}; document.body.append(c); const r = {}; c.remove(); return r; }})()",
+            cadena_js(&dom),
+            crate::interfaz::script_de_la_sonda(spec)
+        );
+        let visto = en(i, "claude", &js).await.unwrap_or_default();
+        a.anotar(
+            visto.trim_matches('"') == esperado,
+            &format!("la sonda cuenta mensajes: {caso}"),
+            &format!("{visto}; esperado {esperado}"),
+        );
+    }
     Ok(())
 }
 

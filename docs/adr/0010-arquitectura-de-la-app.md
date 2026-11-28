@@ -43,3 +43,5 @@ El punto 7 queda así: «7. La app envía solo con confirmación (ADR-0011). pan
 ## Enmienda · 2026-11-22 · D36 y D38 · Corrige el punto 11
 
 El punto 11 queda así: «11. Nombre. La ventana, los accesos y la entrada de desinstalación dicen «ChatCouncil». El binario sigue llamándose ChatCouncilNueva.exe y la carpeta de instalación ChatCouncilNueva, para no tocar el actualizador ni las rutas (D38.2).»
+
+Enmienda del 2026-11-28 (D52.4): el binario pasa a llamarse ChatCouncil.exe y la carpeta de instalación ChatCouncil. El Release publica también el mismo instalador con el nombre ChatCouncilNueva-instalador.exe, para que las versiones instaladas se actualicen. Los datos y las sesiones siguen en %LOCALAPPDATA%\ChatCouncil.

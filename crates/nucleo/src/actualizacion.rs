@@ -6,7 +6,7 @@
 pub const RELEASE: &str =
     "https://github.com/juanfernandezzz/ChatCouncil/releases/download/chatcouncil-v1/";
 pub const ARCHIVO_VERSION: &str = "version.txt";
-pub const ARCHIVO_INSTALADOR: &str = "ChatCouncilNueva-instalador.exe";
+pub const ARCHIVO_INSTALADOR: &str = "ChatCouncil-instalador.exe";
 
 pub const BOTON_ACTUALIZAR: &str = "Actualizar";
 pub const BOTON_REINTENTAR: &str = "Reintentar";

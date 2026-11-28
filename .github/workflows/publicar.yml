@@ -41,7 +41,7 @@ jobs:
         shell: pwsh
         timeout-minutes: 15
         run: |
-          $exe = '.\target\release\ChatCouncilNueva.exe'
+          $exe = '.\target\release\ChatCouncil.exe'
           $salida = Join-Path $env:RUNNER_TEMP 'autoprueba.txt'
           $p = Start-Process $exe -ArgumentList '-autoprueba', $salida -PassThru -Wait
           if (Test-Path $salida) { Get-Content $salida -Encoding UTF8 }
@@ -66,30 +66,33 @@ jobs:
           # D31: versión exacta de Inno Setup (la 6.7.1 compiló el Release anterior).
           choco install innosetup --version 6.7.1 --no-progress -y
           $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
-          & $iscc "/DVersion=0.2.${{ github.run_number }}" instalador\ChatCouncilNueva.iss
+          & $iscc "/DVersion=0.2.${{ github.run_number }}" instalador\ChatCouncil.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item version.txt salida\version.txt
+          # D52.4: las versiones instaladas con el nombre viejo buscan este asset para actualizarse.
+          Copy-Item salida\ChatCouncil-instalador.exe salida\ChatCouncilNueva-instalador.exe
       # D31: sin pedirlo, el instalador no pone el acceso de depuración. Se prueba en una carpeta temporal y se desinstala.
       - name: prueba del componente opcional
         shell: pwsh
         timeout-minutes: 5
         run: |
           $dir = Join-Path $env:RUNNER_TEMP 'instalacion'
-          $p = Start-Process '.\salida\ChatCouncilNueva-instalador.exe' -ArgumentList '/SILENT', '/NORESTART', "/DIR=$dir" -PassThru
+          $p = Start-Process '.\salida\ChatCouncil-instalador.exe' -ArgumentList '/SILENT', '/NORESTART', "/DIR=$dir" -PassThru
           $p.WaitForExit()
-          Get-Process ChatCouncilNueva -ErrorAction SilentlyContinue | Stop-Process -Force
-          if (-not (Test-Path "$dir\ChatCouncilNueva.exe")) { throw 'El instalador no puso el ejecutable' }
+          Get-Process ChatCouncil -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not (Test-Path "$dir\ChatCouncil.exe")) { throw 'El instalador no puso el ejecutable' }
           if (Test-Path "$dir\abrir-depurando.bat") { throw 'El acceso de depuración se instaló sin pedirlo' }
           $u = Start-Process "$dir\unins000.exe" -ArgumentList '/SILENT' -PassThru
           $u.WaitForExit()
           Start-Sleep -Seconds 3
-          if (Test-Path "$dir\ChatCouncilNueva.exe") { throw 'El desinstalador no quitó el ejecutable' }
+          if (Test-Path "$dir\ChatCouncil.exe") { throw 'El desinstalador no quitó el ejecutable' }
           'Componente de depuración: no se instala por defecto; desinstalación limpia.'
       # D31: acción fijada por SHA de commit (v2.6.2).
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           tag_name: chatcouncil-v1
-          name: ChatCouncil (nueva) · instalador
+          name: ChatCouncil · instalador
           files: |
+            salida/ChatCouncil-instalador.exe
             salida/ChatCouncilNueva-instalador.exe
             salida/version.txt

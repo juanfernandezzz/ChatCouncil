@@ -214,7 +214,7 @@ mod pruebas {
     }
 
     fn iss() -> String {
-        leer("instalador/ChatCouncilNueva.iss")
+        leer("instalador/ChatCouncil.iss")
     }
 
     // ARR-011: sin administrador, en español, escritorio opcional, sin el reinicio de Inno y la app
@@ -236,7 +236,10 @@ mod pruebas {
         assert!(!s.contains("Name: \"{group}\\ChatCouncil (nueva)\""));
         // Una app nueva y la Unity conviven: ni el AppId ni la carpeta de la Unity.
         assert!(!s.contains("8C2B4E57"));
-        assert!(!s.contains("DefaultDirName={autopf}\\ChatCouncil\n"));
+        assert!(s.contains("DefaultDirName={autopf}\\ChatCouncil\n"));
+        // D52.4: la carpeta nueva se usa aunque exista la vieja, y la vieja se borra con espera.
+        assert!(s.contains("UsePreviousAppDir=no"));
+        assert!(s.contains("Name: \"{autopf}\\ChatCouncilNueva\"; Check: PuedeBorrarCarpetaVieja"));
     }
 
     // D38.2: el grupo de Inicio es el del nombre nuevo aunque haya una instalación anterior con otro grupo.
@@ -270,7 +273,7 @@ mod pruebas {
         assert!(s.contains("Source: \"abrir-depurando.bat\""));
         let b = leer("instalador/abrir-depurando.bat");
         assert!(b.contains("--remote-debugging-port=9222"));
-        assert!(b.contains("ChatCouncilNueva.exe"));
+        assert!(b.contains("ChatCouncil.exe"));
         assert!(
             b.is_ascii(),
             "un .bat con tildes se rompe en la consola de Windows"

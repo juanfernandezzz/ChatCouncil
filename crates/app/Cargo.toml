@@ -4,9 +4,9 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
-# ADR-0010, punto 11: se llama ChatCouncilNueva.exe hasta el relevo (E9).
+# ADR-0010, punto 11 y su enmienda de D52.4: el binario se llama ChatCouncil.exe.
 [[bin]]
-name = "ChatCouncilNueva"
+name = "ChatCouncil"
 path = "src/main.rs"
 
 [dependencies]

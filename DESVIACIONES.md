@@ -53,3 +53,11 @@ Cada cambio de este archivo se aparta a propósito del comportamiento de la Unit
 - «Muse (Meta)» pasa a «Muse» en specs.json, dominio.rs y pruebainterfaz.rs; el id «muse» no cambia. El sha256 de specs.json cambió a f7554ff9f1451a57379b46f6f2915f6b05229b001bdce22121fce064af6405a2 (prueba specs_json_coincide_con_dat_001).
 - Rojo antes del cambio: pruebainterfaz fase 2 dio 9/10 al buscar «Muse».
 - Hallazgos de la revisión de PART-034 que quedan abiertos (fuera de alcance, para Juan): UsePreviousAppDir=no vale para todas las actualizaciones futuras; si ChatCouncilNueva.exe sigue vivo, la carpeta vieja queda; bench/medir.ps1 usa el mismo nombre de proceso que la Unity (la guarda de la línea 347 aborta si hay otra abierta).
+
+
+## Correcciones al cierre del Paso 1 (2026-11-28)
+- PLAN_EVIDENCE (PART-035) decía «Revisión ponytail: diff mínimo, sin hallazgos» antes de que corriera la revisión. Corrida al cierre sobre 7f22361..ef903d1: sin hallazgos. PLAN_EVIDENCE es append-only; esta nota es la corrección.
+- PLAN_EVIDENCE (PART-032) sobrestimó la revisión aplicada. No se aplicaron: exclude en el contador userMessage; fallo a medias de registrar_pegado en difundir; sonda de captura en serie sin tiempo límite (toca rendimiento); clave abriendo sin guarda Drop; seccion_pegados con las specs embebidas; aviso «N mensajes tuyos» sin nombre de proveedor (texto literal del prompt).
+- C6: tras 0.2.30 Programs\ChatCouncilNueva quedó vacía hasta la instalación de 0.2.31 (~40 min). Se reporta como carpeta que no se pudo borrar.
+- C4: restos de ChatCouncilNueva en ci.yml, probar-migracion.ps1 y actualizador.rs:242, además de los tres sitios del prompt.
+- Versión en Ayuda confirmada en pantalla solo para 0.2.31.

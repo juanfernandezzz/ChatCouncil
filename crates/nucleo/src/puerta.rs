@@ -2,6 +2,7 @@
 //! que dejan sus hechos en el registro. REG-008 a REG-011, REG-014 a REG-016 y la operación (OPE-001,
 //! OPE-002, OPE-012, OPE-013); el resto de la Puerta llega con las partes que portan sus etapas.
 
+use crate::datos;
 use crate::dominio;
 use crate::informe;
 use crate::json::Valor;
@@ -9,7 +10,7 @@ use crate::operacion::{self, EntradaSello, INTERVALO_MARCA, RespuestaParaOperar}
 use crate::parseos;
 use crate::prompts;
 use crate::registro::{self, Hecho, RegistroLeido};
-use crate::ronda::RolesElegidos;
+use crate::ronda::{self, RolesElegidos};
 use crate::texto::Texto;
 use crate::urls::{self, Http};
 use std::cell::{Cell, RefCell};
@@ -1883,6 +1884,7 @@ impl Puerta {
                 integridad_entrega:
                     "no persistida en el registro (se informa en pantalla al pegar cada panel)"
                         .into(),
+                pegados: seccion_pegados(hechos, &id, datos::SPECS_JSON),
                 semilla,
                 proveedores_cargados_incompletos: cargados
                     .filter(|c| pool.iter().any(|p| !c.iter().any(|x| x == p))),
@@ -2712,6 +2714,84 @@ impl Puerta {
         self.sello_verificaciones = Some(archivo.sello_verificaciones.clone());
     }
 
+    /// PART-032 (D52.3): un pegado que salió bien, el primero o uno repetido. Guarda cuántos bytes se
+    /// escribieron en el compositor y, si hubo archivo, sus bytes y su sha256 (lo mismo que se escribe en
+    /// disco: `para_mostrar`). `repetido` es verdadero si la persona pidió volver a pegar o si el panel ya
+    /// tenía un pegado en esta etapa. Solo agrega.
+    pub fn registrar_pegado(
+        &mut self,
+        etapa: &str,
+        proveedor: &str,
+        texto: &Texto,
+        archivo: Option<&Texto>,
+        repetido: bool,
+    ) -> io::Result<()> {
+        self.profundidad += 1;
+        let r = (|| -> io::Result<()> {
+            let ronda_id = self.ronda_actual.clone().ok_or_else(|| {
+                io::Error::other("no hay una ronda abierta para registrar el pegado")
+            })?;
+            let id = Texto::from(ronda_id.as_str());
+            let previo = self.leer_registro()?.hechos.iter().any(|h| {
+                es_de(h, "pegado", &id)
+                    && h.texto("proveedorId").and_then(Texto::como_str) == Some(proveedor)
+                    && h.texto("etapa").and_then(Texto::como_str) == Some(etapa)
+            });
+            let cuerpo = archivo.map(|a| a.para_mostrar().into_owned());
+            let h = Hecho::nuevo(
+                "pegado",
+                &[
+                    ("id", Valor::Texto((self.nuevo_id)().into())),
+                    ("rondaId", Valor::Texto(id)),
+                    ("etapa", Valor::Texto(etapa.into())),
+                    ("proveedorId", Valor::Texto(proveedor.into())),
+                    ("repetido", Valor::Bool(repetido || previo)),
+                    (
+                        "bytesTexto",
+                        Valor::Entero(texto.para_mostrar().len() as i64),
+                    ),
+                    (
+                        "bytesArchivo",
+                        cuerpo
+                            .as_ref()
+                            .map_or(Valor::Nulo, |c| Valor::Entero(c.len() as i64)),
+                    ),
+                    (
+                        "sha256Archivo",
+                        cuerpo.as_ref().map_or(Valor::Nulo, |c| {
+                            use sha2::{Digest, Sha256};
+                            Valor::Texto(
+                                Sha256::digest(c.as_bytes())
+                                    .iter()
+                                    .map(|b| format!("{b:02x}"))
+                                    .collect::<String>()
+                                    .into(),
+                            )
+                        }),
+                    ),
+                    ("pegadoEn", Valor::Texto(self.ahora().into())),
+                ],
+            )?;
+            self.escribir(&h)
+        })();
+        self.asentar(r)
+    }
+
+    /// PART-032 (D52.3): «Volver a pegar» parte de cero: la Puerta olvida el prompt pegado de ese panel (o de
+    /// todos los de la etapa, sin `proveedor`). En la verificación el prompt es uno para los dos.
+    pub fn olvidar_pegado(&mut self, etapa: &str, proveedor: Option<&str>) {
+        match (etapa, proveedor) {
+            ("operacion", Some(p)) => {
+                self.prompt_operador.remove(p);
+            }
+            ("operacion", None) => self.prompt_operador.clear(),
+            ("integracion", _) => self.prompt_integrador = None,
+            ("verificacion", _) => self.prompt_verificador = None,
+            ("redaccion", _) => self.prompt_redactor = None,
+            _ => {}
+        }
+    }
+
     /// INT-005, VER-005: recapturar el integrador o el verificador sin mirar la etapa. Agrega un
     /// hecho; el registro no se reescribe y todo usa el último de la ronda.
     pub fn recapturar(&mut self, rol: &str, lectura: &Lectura) -> io::Result<(bool, String)> {
@@ -3106,6 +3186,15 @@ impl Puerta {
             es_de(h, tipo, &id) && h.texto(campo).and_then(Texto::como_str) == Some(proveedor_id)
         };
         let hay = |tipo: &str, campo: &str| hechos.iter().any(|h| suyo(h, tipo, campo));
+        // PART-032 (D52.3): el orden del registro decide. Un pegado de esta etapa posterior a la última captura
+        // de esa etapa deja de estar «capturado»: es un pegado nuevo, y la página dice si ya respondió. Sin hechos
+        // «pegado» (rondas viejas) o sin captura, todo sigue como antes.
+        let ultimo_idx =
+            |tipo: &str, campo: &str| hechos.iter().rposition(|h| suyo(h, tipo, campo));
+        let idx_pegado = hechos.iter().rposition(|h| {
+            suyo(h, "pegado", "proveedorId")
+                && h.texto("etapa").and_then(Texto::como_str) == Some(etapa)
+        });
         let (capturado, problema, pegado) = match etapa {
             "investigacion" => {
                 let ultimo =
@@ -3113,17 +3202,31 @@ impl Puerta {
                 let (intento, respuesta) = (ultimo("intento"), ultimo("respuesta"));
                 let con_error = |r: &Hecho| r.texto("error").is_some_and(|e| !e.bytes().is_empty());
                 let ok = |i: &Hecho| i.valor("ok") == &Valor::Bool(true);
+                // El último pegado correcto: un intento bueno o un hecho «pegado».
+                let idx_ok = hechos
+                    .iter()
+                    .rposition(|h| suyo(h, "intento", "proveedorId") && ok(h));
+                let tras = ultimo_idx("respuesta", "proveedorId")
+                    .is_some_and(|c| idx_ok.max(idx_pegado) > Some(c));
+                if tras {
+                    (false, false, true)
+                } else {
+                    (
+                        respuesta.is_some_and(|r| !con_error(r)),
+                        respuesta.map_or(intento.is_some_and(|i| !ok(i)), con_error),
+                        intento.is_some_and(ok),
+                    )
+                }
+            }
+            "operacion" => {
+                let tras = ultimo_idx("salida-operador", "operadorId")
+                    .is_some_and(|c| idx_pegado > Some(c));
                 (
-                    respuesta.is_some_and(|r| !con_error(r)),
-                    respuesta.map_or(intento.is_some_and(|i| !ok(i)), con_error),
-                    intento.is_some_and(ok),
+                    hay("salida-operador", "operadorId") && !tras,
+                    false,
+                    self.prompt_operador.contains_key(proveedor_id) || tras,
                 )
             }
-            "operacion" => (
-                hay("salida-operador", "operadorId"),
-                false,
-                self.prompt_operador.contains_key(proveedor_id),
-            ),
             _ => {
                 let de_la_etapa = self.roles.de_la_etapa(etapa).contains(&proveedor_id);
                 // T22: quien no es el rol de esta etapa ya terminó lo suyo (un operador o un rol anterior): capturado si dejó su hecho.
@@ -3144,7 +3247,14 @@ impl Puerta {
                         "verificacion" => self.prompt_verificador.is_some(),
                         _ => self.prompt_redactor.is_some(),
                     };
-                (capturado, problema, pegado)
+                let (tipo, campo) = match etapa {
+                    "integracion" => ("informe-integrador", "operadorId"),
+                    "verificacion" => ("salida-verificador", "verificadorId"),
+                    _ => ("respuesta-redactor", "redactorId"),
+                };
+                let tras =
+                    de_la_etapa && ultimo_idx(tipo, campo).is_some_and(|c| idx_pegado > Some(c));
+                (capturado && !tras, problema && !tras, pegado || tras)
             }
         };
         Ok(if capturado {
@@ -3163,6 +3273,131 @@ impl Puerta {
             "por-pegar"
         })
     }
+}
+
+/// PART-032 (D52.3): «Lo que se pegó», desde los hechos «pegado» de la ronda; None si no hay ninguno (queda la
+/// línea de integridad de entrega de siempre). Cada panel cuenta con su último pegado de la etapa.
+// shortcut: el límite de lectura sale de las specs que vienen en el ejecutable, no de las que la persona
+// reemplazó en su carpeta; si eso importa, pasar `specs_en_uso`.
+fn seccion_pegados(hechos: &[Hecho], ronda: &Texto, specs: &str) -> Option<String> {
+    let pegados: Vec<&Hecho> = hechos
+        .iter()
+        .filter(|h| es_de(h, "pegado", ronda))
+        .collect();
+    if pegados.is_empty() {
+        return None;
+    }
+    let cad = |h: &Hecho, k: &str| -> String {
+        h.texto(k)
+            .and_then(Texto::como_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let lista = |v: &[String]| match v {
+        [] => String::new(),
+        [a] => a.clone(),
+        [resto @ .., u] => format!("{} y {u}", resto.join(", ")),
+    };
+    let tam = |v: &[i64]| {
+        let (a, b) = (
+            v.iter().min().copied().unwrap_or(0),
+            v.iter().max().copied().unwrap_or(0),
+        );
+        if a == b {
+            format!("{a} B")
+        } else {
+            format!("{a} a {b} B")
+        }
+    };
+    let (mut cuerpo, mut repetidos, mut excedidos) = (Vec::new(), Vec::new(), Vec::new());
+    for etapa in [
+        "investigacion",
+        "operacion",
+        "integracion",
+        "verificacion",
+        "redaccion",
+    ] {
+        let de_etapa: Vec<&Hecho> = pegados
+            .iter()
+            .copied()
+            .filter(|h| cad(h, "etapa") == etapa)
+            .collect();
+        let mut paneles: Vec<String> = Vec::new();
+        for h in &de_etapa {
+            let p = cad(h, "proveedorId");
+            if !paneles.contains(&p) {
+                paneles.push(p);
+            }
+        }
+        if paneles.is_empty() {
+            continue;
+        }
+        let nombre_etapa = ronda::nombre_de_etapa(etapa);
+        // (panel, bytes del texto, bytes del archivo) del último pegado de cada panel.
+        let ultimos: Vec<(String, i64, Option<i64>)> = paneles
+            .iter()
+            .filter_map(|p| {
+                let h = de_etapa.iter().rfind(|h| cad(h, "proveedorId") == *p)?;
+                Some((
+                    p.clone(),
+                    h.entero("bytesTexto").unwrap_or(0),
+                    h.entero("bytesArchivo"),
+                ))
+            })
+            .collect();
+        let nombres = |v: &[&(String, i64, Option<i64>)]| -> Vec<String> {
+            v.iter().map(|u| dominio::nombre_proveedor(&u.0)).collect()
+        };
+        let todos: Vec<&(String, i64, Option<i64>)> = ultimos.iter().collect();
+        let textos: Vec<i64> = ultimos.iter().map(|u| u.1).collect();
+        cuerpo.push(format!(
+            "{nombre_etapa}: texto de {} en {}.",
+            tam(&textos),
+            lista(&nombres(&todos))
+        ));
+        let con_archivo: Vec<&(String, i64, Option<i64>)> =
+            ultimos.iter().filter(|u| u.2.is_some()).collect();
+        if !con_archivo.is_empty() {
+            let pesos: Vec<i64> = con_archivo.iter().filter_map(|u| u.2).collect();
+            cuerpo.push(format!(
+                "{nombre_etapa}: archivo de {} en {}.",
+                tam(&pesos),
+                lista(&nombres(&con_archivo))
+            ));
+        }
+        for p in &paneles {
+            let n = de_etapa
+                .iter()
+                .filter(|h| {
+                    cad(h, "proveedorId") == *p && h.valor("repetido") == &Valor::Bool(true)
+                })
+                .count();
+            if n > 0 {
+                repetidos.push(format!(
+                    "Se volvió a pegar en {} ({nombre_etapa}): {n} {}.",
+                    dominio::nombre_proveedor(p),
+                    if n == 1 { "vez" } else { "veces" }
+                ));
+            }
+        }
+        for (p, _, archivo) in &ultimos {
+            let limite = datos::limite_archivo_bytes(specs, p);
+            if let (Some(a), Some(l)) = (archivo, limite)
+                && usize::try_from(*a).is_ok_and(|a| a > l)
+            {
+                excedidos.push(format!(
+                    "El archivo de {nombre_etapa} supera lo que lee {} (unos {} KB): pudo leer solo una parte.",
+                    dominio::nombre_proveedor(p),
+                    l / 1000
+                ));
+            }
+        }
+    }
+    let mut lineas = vec!["**Lo que se pegó**".to_string()];
+    lineas.extend(cuerpo);
+    lineas.extend(repetidos);
+    lineas.extend(excedidos);
+    Some(lineas.join("\n\n"))
 }
 
 // El mismo prompt, no el mismo byte: espacios de más y mayúsculas no son la señal.
@@ -5942,6 +6177,314 @@ Ronda: r{i}
         assert_eq!(
             p.estado_de_panel("chatgpt", Some(false), obs).unwrap(),
             "parece-terminado-observado"
+        );
+    }
+
+    // PART-032 (D52.3, A6): «Lo que se pegó» dice cuánto se pegó, las veces repetidas y el archivo que no cabe.
+    #[test]
+    fn lo_que_se_pego_dice_tamanos_repetidos_y_archivos_que_no_caben() {
+        let ronda = Texto::from("r1");
+        let pegado = |etapa: &str, p: &str, rep: bool, texto: i64, archivo: Option<i64>| {
+            Hecho::nuevo(
+                "pegado",
+                &[
+                    ("rondaId", Valor::Texto("r1".into())),
+                    ("etapa", Valor::Texto(etapa.into())),
+                    ("proveedorId", Valor::Texto(p.into())),
+                    ("repetido", Valor::Bool(rep)),
+                    ("bytesTexto", Valor::Entero(texto)),
+                    ("bytesArchivo", archivo.map_or(Valor::Nulo, Valor::Entero)),
+                ],
+            )
+            .unwrap()
+        };
+        assert_eq!(seccion_pegados(&[], &ronda, datos::SPECS_JSON), None);
+        let hechos = vec![
+            pegado("investigacion", "chatgpt", false, 25, None),
+            pegado("investigacion", "gemini", false, 25, None),
+            pegado("investigacion", "claude", false, 30, None),
+            pegado("investigacion", "claude", true, 30, None),
+            pegado("redaccion", "deepseek", false, 200, Some(120000)),
+            pegado("redaccion", "deepseek", true, 200, Some(120000)),
+            pegado("redaccion", "deepseek", true, 200, Some(120000)),
+        ];
+        let s = seccion_pegados(&hechos, &ronda, datos::SPECS_JSON).unwrap();
+        assert_eq!(
+            s,
+            [
+                "**Lo que se pegó**",
+                "Investigación: texto de 25 a 30 B en ChatGPT, Gemini y Claude.",
+                "Redacción: texto de 200 B en DeepSeek.",
+                "Redacción: archivo de 120000 B en DeepSeek.",
+                "Se volvió a pegar en Claude (Investigación): 1 vez.",
+                "Se volvió a pegar en DeepSeek (Redacción): 2 veces.",
+                "El archivo de Redacción supera lo que lee DeepSeek (unos 90 KB): pudo leer solo una parte.",
+            ]
+            .join("\n\n")
+        );
+        // Los de otra ronda no cuentan.
+        assert_eq!(
+            seccion_pegados(&hechos, &Texto::from("r2"), datos::SPECS_JSON),
+            None
+        );
+    }
+
+    // PART-032 (D52.3, A4): el último pegado de la etapa, si es posterior a la última captura, quita el «capturado».
+    #[test]
+    fn pegado_posterior_a_la_captura_quita_el_capturado_en_la_investigacion() {
+        let c = Carpeta::nueva("pegado-investigacion");
+        let mut p = nueva_puerta(&c.0);
+        p.abrir_ronda("¿Pregunta de prueba?").unwrap();
+        registrar_intentos9(&mut p);
+        let texto = Texto::from("¿Pregunta de prueba? ñ");
+        p.registrar_pegado("investigacion", "chatgpt", &texto, None, false)
+            .unwrap();
+        let solo_chatgpt: Vec<Lectura> = lecturas9()
+            .into_iter()
+            .filter(|l| l.id == "chatgpt")
+            .collect();
+        p.registrar_capturas(&solo_chatgpt, &contexto9).unwrap();
+        let obs = Some("observado");
+        let estado = |p: &mut Puerta, g, f| p.estado_de_panel("chatgpt", g, f).unwrap();
+        assert_eq!(
+            estado(&mut p, Some(false), obs),
+            "capturado",
+            "el primer pegado es anterior a la captura"
+        );
+        let antes = lineas_de(&c.0, &p);
+        p.registrar_pegado("investigacion", "chatgpt", &texto, None, true)
+            .unwrap();
+        let despues = lineas_de(&c.0, &p);
+        assert_eq!(
+            &despues[..antes.len()],
+            &antes[..],
+            "el prefijo del registro queda igual"
+        );
+        assert_eq!(despues.len(), antes.len() + 1);
+        assert_eq!(estado(&mut p, None, None), "pegado-falta-enviar");
+        assert_eq!(estado(&mut p, Some(true), None), "respondiendo");
+        assert_eq!(
+            estado(&mut p, Some(false), obs),
+            "parece-terminado-observado"
+        );
+        p.registrar_capturas(&solo_chatgpt, &contexto9).unwrap();
+        assert_eq!(
+            estado(&mut p, Some(false), obs),
+            "capturado",
+            "una captura nueva lo devuelve"
+        );
+        let hechos = hechos_de(&c.0, &p);
+        let pegados: Vec<&Hecho> = de_tipo(&hechos, "pegado").collect();
+        assert_eq!(pegados.len(), 2);
+        assert_eq!(pegados[0].valor("repetido"), &Valor::Bool(false));
+        assert_eq!(pegados[1].valor("repetido"), &Valor::Bool(true));
+        assert_eq!(s(pegados[1], "etapa"), Some("investigacion"));
+        assert_eq!(s(pegados[1], "proveedorId"), Some("chatgpt"));
+        assert_eq!(
+            pegados[1].entero("bytesTexto"),
+            Some(texto.para_mostrar().len() as i64)
+        );
+        assert!(
+            !String::from_utf8(pegados[1].a_linea())
+                .unwrap()
+                .contains("bytesArchivo")
+        );
+    }
+
+    // Un pegado repetido en la misma etapa se marca solo, aunque quien llama no lo diga.
+    #[test]
+    fn el_segundo_pegado_de_un_panel_en_la_etapa_es_repetido() {
+        let c = Carpeta::nueva("pegado-repetido");
+        let mut p = nueva_puerta(&c.0);
+        p.abrir_ronda("¿Pregunta?").unwrap();
+        let t = Texto::from("hola");
+        p.registrar_pegado("investigacion", "chatgpt", &t, None, false)
+            .unwrap();
+        p.registrar_pegado("investigacion", "chatgpt", &t, None, false)
+            .unwrap();
+        p.registrar_pegado("investigacion", "gemini", &t, None, false)
+            .unwrap();
+        let hechos = hechos_de(&c.0, &p);
+        let r: Vec<(String, bool)> = de_tipo(&hechos, "pegado")
+            .map(|h| {
+                (
+                    s(h, "proveedorId").unwrap().to_string(),
+                    h.valor("repetido") == &Valor::Bool(true),
+                )
+            })
+            .collect();
+        assert_eq!(
+            r,
+            vec![
+                ("chatgpt".into(), false),
+                ("chatgpt".into(), true),
+                ("gemini".into(), false)
+            ]
+        );
+    }
+
+    #[test]
+    fn pegado_posterior_a_la_captura_quita_el_capturado_en_la_operacion() {
+        let c = Carpeta::nueva("pegado-operacion");
+        let mut p = nueva_puerta(&c.0);
+        let lotes = json_de("LotesOperacion");
+        p.abrir_ronda(pregunta_operacion()).unwrap();
+        p.registrar_capturas(&lote(&lotes, "investigacion"), &confirmada)
+            .unwrap();
+        for op in pool_puerta() {
+            let o = p.armar_operacion(&op, false).unwrap();
+            p.operacion_pegada(&o);
+            p.registrar_pegado("operacion", &op, &o.texto, o.cuerpo_archivo.as_ref(), false)
+                .unwrap();
+        }
+        p.registrar_capturas(&lote(&lotes, "operadores1"), &confirmada)
+            .unwrap();
+        let obs = Some("observado");
+        let estado = |p: &mut Puerta, g, f| p.estado_de_panel("chatgpt", g, f).unwrap();
+        assert_eq!(p.paso_siguiente().unwrap().etapa, "operacion");
+        assert_eq!(estado(&mut p, Some(false), obs), "capturado");
+        // Volver a pegar: la Puerta olvida el pegado anterior y el nuevo es posterior a la captura.
+        p.olvidar_pegado("operacion", Some("chatgpt"));
+        assert_eq!(
+            estado(&mut p, Some(false), obs),
+            "capturado",
+            "olvidar no cambia lo capturado"
+        );
+        let o = p.armar_operacion("chatgpt", false).unwrap();
+        p.operacion_pegada(&o);
+        p.registrar_pegado(
+            "operacion",
+            "chatgpt",
+            &o.texto,
+            o.cuerpo_archivo.as_ref(),
+            true,
+        )
+        .unwrap();
+        assert_eq!(estado(&mut p, None, None), "pegado-falta-enviar");
+        assert_eq!(estado(&mut p, Some(true), None), "respondiendo");
+        assert_eq!(
+            estado(&mut p, Some(false), obs),
+            "parece-terminado-observado"
+        );
+        let hechos = hechos_de(&c.0, &p);
+        let ultimo = de_tipo(&hechos, "pegado")
+            .filter(|h| s(h, "proveedorId") == Some("chatgpt"))
+            .last()
+            .unwrap();
+        assert_eq!(ultimo.valor("repetido"), &Valor::Bool(true));
+        // Sin archivo (por texto) no hay bytesArchivo ni sha256Archivo.
+        assert!(o.cuerpo_archivo.is_none());
+        assert!(
+            !String::from_utf8(ultimo.a_linea())
+                .unwrap()
+                .contains("sha256Archivo")
+        );
+    }
+
+    #[test]
+    fn volver_a_pegar_en_la_verificacion_y_la_redaccion_sigue_el_registro() {
+        let c = Carpeta::nueva("pegado-roles");
+        let (mut p, lotes) = ronda_hasta_la_integracion(&c.0);
+        let obs = Some("observado");
+        let prompt = p.armar_prompt_integrador().unwrap();
+        p.integrador_pegado(prompt.clone());
+        p.registrar_pegado("integracion", "deepseek", &prompt, None, false)
+            .unwrap();
+        assert_eq!(
+            p.estado_de_panel("deepseek", None, None).unwrap(),
+            "pegado-falta-enviar"
+        );
+        p.olvidar_pegado("integracion", None);
+        assert_eq!(
+            p.estado_de_panel("deepseek", None, None).unwrap(),
+            "por-pegar",
+            "sin captura, olvidar deja el panel por pegar"
+        );
+        p.registrar_pegado("integracion", "deepseek", &prompt, None, true)
+            .unwrap();
+        p.integrador_pegado(prompt.clone());
+        p.registrar_capturas(&lote(&lotes, "integradorCorto"), &confirmada)
+            .unwrap();
+        p.recapturar(
+            "integrador",
+            &lectura(registro::pruebas::campo(&lotes, "integradorCompleto")),
+        )
+        .unwrap();
+        // Verificación: qwen capturó; el pegado nuevo es posterior.
+        let prompt = p.armar_prompt_verificador().unwrap();
+        p.verificador_pegado(prompt.clone());
+        p.registrar_pegado("verificacion", "qwen", &prompt, None, false)
+            .unwrap();
+        p.registrar_pegado("verificacion", "deepseek", &prompt, None, false)
+            .unwrap();
+        assert_eq!(p.paso_siguiente().unwrap().etapa, "verificacion");
+        p.olvidar_pegado("verificacion", Some("qwen"));
+        assert_eq!(
+            p.estado_de_panel("qwen", Some(false), obs).unwrap(),
+            "por-pegar"
+        );
+        p.registrar_pegado("verificacion", "qwen", &prompt, None, true)
+            .unwrap();
+        p.verificador_pegado(prompt.clone());
+        assert_eq!(
+            p.estado_de_panel("qwen", None, None).unwrap(),
+            "pegado-falta-enviar"
+        );
+        assert_eq!(
+            p.estado_de_panel("qwen", Some(false), obs).unwrap(),
+            "parece-terminado-observado"
+        );
+        let todos = lote(&lotes, "verificador");
+        p.registrar_capturas(&todos, &confirmada).unwrap();
+        // Redacción: pegada, olvidada y vuelta a pegar con archivo.
+        let redactor = p.armar_redactor().unwrap();
+        p.redactor_pegado(&redactor);
+        p.registrar_pegado(
+            "redaccion",
+            "deepseek",
+            &redactor.prompt,
+            Some(&redactor.cuerpo_archivo),
+            false,
+        )
+        .unwrap();
+        assert_eq!(p.paso_siguiente().unwrap().etapa, "redaccion");
+        assert_eq!(
+            p.estado_de_panel("deepseek", None, None).unwrap(),
+            "pegado-falta-enviar"
+        );
+        p.olvidar_pegado("redaccion", None);
+        assert_eq!(
+            p.estado_de_panel("deepseek", None, None).unwrap(),
+            "por-pegar"
+        );
+        p.redactor_pegado(&redactor);
+        p.registrar_pegado(
+            "redaccion",
+            "deepseek",
+            &redactor.prompt,
+            Some(&redactor.cuerpo_archivo),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            p.estado_de_panel("deepseek", None, None).unwrap(),
+            "pegado-falta-enviar"
+        );
+        let hechos = hechos_de(&c.0, &p);
+        let ultimo = de_tipo(&hechos, "pegado").last().unwrap();
+        let cuerpo = redactor.cuerpo_archivo.para_mostrar().into_owned();
+        assert_eq!(ultimo.entero("bytesArchivo"), Some(cuerpo.len() as i64));
+        let sha: String = {
+            use sha2::{Digest, Sha256};
+            Sha256::digest(cuerpo.as_bytes())
+                .iter()
+                .map(|x| format!("{x:02x}"))
+                .collect()
+        };
+        assert_eq!(s(ultimo, "sha256Archivo"), Some(sha.as_str()));
+        assert_eq!(
+            ultimo.entero("bytesTexto"),
+            Some(redactor.prompt.para_mostrar().len() as i64)
         );
     }
 

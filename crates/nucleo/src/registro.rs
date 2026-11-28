@@ -284,6 +284,22 @@ const TIPOS: &[(&str, &[Campo])] = &[
             c("registradoEn", Texto),
         ],
     ),
+    // PART-032 (D52.3): cada pegado que salió bien, de cualquier etapa; lo que se escribió y el archivo, no su contenido.
+    (
+        "pegado",
+        &[
+            c("esquema", Esquema),
+            c("id", Texto),
+            c("rondaId", Texto),
+            c("etapa", Texto),
+            c("proveedorId", Texto),
+            c("repetido", Bool),
+            c("bytesTexto", Entero),
+            omitible("bytesArchivo", EnteroNulo),
+            omitible("sha256Archivo", Texto),
+            c("pegadoEn", Texto),
+        ],
+    ),
 ];
 
 /// Un hecho del registro: su tipo y un valor por campo, en el orden del esquema.

@@ -183,3 +183,11 @@ Esta sección corrige la de abajo (E1/E2 ya se resolvieron con «E1B E2A»). Lot
   2. Botón «Mostrar los paneles de los roles» en cualquier etapa y un clic en un proveedor lo abre (hoy es doble clic y no selecciona): ver memoria mostrar-paneles-roles-pendiente.md; borrar esa memoria al terminarlo.
   3. Muse (Meta) como operador: investigar benchmarks públicos de sus capacidades y decidir con evidencia si conviene como integrador o como redactor (o ninguno). Recomendación y fuentes van a Juan en Serie E antes de implementar. Hoy Muse es solo panel (enLaRonda:false).
 - Con esa versión instalada se termina la ronda CC-2 desde la etapa 3: 3.5 Operación a 3.10.
+
+
+## PART-032 y PART-033 (2026-11-28, rama part-032)
+
+- Hecho: registro «pegado» y «aviso-captura»; «Volver a pegar» en los menús (panel y angosta) con sus diálogos; «Lo que se pegó» y avisos de captura en «Condiciones de la ronda»; prompts del integrador y redactor piden el texto en el chat.
+- Gates: fmt, clippy -D warnings, test (nucleo 216), autoprueba 67/67, pruebainterfaz 16/10/13, pruebaronda 108/108. pagina.js igual (sha256 39b048ce…).
+- Pendiente de verificar con ratón real (agent-desktop): clic en un rol sin página y capturas de «Volver a pegar». No medido: bytes del integrador y redactor de la ronda 0e319605….
+- Detalle de decisiones: DESVIACIONES.md, sección PART-032 y PART-033.

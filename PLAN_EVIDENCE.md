@@ -813,3 +813,17 @@ Build del lote: guarda con prefijo de idioma, /changelog, /docs y /help (copia d
 
 Artifacts:
 - cargo test --workspace
+
+### PART-032
+
+Registro «pegado», «Volver a pegar» en menús y diálogos, «Lo que se pegó» en el informe. Rojo: pruebas de puerta fallaron antes de implementar. Verde: nucleo 216, pruebaronda 108/108, autoprueba 67/67, pruebainterfaz 16/10/13, clippy y fmt limpios. Revisiones ecc:rust-reviewer y ponytail: hallazgos aplicados salvo exclude de userMessage (documentado). Sin envíos.
+
+Artifacts:
+- cargo test --workspace; autoprueba 67/67; pruebainterfaz 16/10/13; pruebaronda 108/108; clippy -D warnings; fmt --check
+
+### PART-033
+
+Prompts del integrador y redactor piden texto en el chat (vectores y sha256 nuevos); la captura avisa más de un mensaje de la persona y enlaces de descarga (hecho aviso-captura, panel e informe). Rojo: pruebaronda 107/108 sin cablear la interfaz; verde 108/108. pagina.js sin cambio.
+
+Artifacts:
+- cargo test --workspace; autoprueba 67/67; pruebainterfaz 16/10/13; pruebaronda 108/108; clippy -D warnings; fmt --check

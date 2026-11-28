@@ -160,15 +160,15 @@
   - Outcome: Guarda de anonimato, botón de roles, Muse como integrador y fin de CC-2
   - Evidence: recorded
 
-- [ ] Part 32: Read `plans/PART32_PLAN.ai.md`
+- [x] Part 32: Read `plans/PART32_PLAN.ai.md`
   - Scenario: SCN-032
   - Outcome: Volver a pegar en «Más…», pegados en el registro y arrastres de PART-031
-  - Evidence: pending
+  - Evidence: recorded
 
-- [ ] Part 33: Read `plans/PART33_PLAN.ai.md`
+- [x] Part 33: Read `plans/PART33_PLAN.ai.md`
   - Scenario: SCN-033
   - Outcome: El integrador y el redactor entregan texto, y la captura avisa más de un mensaje de la persona o un enlace de descarga
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 34: Read `plans/PART34_PLAN.ai.md`
   - Scenario: SCN-034

@@ -391,6 +391,49 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
             estados_en_la_lista(i)
         ),
     );
+    // PART-032 (A5): «Volver a pegar en este panel…» en ChatGPT, con el pegado hecho y sin enviar nada.
+    i.seleccionar("chatgpt");
+    let en_panel = renglon(i, "panel", "Volver a pegar en este panel…", false);
+    let en_etapa = renglon(i, "panel", "Volver a pegar toda la etapa…", false);
+    let en_angosta = renglon(i, "angosta", "Volver a pegar en este panel…", false);
+    let envios_antes = envios(i, "chatgpt").await.0;
+    renglon(i, "panel", "Volver a pegar en este panel…", true);
+    hasta(5, || ui.get_capa_abierta()).await;
+    let (titulo, cuerpo, boton, foco) = (
+        ui.get_dialogo_titulo().to_string(),
+        ui.get_dialogo_texto().to_string(),
+        ui.get_dialogo_aceptar_texto().to_string(),
+        ui.get_dialogo_foco_en_cancelar(),
+    );
+    ui.invoke_dialogo_aceptar();
+    hasta(60, || resultado().starts_with("Pegado otra vez")).await;
+    let h = hechos(i).await;
+    let de_chatgpt: Vec<bool> = de_tipo(&h, "pegado")
+        .into_iter()
+        .filter(|x| texto_de(x, "proveedorId").as_deref() == Some("chatgpt"))
+        .map(|x| x.valor("repetido") == &Valor::Bool(true))
+        .collect();
+    a.anotar(
+        en_panel == Some(true)
+            && en_etapa == Some(true)
+            && en_angosta == Some(true)
+            && titulo == "Volver a pegar en ChatGPT"
+            && cuerpo == "Se abre una conversación nueva en ChatGPT y se pega lo mismo que pide la etapa Investigación. No se envía nada: después pulsas «Enviar a todos», como siempre."
+            && boton == "Volver a pegar"
+            && !foco
+            && resultado() == "Pegado otra vez en ChatGPT. Revísalo y envíalo."
+            && de_chatgpt == [false, true]
+            && compositor(i, "chatgpt").await == LA_PREGUNTA
+            && envios(i, "chatgpt").await.0 == envios_antes
+            && estado_en_la_lista(i, "chatgpt") == "Pegado, falta que envíes",
+        "volver a pegar en un panel",
+        &format!(
+            "renglones {en_panel:?}/{en_etapa:?}/{en_angosta:?}; \"{titulo}\"; foco en Cancelar {foco}; \"{}\"; pegados de ChatGPT (repetido) {de_chatgpt:?}; envíos {} → {}",
+            resultado(),
+            envios_antes,
+            envios(i, "chatgpt").await.0
+        ),
+    );
     // INV-IFZ-006: cada fila trae el símbolo y la palabra, y el símbolo es el de su estado.
     let sin_par: Vec<String> = i
         .filas

@@ -187,6 +187,8 @@ pub struct Puerta {
     roles: RolesElegidos,
     /// El pool de operadores en su orden fijo, de donde salen los P#.
     pool: Vec<String>,
+    /// PART-036 (A6): las specs en uso (las del ejecutable o las de la carpeta de datos), para el informe.
+    specs: String,
     indice_ronda: i64,
     conversacion_actual: Option<String>,
     ronda_actual: Option<String>,
@@ -700,6 +702,7 @@ impl Puerta {
             activos,
             roles,
             pool,
+            specs: datos::SPECS_JSON.to_string(),
             indice_ronda: 0,
             conversacion_actual: None,
             ronda_actual: None,
@@ -1884,7 +1887,7 @@ impl Puerta {
                 integridad_entrega:
                     "no persistida en el registro (se informa en pantalla al pegar cada panel)"
                         .into(),
-                pegados: seccion_pegados(hechos, &id, datos::SPECS_JSON),
+                pegados: self.pegados_del_informe(hechos, &id),
                 avisos_captura: seccion_avisos(hechos, &id),
                 semilla,
                 proveedores_cargados_incompletos: cargados
@@ -2715,6 +2718,32 @@ impl Puerta {
         self.sello_verificaciones = Some(archivo.sello_verificaciones.clone());
     }
 
+    /// PART-036 (A6): las specs que usa la app (la carpeta de datos puede reemplazar las del ejecutable).
+    pub fn usar_specs(&mut self, specs: String) {
+        self.specs = specs;
+    }
+
+    /// PART-036 (A6): «Lo que se pegó» del informe, con las specs en uso.
+    fn pegados_del_informe(&self, hechos: &[Hecho], ronda: &Texto) -> Option<String> {
+        seccion_pegados(hechos, ronda, &self.specs)
+    }
+
+    /// PART-036 (A5): anota el pegado de la pregunta de cada panel. Devuelve (panel, error) de los que no
+    /// quedaron anotados.
+    pub fn registrar_pegados_de_la_pregunta(
+        &mut self,
+        ids: &[&str],
+        texto: &Texto,
+    ) -> Vec<(String, String)> {
+        let mut fallos = Vec::new();
+        for id in ids {
+            if let Err(e) = self.registrar_pegado("investigacion", id, texto, None, false) {
+                fallos.push((id.to_string(), e.to_string()));
+            }
+        }
+        fallos
+    }
+
     /// PART-032 (D52.3): un pegado que salió bien, el primero o uno repetido. Guarda cuántos bytes se
     /// escribieron en el compositor y, si hubo archivo, sus bytes y su sha256 (lo mismo que se escribe en
     /// disco: `para_mostrar`). `repetido` es verdadero si la persona pidió volver a pegar o si el panel ya
@@ -3378,8 +3407,6 @@ fn seccion_avisos(hechos: &[Hecho], ronda: &Texto) -> Vec<String> {
 
 /// PART-032 (D52.3): «Lo que se pegó», desde los hechos «pegado» de la ronda; None si no hay ninguno (queda la
 /// línea de integridad de entrega de siempre). Cada panel cuenta con su último pegado de la etapa.
-// shortcut: el límite de lectura sale de las specs que vienen en el ejecutable, no de las que la persona
-// reemplazó en su carpeta; si eso importa, pasar `specs_en_uso`.
 fn seccion_pegados(hechos: &[Hecho], ronda: &Texto, specs: &str) -> Option<String> {
     let pegados: Vec<&Hecho> = hechos
         .iter()
@@ -6372,6 +6399,71 @@ Ronda: r{i}
             seccion_pegados(&hechos, &Texto::from("r2"), datos::SPECS_JSON),
             None
         );
+    }
+
+    // PART-036 (A5): un pegado que no se anota no corta a los demás.
+    #[test]
+    fn un_pegado_que_no_se_anota_no_corta_a_los_demas() {
+        let c = Carpeta::nueva("pegados-sin-anotar");
+        let mut p = nueva_puerta(&c.0);
+        p.abrir_ronda("¿Pregunta de prueba?").unwrap();
+        registrar_intentos9(&mut p);
+        let ruta = registro::ruta_archivo(&c.0, p.conversacion_actual().unwrap());
+        // El segundo pegado encuentra el registro de solo lectura; el tercero, ya no.
+        let mut llamadas = 0u64;
+        p.nuevo_id = Box::new(move || {
+            llamadas += 1;
+            let mut permisos = fs::metadata(&ruta).unwrap().permissions();
+            permisos.set_readonly(llamadas == 2);
+            fs::set_permissions(&ruta, permisos).unwrap();
+            format!("00000000-0000-4000-8000-{:012}", 900 + llamadas)
+        });
+        let texto = Texto::from("¿Pregunta de prueba? ñ");
+        let fallos = p.registrar_pegados_de_la_pregunta(&["chatgpt", "gemini", "claude"], &texto);
+        assert_eq!(fallos.len(), 1, "falla solo el segundo: {fallos:?}");
+        assert_eq!(fallos[0].0, "gemini");
+        let anotados: Vec<String> = hechos_de(&c.0, &p)
+            .iter()
+            .filter(|h| h.tipo() == "pegado")
+            .filter_map(|h| h.texto("proveedorId").and_then(Texto::como_str))
+            .map(String::from)
+            .collect();
+        assert_eq!(anotados, ["chatgpt", "claude"]);
+    }
+
+    // PART-036 (A6): «Lo que se pegó» usa las specs en uso, no las del ejecutable.
+    #[test]
+    fn lo_que_se_pego_usa_las_specs_en_uso() {
+        let c = Carpeta::nueva("pegados-specs-en-uso");
+        let mut p = nueva_puerta(&c.0);
+        let ronda = Texto::from("r1");
+        let pegado = Hecho::nuevo(
+            "pegado",
+            &[
+                ("id", Valor::Texto("x".into())),
+                ("rondaId", Valor::Texto(ronda.clone())),
+                ("etapa", Valor::Texto("redaccion".into())),
+                ("proveedorId", Valor::Texto("deepseek".into())),
+                ("repetido", Valor::Bool(false)),
+                ("bytesTexto", Valor::Entero(200)),
+                ("bytesArchivo", Valor::Entero(120000)),
+            ],
+        )
+        .unwrap();
+        let con = |p: &Puerta| p.pegados_del_informe(&[pegado.clone()], &ronda).unwrap();
+        assert!(con(&p).contains("(unos 90 KB)"), "{}", con(&p));
+        let otras = datos::SPECS_JSON.replacen(
+            "\"limiteArchivoBytes\": 90000",
+            "\"limiteArchivoBytes\": 50000",
+            1,
+        );
+        assert_ne!(
+            otras,
+            datos::SPECS_JSON,
+            "la spec de deepseek trae su límite"
+        );
+        p.usar_specs(otras);
+        assert!(con(&p).contains("(unos 50 KB)"), "{}", con(&p));
     }
 
     // PART-032 (D52.3, A4): el último pegado de la etapa, si es posterior a la última captura, quita el «capturado».

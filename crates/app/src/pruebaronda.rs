@@ -1073,7 +1073,12 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
     let mistral = r##"<div data-message-author-role="user"><p dir="auto">uno</p><p dir="auto">dos</p></div>"##;
     let cuentas = [
         (unir, chatgpt.to_string(), "1,0", "unión (ChatGPT)"),
-        (anidar, mistral.to_string(), "1,0", "descendientes (Mistral)"),
+        (
+            anidar,
+            mistral.to_string(),
+            "1,0",
+            "descendientes (Mistral)",
+        ),
         (unir, chatgpt.repeat(2), "2,0", "dos mensajes (ChatGPT)"),
         (anidar, mistral.repeat(2), "2,0", "dos mensajes (Mistral)"),
     ];

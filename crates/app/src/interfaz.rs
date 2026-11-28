@@ -37,6 +37,32 @@ pub struct Opciones {
     pub actualizar: bool,
 }
 
+/// PART-036 (A7): la clave de «abriendo» (una página que se está creando). Al soltar la guarda la clave queda libre,
+/// también si la tarea termina antes de tiempo o no llega a correr.
+struct Abriendo {
+    claves: Rc<RefCell<HashSet<String>>>,
+    clave: String,
+}
+
+impl Drop for Abriendo {
+    fn drop(&mut self) {
+        self.claves.borrow_mut().remove(&self.clave);
+    }
+}
+
+impl Abriendo {
+    /// None si esa página ya se está creando.
+    fn tomar(claves: &Rc<RefCell<HashSet<String>>>, clave: &str) -> Option<Abriendo> {
+        claves
+            .borrow_mut()
+            .insert(clave.to_string())
+            .then(|| Abriendo {
+                claves: claves.clone(),
+                clave: clave.to_string(),
+            })
+    }
+}
+
 /// PART-036 (A2): un querySelectorAll responde en milisegundos; si la página no responde en 2 s, no se avisa nada
 /// y la captura sigue sin esperar el techo de 90 s de `ejecutar`.
 const TECHO_SONDA: Duration = Duration::from_secs(2);
@@ -257,7 +283,7 @@ pub struct Interfaz {
     pub filas: Rc<VecModel<Fila>>,
     paginas_cuenta: RefCell<HashMap<String, Rc<Panel>>>,
     cuenta_visible: RefCell<Option<String>>,
-    abriendo: RefCell<HashSet<String>>,
+    abriendo: Rc<RefCell<HashSet<String>>>,
     /// PART-032: las páginas de rol creadas, para que la prueba cuente que un doble clic abre una sola.
     pub(crate) paginas_de_rol_creadas: Cell<u32>,
     vueltas: RefCell<HashMap<String, u64>>,
@@ -531,7 +557,7 @@ impl Interfaz {
             filas: Rc::new(VecModel::default()),
             paginas_cuenta: RefCell::default(),
             cuenta_visible: RefCell::default(),
-            abriendo: RefCell::default(),
+            abriendo: Rc::default(),
             paginas_de_rol_creadas: Cell::new(0),
             vueltas: RefCell::default(),
             navegador: RefCell::default(),
@@ -861,11 +887,12 @@ impl Interfaz {
         let _ = slint::spawn_local(async move {
             if !x.paginas_cuenta.borrow().contains_key(&id) {
                 // Un segundo «Entrar» mientras se crea la página no abre otra encima.
-                if !x.abriendo.borrow_mut().insert(id.clone()) {
-                    return;
-                }
-                let r = x.abrir_cuenta(&id).await;
-                x.abriendo.borrow_mut().remove(&id);
+                let r = {
+                    let Some(_marca) = Abriendo::tomar(&x.abriendo, &id) else {
+                        return;
+                    };
+                    x.abrir_cuenta(&id).await
+                };
                 if let Err(e) = r {
                     x.estado_cuenta(&id, &ajustes::no_se_pudo_abrir(&e));
                     return;
@@ -1271,12 +1298,12 @@ impl Interfaz {
             let id = id.to_string();
             // PART-032: un segundo clic mientras la página se crea no abre otra encima.
             let clave = format!("rol:{id}");
-            if !self.abriendo.borrow_mut().insert(clave.clone()) {
+            let Some(marca) = Abriendo::tomar(&self.abriendo, &clave) else {
                 return;
-            }
+            };
             let _ = slint::spawn_local(async move {
+                let _marca = marca;
                 x.mostrar_rol(&r, &id, true).await;
-                x.abriendo.borrow_mut().remove(&clave);
             });
             return;
         }
@@ -1792,36 +1819,47 @@ impl Interfaz {
         let pegado = t.clone();
         let hecho = r
             .nucleo
-            .pedir(move |p| -> std::io::Result<()> {
+            .pedir(move |p| -> std::io::Result<Vec<(String, String)>> {
                 p.abrir_ronda(pregunta.as_str())?;
                 let v: Vec<(&str, bool, Option<&str>)> = registro
                     .iter()
                     .map(|(id, e)| (id.as_str(), e.is_none(), e.as_deref()))
                     .collect();
                 p.registrar_intentos(&v)?;
-                // PART-032: lo que se pegó, por panel, junto a los intentos.
-                for (id, e) in &registro {
-                    if e.is_none() {
-                        p.registrar_pegado("investigacion", id, &pegado, None, false)?;
-                    }
-                }
-                Ok(())
+                // PART-032: lo que se pegó, por panel, junto a los intentos. PART-036 (A5): si el registro no
+                // anota alguno, la ronda ya está abierta: se devuelve cuáles, no se corta.
+                let pegados: Vec<&str> = registro
+                    .iter()
+                    .filter(|(_, e)| e.is_none())
+                    .map(|(id, _)| id.as_str())
+                    .collect();
+                Ok(p.registrar_pegados_de_la_pregunta(&pegados, &pegado))
             })
             .await
             .and_then(|x| x.map_err(|e| e.to_string()));
-        match hecho {
-            Err(e) => self.resultado(&ronda::ronda_no_abierta(&e), true),
-            Ok(()) if ok == n => self.resultado(
-                &format!(
+        let (mut dicho, mut problema) = match &hecho {
+            Err(e) => (ronda::ronda_no_abierta(e), true),
+            Ok(_) if ok == n => (
+                format!(
                     "Pegada en los {ok} paneles. Revísala y envíala con «Enviar a todos» o a mano."
                 ),
                 false,
             ),
-            Ok(()) => self.resultado(
-                &format!("Pegada en {ok} de {n}. Los que fallaron dicen qué hacer en su cabecera."),
+            Ok(_) => (
+                format!("Pegada en {ok} de {n}. Los que fallaron dicen qué hacer en su cabecera."),
                 true,
             ),
+        };
+        if let Some(s) = hecho
+            .as_ref()
+            .ok()
+            .and_then(|f| ronda::pegado_sin_anotar(f))
+        {
+            dicho.push(' ');
+            dicho.push_str(&s);
+            problema = true;
         }
+        self.resultado(&dicho, problema);
         self.refrescar();
     }
 
@@ -4137,6 +4175,24 @@ mod pruebas {
         assert!(unity.join("conversaciones").join("a.jsonl").exists());
         assert_eq!(importar_de_la_unity(&local, &datos).unwrap(), 0);
         std::fs::remove_dir_all(&raiz).unwrap();
+    }
+
+    #[test]
+    fn la_marca_abriendo_se_suelta_aunque_la_tarea_termine_antes_de_tiempo() {
+        let claves = Rc::new(RefCell::new(HashSet::new()));
+        let marca = Abriendo::tomar(&claves, "rol:x").unwrap();
+        assert!(
+            Abriendo::tomar(&claves, "rol:x").is_none(),
+            "una sola a la vez"
+        );
+        // La tarea tiene la guarda y se descarta sin llegar a su final.
+        let tarea = async move {
+            let _marca = marca;
+            std::future::pending::<()>().await;
+        };
+        drop(tarea);
+        assert!(claves.borrow().is_empty(), "la clave quedó libre");
+        assert!(Abriendo::tomar(&claves, "rol:x").is_some());
     }
 
     #[test]

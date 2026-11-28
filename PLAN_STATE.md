@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART31_PLAN.ai.md
+Next: plans/PART32_PLAN.ai.md
 
 ## Parts
 
@@ -154,10 +154,30 @@ Next: plans/PART31_PLAN.ai.md
   - Outcome: Muse de Meta como proveedor
   - Evidence: recorded
 
-- [ ] Part 31: plans/PART31_PLAN.ai.md
+- [x] Part 31: plans/PART31_PLAN.ai.md
   - Scenario: SCN-031
   - Outcome: Guarda de anonimato, botón de roles, Muse como integrador y fin de CC-2
   - Evidence: recorded
+
+- [ ] Part 32: plans/PART32_PLAN.ai.md
+  - Scenario: SCN-032
+  - Outcome: Volver a pegar en «Más…», pegados en el registro y arrastres de PART-031
+  - Evidence: pending
+
+- [ ] Part 33: plans/PART33_PLAN.ai.md
+  - Scenario: SCN-033
+  - Outcome: El integrador y el redactor entregan texto, y la captura avisa más de un mensaje de la persona o un enlace de descarga
+  - Evidence: pending
+
+- [ ] Part 34: plans/PART34_PLAN.ai.md
+  - Scenario: SCN-034
+  - Outcome: La app se llama ChatCouncil en todo: ejecutable, carpeta, instalador y actualizador
+  - Evidence: pending
+
+- [ ] Part 35: plans/PART35_PLAN.ai.md
+  - Scenario: SCN-035
+  - Outcome: README con la skill obligatoria en los siete; Muse se llama «Muse»; Muse como integrador guardado
+  - Evidence: pending
 
 ## Notes
 

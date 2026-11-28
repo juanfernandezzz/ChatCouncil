@@ -9,6 +9,8 @@ pub mod importar;
 pub mod informe;
 pub mod json;
 #[cfg(test)]
+mod medicion_cc2;
+#[cfg(test)]
 mod medicion_e9;
 #[cfg(test)]
 mod medicion_roles;

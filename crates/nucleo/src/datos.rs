@@ -249,6 +249,33 @@ mod pruebas {
         );
     }
 
+    // PART-033 (B1): las dos líneas que piden el texto en el chat no traen palabras que lean los analizadores.
+    #[test]
+    fn las_lineas_de_texto_en_el_chat_no_traen_palabras_de_los_analizadores() {
+        let integrador = "Escribe el informe completo aqui, en este chat, como texto. No lo entregues como archivo (PDF, Word u otro), ni como enlace de descarga, ni lo guardes en un archivo: solo se recoge el texto de tu mensaje.";
+        let redactor = "Escribe la respuesta completa aqui, en este chat, como texto. No la entregues como archivo (PDF, Word u otro), ni como enlace de descarga, ni la guardes en un archivo: solo se recoge el texto de tu mensaje.";
+        assert!(PROMPT_INTEGRADOR.contains(integrador));
+        assert!(PROMPT_REDACTOR.contains(redactor));
+        for linea in [integrador, redactor] {
+            for palabra in [
+                "CONFIRMA",
+                "CONTRADICE",
+                "NO_ENCONTRADA",
+                "CONVERGENCIA",
+                "DIVERGENCIA",
+                "TENSION",
+                "SINGULARIDAD",
+                "AUSENCIA",
+                "LIMITACION",
+                "ARCHIVO:",
+                "TITULO:",
+                "[H",
+            ] {
+                assert!(!linea.contains(palabra), "{palabra} en: {linea}");
+            }
+        }
+    }
+
     #[test]
     fn prompts_coinciden_con_dat_002() {
         for (fuente, esperado) in [
@@ -258,7 +285,7 @@ mod pruebas {
             ),
             (
                 PROMPT_INTEGRADOR,
-                "dc9afcae3f7f2327273fce5c50a7485362f72534ce224e3020749f6c981365a4",
+                "11d5533530a09fb066d8661f41fa73616f15e529a5cc3fca02c7193fee56189f",
             ),
             (
                 PROMPT_VERIFICADOR,
@@ -266,7 +293,7 @@ mod pruebas {
             ),
             (
                 PROMPT_REDACTOR,
-                "7475126cc2d653a2a203b466bd2c171bcc5447e5b1ecc7cfc2727302863a843d",
+                "1f64841914f20215126fdb032643161450d2c15e640c0a963862162678dce1c1",
             ),
         ] {
             assert_eq!(sha256(fuente), esperado);

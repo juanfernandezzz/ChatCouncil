@@ -94,6 +94,8 @@ COMO SE ESCRIBE
 
 Escribe en parrafos, en prosa normal. No uses tablas ni listas con vinetas.
 
+Escribe el informe completo aqui, en este chat, como texto. No lo entregues como archivo (PDF, Word u otro), ni como enlace de descarga, ni lo guardes en un archivo: solo se recoge el texto de tu mensaje.
+
 REGLA OBLIGATORIA: cada parrafo que escribas tiene que contener al menos una referencia a un hallazgo de la tabla, con su identificador entre corchetes. Por ejemplo: [H12]. Si un parrafo se apoya en varios hallazgos, ponlos todos: [H12] [H31].
 
 No puedes afirmar nada que no este en la tabla. Si la tabla no alcanza para responder algo de las cinco secciones, escribelo en un parrafo que empiece con LA TABLA NO ALCANZA y explica que falta. Ese parrafo es el unico que puede ir sin referencias.

@@ -27,3 +27,15 @@ Cada cambio de este archivo se aparta a propósito del comportamiento de la Unit
 - El prompt prohibía ampliar la guarda de anonimato más allá de lo que fija; Juan levantó esa regla para `/help` con «E1B E2A» (E2 A): `www.kimi.ai/help/features/<id>` es una página pública de ayuda y dejaba «Pegar la operación» en 0 de 7. `/helpx`, `/en/helper` y las rutas con `..`, `.` o `%2e` siguen siendo fuga.
 - Muse (solo panel) es elegible como integrador o redactor desde esta build («E1 B»): se adelantó la elegibilidad al orden del prompt, que la probaba antes (T1 y T2). Nunca investigador ni verificador; los roles por defecto (RON-002) no cambian y CONOCIDOS sigue en 10. Que Muse sea integrador de la app real solo ocurre si T1 y T2 aprueban.
 - La versión sale de publicar.yml (0.2.<run_number>): no hay un parche que subir a mano en Cargo.toml.
+- PENDIENTE (pedido de Juan, 2026-11-27, aún sin hacer): (1) volver a pegar la Operación. Si una etapa ya se pegó y Juan debe cambiar de cuenta de Google por límite de uso, la app debe dejarle volver a pegar esa etapa; hoy no lo permite (causa sin diagnosticar). Falta diagnosticarlo en una copia y decidir la regla (p. ej. repetir el pegado solo de los paneles sin respuesta capturada). (2) Quitar «Nueva» de ChatCouncilNueva: exe, carpeta de instalación (Programs\ChatCouncilNueva), instalador (ChatCouncilNueva.iss), actualizador y su asset, textos y rutas. Toca el mecanismo de actualización: va en un lote propio, con decisión de Juan; si la carpeta de datos también cambia, con migración.
+
+## PART-032 y PART-033 (2026-11-28)
+
+- nucleo tiene su primera dependencia de ejecución: sha2 0.11.1 (antes solo de pruebas), para el sha256 del archivo que se pega.
+- Los hechos nuevos «pegado» y «aviso-captura» se suman a los dieciséis de la Unity; el registro sigue append-only y los vectores reales de la Unity no cambian.
+- «Volver a pegar» en un rol continúa con los demás paneles si uno falla; el pegado normal se detiene en el primer fallo. En la verificación, olvidar el pegado de un solo panel no quita el del otro (el prompt es uno para los dos).
+- Redactor: el orden «capturado quita» no puede darse, porque la etapa avanza al capturar.
+- B1 cambió los vectores y los sha256 de PROMPT_INTEGRADOR (11d55335…) y PROMPT_REDACTOR (1f648419…).
+- A7: el doble clic en un rol sin página no se pudo reproducir en rojo en pruebaronda (crear_panel termina en el mismo turno); la guarda es defensiva. Sin verificar con ratón real.
+- B2: el conteo de mensajes mira todas las coincidencias de userMessage sin respetar `exclude` y no mira dentro de iframes (límite conocido). pagina.js sin cambio (sha256 39b048ce…).
+- Pendiente, no medido: bytes del integrador y el redactor de la ronda 0e319605… sobre la copia de CC-2.

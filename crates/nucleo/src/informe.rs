@@ -117,6 +117,10 @@ pub struct InformeFinalInput {
     pub participacion_operadores: Vec<ParticipacionOperador>,
     pub condiciones: Vec<CondicionProveedor>,
     pub integridad_entrega: String,
+    /// PART-032 (D52.3): «Lo que se pegó», ya armada; si hay, reemplaza la línea de integridad de entrega.
+    pub pegados: Option<String>,
+    /// PART-033 (B2): una línea por aviso de captura, tras la integridad de entrega.
+    pub avisos_captura: Vec<String>,
     pub semilla: Texto,
     pub proveedores_cargados_incompletos: Option<Vec<String>>,
     pub integrador: Option<String>,
@@ -667,8 +671,16 @@ pub fn armar(input: &InformeFinalInput) -> Texto {
         );
         partes.push("".into());
     }
+    match &input.pegados {
+        Some(p) => partes.extend([Texto::from(p.as_str()), "".into()]),
+        None => {
+            partes.push(format!("**Integridad de entrega:** {}", input.integridad_entrega).into())
+        }
+    }
+    for l in &input.avisos_captura {
+        partes.extend([Texto::from(l.as_str()), "".into()]);
+    }
     partes.extend([
-        format!("**Integridad de entrega:** {}", input.integridad_entrega).into(),
         T::de("**Semilla de la ronda:** ").t(&input.semilla).0,
         "".into(),
         "## Lo que este informe no dice".into(),
@@ -1042,6 +1054,8 @@ pub(crate) mod pruebas {
                 })
                 .collect(),
             integridad_entrega: st(campo(e, "integridadEntrega")),
+            pegados: None,
+            avisos_captura: Vec::new(),
             semilla: tx(campo(e, "semilla")),
             proveedores_cargados_incompletos: opc(e, "proveedoresCargadosIncompletos").map(strs),
             integrador: opc(e, "integrador").map(st),
@@ -1172,6 +1186,30 @@ pub(crate) mod pruebas {
         }
         assert!(!armar_caso(1).contains("referencio todos los hallazgos"));
         assert!(!armar_caso(4).contains("|---|"));
+    }
+
+    // PART-032 (D52.3, A6): con «Lo que se pegó» no queda la línea de integridad de entrega.
+    #[test]
+    fn informe_con_pegados_reemplaza_la_linea_de_integridad() {
+        assert!(armar_caso(0).contains("**Integridad de entrega:**"));
+        let mut e = de_entrada(&casos()[0].0);
+        e.pegados = Some("**Lo que se pegó**\n\nInvestigación: texto de 5 B en ChatGPT.".into());
+        let t = armar(&e).para_mostrar().into_owned();
+        assert!(t.contains("**Lo que se pegó**\n\nInvestigación: texto de 5 B en ChatGPT."));
+        assert!(!t.contains("Integridad de entrega"));
+        assert!(t.contains("**Semilla de la ronda:**"));
+    }
+
+    // PART-033 (B2): las líneas de aviso de captura salen en «Condiciones de la ronda».
+    #[test]
+    fn informe_trae_los_avisos_de_captura() {
+        assert!(!armar_caso(0).contains("enlace de descarga"));
+        let mut e = de_entrada(&casos()[0].0);
+        e.avisos_captura = vec![
+            "Claude (Investigación): la respuesta traía un archivo o un enlace de descarga.".into(),
+        ];
+        let t = armar(&e).para_mostrar().into_owned();
+        assert!(t.contains("Claude (Investigación): la respuesta traía un archivo o un enlace de descarga.\n\n**Semilla de la ronda:**"));
     }
 
     // INF-004: las marcas de integridad se quitan y se declaran.

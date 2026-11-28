@@ -64,6 +64,7 @@ En las plantillas basta con citar, al principio de cada una, de que respuestas s
 QUE ENTREGAS
 
 Lo que pide la pregunta, en el orden y con el formato que pide. Si la pregunta pone reglas propias (como marcar las afirmaciones, que distinguir, que no usar), cumplelas tambien.
+Escribe la respuesta completa aqui, en este chat, como texto. No la entregues como archivo (PDF, Word u otro), ni como enlace de descarga, ni la guardes en un archivo: solo se recoge el texto de tu mensaje.
 Al final, una seccion PENDIENTE con lo que la pregunta pedia y este material no alcanza para entregar, con lo que quedo en discrepancia sin resolver, y con los hallazgos cuya verificacion quedo en disputa.
 
 UNA COSA MAS

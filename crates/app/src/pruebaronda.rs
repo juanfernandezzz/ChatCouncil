@@ -391,6 +391,49 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
             estados_en_la_lista(i)
         ),
     );
+    // PART-032 (A5): «Volver a pegar en este panel…» en ChatGPT, con el pegado hecho y sin enviar nada.
+    i.seleccionar("chatgpt");
+    let en_panel = renglon(i, "panel", "Volver a pegar en este panel…", false);
+    let en_etapa = renglon(i, "panel", "Volver a pegar toda la etapa…", false);
+    let en_angosta = renglon(i, "angosta", "Volver a pegar en este panel…", false);
+    let envios_antes = envios(i, "chatgpt").await.0;
+    renglon(i, "panel", "Volver a pegar en este panel…", true);
+    hasta(5, || ui.get_capa_abierta()).await;
+    let (titulo, cuerpo, boton, foco) = (
+        ui.get_dialogo_titulo().to_string(),
+        ui.get_dialogo_texto().to_string(),
+        ui.get_dialogo_aceptar_texto().to_string(),
+        ui.get_dialogo_foco_en_cancelar(),
+    );
+    ui.invoke_dialogo_aceptar();
+    hasta(60, || resultado().starts_with("Pegado otra vez")).await;
+    let h = hechos(i).await;
+    let de_chatgpt: Vec<bool> = de_tipo(&h, "pegado")
+        .into_iter()
+        .filter(|x| texto_de(x, "proveedorId").as_deref() == Some("chatgpt"))
+        .map(|x| x.valor("repetido") == &Valor::Bool(true))
+        .collect();
+    a.anotar(
+        en_panel == Some(true)
+            && en_etapa == Some(true)
+            && en_angosta == Some(true)
+            && titulo == "Volver a pegar en ChatGPT"
+            && cuerpo == "Se abre una conversación nueva en ChatGPT y se pega lo mismo que pide la etapa Investigación. No se envía nada: después pulsas «Enviar a todos», como siempre."
+            && boton == "Volver a pegar"
+            && !foco
+            && resultado() == "Pegado otra vez en ChatGPT. Revísalo y envíalo."
+            && de_chatgpt == [false, true]
+            && compositor(i, "chatgpt").await == LA_PREGUNTA
+            && envios(i, "chatgpt").await.0 == envios_antes
+            && estado_en_la_lista(i, "chatgpt") == "Pegado, falta que envíes",
+        "volver a pegar en un panel",
+        &format!(
+            "renglones {en_panel:?}/{en_etapa:?}/{en_angosta:?}; \"{titulo}\"; foco en Cancelar {foco}; \"{}\"; pegados de ChatGPT (repetido) {de_chatgpt:?}; envíos {} → {}",
+            resultado(),
+            envios_antes,
+            envios(i, "chatgpt").await.0
+        ),
+    );
     // INV-IFZ-006: cada fila trae el símbolo y la palabra, y el símbolo es el de su estado.
     let sin_par: Vec<String> = i
         .filas
@@ -942,6 +985,46 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
             ui.get_barra_titulo()
         ),
     );
+
+    // PART-033 (B2): una conversación con dos mensajes de la persona (ChatGPT) y una respuesta con un enlace de
+    // descarga (Gemini) se avisan en el panel y quedan en el registro; sin tocar pagina.js.
+    en(
+        i,
+        "chatgpt",
+        "(() => { const u = document.createElement('div'); u.className = 'usuario'; u.textContent = 'otra vez'; document.getElementById('chat').append(u); return 'ok'; })()",
+    )
+    .await?;
+    en(
+        i,
+        "gemini",
+        "(() => { const r = [...document.querySelectorAll('.respuesta')].pop(); const a = document.createElement('a'); a.href = 'blob:https://cc-prueba.test/informe'; a.setAttribute('download', 'informe.pdf'); a.textContent = 'informe.pdf'; r.append(a); return 'ok'; })()",
+    )
+    .await?;
+    i.capturar(vec!["chatgpt".into(), "gemini".into(), "claude".into()])
+        .await;
+    let h = hechos(i).await;
+    let avisos: Vec<(String, Option<i64>, bool)> = de_tipo(&h, "aviso-captura")
+        .into_iter()
+        .map(|x| {
+            (
+                texto_de(x, "proveedorId").unwrap_or_default(),
+                x.entero("mensajesDePersona"),
+                x.valor("enlaceDescarga") == &Valor::Bool(true),
+            )
+        })
+        .collect();
+    let dicho = resultado();
+    a.anotar(
+        dicho.contains("Esta conversación tiene 2 mensajes tuyos. El registro guarda el que pegó la app y la última respuesta.")
+            && dicho.contains("La respuesta de Gemini trae un archivo o un enlace de descarga. La app solo recoge el texto del mensaje: si lo que pediste está en el archivo, pídele que lo escriba en el chat y vuelve a capturar.")
+            && avisos
+                == [
+                    ("chatgpt".to_string(), Some(2), false),
+                    ("gemini".to_string(), Some(1), true),
+                ],
+        "avisos al capturar",
+        &format!("\"{dicho}\"; hechos {avisos:?}"),
+    );
     Ok(())
 }
 
@@ -1040,6 +1123,9 @@ async fn operacion(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
     // Un clic en un rol que todavía no tiene página la abre y la pone al frente (la rama nueva de `seleccionar`).
     let sin_pagina = roles_ids.get(1).cloned().unwrap_or_default();
     let sin_pagina_antes = i.panel_de(&sin_pagina).is_none();
+    // PART-032 (A7): un doble clic rápido abre la página una sola vez.
+    let creadas_antes = i.paginas_de_rol_creadas.get();
+    i.seleccionar(&sin_pagina);
     i.seleccionar(&sin_pagina);
     let abierto_por_clic = hasta(60, || {
         i.panel_de(&sin_pagina).is_some()
@@ -1051,6 +1137,13 @@ async fn operacion(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
                 == Some(sin_pagina.as_str())
     })
     .await;
+    esperar(1500).await;
+    let creadas = i.paginas_de_rol_creadas.get() - creadas_antes;
+    a.anotar(
+        creadas == 1,
+        "un doble clic en un rol sin página la abre una sola vez",
+        &format!("páginas creadas {creadas}"),
+    );
     a.anotar(
         sin_pagina_antes && abierto_por_clic,
         "un clic en un rol de la lista sin página la abre y la pone al frente",

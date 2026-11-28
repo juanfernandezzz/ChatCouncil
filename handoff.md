@@ -83,7 +83,79 @@ Pendientes del lote: 3.2 a 3.10; informe de cierre en un code block + Set-Clipbo
 - Enviar a todos + Sí hechos 22:24: enviados 5 de 7 (ChatGPT, Gemini, Grok, Kimi, Perplexity; "Parece terminado"). Faltan a mano: Claude y Mistral (flecha de envío; sin return). Capturados 0.
 - Hook PreToolUse:PowerShell expira de forma intermitente: agent-desktop vía PowerShell queda bloqueado. No se tocó el hook.
 
-## PART-031 en curso (sesión del lote, 2026-11-27) · LEE ESTO PRIMERO
+## INFORME DE CIERRE PART-031 (2026-11-28) · LEE ESTO PRIMERO
+(Las secciones de abajo son anteriores y quedan superadas por esta.)
+
+INFORME DE CIERRE · Paso 1 · PART-031
+
+ESTADO: el lote NO está cerrado por Code. Lo cierra o no quien reciba este informe (decisión de Juan). No se corrió plannable complete ni plannable verify.
+
+VERIFICACIÓN (salida real; fuente entre corchetes)
+- Guarda de anonimato: perplexity /en-GB/changelog/<id> y kimi /help/features/<id> ya no se rechazan; /search, /c, /share, /chat, /app, /helpx, /en/helper y rutas con «..», «.» o %2e siguen rechazadas. Test operacion_paginas_publicas_con_prefijo_de_idioma_no_son_fuga: rojo y luego verde; 35 tests operacion_, 207 de nucleo [cargo test, C:\cc-target\tmp\gate-*].
+- Diagnóstico sobre COPIA del registro de CC-2 (sha256 294B4909BC49902847A72F7105BF6A67B049AAE9C8A55B0E0426A4AD25963E3D antes = después; el registro real no se tocó): armar la Operación pasó de 0 de 7 a 7 de 7 [arnés C:\cc-target\tmp\diag-guarda].
+- Botón «Mostrar los paneles de los roles» y un clic en un rol sin página lo abre: pruebaronda 105/105; pruebainterfaz fase 2 10/10 [-pruebaronda, -pruebainterfaz].
+- Muse elegible como integrador o redactor (no por defecto; nunca verificador): test ronda_un_proveedor_solo_panel_puede_ser_integrador_o_redactor_y_nada_mas y anotación de fase 2.
+- PR #13 fusionada en main (7271c27), checks SUCCESS y SUCCESS [gh pr view 13]; release móvil chatcouncil-v1 con version.txt = 0.2.28, assets del 2026-11-27 15:49 UTC [gh release download]; app real actualizada a 0.2.28 con «Buscar actualizaciones» (visto en la sesión; no se re-midió ahora).
+- CC-2: informe generado el 2026-11-27 23:46 en C:\Users\Juan Fernández\AppData\Local\ChatCouncil\informes\2026-11-27 2346 - Instrucciones y skill research-protocol en siete proveedores\ [Get-FileHash]:
+  .pdf 639448 bytes, sha256 A2AB79F002645EBF66847F4895A5F41C583D9125F9E67121DAB1AB7E9ABA72E5
+  .md 202946 bytes, sha256 768B98B24726209A0EAEBF267A9AC6B255C039AEB365DD51ECC64FB79CCE94B1
+  El .md (leído solo por estructura y conteos) trae aporte del redactor, verificación de Qwen y de DeepSeek, lectura del integrador y 7 de 7 operadores «ok» (hallazgos 43, 72, 65, 29, 38, 45, 47). Integrador de la ronda: GLM. Ronda 0e319605-36e7-47ad-90aa-f8e0e6dda488.
+
+DECISIONES
+- «E1B E2A» (Juan): Muse elegible como integrador o redactor ahora, sin ser predeterminado; /help público con /helpx rechazado. Roles por defecto (RON-002) sin cambios; CONOCIDOS sigue en 10; sin tercer verificador.
+- Paso 6 (asignar Muse): NO se hizo. Sin T1 ni T2 aprobados no cambia ningún rol, y CC-2 terminó con GLM de integrador.
+
+LO QUE NO SE PUDO VERIFICAR
+- T1 de Muse: el texto quedó pegado (159 caracteres) en un chat paralelo nuevo del perfil C:\cc-target\perfil-muse; Juan cerró la ventana y no se sabe si se envió. T2 no se corrió. PART-030 ya había medido T1 = no aprueba (la memoria de Muse cruza chats). girasol-47 NO se borró.
+- Bytes de los archivos del integrador y del redactor de CC-2: no se registraron. El prompt los pide pero no dice dónde están; no se leyó el registro real ni se listó la carpeta de datos.
+- Que las cuatro etapas de CC-2 terminaron sin error: solo se vio el informe final, no el registro.
+- Que la app deja repegar la Operación tras reabrirla: sin comprobar.
+- El clic con ratón real en un rol sin página (lo cubre la anotación de pruebaronda, no una prueba con ratón).
+- Muse en una ronda real (reutilización del panel, captura como integrador).
+- La guarda no cubre hosts de Muse.
+
+DESVIACIONES
+- PDF en la carpeta de datos de la app y no en Documents\ChatCouncil-informes\cc2, como pedía el prompt.
+- Ampliar la guarda (/help) y hacer elegible a Muse antes del orden del prompt: ambos por «E1B E2A». Registrado en DESVIACIONES.md.
+- La versión sale de publicar.yml (0.2.<run_number>); no hay subida manual en Cargo.toml.
+- Los commits 329654b y 2a9a764 comparten asunto (no se enmendaron).
+- Riesgo conocido sin arreglar: dos clics rápidos en un rol sin página pueden abrirlo dos veces.
+- Un script mío intentó listar "%LOCALAPPDATA%\ChatCouncil*" con -Recurse (regla: nunca recursivo); el clasificador lo bloqueó y no se ejecutó. Aparte, listé SIN recursión la carpeta de informes que Juan indicó y leí el .md solo por estructura y conteos.
+- Memorias: mostrar-paneles-roles-pendiente marcada HECHA; proxima-build-mandatoria con los puntos 1 a 3 y «terminar CC-2» hechos y abiertos los dos pedidos nuevos y Muse T1/T2. El cierre del lote sigue siendo decisión de quien recibe este informe.
+- Un hook PreToolUse [node] se agotó varias veces y bloqueó llamadas hasta reintentarlas; no se tocó.
+- Observación de diseño: el prompt pide bytes del integrador y del redactor sin indicar su ubicación. Es un fallo del diseño de ChatCouncil (no guarda esa evidencia en un lugar fijo) o del prompt del orquestador; lo decide quien reciba este informe.
+
+PEDIDOS NUEVOS DE JUAN (sin hacer; en DESVIACIONES.md)
+1. Permitir repegar una etapa tras cambiar de cuenta de Google por límite de uso (hoy no deja; causa sin diagnosticar).
+2. Quitar «Nueva» de ChatCouncilNueva: exe, carpeta Programs\ChatCouncilNueva, instalador .iss, actualizador y su asset, textos (21 archivos del repo lo mencionan). Si la carpeta de datos cambia, hace falta migración.
+
+HANDOFF PARA EL PRÓXIMO LOTE (solo hechos verificados)
+- main en 7271c27 [git branch -vv]. El checkout queda en la rama part-031-pausa (2 commits, 8a24bea y 303b6fe, con DESVIACIONES.md y handoff.md, más el cierre de este informe); NO está en GitHub [git ls-remote origin part-031-pausa: vacío]. La próxima sesión arranca en esa rama.
+- Release 0.2.28 instalada. Al cierre hay una instancia ChatCouncilNueva.exe abierta, pid 15604 [Get-CimInstance]; la que lancé yo (pid 2128) ya no corre. No se sabe si la actual tiene puerto de depuración.
+- Perfil de prueba C:\cc-target\perfil-muse (solo Muse, glm en la selección): existe [Test-Path = True]; no se ha borrado.
+- Informe CC-2: ver rutas y sha256 arriba.
+- Registro real intacto (append-only); copia de diagnóstico en C:\cc-target\tmp\cc2-copia\registro.jsonl.
+- Pendiente: T1/T2 de Muse; decidir dónde y cómo se registran los bytes del integrador y del redactor; los dos pedidos nuevos; plannable complete/verify de PART-031 si quien recibe decide cerrarlo.
+
+## (superada) ACTUALIZACIÓN 2026-11-28 · CC-2 TERMINADA (según Juan; verificada solo por el informe generado)
+- Informe en C:\Users\Juan Fernández\AppData\Local\ChatCouncil\informes\2026-11-27 2346 - Instrucciones y skill research-protocol en siete proveedores\ (la app lo guarda ahí, no en Documents\ChatCouncil-informes\cc2 como pedía el prompt). Fuente: Get-FileHash de esos dos archivos.
+  - .pdf 639448 bytes, sha256 A2AB79F002645EBF66847F4895A5F41C583D9125F9E67121DAB1AB7E9ABA72E5
+  - .md 202946 bytes, sha256 768B98B24726209A0EAEBF267A9AC6B255C039AEB365DD51ECC64FB79CCE94B1
+- El .md (leído solo por estructura y conteos) trae: aporte del redactor, verificación de Qwen y de DeepSeek, lectura del integrador, 7 de 7 operadores «ok» (hallazgos: ChatGPT 43, Gemini 72, Claude 65, Grok 29, Mistral 38, Kimi 45, Perplexity 47), «Integrador de esta ronda: GLM», ronda 0e319605-36e7-47ad-90aa-f8e0e6dda488.
+- NO verificado: bytes de los archivos del integrador y del redactor (no se localizaron; el registro real no se leyó), el repegado de Operación, T1/T2 de Muse. Con CC-2 cerrada, Muse de integrador solo aplicaría a una ronda nueva.
+
+## PAUSA PART-031 (2026-11-27, Juan: «paremos acá») · LEE ESTO PRIMERO
+Esta sección corrige la de abajo (E1/E2 ya se resolvieron con «E1B E2A»). Lote NO cerrado: sin informe de cierre, sin plannable complete, memorias sin marcar DONE.
+- Hecho y en main: PR #13 (7271c27), release 0.2.28, app real actualizada (guarda con prefijo de idioma, /changelog /docs /help públicos, botón de roles, Muse elegible como integrador o redactor, no por defecto).
+- Muse T1: el texto (159 caracteres) quedó pegado en un chat paralelo NUEVO de Muse, en el perfil de prueba C:\cc-target\perfil-muse; Juan cerró la ventana. Si se envió NO está verificado (no se preguntó). girasol-47 NO se ha borrado. T2 no se ha corrido. Retomar: reabrir perfil-muse y leer la respuesta solo tras el «captura» de Juan.
+- Paso 6: CC-2 ya tiene la Operación pegada (dicho por Juan) y los roles se fijan al primer pegado de Operación (el sello), así que Muse de integrador solo podría valer para una ronda posterior; CC-2 sigue con GLM de integrador. Sin verificar de nuevo en esta sesión.
+- Juan tuvo que cambiar de cuenta de Google por límite de uso y la app no le dejó repegar la Operación (causa sin diagnosticar). Reabrí la app real (pid 2128, sin puerto de depuración) para que vuelva a la etapa de Operación; si ahora deja repegar NO está verificado. Esa app es la sesión de trabajo de Juan: no cerrarla.
+- Pedidos nuevos, anotados en DESVIACIONES.md y sin hacer: (1) permitir repegar una etapa tras cambiar de cuenta; (2) quitar «Nueva» de ChatCouncilNueva (exe, carpeta Programs\ChatCouncilNueva, instalador .iss, actualizador y su asset, textos).
+- Falta: paso 5 (T1/T2), paso 7 (terminar CC-2: Operación, Integración, Verificación, Redacción; bytes del integrador y del redactor; PDF en Documents\ChatCouncil-informes\cc2 con su sha256), informe de cierre, handoff final, plannable complete/verify, advisor final.
+- Riesgo conocido sin arreglar: dos clics rápidos en un rol sin página pueden abrirlo dos veces.
+- Registro real intacto (append-only); copia de diagnóstico con sha256 294B4909…3E3.
+
+## (sección anterior, parcialmente superada) PART-031 en curso (sesión del lote, 2026-11-27)
 - Rama part-031 en 329654b (local, SIN push) + cambios sin commit en interfaz.rs y pruebaronda.rs. main sigue en 2028688.
 - Copia del registro: C:\cc-target\tmp\cc2-copia\registro.jsonl, sha256 antes = después = copia = 294B4909BC49902847A72F7105BF6A67B049AAE9C8A55B0E0426A4AD25963E3D (el real no se tocó).
 - Diagnóstico 2a (arnés fuera del repo: C:\cc-target\tmp\diag-guarda, llama a Puerta::armar_operacion): ANTES 0 de 7, rechazada www.perplexity.ai/en-GB/changelog/<id>. DESPUÉS del arreglo prescrito, 0 de 7 todavía: queda www.kimi.ai/help/features/<id> (solo en la respuesta de Kimi; las otras 6 pasan una por una). Es una página pública de ayuda; el lote prohíbe ampliar más: pregunta E2 abierta.
@@ -111,3 +183,11 @@ Pendientes del lote: 3.2 a 3.10; informe de cierre en un code block + Set-Clipbo
   2. Botón «Mostrar los paneles de los roles» en cualquier etapa y un clic en un proveedor lo abre (hoy es doble clic y no selecciona): ver memoria mostrar-paneles-roles-pendiente.md; borrar esa memoria al terminarlo.
   3. Muse (Meta) como operador: investigar benchmarks públicos de sus capacidades y decidir con evidencia si conviene como integrador o como redactor (o ninguno). Recomendación y fuentes van a Juan en Serie E antes de implementar. Hoy Muse es solo panel (enLaRonda:false).
 - Con esa versión instalada se termina la ronda CC-2 desde la etapa 3: 3.5 Operación a 3.10.
+
+
+## PART-032 y PART-033 (2026-11-28, rama part-032)
+
+- Hecho: registro «pegado» y «aviso-captura»; «Volver a pegar» en los menús (panel y angosta) con sus diálogos; «Lo que se pegó» y avisos de captura en «Condiciones de la ronda»; prompts del integrador y redactor piden el texto en el chat.
+- Gates: fmt, clippy -D warnings, test (nucleo 216), autoprueba 67/67, pruebainterfaz 16/10/13, pruebaronda 108/108. pagina.js igual (sha256 39b048ce…).
+- Pendiente de verificar con ratón real (agent-desktop): clic en un rol sin página y capturas de «Volver a pegar». No medido: bytes del integrador y redactor de la ronda 0e319605….
+- Detalle de decisiones: DESVIACIONES.md, sección PART-032 y PART-033.

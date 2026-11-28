@@ -848,3 +848,6 @@ Sonda de captura en paralelo (techo 2 s), conteo de mensajes, aviso con proveedo
 
 Artifacts:
 - cargo test --workspace; pruebaronda; cargo test -p nucleo medir_archivos_cc2 -- --ignored
+
+### Corrección PART-036 (B3)
+La línea de evidencia de PART-036 dice «integrador 55 bytes» como si fuera un archivo con contenido. Es solo el encabezado: la ronda 0e319605… tiene 0 salidas vigentes y 0 hallazgos, así que B3 queda parada por falta de datos (ver DESVIACIONES.md). B2 no se ejecutó (misma nota); la línea de evidencia decía «B2 no alcanzable por la interfaz» sin ese detalle.

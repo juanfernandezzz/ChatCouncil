@@ -16,6 +16,7 @@ use crate::operacion::CONOCIDOS;
 use crate::puerta::{ArchivoRedactor, Puerta};
 use crate::registro;
 use crate::ronda::RolesElegidos;
+use crate::texto::Texto;
 
 fn sha(b: &[u8]) -> String {
     Sha256::digest(b)
@@ -31,7 +32,8 @@ fn medida(rol: &str, proveedor: &str, a: &ArchivoRedactor) -> String {
         format!("{:.1}", bytes as f64 * 100.0 / l as f64)
     });
     format!(
-        "\"{rol}\":{{\"proveedor\":\"{proveedor}\",\"bytesUtf8\":{bytes},\"sha256\":\"{}\",\"limiteArchivoBytes\":{},\"porcentajeDelLimite\":{pct}}}",
+        "\"{rol}\":{{\"proveedor\":\"{proveedor}\",\"bytesUtf8\":{bytes},\"lineas\":{},\"sha256\":\"{}\",\"limiteArchivoBytes\":{},\"porcentajeDelLimite\":{pct}}}",
+        a.cuerpo_archivo.para_mostrar().lines().count(),
         sha(a.cuerpo_archivo.bytes()),
         limite.map_or("null".to_string(), |l| l.to_string())
     )
@@ -57,27 +59,11 @@ fn medir_archivos_cc2() {
     let carpeta = std::env::temp_dir().join(format!("cc-cc2-{}", std::process::id()));
     fs::create_dir_all(carpeta.join("conversaciones")).unwrap();
     fs::write(registro::ruta_archivo(&carpeta, &conversacion), &bytes).unwrap();
-    // El pool son los proveedores sellados en esa ronda, en el orden fijo.
-    let mut pool: Vec<String> = Vec::new();
-    for s in hechos.iter().filter(|h| {
-        h.tipo() == "sello"
-            && h.texto("rondaId")
-                .map(|t| t.para_mostrar().into_owned())
-                .as_deref()
-                == Some(esperada.as_str())
-    }) {
-        let p = s
-            .texto("panelSourceId")
-            .unwrap()
-            .para_mostrar()
-            .into_owned();
-        if !pool.contains(&p) {
-            pool.push(p);
-        }
-    }
-    pool.sort_by_key(|p| CONOCIDOS.iter().position(|c| c == p));
-    let mut n = 0u64;
+    // El pool sale como en la app (hilo.rs): de los roles, no de los sellos; CC-2 no tiene sellos.
     let roles = RolesElegidos::por_defecto();
+    let pool = crate::ronda::pool_de_investigadores(&crate::ronda::CONOCIDOS, &roles);
+    assert!(!pool.is_empty(), "el pool no puede quedar vacío");
+    let mut n = 0u64;
     let (integrador, redactor) = (roles.integrador.clone(), roles.redactor.clone());
     let mut puerta = Puerta::new(
         carpeta.clone(),
@@ -96,6 +82,10 @@ fn medir_archivos_cc2() {
         Some(esperada.as_str()),
         "la ronda activa de la copia"
     );
+    // Lo que alimenta la tabla del integrador: las salidas vigentes de los operadores de la ronda y sus hallazgos.
+    let vigentes =
+        crate::dominio::salidas_vigentes_de_ronda(hechos, &Texto::from(esperada.as_str()));
+    let hallazgos: usize = vigentes.iter().map(|s| s.hallazgos.len()).sum();
     let i = puerta.armar_integrador().expect("armar el integrador");
     // CC-2 no llegó a capturar el informe del integrador: sin él el camino de la app no arma el archivo del redactor.
     let r = puerta.armar_redactor();
@@ -104,7 +94,8 @@ fn medir_archivos_cc2() {
     fs::write(
         &salida,
         format!(
-            "{{\"ronda\":\"{esperada}\",\"shaCopiaAntes\":\"{antes}\",\"shaCopiaDespues\":\"{despues}\",{},{}}}\n",
+            "{{\"ronda\":\"{esperada}\",\"shaCopiaAntes\":\"{antes}\",\"shaCopiaDespues\":\"{despues}\",\"salidasVigentesDeOperadores\":{},\"hallazgosEnLaTabla\":{hallazgos},{},{}}}\n",
+            vigentes.len(),
             medida("integrador", &integrador, &i),
             match &r {
                 Ok(r) => medida("redactor", &redactor, r),

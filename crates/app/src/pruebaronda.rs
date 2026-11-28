@@ -1083,6 +1083,9 @@ async fn operacion(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
     // Un clic en un rol que todavía no tiene página la abre y la pone al frente (la rama nueva de `seleccionar`).
     let sin_pagina = roles_ids.get(1).cloned().unwrap_or_default();
     let sin_pagina_antes = i.panel_de(&sin_pagina).is_none();
+    // PART-032 (A7): un doble clic rápido abre la página una sola vez.
+    let creadas_antes = i.paginas_de_rol_creadas.get();
+    i.seleccionar(&sin_pagina);
     i.seleccionar(&sin_pagina);
     let abierto_por_clic = hasta(60, || {
         i.panel_de(&sin_pagina).is_some()
@@ -1094,6 +1097,13 @@ async fn operacion(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
                 == Some(sin_pagina.as_str())
     })
     .await;
+    esperar(1500).await;
+    let creadas = i.paginas_de_rol_creadas.get() - creadas_antes;
+    a.anotar(
+        creadas == 1,
+        "un doble clic en un rol sin página la abre una sola vez",
+        &format!("páginas creadas {creadas}"),
+    );
     a.anotar(
         sin_pagina_antes && abierto_por_clic,
         "un clic en un rol de la lista sin página la abre y la pone al frente",

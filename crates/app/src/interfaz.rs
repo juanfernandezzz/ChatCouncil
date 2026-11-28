@@ -226,6 +226,8 @@ pub struct Interfaz {
     paginas_cuenta: RefCell<HashMap<String, Rc<Panel>>>,
     cuenta_visible: RefCell<Option<String>>,
     abriendo: RefCell<HashSet<String>>,
+    /// PART-032: las páginas de rol creadas, para que la prueba cuente que un doble clic abre una sola.
+    pub(crate) paginas_de_rol_creadas: Cell<u32>,
     vueltas: RefCell<HashMap<String, u64>>,
     navegador: RefCell<Option<Rc<Navegador>>>,
     apariencia: Cell<Apariencia>,
@@ -498,6 +500,7 @@ impl Interfaz {
             paginas_cuenta: RefCell::default(),
             cuenta_visible: RefCell::default(),
             abriendo: RefCell::default(),
+            paginas_de_rol_creadas: Cell::new(0),
             vueltas: RefCell::default(),
             navegador: RefCell::default(),
             menu: Rc::new(VecModel::default()),
@@ -1234,8 +1237,14 @@ impl Interfaz {
         });
         if let (Some(r), Some(x)) = (sin_pagina, self.yo().upgrade()) {
             let id = id.to_string();
+            // PART-032: un segundo clic mientras la página se crea no abre otra encima.
+            let clave = format!("rol:{id}");
+            if !self.abriendo.borrow_mut().insert(clave.clone()) {
+                return;
+            }
             let _ = slint::spawn_local(async move {
                 x.mostrar_rol(&r, &id, true).await;
+                x.abriendo.borrow_mut().remove(&clave);
             });
             return;
         }
@@ -2515,6 +2524,8 @@ impl Interfaz {
     /// Una página nueva para ese panel, con su URL cargada.
     async fn crear_panel_de(&self, r: &Rc<Ronda>, id: &str) -> Result<(), String> {
         let nav = self.navegador()?;
+        self.paginas_de_rol_creadas
+            .set(self.paginas_de_rol_creadas.get() + 1);
         let i = r.ids().iter().position(|x| x == id).unwrap_or(0);
         let url = self.url_de(id, i);
         let p =

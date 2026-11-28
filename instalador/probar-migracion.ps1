@@ -2,6 +2,7 @@
 # Uso: instalador\probar-migracion.ps1 -Viejo <ChatCouncilNueva-instalador.exe del Release> -Nuevo <ChatCouncil-instalador.exe nuevo> -NuevoSinUsePreviousAppDir <el mismo, compilado con /DSinUsePreviousAppDir>
 param([Parameter(Mandatory)][string]$Viejo, [Parameter(Mandatory)][string]$Nuevo, [Parameter(Mandatory)][string]$NuevoSinUsePreviousAppDir)
 $ErrorActionPreference = 'Stop'
+if (-not $env:CI) { throw "probar-migracion.ps1 solo corre en el CI" }
 $programas = Join-Path $env:LOCALAPPDATA 'Programs'
 $carpetaVieja = Join-Path $programas 'ChatCouncilNueva'
 $carpetaNueva = Join-Path $programas 'ChatCouncil'

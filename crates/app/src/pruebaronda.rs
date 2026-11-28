@@ -1048,14 +1048,15 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
     .await;
     let con_cuelgue = t0.elapsed();
     let dicho = resultado();
-    let _ = en(
+    let restaurado = en(
         i,
         "kimi",
         "(() => { Element.prototype.querySelector = window.__q; return 'ok'; })()",
     )
     .await;
     a.anotar(
-        con_cuelgue < sin_cuelgue + Duration::from_secs(3)
+        restaurado.is_ok()
+            && con_cuelgue < sin_cuelgue + Duration::from_secs(3)
             && dicho.contains("2 mensajes tuyos")
             && dicho.contains("La respuesta de Gemini trae un archivo"),
         "la sonda no traba la captura",

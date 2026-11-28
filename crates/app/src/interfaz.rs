@@ -67,6 +67,8 @@ impl Abriendo {
 /// y la captura sigue sin esperar el techo de 90 s de `ejecutar`.
 const TECHO_SONDA: Duration = Duration::from_secs(2);
 
+// shortcut: si el primer compuesto de una parte es un ancestro común de todos los mensajes (p. ej. `.chat .msg`),
+// la cuenta colapsa a 1; las specs del repo no lo hacen, si una spec de la carpeta de datos sí, ampliar.
 /// PART-033 (B2) y PART-036 (A3): el script de la sonda; responde «mensajes,enlace» o «-1,0». Cuenta mensajes, no
 /// coincidencias: cada coincidencia sube a su contenedor (`closest` del primer compuesto de su parte de la unión),
 /// los contenedores se juntan sin repetir y los que están dentro de otro se descartan.

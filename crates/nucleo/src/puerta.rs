@@ -6450,7 +6450,10 @@ Ronda: r{i}
             ],
         )
         .unwrap();
-        let con = |p: &Puerta| p.pegados_del_informe(&[pegado.clone()], &ronda).unwrap();
+        let con = |p: &Puerta| {
+            p.pegados_del_informe(std::slice::from_ref(&pegado), &ronda)
+                .unwrap()
+        };
         assert!(con(&p).contains("(unos 90 KB)"), "{}", con(&p));
         let otras = datos::SPECS_JSON.replacen(
             "\"limiteArchivoBytes\": 90000",

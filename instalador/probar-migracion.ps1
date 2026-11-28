@@ -26,6 +26,12 @@ function Desinstalar {
 
 # Caso rojo: con el UsePreviousAppDir por defecto, la instalación nueva cae en la carpeta vieja.
 Instalar $Viejo
+if (-not (Test-Path (Join-Path $carpetaVieja 'ChatCouncilNueva.exe'))) {
+  # Tras el primer Release con PART-034, el asset con el nombre viejo es una copia del instalador nuevo: ya no hay migración que probar.
+  Desinstalar
+  'Aviso: el asset ChatCouncilNueva-instalador.exe del Release ya instala ChatCouncil; la migración se probó en la PR de PART-034.'
+  exit 0
+}
 Instalar $NuevoSinUsePreviousAppDir
 if (-not (Test-Path (Join-Path $carpetaVieja 'ChatCouncil.exe'))) { throw 'Caso rojo: se esperaba que el instalador sin UsePreviousAppDir=no cayera en la carpeta vieja' }
 if (Test-Path (Join-Path $carpetaNueva 'ChatCouncil.exe')) { throw 'Caso rojo: no debía existir la carpeta nueva' }

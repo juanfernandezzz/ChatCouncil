@@ -47,3 +47,9 @@ Cada cambio de este archivo se aparta a propósito del comportamiento de la Unit
 - Caso rojo del job migracion (corre en cada CI): con /DSinUsePreviousAppDir=1 el instalador nuevo cae en Programs\ChatCouncilNueva (confirmado en la PR #15).
 - Respaldo del instalador 0.2.29: C:\cc-target\respaldo\0.2.29\ChatCouncilNueva-instalador.exe, sha256 C2D8F0DC187E44B8A6783454EB561B4C63824FFBEC75F605F4432B011A06941B.
 - Los registros históricos (PLAN_EVIDENCE.md, planes cerrados, bench/resultados, docs/revisiones, handoff anterior) conservan el nombre viejo.
+
+## PART-035 (2026-11-28)
+
+- «Muse (Meta)» pasa a «Muse» en specs.json, dominio.rs y pruebainterfaz.rs; el id «muse» no cambia. El sha256 de specs.json cambió a f7554ff9f1451a57379b46f6f2915f6b05229b001bdce22121fce064af6405a2 (prueba specs_json_coincide_con_dat_001).
+- Rojo antes del cambio: pruebainterfaz fase 2 dio 9/10 al buscar «Muse».
+- Hallazgos de la revisión de PART-034 que quedan abiertos (fuera de alcance, para Juan): UsePreviousAppDir=no vale para todas las actualizaciones futuras; si ChatCouncilNueva.exe sigue vivo, la carpeta vieja queda; bench/medir.ps1 usa el mismo nombre de proceso que la Unity (la guarda de la línea 347 aborta si hay otra abierta).

@@ -441,7 +441,7 @@ async fn fase2(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
     let nombres_rol: Vec<SharedString> = ui.get_nombres_rol().iter().collect();
     let idx_muse = nombres_rol
         .iter()
-        .position(|n| n == "Muse (Meta)")
+        .position(|n| n == "Muse")
         .map_or(-1, |p| p as i32);
     let integrador_antes = ui.get_idx_integrador();
     ui.set_idx_integrador(idx_muse);
@@ -451,7 +451,7 @@ async fn fase2(a: &mut Anotador, i: &Rc<Interfaz>) -> Result<(), String> {
         ui.get_mensaje() == ajustes::GUARDADO,
         std::fs::read_to_string(seleccion(i)).unwrap_or_default(),
     );
-    let sin_muse_en_verificadores = !ui.get_nombres().iter().any(|n| n == "Muse (Meta)");
+    let sin_muse_en_verificadores = !ui.get_nombres().iter().any(|n| n == "Muse");
     ui.set_idx_integrador(integrador_antes);
     ui.invoke_guardar();
     esperar(50).await;

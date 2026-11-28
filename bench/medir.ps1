@@ -25,7 +25,7 @@ $ErrorActionPreference = 'Stop'
 # E8: cada app con su ejecutable instalado y su proceso; el resto del script usa $Proc y $Exe.
 $Apps = @{
     unity = @{ Exe = (Join-Path $env:ProgramFiles 'ChatCouncil\ChatCouncil.exe'); Proc = 'ChatCouncil'; Paneles = 3 }
-    nueva = @{ Exe = (Join-Path $env:LOCALAPPDATA 'Programs\ChatCouncilNueva\ChatCouncilNueva.exe'); Proc = 'ChatCouncilNueva'; Paneles = 7 }
+    nueva = @{ Exe = (Join-Path $env:LOCALAPPDATA 'Programs\ChatCouncil\ChatCouncil.exe'); Proc = 'ChatCouncil'; Paneles = 7 }
 }
 $Exe = $Apps[$App].Exe
 $Proc = $Apps[$App].Proc
@@ -349,7 +349,7 @@ function Ejecutar-E8 {
         registradoEn = Hora (Get-Date); cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name.Trim(); nucleosLogicos = $Logicos
         windows = (Get-CimInstance Win32_OperatingSystem).Caption; webView2Runtime = (Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}').pv
         unityVersion = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'ChatCouncil' } | Select-Object -First 1).DisplayVersion
-        nuevaVersion = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like 'ChatCouncil*' -and $_.InstallLocation -like '*ChatCouncilNueva*' } | Select-Object -First 1).DisplayVersion
+        nuevaVersion = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like 'ChatCouncil*' -and $_.InstallLocation -like '*ChatCouncil*' } | Select-Object -First 1).DisplayVersion
         nuevaExeBytes = (Get-Item $Apps.nueva.Exe).Length; unityExeBytes = (Get-Item $Apps.unity.Exe).Length
         plan = ((powercfg /getactivescheme) -join ' ').Trim(); umbralCpuMaquinaPct = $UmbralCpu
         metodo = 'M1a y M2 con los paneles que cada app restaura de su carpeta real (Unity 3, nueva 7); M1b y M4 no se midieron igual, ver notas'

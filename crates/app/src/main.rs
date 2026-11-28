@@ -507,7 +507,7 @@ mod pruebas {
     #[test]
     fn la_carpeta_de_datos_es_la_de_menos_datos() {
         // ARR-001
-        let a = args(&["ChatCouncilNueva.exe", "-datos", r"C:\x"]);
+        let a = args(&["ChatCouncil.exe", "-datos", r"C:\x"]);
         assert_eq!(
             modo(&a, Some(r"C:\L".into())),
             Ok(Modo::Normal {
@@ -522,7 +522,7 @@ mod pruebas {
 
     #[test]
     fn sin_menos_datos_es_la_de_appdata_local() {
-        let a = args(&["ChatCouncilNueva.exe"]);
+        let a = args(&["ChatCouncil.exe"]);
         assert_eq!(
             modo(&a, Some(r"C:\L".into())),
             Ok(Modo::Normal {

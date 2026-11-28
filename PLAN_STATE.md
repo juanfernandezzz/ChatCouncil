@@ -5,7 +5,7 @@ Created: 2026-11-10T05:22:26.876Z
 
 ## Current Part
 
-Next: plans/PART34_PLAN.ai.md
+Next: plans/PART35_PLAN.ai.md
 
 ## Parts
 
@@ -169,10 +169,10 @@ Next: plans/PART34_PLAN.ai.md
   - Outcome: El integrador y el redactor entregan texto, y la captura avisa más de un mensaje de la persona o un enlace de descarga
   - Evidence: recorded
 
-- [ ] Part 34: plans/PART34_PLAN.ai.md
+- [x] Part 34: plans/PART34_PLAN.ai.md
   - Scenario: SCN-034
   - Outcome: La app se llama ChatCouncil en todo: ejecutable, carpeta, instalador y actualizador
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 35: plans/PART35_PLAN.ai.md
   - Scenario: SCN-035

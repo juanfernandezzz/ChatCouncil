@@ -26,7 +26,7 @@ jobs:
         run: |
           cargo build -p app
           $salida = Join-Path $env:RUNNER_TEMP 'autoprueba.txt'
-          $p = Start-Process .\target\debug\ChatCouncilNueva.exe -ArgumentList '-autoprueba', $salida -PassThru -Wait
+          $p = Start-Process .\target\debug\ChatCouncil.exe -ArgumentList '-autoprueba', $salida -PassThru -Wait
           if (Test-Path $salida) { Get-Content $salida -Encoding UTF8 } else { "No se escribió $salida" }
           "Código de salida: $($p.ExitCode)"
           exit $p.ExitCode
@@ -39,7 +39,7 @@ jobs:
           New-Item -ItemType Directory $datos | Out-Null
           foreach ($fase in 1, 2, 3) {
             $salida = Join-Path $env:RUNNER_TEMP "pruebainterfaz-$fase.txt"
-            $p = Start-Process .\target\debug\ChatCouncilNueva.exe -ArgumentList '-pruebainterfaz', $salida, '-datos', $datos, '-fase', "$fase" -PassThru -Wait
+            $p = Start-Process .\target\debug\ChatCouncil.exe -ArgumentList '-pruebainterfaz', $salida, '-datos', $datos, '-fase', "$fase" -PassThru -Wait
             if (Test-Path $salida) { Get-Content $salida -Encoding UTF8 } else { "No se escribió $salida" }
             "Código de salida de la fase ${fase}: $($p.ExitCode)"
             if ($p.ExitCode -ne 0) { exit $p.ExitCode }
@@ -52,7 +52,34 @@ jobs:
           $datos = Join-Path $env:RUNNER_TEMP 'pruebaronda'
           New-Item -ItemType Directory $datos | Out-Null
           $salida = Join-Path $env:RUNNER_TEMP 'pruebaronda.txt'
-          $p = Start-Process .\target\debug\ChatCouncilNueva.exe -ArgumentList '-pruebaronda', $salida, '-datos', $datos -PassThru -Wait
+          $p = Start-Process .\target\debug\ChatCouncil.exe -ArgumentList '-pruebaronda', $salida, '-datos', $datos -PassThru -Wait
           if (Test-Path $salida) { Get-Content $salida -Encoding UTF8 } else { "No se escribió $salida" }
           "Código de salida: $($p.ExitCode)"
           exit $p.ExitCode
+
+  # D52.4 (C3): migración de ChatCouncilNueva a ChatCouncil en una máquina limpia, con el instalador del Release actual.
+  migracion:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup update stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p app
+      - name: Inno Setup y los dos instaladores nuevos
+        shell: pwsh
+        run: |
+          choco install innosetup --version 6.7.1 --no-progress -y
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          & $iscc "/DVersion=0.2.999" "/O$env:RUNNER_TEMP\nuevo" instalador\ChatCouncil.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $iscc "/DVersion=0.2.999" "/DSinUsePreviousAppDir=1" "/O$env:RUNNER_TEMP\rojo" instalador\ChatCouncil.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: instalador del Release actual
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download chatcouncil-v1 -p ChatCouncilNueva-instalador.exe -D "$env:RUNNER_TEMP\viejo" --repo ${{ github.repository }}
+      - name: migración, caso rojo y caso verde
+        shell: pwsh
+        timeout-minutes: 10
+        run: ./instalador/probar-migracion.ps1 -Viejo "$env:RUNNER_TEMP\viejo\ChatCouncilNueva-instalador.exe" -Nuevo "$env:RUNNER_TEMP\nuevo\ChatCouncil-instalador.exe" -NuevoSinUsePreviousAppDir "$env:RUNNER_TEMP\rojo\ChatCouncil-instalador.exe"

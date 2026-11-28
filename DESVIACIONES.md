@@ -39,3 +39,11 @@ Cada cambio de este archivo se aparta a propósito del comportamiento de la Unit
 - A7: el doble clic en un rol sin página no se pudo reproducir en rojo en pruebaronda (crear_panel termina en el mismo turno); la guarda es defensiva. Sin verificar con ratón real.
 - B2: el conteo de mensajes mira todas las coincidencias de userMessage sin respetar `exclude` y no mira dentro de iframes (límite conocido). pagina.js sin cambio (sha256 39b048ce…).
 - Pendiente, no medido: bytes del integrador y el redactor de la ronda 0e319605… sobre la copia de CC-2.
+
+## PART-034 (2026-11-28)
+
+- El binario es ChatCouncil.exe y la carpeta Programs\ChatCouncil. El instalador no reutiliza la carpeta anterior (UsePreviousAppDir=no) y borra Programs\ChatCouncilNueva solo si ChatCouncilNueva.exe se puede borrar (espera hasta 10 s); si no, la instalación sigue y la carpeta vieja queda con su desinstalador huérfano. Un instalador silencioso no puede avisarlo en pantalla.
+- El Release publica ChatCouncil-instalador.exe y una copia con el nombre ChatCouncilNueva-instalador.exe para que las versiones instaladas (0.2.29 y anteriores) se actualicen. Tras el primer Release con este cambio, el asset con el nombre viejo ya instala la carpeta nueva: el job migracion del CI avisa y sale en vez de probar una migración que ya no existe con ese asset.
+- Caso rojo del job migracion (corre en cada CI): con /DSinUsePreviousAppDir=1 el instalador nuevo cae en Programs\ChatCouncilNueva (confirmado en la PR #15).
+- Respaldo del instalador 0.2.29: C:\cc-target\respaldo\0.2.29\ChatCouncilNueva-instalador.exe, sha256 C2D8F0DC187E44B8A6783454EB561B4C63824FFBEC75F605F4432B011A06941B.
+- Los registros históricos (PLAN_EVIDENCE.md, planes cerrados, bench/resultados, docs/revisiones, handoff anterior) conservan el nombre viejo.

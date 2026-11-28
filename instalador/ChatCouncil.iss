@@ -12,14 +12,18 @@ AppName=ChatCouncil
 AppVerName=ChatCouncil {#Version}
 AppVersion={#Version}
 AppPublisher=ChatCouncil
-DefaultDirName={autopf}\ChatCouncilNueva
+DefaultDirName={autopf}\ChatCouncil
+; D52.4: la carpeta nueva se usa aunque haya una instalación anterior en Programs\ChatCouncilNueva.
+#ifndef SinUsePreviousAppDir
+UsePreviousAppDir=no
+#endif
 DefaultGroupName=ChatCouncil
 DisableProgramGroupPage=yes
 ; D38.2: sin esto Inno reutiliza el grupo anterior y el acceso nuevo cae en «ChatCouncil (nueva)».
 UsePreviousGroup=no
 OutputDir=..\salida
-OutputBaseFilename=ChatCouncilNueva-instalador
-UninstallDisplayIcon={app}\ChatCouncilNueva.exe
+OutputBaseFilename=ChatCouncil-instalador
+UninstallDisplayIcon={app}\ChatCouncil.exe
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
@@ -47,23 +51,25 @@ Name: "depuracion"; Description: "Acceso de depuración (abre el perfil real con
 Name: "escritorio"; Description: "Crear un acceso directo en el escritorio"
 
 [Files]
-Source: "..\target\release\ChatCouncilNueva.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\target\release\ChatCouncil.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; Herramienta de depuración: abre la app con el puerto local de WebView2 para inspeccionar los paneles.
 Source: "abrir-depurando.bat"; DestDir: "{app}"; Flags: ignoreversion; Components: depuracion
 
 [Icons]
-Name: "{group}\ChatCouncil"; Filename: "{app}\ChatCouncilNueva.exe"
-Name: "{group}\ChatCouncil (depuración)"; Filename: "{app}\abrir-depurando.bat"; IconFilename: "{app}\ChatCouncilNueva.exe"; Components: depuracion
-Name: "{autodesktop}\ChatCouncil"; Filename: "{app}\ChatCouncilNueva.exe"; Tasks: escritorio
+Name: "{group}\ChatCouncil"; Filename: "{app}\ChatCouncil.exe"
+Name: "{group}\ChatCouncil (depuración)"; Filename: "{app}\abrir-depurando.bat"; IconFilename: "{app}\ChatCouncil.exe"; Components: depuracion
+Name: "{autodesktop}\ChatCouncil"; Filename: "{app}\ChatCouncil.exe"; Tasks: escritorio
 
 [InstallDelete]
 ; D38.2: el nombre visible pasa de «ChatCouncil (nueva)» a «ChatCouncil»: se borran la carpeta vieja de Inicio y el acceso viejo del Escritorio.
 Type: filesandordirs; Name: "{userprograms}\ChatCouncil (nueva)"
 Type: files; Name: "{userdesktop}\ChatCouncil (nueva).lnk"
+; D52.4: la carpeta de la versión anterior (ChatCouncilNueva) se borra solo cuando su ejecutable ya no corre; los datos viven en %LOCALAPPDATA%\ChatCouncil.
+Type: filesandordirs; Name: "{autopf}\ChatCouncilNueva"; Check: PuedeBorrarCarpetaVieja
 
 [Run]
-Filename: "{app}\ChatCouncilNueva.exe"; Description: "Abrir ChatCouncil"; Flags: nowait postinstall skipifsilent
-Filename: "{app}\ChatCouncilNueva.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent
+Filename: "{app}\ChatCouncil.exe"; Description: "Abrir ChatCouncil"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\ChatCouncil.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent
 
 [Code]
 const
@@ -75,6 +81,24 @@ var
   Version: String;
 begin
   Result := RegQueryStringValue(Raiz, Ruta, 'pv', Version) and (Version <> '') and (Version <> '0.0.0.0');
+end;
+
+// D52.4: espera hasta 10 s a que ChatCouncilNueva.exe termine (un ejecutable en uso no se puede borrar). Si no termina,
+// la instalación sigue sin borrar la carpeta vieja.
+function PuedeBorrarCarpetaVieja: Boolean;
+var
+  Exe: String;
+  I: Integer;
+begin
+  Result := True;
+  Exe := ExpandConstant('{autopf}\ChatCouncilNueva\ChatCouncilNueva.exe');
+  if not FileExists(Exe) then Exit;
+  for I := 1 to 20 do
+  begin
+    if DeleteFile(Exe) then Exit;
+    Sleep(500);
+  end;
+  Result := False;
 end;
 
 function InitializeSetup: Boolean;

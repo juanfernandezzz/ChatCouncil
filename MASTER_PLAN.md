@@ -170,10 +170,10 @@
   - Outcome: El integrador y el redactor entregan texto, y la captura avisa más de un mensaje de la persona o un enlace de descarga
   - Evidence: recorded
 
-- [ ] Part 34: Read `plans/PART34_PLAN.ai.md`
+- [x] Part 34: Read `plans/PART34_PLAN.ai.md`
   - Scenario: SCN-034
   - Outcome: La app se llama ChatCouncil en todo: ejecutable, carpeta, instalador y actualizador
-  - Evidence: pending
+  - Evidence: recorded
 
 - [ ] Part 35: Read `plans/PART35_PLAN.ai.md`
   - Scenario: SCN-035

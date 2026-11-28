@@ -827,3 +827,10 @@ Prompts del integrador y redactor piden texto en el chat (vectores y sha256 nuev
 
 Artifacts:
 - cargo test --workspace; autoprueba 67/67; pruebainterfaz 16/10/13; pruebaronda 108/108; clippy -D warnings; fmt --check
+
+### PART-034
+
+App llamada ChatCouncil: binario, carpeta, instalador, actualizador, Release con copia del nombre viejo, ADR-0010 enmendado. Rojo: sin UsePreviousAppDir=no la instalación nueva cae en Programs\ChatCouncilNueva (job migracion, PR #15). Verde: migración desde el instalador del Release 0.2.29: ChatCouncil.exe en Programs\ChatCouncil, carpeta vieja borrada, desinstalación y acceso apuntan a la nueva, desinstalación limpia. cargo test --workspace en verde.
+
+Artifacts:
+- gh run 46127179763 job migracion; cargo test --workspace

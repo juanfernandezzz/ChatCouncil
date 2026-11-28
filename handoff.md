@@ -83,6 +83,13 @@ Pendientes del lote: 3.2 a 3.10; informe de cierre en un code block + Set-Clipbo
 - Enviar a todos + Sí hechos 22:24: enviados 5 de 7 (ChatGPT, Gemini, Grok, Kimi, Perplexity; "Parece terminado"). Faltan a mano: Claude y Mistral (flecha de envío; sin return). Capturados 0.
 - Hook PreToolUse:PowerShell expira de forma intermitente: agent-desktop vía PowerShell queda bloqueado. No se tocó el hook.
 
+## ACTUALIZACIÓN 2026-11-28 · CC-2 TERMINADA (según Juan; verificada solo por el informe generado)
+- Informe en C:\Users\Juan Fernández\AppData\Local\ChatCouncil\informes\2026-11-27 2346 - Instrucciones y skill research-protocol en siete proveedores\ (la app lo guarda ahí, no en Documents\ChatCouncil-informes\cc2 como pedía el prompt). Fuente: Get-FileHash de esos dos archivos.
+  - .pdf 639448 bytes, sha256 A2AB79F002645EBF66847F4895A5F41C583D9125F9E67121DAB1AB7E9ABA72E5
+  - .md 202946 bytes, sha256 768B98B24726209A0EAEBF267A9AC6B255C039AEB365DD51ECC64FB79CCE94B1
+- El .md (leído solo por estructura y conteos) trae: aporte del redactor, verificación de Qwen y de DeepSeek, lectura del integrador, 7 de 7 operadores «ok» (hallazgos: ChatGPT 43, Gemini 72, Claude 65, Grok 29, Mistral 38, Kimi 45, Perplexity 47), «Integrador de esta ronda: GLM», ronda 0e319605-36e7-47ad-90aa-f8e0e6dda488.
+- NO verificado: bytes de los archivos del integrador y del redactor (no se localizaron; el registro real no se leyó), el repegado de Operación, T1/T2 de Muse. Con CC-2 cerrada, Muse de integrador solo aplicaría a una ronda nueva.
+
 ## PAUSA PART-031 (2026-11-27, Juan: «paremos acá») · LEE ESTO PRIMERO
 Esta sección corrige la de abajo (E1/E2 ya se resolvieron con «E1B E2A»). Lote NO cerrado: sin informe de cierre, sin plannable complete, memorias sin marcar DONE.
 - Hecho y en main: PR #13 (7271c27), release 0.2.28, app real actualizada (guarda con prefijo de idioma, /changelog /docs /help públicos, botón de roles, Muse elegible como integrador o redactor, no por defecto).

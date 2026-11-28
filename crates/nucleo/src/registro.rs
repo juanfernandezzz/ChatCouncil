@@ -1,5 +1,5 @@
 //! El registro: una línea de JSON por hecho, append-only (Registro.cs y Hechos.cs de la Unity).
-//! Los dieciséis tipos salen de una tabla de esquemas: el orden de los campos es el orden en que los
+//! Los tipos (los dieciséis de la Unity y los que agregan PART-032 y PART-033) salen de una tabla de esquemas: el orden de los campos es el orden en que los
 //! escribe la Unity, así una línea escrita acá es byte a byte la misma.
 
 use crate::json::{self, Valor};
@@ -72,7 +72,7 @@ const COPIA_RESPUESTA: &[Campo] = &[c("rondaId", Texto), c("respuestaId", Texto)
 const COPIA_SALIDA: &[Campo] = &[c("rondaId", Texto), c("salidaOperadorId", Texto)];
 const ETIQUETA_VERIFICADOR: &[Campo] = &[c("etiqueta", Texto), c("verificadorId", Texto)];
 
-/// Los dieciséis tipos; todos empiezan con esquema e id (tipo se escribe antes, desde el nombre).
+/// Los tipos; todos empiezan con esquema e id (tipo se escribe antes, desde el nombre).
 const TIPOS: &[(&str, &[Campo])] = &[
     (
         "conversacion",
@@ -298,6 +298,21 @@ const TIPOS: &[(&str, &[Campo])] = &[
             omitible("bytesArchivo", EnteroNulo),
             omitible("sha256Archivo", Texto),
             c("pegadoEn", Texto),
+        ],
+    ),
+    // PART-033 (D52.3, B2): lo que la captura vio y la persona debe saber: más de un mensaje suyo en la
+    // conversación o un enlace de descarga en la respuesta.
+    (
+        "aviso-captura",
+        &[
+            c("esquema", Esquema),
+            c("id", Texto),
+            c("rondaId", Texto),
+            c("etapa", Texto),
+            c("proveedorId", Texto),
+            omitible("mensajesDePersona", EnteroNulo),
+            c("enlaceDescarga", Bool),
+            c("avisadoEn", Texto),
         ],
     ),
 ];

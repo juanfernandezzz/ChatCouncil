@@ -2026,6 +2026,18 @@ impl Interfaz {
                 Err(e) => sin_panel(id).con_error(e.to_string()),
             });
         }
+        // PART-033 (B2): lo que trae cada conversación, mirado desde acá, sin tocar pagina.js.
+        let mut avisos: Vec<(String, Option<i64>, bool)> = Vec::new();
+        for (id, l) in ids.iter().zip(&lecturas) {
+            if l.error.as_ref().is_some_and(|e| e.largo_utf16() > 0) {
+                continue;
+            }
+            let panel = r.paneles.borrow().get(id).cloned();
+            if let Some(p) = panel {
+                let (mensajes, enlace) = self.lo_que_trae_la_conversacion(&p, id).await;
+                avisos.push((id.clone(), mensajes, enlace));
+            }
+        }
         // La continuidad de hilo y el tamaño del panel al capturar (PantallaRonda.Contexto).
         let contexto: HashMap<String, (Option<String>, Option<String>)> = {
             let paneles = r.paneles.borrow();
@@ -2065,11 +2077,50 @@ impl Interfaz {
             })
             .await
             .and_then(|x| x.map_err(|e| e.to_string()));
+        let mut avisos_dichos: Vec<String> = Vec::new();
         if registro.is_ok() {
             for (id, p) in r.paneles.borrow().iter() {
                 r.navegaciones
                     .borrow_mut()
                     .insert(id.clone(), p.navegaciones());
+            }
+            for (id, mensajes, enlace) in &avisos {
+                let dicho = if mensajes.is_some_and(|n| n > 1) {
+                    format!(
+                        "Esta conversación tiene {} mensajes tuyos. El registro guarda el que pegó la app y la última respuesta.",
+                        mensajes.unwrap_or_default()
+                    )
+                } else if *enlace {
+                    format!(
+                        "La respuesta de {} trae un archivo o un enlace de descarga. La app solo recoge el texto del mensaje: si lo que pediste está en el archivo, pídele que lo escriba en el chat y vuelve a capturar.",
+                        nombre_proveedor(id)
+                    )
+                } else {
+                    continue;
+                };
+                if !avisos_dichos.contains(&dicho) {
+                    avisos_dichos.push(dicho);
+                }
+                // Con las dos cosas a la vez, también se dice la del enlace.
+                if *enlace && mensajes.is_some_and(|n| n > 1) {
+                    avisos_dichos.push(format!(
+                        "La respuesta de {} trae un archivo o un enlace de descarga. La app solo recoge el texto del mensaje: si lo que pediste está en el archivo, pídele que lo escriba en el chat y vuelve a capturar.",
+                        nombre_proveedor(id)
+                    ));
+                }
+            }
+            let (etapa, v) = (r.etapa.get(), avisos.clone());
+            let anotado = r
+                .nucleo
+                .pedir(move |p| {
+                    let v: Vec<(&str, Option<i64>, bool)> =
+                        v.iter().map(|(i, m, e)| (i.as_str(), *m, *e)).collect();
+                    p.registrar_avisos_captura(etapa, &v)
+                })
+                .await
+                .and_then(|x| x.map_err(|e| e.to_string()));
+            if let Err(e) = anotado {
+                avisos_dichos.push(format!("No se pudo registrar el aviso de la captura: {e}"));
             }
         }
         match registro {
@@ -2084,11 +2135,35 @@ impl Interfaz {
                         (nombre_proveedor(&l.id), largo, fallida)
                     })
                     .collect();
-                let (t, problema) = texto_de_captura(&filas, &aviso);
-                self.resultado(&t, problema);
+                let (mut t, problema) = texto_de_captura(&filas, &aviso);
+                for dicho in &avisos_dichos {
+                    t.push(' ');
+                    t.push_str(dicho);
+                }
+                self.resultado(&t, problema || !avisos_dichos.is_empty());
             }
         }
         self.refrescar();
+    }
+
+    /// PART-033 (B2): cuántos mensajes de la persona tiene la conversación (el selector userMessage de la spec,
+    /// todas las coincidencias) y si la última respuesta trae un enlace de descarga. Se mira con un script propio:
+    /// pagina.js no cambia. Sin selector o sin poder mirar, no se dice nada.
+    // shortcut: ignora `exclude` de la spec y no mira dentro de iframes; si un proveedor deja el enlace ahí, ampliar.
+    async fn lo_que_trae_la_conversacion(&self, p: &Panel, id: &str) -> (Option<i64>, bool) {
+        let spec = self.spec_de(id);
+        if spec.is_empty() {
+            return (None, false);
+        }
+        let js = format!(
+            "(function(){{try{{var s={spec};var n=-1,e=0;var u=s.userMessage&&s.userMessage.selector;if(u)n=document.querySelectorAll(u).length;var a=s.assistantMessage&&s.assistantMessage.selector;if(a){{var xs=document.querySelectorAll(a);var x=s.assistantMessage.pick==='first'?xs[0]:xs[xs.length-1];if(x&&x.querySelector('a[download],a[href^=\"blob:\"],a[href^=\"data:\"]'))e=1;}}return n+','+e;}}catch(_){{return '-1,0';}}}})()"
+        );
+        let Ok(r) = p.ejecutar(&js).await else {
+            return (None, false);
+        };
+        let r = r.trim_matches('"');
+        let (n, e) = r.split_once(',').unwrap_or(("-1", "0"));
+        (n.parse::<i64>().ok().filter(|n| *n >= 0), e == "1")
     }
 
     /// «Capturar lo que ya está en los paneles»: todos los operadores, aunque no se haya pegado nada.

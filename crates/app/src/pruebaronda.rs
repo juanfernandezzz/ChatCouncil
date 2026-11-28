@@ -985,6 +985,46 @@ async fn recorrido(a: &mut Anotador, i: &Rc<Interfaz>, salida: &Path) -> Result<
             ui.get_barra_titulo()
         ),
     );
+
+    // PART-033 (B2): una conversación con dos mensajes de la persona (ChatGPT) y una respuesta con un enlace de
+    // descarga (Gemini) se avisan en el panel y quedan en el registro; sin tocar pagina.js.
+    en(
+        i,
+        "chatgpt",
+        "(() => { const u = document.createElement('div'); u.className = 'usuario'; u.textContent = 'otra vez'; document.getElementById('chat').append(u); return 'ok'; })()",
+    )
+    .await?;
+    en(
+        i,
+        "gemini",
+        "(() => { const r = [...document.querySelectorAll('.respuesta')].pop(); const a = document.createElement('a'); a.href = 'blob:https://cc-prueba.test/informe'; a.setAttribute('download', 'informe.pdf'); a.textContent = 'informe.pdf'; r.append(a); return 'ok'; })()",
+    )
+    .await?;
+    i.capturar(vec!["chatgpt".into(), "gemini".into(), "claude".into()])
+        .await;
+    let h = hechos(i).await;
+    let avisos: Vec<(String, Option<i64>, bool)> = de_tipo(&h, "aviso-captura")
+        .into_iter()
+        .map(|x| {
+            (
+                texto_de(x, "proveedorId").unwrap_or_default(),
+                x.entero("mensajesDePersona"),
+                x.valor("enlaceDescarga") == &Valor::Bool(true),
+            )
+        })
+        .collect();
+    let dicho = resultado();
+    a.anotar(
+        dicho.contains("Esta conversación tiene 2 mensajes tuyos. El registro guarda el que pegó la app y la última respuesta.")
+            && dicho.contains("La respuesta de Gemini trae un archivo o un enlace de descarga. La app solo recoge el texto del mensaje: si lo que pediste está en el archivo, pídele que lo escriba en el chat y vuelve a capturar.")
+            && avisos
+                == [
+                    ("chatgpt".to_string(), Some(2), false),
+                    ("gemini".to_string(), Some(1), true),
+                ],
+        "avisos al capturar",
+        &format!("\"{dicho}\"; hechos {avisos:?}"),
+    );
     Ok(())
 }
 

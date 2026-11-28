@@ -1885,6 +1885,7 @@ impl Puerta {
                     "no persistida en el registro (se informa en pantalla al pegar cada panel)"
                         .into(),
                 pegados: seccion_pegados(hechos, &id, datos::SPECS_JSON),
+                avisos_captura: seccion_avisos(hechos, &id),
                 semilla,
                 proveedores_cargados_incompletos: cargados
                     .filter(|c| pool.iter().any(|p| !c.iter().any(|x| x == p))),
@@ -2777,6 +2778,44 @@ impl Puerta {
         self.asentar(r)
     }
 
+    /// PART-033 (D52.3, B2): lo que la captura vio y la persona debe saber. Solo agrega, y solo si hay algo que
+    /// avisar: más de un mensaje de la persona en la conversación o un enlace de descarga en la respuesta.
+    pub fn registrar_avisos_captura(
+        &mut self,
+        etapa: &str,
+        avisos: &[(&str, Option<i64>, bool)],
+    ) -> io::Result<()> {
+        self.profundidad += 1;
+        let r = (|| -> io::Result<()> {
+            let Some(ronda_id) = self.ronda_actual.clone() else {
+                return Ok(());
+            };
+            for (proveedor, mensajes, enlace) in avisos {
+                if !(mensajes.is_some_and(|n| n > 1) || *enlace) {
+                    continue;
+                }
+                let h = Hecho::nuevo(
+                    "aviso-captura",
+                    &[
+                        ("id", Valor::Texto((self.nuevo_id)().into())),
+                        ("rondaId", Valor::Texto(Texto::from(ronda_id.as_str()))),
+                        ("etapa", Valor::Texto(etapa.into())),
+                        ("proveedorId", Valor::Texto((*proveedor).into())),
+                        (
+                            "mensajesDePersona",
+                            mensajes.map_or(Valor::Nulo, Valor::Entero),
+                        ),
+                        ("enlaceDescarga", Valor::Bool(*enlace)),
+                        ("avisadoEn", Valor::Texto(self.ahora().into())),
+                    ],
+                )?;
+                self.escribir(&h)?;
+            }
+            Ok(())
+        })();
+        self.asentar(r)
+    }
+
     /// PART-032 (D52.3): «Volver a pegar» parte de cero: la Puerta olvida el prompt pegado de ese panel (o de
     /// todos los de la etapa, sin `proveedor`). En la verificación el prompt es uno para los dos.
     pub fn olvidar_pegado(&mut self, etapa: &str, proveedor: Option<&str>) {
@@ -3273,6 +3312,43 @@ impl Puerta {
             "por-pegar"
         })
     }
+}
+
+/// PART-033 (B2): los avisos de captura de la ronda para «Condiciones de la ronda», el último de cada panel y
+/// etapa.
+fn seccion_avisos(hechos: &[Hecho], ronda: &Texto) -> Vec<String> {
+    let cad = |h: &Hecho, k: &str| {
+        h.texto(k)
+            .and_then(Texto::como_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let mut ultimos: Vec<&Hecho> = Vec::new();
+    for h in hechos.iter().filter(|h| es_de(h, "aviso-captura", ronda)) {
+        match ultimos.iter().position(|u| {
+            cad(u, "proveedorId") == cad(h, "proveedorId") && cad(u, "etapa") == cad(h, "etapa")
+        }) {
+            Some(i) => ultimos[i] = h,
+            None => ultimos.push(h),
+        }
+    }
+    let mut lineas = Vec::new();
+    for h in ultimos {
+        let quien = format!(
+            "{} ({})",
+            dominio::nombre_proveedor(&cad(h, "proveedorId")),
+            ronda::nombre_de_etapa(&cad(h, "etapa"))
+        );
+        if let Some(n) = h.entero("mensajesDePersona").filter(|n| *n > 1) {
+            lineas.push(format!("{quien}: la conversación tuvo {n} mensajes de la persona; el registro guarda el que pegó la app y la última respuesta."));
+        }
+        if h.valor("enlaceDescarga") == &Valor::Bool(true) {
+            lineas.push(format!(
+                "{quien}: la respuesta traía un archivo o un enlace de descarga."
+            ));
+        }
+    }
+    lineas
 }
 
 /// PART-032 (D52.3): «Lo que se pegó», desde los hechos «pegado» de la ronda; None si no hay ninguno (queda la
@@ -6174,6 +6250,54 @@ Ronda: r{i}
             p.estado_de_panel("chatgpt", Some(false), obs).unwrap(),
             "parece-terminado-observado"
         );
+    }
+
+    // PART-033 (B2): el aviso solo se registra si hay algo que avisar, y el informe lo cuenta una vez por panel y etapa.
+    #[test]
+    fn el_aviso_de_captura_se_registra_solo_con_algo_que_avisar_y_el_informe_lo_dice() {
+        let c = Carpeta::nueva("aviso-captura");
+        let mut p = nueva_puerta(&c.0);
+        p.abrir_ronda("¿Pregunta?").unwrap();
+        p.registrar_avisos_captura(
+            "investigacion",
+            &[
+                ("chatgpt", Some(1), false),
+                ("gemini", None, false),
+                ("claude", Some(3), false),
+                ("mistral", Some(1), true),
+            ],
+        )
+        .unwrap();
+        p.registrar_avisos_captura("investigacion", &[("claude", Some(4), true)])
+            .unwrap();
+        let hechos = hechos_de(&c.0, &p);
+        let v: Vec<(String, Option<i64>, bool)> = de_tipo(&hechos, "aviso-captura")
+            .map(|h| {
+                (
+                    s(h, "proveedorId").unwrap().to_string(),
+                    h.entero("mensajesDePersona"),
+                    h.valor("enlaceDescarga") == &Valor::Bool(true),
+                )
+            })
+            .collect();
+        assert_eq!(
+            v,
+            vec![
+                ("claude".into(), Some(3), false),
+                ("mistral".into(), Some(1), true),
+                ("claude".into(), Some(4), true),
+            ]
+        );
+        let ronda = Texto::from(p.ronda_actual.clone().unwrap().as_str());
+        assert_eq!(
+            seccion_avisos(&hechos, &ronda),
+            vec![
+                "Claude (Investigación): la conversación tuvo 4 mensajes de la persona; el registro guarda el que pegó la app y la última respuesta.".to_string(),
+                "Claude (Investigación): la respuesta traía un archivo o un enlace de descarga.".to_string(),
+                "Mistral (Investigación): la respuesta traía un archivo o un enlace de descarga.".to_string(),
+            ]
+        );
+        assert!(seccion_avisos(&hechos, &Texto::from("otra")).is_empty());
     }
 
     // PART-032 (D52.3, A6): «Lo que se pegó» dice cuánto se pegó, las veces repetidas y el archivo que no cabe.

@@ -83,7 +83,18 @@ Pendientes del lote: 3.2 a 3.10; informe de cierre en un code block + Set-Clipbo
 - Enviar a todos + Sí hechos 22:24: enviados 5 de 7 (ChatGPT, Gemini, Grok, Kimi, Perplexity; "Parece terminado"). Faltan a mano: Claude y Mistral (flecha de envío; sin return). Capturados 0.
 - Hook PreToolUse:PowerShell expira de forma intermitente: agent-desktop vía PowerShell queda bloqueado. No se tocó el hook.
 
-## PART-031 en curso (sesión del lote, 2026-11-27) · LEE ESTO PRIMERO
+## PAUSA PART-031 (2026-11-27, Juan: «paremos acá») · LEE ESTO PRIMERO
+Esta sección corrige la de abajo (E1/E2 ya se resolvieron con «E1B E2A»). Lote NO cerrado: sin informe de cierre, sin plannable complete, memorias sin marcar DONE.
+- Hecho y en main: PR #13 (7271c27), release 0.2.28, app real actualizada (guarda con prefijo de idioma, /changelog /docs /help públicos, botón de roles, Muse elegible como integrador o redactor, no por defecto).
+- Muse T1: el texto (159 caracteres) quedó pegado en un chat paralelo NUEVO de Muse, en el perfil de prueba C:\cc-target\perfil-muse; Juan cerró la ventana. Si se envió NO está verificado (no se preguntó). girasol-47 NO se ha borrado. T2 no se ha corrido. Retomar: reabrir perfil-muse y leer la respuesta solo tras el «captura» de Juan.
+- Paso 6: CC-2 ya tiene la Operación pegada (dicho por Juan) y los roles se fijan al primer pegado de Operación (el sello), así que Muse de integrador solo podría valer para una ronda posterior; CC-2 sigue con GLM de integrador. Sin verificar de nuevo en esta sesión.
+- Juan tuvo que cambiar de cuenta de Google por límite de uso y la app no le dejó repegar la Operación (causa sin diagnosticar). Reabrí la app real (pid 2128, sin puerto de depuración) para que vuelva a la etapa de Operación; si ahora deja repegar NO está verificado. Esa app es la sesión de trabajo de Juan: no cerrarla.
+- Pedidos nuevos, anotados en DESVIACIONES.md y sin hacer: (1) permitir repegar una etapa tras cambiar de cuenta; (2) quitar «Nueva» de ChatCouncilNueva (exe, carpeta Programs\ChatCouncilNueva, instalador .iss, actualizador y su asset, textos).
+- Falta: paso 5 (T1/T2), paso 7 (terminar CC-2: Operación, Integración, Verificación, Redacción; bytes del integrador y del redactor; PDF en Documents\ChatCouncil-informes\cc2 con su sha256), informe de cierre, handoff final, plannable complete/verify, advisor final.
+- Riesgo conocido sin arreglar: dos clics rápidos en un rol sin página pueden abrirlo dos veces.
+- Registro real intacto (append-only); copia de diagnóstico con sha256 294B4909…3E3.
+
+## (sección anterior, parcialmente superada) PART-031 en curso (sesión del lote, 2026-11-27)
 - Rama part-031 en 329654b (local, SIN push) + cambios sin commit en interfaz.rs y pruebaronda.rs. main sigue en 2028688.
 - Copia del registro: C:\cc-target\tmp\cc2-copia\registro.jsonl, sha256 antes = después = copia = 294B4909BC49902847A72F7105BF6A67B049AAE9C8A55B0E0426A4AD25963E3D (el real no se tocó).
 - Diagnóstico 2a (arnés fuera del repo: C:\cc-target\tmp\diag-guarda, llama a Puerta::armar_operacion): ANTES 0 de 7, rechazada www.perplexity.ai/en-GB/changelog/<id>. DESPUÉS del arreglo prescrito, 0 de 7 todavía: queda www.kimi.ai/help/features/<id> (solo en la respuesta de Kimi; las otras 6 pasan una por una). Es una página pública de ayuda; el lote prohíbe ampliar más: pregunta E2 abierta.

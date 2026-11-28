@@ -2085,28 +2085,22 @@ impl Interfaz {
                     .insert(id.clone(), p.navegaciones());
             }
             for (id, mensajes, enlace) in &avisos {
-                let dicho = if mensajes.is_some_and(|n| n > 1) {
-                    format!(
-                        "Esta conversación tiene {} mensajes tuyos. El registro guarda el que pegó la app y la última respuesta.",
-                        mensajes.unwrap_or_default()
-                    )
-                } else if *enlace {
-                    format!(
-                        "La respuesta de {} trae un archivo o un enlace de descarga. La app solo recoge el texto del mensaje: si lo que pediste está en el archivo, pídele que lo escriba en el chat y vuelve a capturar.",
-                        nombre_proveedor(id)
-                    )
-                } else {
-                    continue;
-                };
-                if !avisos_dichos.contains(&dicho) {
-                    avisos_dichos.push(dicho);
+                let mut dichos: Vec<String> = Vec::new();
+                if let Some(n) = mensajes.filter(|n| *n > 1) {
+                    dichos.push(format!(
+                        "Esta conversación tiene {n} mensajes tuyos. El registro guarda el que pegó la app y la última respuesta."
+                    ));
                 }
-                // Con las dos cosas a la vez, también se dice la del enlace.
-                if *enlace && mensajes.is_some_and(|n| n > 1) {
-                    avisos_dichos.push(format!(
+                if *enlace {
+                    dichos.push(format!(
                         "La respuesta de {} trae un archivo o un enlace de descarga. La app solo recoge el texto del mensaje: si lo que pediste está en el archivo, pídele que lo escriba en el chat y vuelve a capturar.",
                         nombre_proveedor(id)
                     ));
+                }
+                for dicho in dichos {
+                    if !avisos_dichos.contains(&dicho) {
+                        avisos_dichos.push(dicho);
+                    }
                 }
             }
             let (etapa, v) = (r.etapa.get(), avisos.clone());
@@ -2825,8 +2819,16 @@ impl Interfaz {
                 true,
             );
         }
-        let nombres: Vec<String> = ids.iter().map(|id| nombre_proveedor(id)).collect();
+        let nombres: Vec<String> = ids
+            .iter()
+            .filter(|id| !r.falla_rol.borrow().contains_key(*id))
+            .map(|id| nombre_proveedor(id))
+            .collect();
         let mut t = format!("Prompt pegado en {}.", nombres.join(" y "));
+        let fallaron = ids.len() - nombres.len();
+        if fallaron > 0 {
+            t.push_str(" En el otro panel no se pegó: dice por qué en su cabecera.");
+        }
         t.push_str(if con_archivo {
             " Comprueba que el archivo quedó adjunto, revísalo y envíalo."
         } else {
@@ -2836,7 +2838,7 @@ impl Interfaz {
             t.push(' ');
             t.push_str(&a);
         }
-        self.resultado(&t, false);
+        self.resultado(&t, fallaron > 0);
     }
 
     /// INT-005 y VER-005: recapturar el integrador o los verificadores en cualquier etapa; gana el último.
@@ -3377,14 +3379,17 @@ impl Interfaz {
             r.falla_rol.borrow_mut().remove(id);
         }
         let olvidar = ids.clone();
-        let _ = r
+        if let Err(e) = r
             .nucleo
             .pedir(move |p| {
                 for id in &olvidar {
                     p.olvidar_pegado(etapa, Some(id));
                 }
             })
-            .await;
+            .await
+        {
+            return self.resultado(&format!("No se pudo preparar el nuevo pegado: {e}"), true);
+        }
         let mut fallos: Vec<(String, String)> = Vec::new();
         if etapa == "investigacion" || etapa == "operacion" {
             let pregunta = if etapa == "investigacion" {

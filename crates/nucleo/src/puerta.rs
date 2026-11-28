@@ -2790,8 +2790,32 @@ impl Puerta {
             let Some(ronda_id) = self.ronda_actual.clone() else {
                 return Ok(());
             };
+            let previos: Vec<(String, String)> = if avisos
+                .iter()
+                .any(|(_, m, e)| !(m.is_some_and(|n| n > 1) || *e))
+            {
+                self.leer_registro()?
+                    .hechos
+                    .iter()
+                    .filter(|h| {
+                        h.tipo() == "aviso-captura"
+                            && h.texto("rondaId")
+                                .is_some_and(|t| t.para_mostrar() == ronda_id.as_str())
+                    })
+                    .filter_map(|h| {
+                        Some((
+                            h.texto("etapa")?.para_mostrar().into_owned(),
+                            h.texto("proveedorId")?.para_mostrar().into_owned(),
+                        ))
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
             for (proveedor, mensajes, enlace) in avisos {
-                if !(mensajes.is_some_and(|n| n > 1) || *enlace) {
+                // Una recaptura limpia reemplaza el aviso anterior de ese panel (el último hecho manda).
+                let con_aviso = mensajes.is_some_and(|n| n > 1) || *enlace;
+                if !con_aviso && !previos.iter().any(|(e, p)| e == etapa && p == proveedor) {
                     continue;
                 }
                 let h = Hecho::nuevo(
@@ -2825,7 +2849,8 @@ impl Puerta {
             }
             ("operacion", None) => self.prompt_operador.clear(),
             ("integracion", _) => self.prompt_integrador = None,
-            ("verificacion", _) => self.prompt_verificador = None,
+            // Los dos verificadores comparten el prompt: si solo uno vuelve a pegar y falla, el otro sigue pegado.
+            ("verificacion", None) => self.prompt_verificador = None,
             ("redaccion", _) => self.prompt_redactor = None,
             _ => {}
         }
@@ -6538,7 +6563,13 @@ Ronda: r{i}
         p.registrar_pegado("verificacion", "deepseek", &prompt, None, false)
             .unwrap();
         assert_eq!(p.paso_siguiente().unwrap().etapa, "verificacion");
+        // El prompt es uno para los dos: olvidar uno solo no le quita el pegado al otro (si el nuevo pegado falla).
         p.olvidar_pegado("verificacion", Some("qwen"));
+        assert_eq!(
+            p.estado_de_panel("deepseek", Some(true), obs).unwrap(),
+            "capturado"
+        );
+        p.olvidar_pegado("verificacion", None);
         assert_eq!(
             p.estado_de_panel("qwen", Some(false), obs).unwrap(),
             "por-pegar"
